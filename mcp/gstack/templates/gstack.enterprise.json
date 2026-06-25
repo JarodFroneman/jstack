@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "gstack.enterprise.v1",
+  "standard": "enterprise",
+  "project": {
+    "name": "replace-me",
+    "owner": "replace-me",
+    "riskTier": "normal"
+  },
+  "requiredChecks": [
+    "project_instructions_read",
+    "git_status_reviewed",
+    "diff_check_clean",
+    "test_commands_discovered",
+    "focused_tests_run_or_blocked",
+    "secret_scan_clean",
+    "security_review_for_sensitive_work",
+    "release_approval_for_production",
+    "rollback_plan_for_production",
+    "post_release_monitoring_for_production"
+  ],
+  "protectedPaths": [
+    ".env",
+    ".env.*",
+    "**/.env",
+    "**/.env.*",
+    "secrets/**",
+    "**/secrets/**",
+    "config/production*",
+    "**/production*",
+    ".github/workflows/**",
+    "infra/**",
+    "migrations/**"
+  ],
+  "release": {
+    "requiresExplicitApproval": true,
+    "requiresRollbackPlan": true,
+    "requiresCanaryOrMonitoring": true,
+    "requiresCleanDiffCheck": true
+  },
+  "security": {
+    "secretScanRequired": true,
+    "sensitiveKeywords": [
+      "auth",
+      "login",
+      "password",
+      "token",
+      "secret",
+      "api key",
+      "payment",
+      "stripe",
+      "webhook",
+      "rbac",
+      "permission",
+      "pii",
+      "personal data",
+      "production"
+    ]
+  },
+  "quant": {
+    "minimumHistoryQualityPercent": 99.0,
+    "requiresParameterFreeze": true,
+    "requiresOutOfSample": true,
+    "requiresCostModel": true,
+    "requiredEvidence": [
+      "symbol",
+      "timeframe",
+      "date_range",
+      "data_source",
+      "history_quality_or_modelling_quality",
+      "spread_model",
+      "commission_model",
+      "slippage_model",
+      "source_version",
+      "settings_file",
+      "in_sample_out_of_sample_split",
+      "walk_forward_or_forward_test_plan",
+      "drawdown_stress_test",
+      "no_lookahead_bias_review"
+    ]
+  }
+}

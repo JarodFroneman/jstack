@@ -1,0 +1,29 @@
+schemaVersion: gstack.enterprise.v1
+standard: enterprise
+
+# This YAML template is intentionally simple so the local MCP can parse it
+# without third-party dependencies. Use the JSON template for nested policy.
+requiredChecks:
+  - project_instructions_read
+  - git_status_reviewed
+  - diff_check_clean
+  - test_commands_discovered
+  - focused_tests_run_or_blocked
+  - secret_scan_clean
+  - security_review_for_sensitive_work
+  - release_approval_for_production
+  - rollback_plan_for_production
+  - post_release_monitoring_for_production
+
+protectedPaths:
+  - .env
+  - .env.*
+  - **/.env
+  - **/.env.*
+  - secrets/**
+  - **/secrets/**
+  - config/production*
+  - **/production*
+  - .github/workflows/**
+  - infra/**
+  - migrations/**
