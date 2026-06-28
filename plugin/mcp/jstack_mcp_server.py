@@ -22,7 +22,7 @@ from typing import Any, Callable
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.7.0"
+SERVER_VERSION = "0.7.1"
 PROTOCOL_VERSION = "2024-11-05"
 MAX_OUTPUT_CHARS = 12_000
 
@@ -909,6 +909,7 @@ TEAM_DISPATCH_POLICY = {
     "singleAgentDefault": "Use only the Lead Engineer for trivial tasks and most one-file fixes.",
     "dispatchThreshold": "Dispatch specialists when the task is broad, ambiguous, risky, production-facing, security-sensitive, UI-sensitive, or quant/data-sensitive.",
     "defaultMaxSpecialists": 3,
+    "fullTeamMaxSpecialists": 10,
     "fullTeamRule": "Full team means complete professional coverage, not uncontrolled concurrency. Dispatch in waves when needed.",
     "aboveMaxRule": "Using more than three specialists requires an explicit lead justification tied to risk, complexity, or disjoint work streams.",
     "accountability": "The Lead Engineer remains accountable for final decisions and must synthesize specialist evidence before editing or handoff.",
@@ -1617,7 +1618,12 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         raw_agents = []
     agents = [normalize_agent_plan(agent) for agent in raw_agents]
     agents = [agent for agent in agents if agent.get("id")]
-    max_specialists = int(args.get("max_specialists") or TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])
+    if args.get("max_specialists") is not None:
+        max_specialists = int(args["max_specialists"])
+    elif team_mode == "full-team":
+        max_specialists = int(TEAM_DISPATCH_POLICY["fullTeamMaxSpecialists"])
+    else:
+        max_specialists = int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])
     explicit_justification = str(args.get("lead_justification") or "").strip()
     explicit_release_requested = bool(args.get("explicit_release_requested") or False)
     coordination_packet_supplied = bool(args.get("coordination_packet_supplied") or False)

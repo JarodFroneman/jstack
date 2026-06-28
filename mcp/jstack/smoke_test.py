@@ -122,7 +122,6 @@ def main() -> int:
                     "team_mode": "full-team",
                     "coordination_packet_supplied": True,
                     "explicit_release_requested": True,
-                    "max_specialists": 10,
                     "team": {
                         "agents": [
                             {"id": "lead", "readOnly": False, "writeScope": ["."], "task": "Orchestrate and synthesize."},
