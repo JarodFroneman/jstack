@@ -200,6 +200,25 @@ class PolicyAndDispatchTests(unittest.TestCase):
             self.assertIn(".github/workflows/ci.yml", result["protectedMatches"])
             self.assertIn(".github/workflows/ci.yml", result["changeEvidence"]["sources"]["committed"])
 
+    def test_hardened_git_preserves_checkout_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            global_config = base / "gitconfig"
+            global_config.write_text("[core]\n\tautocrlf = true\n", encoding="utf-8")
+            with mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(global_config)}):
+                repo = make_repo(base)
+                readme = repo / "README.md"
+                readme.write_bytes(b"# Test Project\r\n\r\nWindows checkout.\r\n")
+                git(repo, "add", "README.md")
+                git(repo, "commit", "-m", "windows checkout")
+
+                self.assertEqual("", git(repo, "status", "--porcelain"))
+                state = server.project_state(repo)
+                self.assertTrue(state["clean"], state)
+                self.assertEqual([], server.git_changed_files(repo))
+                review = server.tool_review({"project_path": str(repo)})
+                self.assertTrue(review["diffCheck"]["ok"], review["diffCheck"])
+
     @unittest.skipIf(os.name == "nt", "POSIX executable shadow test")
     def test_git_path_shadow_is_not_executed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

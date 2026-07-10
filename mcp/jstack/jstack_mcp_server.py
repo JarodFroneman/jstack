@@ -141,6 +141,43 @@ def require_project_path(path: str | None = None) -> Path:
     return Path(root).resolve()
 
 
+def trusted_git_line_ending_overrides(executable: str, cwd: Path, env: dict[str, str]) -> list[str]:
+    allowed_values = {
+        "core.autocrlf": {
+            "true": "true",
+            "yes": "true",
+            "on": "true",
+            "1": "true",
+            "false": "false",
+            "no": "false",
+            "off": "false",
+            "0": "false",
+            "input": "input",
+        },
+        "core.eol": {"lf": "lf", "crlf": "crlf", "native": "native"},
+    }
+    overrides: list[str] = []
+    for key, values in allowed_values.items():
+        try:
+            result = subprocess.run(
+                [executable, "config", "--get", key],
+                cwd=str(cwd),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        value = result.stdout.decode("utf-8", errors="replace").strip().lower()
+        normalized = values.get(value) if result.returncode == 0 else None
+        if normalized:
+            overrides.extend(["-c", f"{key}={normalized}"])
+    return overrides
+
+
 def process_environment(args: list[str], cwd: Path) -> tuple[list[str], dict[str, str] | None]:
     if not args or args[0] != "git":
         return args, None
@@ -178,6 +215,7 @@ def process_environment(args: list[str], cwd: Path) -> tuple[list[str], dict[str
         "GIT_CONFIG_VALUE_0",
     ):
         env.pop(name, None)
+    line_ending_overrides = trusted_git_line_ending_overrides(executable, cwd, env)
     null_device = "NUL" if os.name == "nt" else "/dev/null"
     env.update(
         {
@@ -196,6 +234,7 @@ def process_environment(args: list[str], cwd: Path) -> tuple[list[str], dict[str
         f"core.hooksPath={null_device}",
         "-c",
         "diff.external=",
+        *line_ending_overrides,
         *args[1:],
     ]
     return hardened, env
