@@ -24,20 +24,29 @@ Default behavior:
 
 Before dispatch, require a coordination packet:
 
-- goal
-- risk class
-- roles used and why
-- roles skipped and why
-- read/write permissions
-- file ownership map
-- evidence contract
-- conflict rule
-- stop conditions
-- verification gate
-- handoff gate
+- `goal`
+- `riskClass` array
+- `mode: smart-subagents`
+- `rolesUsed` and `rolesNotUsed`
+- `readWritePermissions` and `fileOwnershipMap`
+- `evidenceContract`, `conflictRule`, and `stopConditions`
+- `verificationGate` and `handoffGate`
+
+Pass the actual packet object to `jstack_dispatch_check`; a boolean packet
+claim is invalid. Use `jstack_plan` with
+`team_mode="smart-subagents"` and the resolved learning mode: explicit
+`off`, `coach`, or `assessment`, otherwise `embedded`.
+The MCP plans and validates; platform multi-agent tools perform actual
+dispatch, collection, and closure.
+
+The Lead may implement. If a specialist edits implementation, it must be the
+Builder with an explicit disjoint scope. If more than three specialists are
+required, stop and recommend `/jstack-full-team`.
 
 No two editing agents may own the same file or module. If scope cannot be split
 cleanly, use one Builder. The Lead Engineer resolves conflicts using evidence,
 reproduction, project rules, and safety gates.
 
-If multi-agent tools are unavailable, state `No subagents deployed:` with the concrete reason, then continue with the single-lead enterprise workflow.
+If multi-agent tools are unavailable, state `No subagents deployed:` with the
+concrete reason. Retain `team_mode="smart-subagents"` in planning and apply
+its evidence rubric while one Lead performs the work.

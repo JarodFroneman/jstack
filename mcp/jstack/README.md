@@ -1,140 +1,64 @@
-﻿# JStack MCP
+# JStack MCP
 
-Local stdio MCP server for using the JStack workflow across Codex projects.
+Local JSONL stdio MCP server for JStack workflow planning, governance,
+evidence, release readiness, and mastery progression.
 
-This is intentionally a narrow orchestration layer, not a generic shell runner.
-It exposes safe, project-oriented tools that help an agent apply JStack patterns
-consistently:
+## Boundaries
 
-- `jstack_detect_project`
-- `jstack_list_skills`
-- `jstack_read_skill`
-- `jstack_plan`
-- `jstack_team_plan`
-- `jstack_dispatch_check`
-- `jstack_policy_check`
-- `jstack_preflight`
-- `jstack_health`
-- `jstack_review`
-- `jstack_security_audit`
-- `jstack_qa`
-- `jstack_context_save`
-- `jstack_context_restore`
-- `jstack_ship_check`
-- `jstack_release_readiness`
-- `jstack_quant_backtest_review`
+- The MCP plans and validates teams; platform tools spawn real subagents.
+- It does not deploy, merge, push, restart production, or expose an arbitrary
+  shell tool.
+- `jstack_qa` can execute only discovered project commands after exact
+  revision, fingerprint, policy, and explicit-trust checks.
+- Project commands remain repository-controlled code with the current user's
+  filesystem and network privileges. The scrubbed environment and isolated
+  HOME are hardening, not an OS sandbox.
+- Context and mastery records are atomically written under `~/.jstack` with
+  private file permissions.
 
-## Design Rules
+## Evidence
 
-- No arbitrary shell command tool.
-- No network calls.
-- No destructive filesystem operations.
-- Test/build execution is optional and restricted to commands discovered from
-  project files such as `package.json`, `pyproject.toml`, `Cargo.toml`, or
-  `go.mod`.
-- Context save writes only to `~/.jstack/mcp-context`.
-- Upstream gstack skills are read from `~/.gstack/repos/gstack`.
+QA and security receipts are HMAC-signed for one server session and bind:
 
-## Enterprise Enforcement
+- canonical repository root
+- explicit comparison base where supplied
+- HEAD and workspace fingerprint
+- policy digest and JStack version
+- check/command identity and outcome
+- issue time and server session
 
-The server supports policy-as-code through a project policy file. Recommended
-file names:
+Release readiness requires an explicit base, clean commit, current passing
+receipt for every discovered command, complete current and release-history
+secret scan, environment-specific approval reference, rollback, and monitoring.
 
-- `jstack.enterprise.json`
-- `jstack.policy.json`
-- `jstack.yml`
-- `.jstack/jstack.enterprise.json`
-- `.jstack/jstack.yml`
+## Tools
 
-Legacy `gstack.*` policy files are also accepted for migration compatibility.
+The server exposes `jstack_*` tools for project detection, planning, team
+validation, policy/preflight, health/review, QA, security, context, release,
+quant review, and mastery. Legacy `gstack_*` aliases remain for compatibility;
+upstream gstack itself is optional.
 
-Templates live in `templates/`:
+Use `tools/list` after MCP initialization for the authoritative schemas.
 
-- `agent_coordination_protocol.md`
-- `jstack.enterprise.json`
-- `jstack.enterprise.yml`
-- `pull_request_template.md`
-- `release_checklist.md`
-- `quant_backtest_review.md`
+## Install
 
-Use `jstack_policy_check` to load project policy and detect protected file
-changes. Use `jstack_preflight` before substantial edits or handoff. Use
-`jstack_release_readiness` before any production release. Use
-`jstack_quant_backtest_review` before making trading, EA, or backtest
-performance claims.
+From this directory:
 
-## Virtual Engineering Team
+~~~text
+python install.py
+~~~
 
-`jstack_team_plan` turns `/j-stack-dev` into a controlled virtual engineering
-team. It always keeps a Lead Engineer accountable and conditionally adds
-specialists:
+The installer stages and atomically replaces `~/.codex/mcp/jstack`, backs up
+the Codex config, and writes the `mcp_servers.jstack` entry using the current
+Python interpreter.
 
-- Architect
-- Code Investigator
-- Builder
-- Reviewer
-- QA Engineer
-- Security Engineer
-- DevOps / Release Engineer
-- Product / UX Reviewer
-- Quant / Backtest Reviewer
-- Documentation / Handoff Writer
+Restart Codex or open a new task after installation.
 
-Use `jstack_dispatch_check` before spawning several specialists or assigning
-file edits. The default maximum is three specialists. More specialists require a
-lead justification. Subagents are read-only by default, and only one agent may
-own a given file/module write scope.
+## Verify
 
-## Local Smoke Test
+~~~text
+python smoke_test.py
+~~~
 
-```bash
-python3 /Users/jarodfroneman/.codex/mcp/jstack/smoke_test.py
-```
-
-## Install Into Codex
-
-```bash
-python3 /Users/jarodfroneman/.codex/mcp/jstack/install.py
-```
-
-The installer:
-
-- copies this folder to `~/.codex/mcp/jstack`
-- backs up `~/.codex/config.toml`
-- adds `[mcp_servers.jstack]`
-
-Restart Codex or open a new thread after installation.
-
-## Operational Intent
-
-Use this MCP as an enterprise project quality gate:
-
-1. Classify the work by risk:
-   - Trivial fix
-   - Normal feature or bug
-   - Architecture-sensitive change
-   - UI/product-sensitive change
-   - Security/compliance-sensitive change
-   - Data/financial/integration-sensitive change
-   - Production/release/deploy work
-2. Apply the matching gate sequence:
-   - Context: project instructions, restored context, project memory, project detection
-   - Planning: `spec`, `office-hours`, `autoplan`, `plan-eng-review`,
-     `plan-ceo-review`, `plan-design-review`, `plan-devex-review`
-   - Safety: `guard`, `freeze`, `careful`
-   - Build: scoped implementation using existing architecture
-   - Quality: `health`, `review`, `investigate`, focused tests
-   - Security/compliance: `cso`, secret scan, auth/RBAC/data/public-boundary review
-   - Product/UI/QA: `design-review`, `design-consultation`, `qa`, `qa-only`,
-     `browse`, `benchmark`
-   - Release: `ship`, `land-and-deploy`, `canary` only when explicitly requested
-   - Handoff: `context-save`, `document-release`, `learn`
-3. Return required gates and release blockers from `jstack_plan`.
-4. Build a lead-plus-specialists team plan when task risk justifies it.
-5. Run policy and preflight checks before substantial implementation.
-6. Run safe health/review/security/QA checks.
-7. Run release readiness checks only when release/deploy is explicitly requested.
-8. Save context for handoff or later continuation.
-9. Keep project-specific production/deployment commands outside the MCP unless
-   they are explicitly requested, discovered, selected, and allowed by project
-   rules.
+The smoke test is an independent newline-delimited JSON-RPC client; it does not
+reuse the server's framing implementation.

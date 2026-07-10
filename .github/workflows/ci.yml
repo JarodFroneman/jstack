@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Compile
+        run: python -m compileall -q mcp scripts tests
+      - name: Verify generated artifacts
+        run: python scripts/sync_artifacts.py --check
+      - name: Unit and adversarial tests
+        run: python -m unittest discover -s tests -v
+      - name: Independent MCP smoke test
+        run: python mcp/jstack/smoke_test.py

@@ -1,316 +1,186 @@
-﻿---
+---
 name: jstack-dev
-description: Enterprise JStack development and mastery workflow for Codex projects. Use when the user invokes /j-stack-dev, /jstack-subagents, /jstack-full-team, or asks to apply the standard JStack project workflow for planning, implementation, code quality, security, frontend/product QA, release checks, context handoff, or deliberate engineering skill development. Prefer the jstack MCP tools when available; otherwise use installed upstream gstack skills and normal Codex tools.
+description: Evidence-driven enterprise engineering and mastery workflow for JStack projects. Use when the user invokes /j-stack-dev, /jstack-subagents, or /jstack-full-team, or asks for JStack planning, implementation, review, QA, security, release readiness, project handoff, or deliberate engineering training.
 metadata:
-  short-description: Run the enterprise jstack project workflow and mastery loop
+  short-description: Run JStack enterprise delivery and mastery
 ---
 
-# jstack-dev
+# JStack
 
-Use this skill as the enterprise project-development entrypoint for JStack.
-Operate as a senior engineering and DevOps authority: production-minded,
-evidence-driven, and intolerant of vague implementation claims. This workflow is
-both an execution standard and a mastery-training system for Jay.
+JStack is an execution standard, not a claim that AI output is automatically
+production-grade. Produce the smallest coherent change, gather independent
+evidence, expose residual risk, and deny readiness whenever required evidence is
+missing, stale, incomplete, or failed.
 
-## Preferred Path: jstack MCP
+## Command Authority
 
-If the `jstack` MCP tools are available in the active thread, use them in this order:
+The invoked command is the sole staffing authority:
 
-1. `jstack_detect_project` for the current project path.
-2. `jstack_policy_check` to load project policy, classify risk, and detect
-   protected-path changes.
-3. `jstack_plan` with the user's goal, `quality_level="enterprise"`, and
-   `mastery_mode=true`.
-4. `jstack_team_plan` for broad, risky, production-facing, security-sensitive,
-   UI-sensitive, or quant/data-sensitive work.
-5. `jstack_preflight` before substantial edits or handoff.
-6. `jstack_health` before substantial edits.
-7. `jstack_review` after edits or before handoff.
-8. `jstack_security_audit` for security/compliance/auth/integration-sensitive work.
-9. `jstack_qa` to discover and optionally run safe detected test commands.
-10. `jstack_quant_backtest_review` for trading, EA, or backtest work.
-11. `jstack_release_readiness` and `jstack_ship_check` before release/deploy work.
-12. `jstack_context_save` when the work should be resumable later.
+- `/j-stack-dev`: `single-lead`. Never spawn subagents. If the work no longer
+  fits one lead, stop and recommend another command.
+- `/jstack-subagents`: `smart-subagents`. The user explicitly approved a
+  right-sized team, normally two or three specialists.
+- `/jstack-full-team`: `full-team`. Account for all 11 roles and dispatch in
+  controlled waves when concurrency would create noise.
 
-Do not use the MCP as a substitute for user approval, project-specific deploy rules, or destructive-command safeguards.
+Do not silently reinterpret one command as another. Staffing changes
+coordination coverage, never the quality bar.
 
-## Enterprise Workflow Profile
+The JStack MCP plans, validates, scans, records, and evaluates evidence. It does
+not spawn platform subagents. Use the platform multi-agent tools for real
+dispatch, waiting, collection, and closure.
 
-Default to the lightweight path only for truly trivial one-line changes. For all
-substantial development work, apply these gates.
+## Start
 
-## Virtual Engineering Team Model
+1. Read repository instructions and relevant durable memory.
+2. Inspect git status, branch, project boundaries, stack, and existing checks.
+3. Use `jstack_detect_project`.
+4. Use `jstack_policy_check` with the task goal and comparison `base_ref` when
+   known.
+5. Use `jstack_plan` with the exact command `team_mode`,
+   `quality_level="enterprise"`, and the requested `learning_mode`.
+6. For specialist modes, use `jstack_team_plan`, build the actual coordination
+   packet, and pass that object to `jstack_dispatch_check`.
+7. Use `jstack_preflight` before substantial implementation and before handoff.
 
-`/j-stack-dev` should behave like a small engineering department, not an
-uncontrolled agent swarm. One Lead Engineer owns the task, and specialists are
-dispatched only when their review materially reduces risk or increases speed.
+If the JStack MCP is unavailable, apply this skill with normal Codex tools.
+Upstream gstack is optional; JStack is independently usable.
 
-### Default team
+## Delivery Gates
 
-- Lead Engineer: owns scope, risk classification, plan, final implementation
-  decision, final verification, and user handoff.
-- Architect: reviews boundaries, contracts, migrations, and long-term
-  maintainability.
-- Code Investigator: traces current behavior, reproduces defects, and maps root
-  cause before edits.
-- Builder: implements a bounded change in an explicitly assigned write scope.
-- Reviewer: checks diffs for bugs, regressions, missing tests, and scope creep.
-- QA Engineer: designs or runs verification, browser checks, screenshots, and
-  regression checks.
-- Security Engineer: reviews secrets, auth, RBAC, PII, webhooks, public
-  boundaries, and production mutation risk.
-- DevOps / Release Engineer: checks deploy readiness, environment separation,
-  rollback, monitoring, and canary plans.
-- Product / UX Reviewer: checks user workflow, acceptance criteria, visual
-  quality, and accessibility basics.
-- Quant / Backtest Reviewer: checks EA/backtest data provenance, history
-  quality, cost model, sample split, bias controls, and robustness.
-- Documentation / Handoff Writer: records behavior changes, release notes,
-  decisions, and durable context.
+### Context
 
-### Dispatch rules
+- Read `AGENTS.md`, README, architecture, security, contribution, and relevant
+  project docs before editing.
+- Restore saved context when resuming.
+- Load only task-relevant durable memory.
+- Distinguish source truth, generated artifacts, and installed copies.
 
-- Small one-file task: Lead Engineer only.
-- Normal bug or feature: Lead plus Investigator and Reviewer.
-- Phase, milestone, project, or broad roadmap work: Lead plus at least Code
-  Investigator and Reviewer when multi-agent tools are available.
-- Broad implementation: add Builder with a disjoint write scope.
-- Architecture/API/database/integration: add Architect.
-- UI/product work: add Product / UX Reviewer and QA Engineer.
-- Security/compliance/auth/public endpoint/payment/PII: add Security Engineer.
-- Production/release/deploy: add DevOps / Release Engineer, Security Engineer,
-  QA Engineer, and Reviewer.
-- Trading/EA/quant/backtest: add Quant / Backtest Reviewer.
-- Documentation-heavy or GitHub/repo packaging work: add Documentation /
-  Handoff Writer.
-- For phase/milestone/project work, architecture-sensitive work,
-  security/compliance-sensitive work, production/release work, UI/product work,
-  quant/data/financial work, or difficult debugging, the Lead MUST spawn the
-  selected specialists when multi-agent tools are available before implementation
-  or final handoff.
-- If no specialists are spawned for one of those tasks, the Lead MUST explicitly
-  write: "No subagents deployed:" followed by the concrete reason, such as
-  "multi-agent tools unavailable", "task reclassified as trivial", or "user
-  requested single-agent mode".
+### Plan
 
-### Agent Coordination Protocol
+- Classify all matching domains: normal, architecture, product/UI,
+  security/compliance, data/financial, and production/release.
+- Use the strictest combined gates.
+- State acceptance criteria, invariants, failure modes, test evidence, and
+  rollback or compatibility needs before broad work.
+- Keep one lead accountable for synthesis and final decisions.
 
-Full team means complete professional coverage, not uncontrolled concurrency.
-Before deploying several specialists or using `/jstack-full-team`, the Lead
-Engineer must produce or internally maintain a coordination packet with:
+### Build
 
-- goal: the user objective in one sentence
-- risk class: trivial, normal, architecture, UI/product, security,
-  data/financial, or release
-- mode: single-lead, smart-subagents, or full-team
-- roles used: exact agents used and why each is necessary
-- roles not used: skipped specialists and why, unless full-team mode accounts
-  for all 11 roles
-- read/write permissions: who may edit and who is read-only
-- file ownership map: path or module ownership for every editing agent
-- evidence contract: what each specialist must return
-- conflict rule: how contradictory findings are resolved
-- stop conditions: what forces pause or escalation
-- verification gate: tests, QA, screenshots, logs, security, release, or
-  backtest checks required
-- handoff gate: final summary and residual-risk requirements
+- Follow local architecture and conventions.
+- Make the smallest coherent diff.
+- Do not invent APIs, data, file contents, test results, or operational state.
+- Avoid unrelated refactors, dependency churn, and generated-file drift.
+- Add tests proportional to risk and blast radius.
 
-Default permissions:
+### Review
 
-- Lead Engineer: orchestrator; may edit.
-- Builder: may edit only assigned disjoint implementation scope.
-- Documentation / Handoff Writer: may edit docs only when assigned.
-- All other specialists: read-only.
+- Review the complete release delta: committed `base..HEAD`, staged, unstaged,
+  and untracked changes.
+- Lead findings with correctness, security, data loss, compatibility,
+  production risk, and missing tests.
+- Treat policy files, workflows, secrets, production config, infra, and
+  migrations as protected surfaces.
+- Use `jstack_review` and specialist review where the command permits it.
 
-File ownership rules:
+### QA
 
-- No two editing agents may own the same file or module.
-- Shared files require Lead Engineer ownership or explicit serialization.
-- Specialists may not edit outside their assigned write scope.
-- A file ownership conflict blocks dispatch until resolved.
-- If the scope cannot be split cleanly, use one Builder.
+- `jstack_qa` discovery is read-only; discovered commands are repository code,
+  not trusted JStack code.
+- Before execution, inspect the command and exact project fingerprint. Set
+  `execution_approved=true` only when local project checks are authorized and
+  the reviewed revision/fingerprint match.
+- Run all checks relevant to the changed surface. Record command, exit status,
+  and receipt. A discovered, skipped, blocked, timed-out, or failed command is
+  not a pass.
+- Browser/UI work also needs runtime interaction and responsive visual evidence.
 
-Conflict resolution:
+### Security
 
-- Evidence beats opinion.
-- Reproduction beats speculation.
-- Project rules beat generic best practice.
-- Safety gates beat speed.
-- The Lead Engineer decides and documents unresolved risk.
+- Use `jstack_security_audit` for substantial and sensitive work.
+- Scan incompleteness, file/symlink errors, findings, auth gaps, secret
+  exposure, unsafe public output, and unreviewed trust boundaries are blockers.
+- A clean heuristic secret scan does not replace dependency, SAST, container,
+  infrastructure, or human security review when those are relevant.
 
-Full-team wave pattern:
+### Release
 
-1. Discovery wave: Architect, Code Investigator, Product/UX or Quant when
-   relevant.
-2. Build wave: Builder only after the Lead approves scope.
-3. Review wave: Reviewer, QA, Security, DevOps, Documentation.
-4. Synthesis wave: Lead reconciles evidence, resolves conflicts, verifies, and
-   hands off.
+- Release/deploy/merge/production mutation requires explicit user approval and
+  project authorization.
+- Use `jstack_ship_check` and `jstack_release_readiness` with current QA and
+  security receipts.
+- Readiness requires a clean committed subject, every discovered required
+  command passing for that exact fingerprint, complete security evidence,
+  approver reference, rollback plan, and monitoring or canary plan.
+- Never equate implementation completion with deployment completion.
 
-### Anti-swarm controls
+### Handoff
 
-- Do not spawn agents just to create activity.
-- Do not ask multiple agents to solve the same question unless comparing
-  approaches is the explicit goal.
-- Do not allow parallel uncontrolled edits to overlapping files.
-- Each subagent must have one clear scope, one owner, and one evidence contract.
-- Specialists should usually investigate, test, review, and report. They edit
-  only when assigned a disjoint file/module scope.
-- The Lead Engineer must synthesize all specialist results before claiming the
-  work is complete.
+- State outcome, files changed, exact checks and results, residual risk, and
+  open work.
+- Use `jstack_context_save` for resumable substantial work.
+- Update durable memory only for durable facts or decisions.
+- Never call work production-ready when a required gate is absent.
 
-### Production code standard
+## Specialist Modes
 
-- Prefer existing architecture, contracts, and local conventions over new abstractions.
-- No fake data, fake confidence, hidden source assumptions, or unverifiable "done" claims.
-- No broad refactors, metadata churn, production mutation, or deploy/restart side effects outside the requested scope.
-- Every non-trivial claim needs evidence: tests, logs, source references, browser checks, API responses, screenshots, or explicit residual risk.
-- If required quality/security/QA/release gates are missing, say so directly and do not call the work production-ready.
-- For projects with a `jstack.enterprise.json`, `jstack.policy.json`, `jstack.yml`, `.jstack/jstack.yml`, or legacy `gstack.*` policy file, treat that file as the project-specific enforcement layer.
-- For trading/EA/quant work, do not make performance or investor-facing claims without reproducible data source, history quality, cost model, settings file, source version, sample split, and bias-control evidence.
+Before dispatch, create a coordination packet containing:
 
-### 1. Classify the work
+- `goal` and `riskClass` array
+- `mode`, `rolesUsed`, and `rolesNotUsed`
+- `readWritePermissions`
+- `fileOwnershipMap` for every writer
+- `evidenceContract` and `stopConditions`
+- `conflictRule`, `verificationGate`, and `handoffGate`
 
-Classify the request before planning:
+Only Lead, Builder, and assigned Documentation roles may write. Builder scopes
+must be explicit and disjoint. Documentation may write documentation only.
+All other specialists are read-only. Unknown roles, traversal, wildcard/root
+ambiguity, ancestor overlap such as `src` versus `src/auth`, or a boolean claim
+that a packet exists block dispatch.
 
-- Trivial fix
-- Normal feature or bug
-- Architecture-sensitive change
-- UI/product-sensitive change
-- Security/compliance-sensitive change
-- Data/financial/integration-sensitive change
-- Production/release/deploy work
+For full-team work use waves:
 
-Use the stricter gate when a task matches more than one class.
+1. Discovery: Architect, Investigator, Product/UX, and Quant.
+2. Build: Lead and one scoped Builder by default.
+3. Review: Reviewer, QA, Security, DevOps, and Documentation.
+4. Synthesis: Lead reconciles evidence and makes the go/no-go call.
 
-### 2. Context gate
+Read [team-coordination.md](references/team-coordination.md) when using either
+specialist command.
 
-- Read project instructions first: `AGENTS.md`, `CLAUDE.md`, README, relevant
-  docs, and local config.
-- Use `context-restore` or `jstack_context_restore` when resuming prior work.
-- For Caberg/server work, read Obsidian memory starting with `Memory/COMPACT.md`,
-  then the relevant project memory note.
-- Detect stack, test commands, and project boundaries before editing.
+## Mastery
 
-### 3. Planning gate
+Learning modes:
 
-- Product/feature shaping: `office-hours`, then `autoplan` or plan reviews.
-- Vague scope: `spec`.
-- Broad or multi-step work: `autoplan`.
-- Architecture/database/API/integration changes: `plan-eng-review`.
-- UI/product surfaces: `plan-design-review`.
-- Developer-facing workflows: `plan-devex-review`.
-- Product strategy or business-model impact: `plan-ceo-review`.
+- `off`: enterprise execution without visible instruction.
+- `embedded` (default): finish with at most one mental model, one decision
+  checkpoint, and one next drill in three lines.
+- `coach`: explain decisions interactively while preserving delivery pace.
+- `assessment`: do not reveal hidden answers before the attempt; score submitted
+  evidence only.
 
-### 4. Safety gate
+Use `jstack_mastery_start`, `jstack_mastery_status`, and
+`jstack_mastery_record`. Learner stage is demonstrated ability; task domain is
+the risk of the current work. Never promote a learner because a task contains an
+advanced keyword.
 
-- Risky repo or narrow edit boundary: `guard` or `freeze`.
-- Destructive-command awareness: `careful`.
-- Enterprise policy: `jstack_policy_check` and `jstack_preflight`.
-- Never deploy, push, merge, delete data, reset git state, restart production,
-  alter DNS/SSL, or modify production systems unless explicitly requested and
-  allowed by project rules.
+When task risk exceeds learner stage, keep delivery under the full expert gate
+while isolating assessment to the learner's current drill. For Stage 0, complete
+the read-only orientation and required `.jstack-training/` artifacts before
+implementation, or use a separate clean worktree. Do not award advanced-task
+credit for work performed by the Lead or AI.
 
-### 5. Build gate
+Normal output order is outcome, evidence, residual risk, then the optional
+mastery capsule. Read [mastery-system.md](references/mastery-system.md) for the
+curriculum, artifacts, scoring, advancement, and capstones.
 
-- Implement the smallest coherent change that solves the problem.
-- Follow existing architecture and project conventions.
-- Avoid unrelated refactors and metadata churn.
-- Add or update tests proportional to risk and blast radius.
+## Anti-Slop Rule
 
-### 6. Quality gate
+JStack improves the process that produces code. It does not transform weak code
+by declaration. Enterprise quality exists only when the implementation,
+verification, security review, operational controls, and human judgment support
+the claim.
 
-- General health: `health`.
-- Diff/bug/regression review: `review`.
-- Bugs needing root cause: `investigate`.
-- Run focused lint, typecheck, tests, and build commands discovered from the
-  project.
-
-### 7. Security/compliance gate
-
-- Use `cso` for auth, secrets, RBAC, payments, PII, data retention, public
-  endpoints, webhooks, external APIs, infrastructure, deployment, or compliance
-  sensitive work.
-- Treat secret exposure, auth bypass, data leakage, unsafe production mutation,
-  and missing security review for sensitive surfaces as release blockers.
-
-### 8. Product/UI/QA gate
-
-- Visual/product quality: `design-review`.
-- Larger design direction: `design-consultation`.
-- Running app verification: `qa`, `qa-only`, `browse`.
-- Performance-sensitive surfaces: `benchmark`.
-
-### 9. Release gate
-
-- Use `ship` only when explicitly asked to ship or open a PR.
-- Use `jstack_release_readiness` and `ship_check`/`jstack_ship_check` before release handoff.
-- Use `land-and-deploy` and `canary` only when explicitly asked to merge,
-  deploy, or monitor production.
-- Do not call work production-ready if required tests, security, QA, or docs are
-  missing.
-
-### 10. Handoff gate
-
-- Summarize files changed, checks run, results, risks, and open items.
-- Use `context-save` or `jstack_context_save` for non-trivial work.
-- Use `document-release` when behavior, API, deployment, or user workflow docs
-  changed.
-- Update Obsidian memory for durable Caberg/server facts.
-
-### 11. Mastery-training layer
-
-For non-trivial work, also train Jay deliberately. Include:
-
-- `masteryStage`: the current skill stage being practiced.
-- `learningObjective`: what this task teaches.
-- `expertMentalModel`: the senior-engineer principle behind the work.
-- `skillBenchmarks`: objective evidence that would prove competence.
-- `antiSlopChecklist`: concrete quality failures to avoid on this task.
-- `reviewRubric`: what a serious production review would check.
-- `nextDrill`: one focused exercise that moves Jay up one level.
-
-Progressive stages:
-
-0. Operator setup: paths, shell, git, logs, non-destructive habits.
-1. Code reading: trace existing behavior before editing.
-2. Scoped fixes: minimal diffs, local conventions, focused tests.
-3. Testing/debugging: reproduce, isolate, fix, verify root cause.
-4. Backend/API/data contracts: stable schemas, failure modes, source truth.
-5. Frontend/product: usable workflows, state, accessibility, visual QA.
-6. DevOps/release: backups, preflight, scoped deploys, logs, rollback.
-7. Security/reliability: auth, secrets, RBAC, PII, public boundary risk.
-8. Architecture: boundaries, migrations, observability, long-term change.
-9. Staff-level execution: ambiguous goals to shipped, monitored systems.
-
-## Skill Routing Summary
-
-- Planning: `spec`, `office-hours`, `autoplan`, `plan-eng-review`,
-  `plan-ceo-review`, `plan-design-review`, `plan-devex-review`
-- Code quality: `health`, `review`, `investigate`
-- Security/safety: `cso`, `careful`, `guard`, `freeze`, `unfreeze`
-- Frontend/product: `design-review`, `design-consultation`, `qa`, `qa-only`,
-  `browse`, `benchmark`
-- Testing/release: `qa`, `qa-only`, `ship`, `jstack_ship_check`, `canary`,
-  `land-and-deploy`
-- Continuity/docs: `context-save`, `context-restore`, `document-generate`,
-  `document-release`, `learn`
-
-## Fallback Path When MCP Is Not Loaded
-
-If the jstack MCP tools are not visible:
-
-1. Read project instructions first: `AGENTS.md`, `CLAUDE.md`, README, or relevant docs.
-2. Use normal Codex tools to inspect the repo and detect stack/test commands.
-3. Use installed gstack skills from `~/.codex/skills` when their trigger matches the task.
-4. Keep the same enterprise workflow profile above.
-5. Explain briefly that the MCP may require a new Codex thread or app restart to appear in `/mcp list`.
-
-## Operating Rules
-
-- Do not expose or run arbitrary shell through this workflow.
-- Do not deploy, push, merge, delete data, reset git state, or modify production systems unless explicitly requested and allowed by project rules.
-- For small one-line fixes, keep the workflow lightweight.
-- For enterprise work, prefer explicit plan, scoped implementation, focused
-  tests, static/security review, product/QA review when relevant, and handoff
-  summary.
+Read [evidence-and-release.md](references/evidence-and-release.md) before
+changing policy, QA execution, evidence receipts, installers, or release gates.

@@ -60,6 +60,10 @@ define:
 | Verification gate | Tests, checks, QA, screenshots, logs, or reports required |
 | Handoff gate | Final summary shape and residual-risk requirements |
 
+`jstack_dispatch_check` receives this actual object. A boolean assertion that
+a packet exists is invalid. The MCP never claims to spawn agents; Codex
+platform tools perform dispatch and collection.
+
 ## Role Permission Defaults
 
 | Role | Default Mode | Edit Permission |
@@ -83,6 +87,8 @@ define:
 3. Specialists may not edit outside their assigned write scope.
 4. A file ownership conflict blocks dispatch until resolved.
 5. If the scope cannot be split cleanly, use one Builder.
+6. Reject absolute paths, traversal, repository-root scopes, and ancestor/glob
+   overlaps such as `src` versus `src/api`.
 
 ## Evidence Contract
 

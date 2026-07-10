@@ -2,16 +2,12 @@
   "mcpServers": {
     "jstack": {
       "cwd": ".",
-      "command": "python",
+      "command": "node",
       "args": [
-        "./mcp/jstack_mcp_server.py"
+        "./mcp/launcher.mjs"
       ],
       "startup_timeout_sec": 30,
-      "tool_timeout_sec": 300,
-      "env": {
-        "GSTACK_ROOT": "C:/Users/TE05/.gstack/repos/gstack",
-        "PATH": "C:/Users/TE05/.gstack/repos/gstack/bin;C:/Windows/System32;C:/Windows;C:/Windows/System32/WindowsPowerShell/v1.0"
-      }
+      "tool_timeout_sec": 300
     }
   }
 }

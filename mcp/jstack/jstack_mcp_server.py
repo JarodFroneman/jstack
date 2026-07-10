@@ -9,22 +9,39 @@ checks, security scanning, and context save/restore.
 from __future__ import annotations
 
 import datetime as _dt
+import base64
 import fnmatch
 import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
+import signal
+import shutil
+import stat
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.7.1"
-PROTOCOL_VERSION = "2024-11-05"
+SERVER_VERSION = "0.2.0"
+PROTOCOL_VERSION = "2025-11-25"
+SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
+MAX_CHANGED_FILES = 10_000
+MAX_FINGERPRINT_BYTES = 512_000_000
+MAX_FINGERPRINT_FILES = 100_000
+RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
+SERVER_SESSION_ID = secrets.token_hex(16)
+_RECEIPT_SECRET = secrets.token_bytes(32)
+_MCP_INITIALIZED = False
 
 EXCLUDED_DIRS = {
     ".git",
@@ -49,6 +66,47 @@ EXCLUDED_DIRS = {
 
 class ToolError(Exception):
     """Expected tool error with an actionable message."""
+
+
+class InputError(ToolError):
+    """Invalid JSON-RPC or tool input."""
+
+
+def validate_schema_value(value: Any, schema: dict[str, Any], path: str = "arguments") -> None:
+    expected = schema.get("type")
+    valid = True
+    if expected == "object":
+        valid = isinstance(value, dict)
+    elif expected == "array":
+        valid = isinstance(value, list)
+    elif expected == "string":
+        valid = isinstance(value, str)
+    elif expected == "boolean":
+        valid = isinstance(value, bool)
+    elif expected == "integer":
+        valid = isinstance(value, int) and not isinstance(value, bool)
+    elif expected == "number":
+        valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if not valid:
+        raise InputError(f"{path} must be of type {expected}.")
+    if "enum" in schema and value not in schema["enum"]:
+        raise InputError(f"{path} must be one of: {schema['enum']}")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in schema and value < schema["minimum"]:
+            raise InputError(f"{path} must be at least {schema['minimum']}.")
+        if "maximum" in schema and value > schema["maximum"]:
+            raise InputError(f"{path} must be at most {schema['maximum']}.")
+    if isinstance(value, dict):
+        for field in schema.get("required", []):
+            if field not in value:
+                raise InputError(f"{path}.{field} is required.")
+        properties = schema.get("properties", {})
+        for field, child in value.items():
+            if field in properties:
+                validate_schema_value(child, properties[field], f"{path}.{field}")
+    if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        for index, child in enumerate(value):
+            validate_schema_value(child, schema["items"], f"{path}[{index}]")
 
 
 def now_iso() -> str:
@@ -77,40 +135,170 @@ def require_project_path(path: str | None = None) -> Path:
         raise ToolError(f"Project path does not exist: {project_path}")
     if not project_path.is_dir():
         raise ToolError(f"Project path must be a directory: {project_path}")
-    return project_path
+    root = git_root(project_path)
+    if not root:
+        raise ToolError(f"JStack project tools require a git repository: {project_path}")
+    return Path(root).resolve()
+
+
+def process_environment(args: list[str], cwd: Path) -> tuple[list[str], dict[str, str] | None]:
+    if not args or args[0] != "git":
+        return args, None
+    candidates = [
+        Path("/usr/bin/git"),
+        Path("/usr/local/bin/git"),
+        Path("/opt/homebrew/bin/git"),
+        Path("C:/Program Files/Git/cmd/git.exe"),
+        Path("C:/Program Files/Git/bin/git.exe"),
+    ]
+    discovered = shutil.which("git")
+    if discovered:
+        candidates.append(Path(discovered))
+    executable: str | None = None
+    for candidate in candidates:
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(cwd.resolve())
+            continue
+        except ValueError:
+            executable = str(resolved)
+            break
+    if not executable:
+        raise ToolError("No trusted git executable was found outside the project directory.")
+    env = os.environ.copy()
+    for name in (
+        "GIT_EXTERNAL_DIFF",
+        "GIT_DIFF_OPTS",
+        "GIT_ASKPASS",
+        "SSH_ASKPASS",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+    ):
+        env.pop(name, None)
+    null_device = "NUL" if os.name == "nt" else "/dev/null"
+    env.update(
+        {
+            "GIT_CONFIG_GLOBAL": null_device,
+            "GIT_CONFIG_SYSTEM": null_device,
+            "GIT_ATTR_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_OPTIONAL_LOCKS": "0",
+        }
+    )
+    hardened = [
+        executable,
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        f"core.hooksPath={null_device}",
+        "-c",
+        "diff.external=",
+        *args[1:],
+    ]
+    return hardened, env
 
 
 def safe_run(args: list[str], cwd: Path, timeout: int = 20) -> dict[str, Any]:
+    completed = run_complete(args, cwd, timeout=timeout, max_bytes=5_000_000)
+    stdout = completed["stdout"].decode("utf-8", errors="replace")
+    return {
+        "ok": completed["ok"],
+        "returncode": completed["returncode"],
+        "stdout": truncate(stdout),
+        "stderr": truncate(completed["stderr"]),
+        "args": args,
+    }
+
+
+def run_complete(args: list[str], cwd: Path, timeout: int = 20, max_bytes: int = 5_000_000) -> dict[str, Any]:
+    """Run a trusted read-only command without silently truncating its evidence."""
+    process_args, env = process_environment(args, cwd)
     try:
-        completed = subprocess.run(
-            args,
+        process = subprocess.Popen(
+            process_args,
             cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            start_new_session=(os.name != "nt"),
         )
     except FileNotFoundError:
-        return {
-            "ok": False,
-            "returncode": 127,
-            "stdout": "",
-            "stderr": f"Command not found: {args[0]}",
-            "args": args,
-        }
-    except subprocess.TimeoutExpired as exc:
+        return {"ok": False, "returncode": 127, "stdout": b"", "stderr": f"Command not found: {args[0]}", "args": args}
+    assert process.stdout and process.stderr
+    stdout_buffer = bytearray()
+    stderr_buffer = bytearray()
+    overflow = threading.Event()
+    lock = threading.Lock()
+    captured = [0]
+
+    def read_stream(stream: Any, buffer: bytearray) -> None:
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                return
+            with lock:
+                remaining = max_bytes - captured[0]
+                accepted = min(len(chunk), max(0, remaining))
+                if accepted:
+                    buffer.extend(chunk[:accepted])
+                    captured[0] += accepted
+                if accepted < len(chunk):
+                    overflow.set()
+                    return
+
+    readers = [
+        threading.Thread(target=read_stream, args=(process.stdout, stdout_buffer), daemon=True),
+        threading.Thread(target=read_stream, args=(process.stderr, stderr_buffer), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    deadline = time.monotonic() + timeout
+    timed_out = False
+    while process.poll() is None:
+        if overflow.is_set():
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+            break
+        if time.monotonic() >= deadline:
+            timed_out = True
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+            break
+        time.sleep(0.01)
+    process.wait(timeout=5)
+    for reader in readers:
+        reader.join(timeout=2)
+    process.stdout.close()
+    process.stderr.close()
+    stderr = stderr_buffer.decode("utf-8", errors="replace")
+    if timed_out:
         return {
             "ok": False,
             "returncode": 124,
-            "stdout": truncate(exc.stdout or ""),
-            "stderr": truncate((exc.stderr or "") + f"\nTimed out after {timeout}s"),
+            "stdout": bytes(stdout_buffer),
+            "stderr": stderr + f"\nTimed out after {timeout}s; process group terminated.",
+            "args": args,
+        }
+    if overflow.is_set():
+        return {
+            "ok": False,
+            "returncode": 125,
+            "stdout": bytes(stdout_buffer),
+            "stderr": f"Command evidence exceeded the {max_bytes}-byte safety limit.",
             "args": args,
         }
     return {
-        "ok": completed.returncode == 0,
-        "returncode": completed.returncode,
-        "stdout": truncate(completed.stdout or ""),
-        "stderr": truncate(completed.stderr or ""),
+        "ok": process.returncode == 0,
+        "returncode": process.returncode,
+        "stdout": bytes(stdout_buffer),
+        "stderr": stderr,
         "args": args,
     }
 
@@ -137,6 +325,23 @@ def find_gstack_root() -> Path | None:
     return None
 
 
+def find_jstack_root() -> Path | None:
+    server_dir = Path(__file__).resolve().parent
+    candidates = [
+        os.environ.get("JSTACK_ROOT"),
+        str(server_dir.parents[1]) if len(server_dir.parents) > 1 else None,
+        str(server_dir.parent),
+        str(Path.home() / ".codex" / "skills" / "jstack-dev"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        root = Path(candidate).expanduser().resolve()
+        if (root / "skills" / "jstack-dev" / "SKILL.md").exists() or (root / "SKILL.md").exists():
+            return root
+    return None
+
+
 def gstack_bin() -> Path | None:
     root = find_gstack_root()
     if not root:
@@ -153,7 +358,8 @@ def project_slug(project_path: Path) -> str:
 
 def read_json(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+        return value if isinstance(value, dict) else None
     except Exception:
         return None
 
@@ -293,7 +499,7 @@ def read_policy_file(path: Path) -> dict[str, Any] | None:
         return read_json(path)
     if path.suffix.lower() in {".yml", ".yaml"}:
         try:
-            return parse_simple_yaml(path.read_text(encoding="utf-8", errors="replace"))
+            return parse_simple_yaml(path.read_text(encoding="utf-8-sig", errors="strict"))
         except OSError:
             return None
     return None
@@ -307,6 +513,86 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
         else:
             result[key] = value
     return result
+
+
+def _string_list(value: Any, field: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+        raise ToolError(f"JStack policy field '{field}' must be an array of non-empty strings.")
+    return [item.strip() for item in value]
+
+
+def _merge_unique(*groups: list[str]) -> list[str]:
+    result: list[str] = []
+    for group in groups:
+        for item in group:
+            if item not in result:
+                result.append(item)
+    return result
+
+
+def validate_policy_override(value: dict[str, Any], path: Path) -> None:
+    if not isinstance(value, dict):
+        raise ToolError(f"JStack policy must be a JSON/YAML object: {path}")
+    if "schemaVersion" in value and value["schemaVersion"] != "jstack.enterprise.v1":
+        raise ToolError(f"Unsupported JStack policy schemaVersion in {path}: {value['schemaVersion']!r}")
+    for field in ("requiredChecks", "protectedPaths"):
+        if field in value:
+            _string_list(value[field], field)
+    for section in ("release", "security", "quant"):
+        if section in value and not isinstance(value[section], dict):
+            raise ToolError(f"JStack policy field '{section}' must be an object.")
+    security = value.get("security") or {}
+    if "sensitiveKeywords" in security:
+        _string_list(security["sensitiveKeywords"], "security.sensitiveKeywords")
+    quant = value.get("quant") or {}
+    if "requiredEvidence" in quant:
+        _string_list(quant["requiredEvidence"], "quant.requiredEvidence")
+    if "minimumHistoryQualityPercent" in quant:
+        try:
+            number = float(quant["minimumHistoryQualityPercent"])
+        except (TypeError, ValueError) as exc:
+            raise ToolError("JStack policy quant.minimumHistoryQualityPercent must be numeric.") from exc
+        if not 0 <= number <= 100:
+            raise ToolError("JStack policy quant.minimumHistoryQualityPercent must be between 0 and 100.")
+
+
+def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str, Any]:
+    """Enforce minimum controls that a repository policy cannot weaken."""
+    policy["schemaVersion"] = "jstack.enterprise.v1"
+    policy["requiredChecks"] = _merge_unique(
+        _string_list(DEFAULT_ENTERPRISE_POLICY["requiredChecks"], "requiredChecks"),
+        _string_list(policy.get("requiredChecks", []), "requiredChecks"),
+    )
+    policy_files = []
+    for candidate in policy_candidates(project_path):
+        try:
+            policy_files.append(candidate.relative_to(project_path).as_posix())
+        except ValueError:
+            continue
+    policy["protectedPaths"] = _merge_unique(
+        _string_list(DEFAULT_ENTERPRISE_POLICY["protectedPaths"], "protectedPaths"),
+        _string_list(policy.get("protectedPaths", []), "protectedPaths"),
+        policy_files,
+    )
+    for key in ("requiresExplicitApproval", "requiresRollbackPlan", "requiresCanaryOrMonitoring", "requiresCleanDiffCheck"):
+        policy.setdefault("release", {})[key] = True
+    policy.setdefault("security", {})["secretScanRequired"] = True
+    policy["security"]["sensitiveKeywords"] = _merge_unique(
+        _string_list(DEFAULT_ENTERPRISE_POLICY["security"]["sensitiveKeywords"], "security.sensitiveKeywords"),
+        _string_list(policy["security"].get("sensitiveKeywords", []), "security.sensitiveKeywords"),
+    )
+    policy.setdefault("quant", {})["requiresParameterFreeze"] = True
+    policy["quant"]["requiresOutOfSample"] = True
+    policy["quant"]["requiresCostModel"] = True
+    policy["quant"]["requiredEvidence"] = _merge_unique(
+        _string_list(DEFAULT_ENTERPRISE_POLICY["quant"]["requiredEvidence"], "quant.requiredEvidence"),
+        _string_list(policy["quant"].get("requiredEvidence", []), "quant.requiredEvidence"),
+    )
+    policy["quant"]["minimumHistoryQualityPercent"] = max(
+        float(DEFAULT_ENTERPRISE_POLICY["quant"]["minimumHistoryQualityPercent"]),
+        float(policy["quant"].get("minimumHistoryQualityPercent", 0)),
+    )
+    return policy
 
 
 def policy_candidates(project_path: Path) -> list[Path]:
@@ -333,40 +619,361 @@ def policy_candidates(project_path: Path) -> list[Path]:
 
 
 def load_enterprise_policy(project_path: Path) -> dict[str, Any]:
-    for path in policy_candidates(project_path):
-        if not path.exists():
-            continue
+    existing = [path for path in policy_candidates(project_path) if path.exists() or path.is_symlink()]
+    if len(existing) > 1:
+        raise ToolError(
+            "Multiple JStack policy files are ambiguous; keep exactly one: " + ", ".join(str(path) for path in existing)
+        )
+    for path in existing:
+        if path.is_symlink():
+            raise ToolError(f"JStack policy file may not be a symlink: {path}")
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1_000_000:
+            raise ToolError(f"JStack policy must be a regular file no larger than 1 MB: {path}")
         parsed = read_policy_file(path)
         if parsed is None:
             raise ToolError(f"Could not parse JStack policy file: {path}")
-        policy = deep_merge(DEFAULT_ENTERPRISE_POLICY, parsed)
+        validate_policy_override(parsed, path)
+        policy = apply_policy_floors(deep_merge(DEFAULT_ENTERPRISE_POLICY, parsed), project_path)
         policy["_sourcePath"] = str(path)
         policy["_usingDefault"] = False
         return policy
-    policy = json.loads(json.dumps(DEFAULT_ENTERPRISE_POLICY))
+    policy = apply_policy_floors(json.loads(json.dumps(DEFAULT_ENTERPRISE_POLICY)), project_path)
     policy["_sourcePath"] = None
     policy["_usingDefault"] = True
     return policy
 
 
-def git_changed_files(project_path: Path) -> list[str]:
-    commands = [
-        ["git", "diff", "--name-only"],
-        ["git", "diff", "--cached", "--name-only"],
-        ["git", "ls-files", "--others", "--exclude-standard"],
-    ]
+def _git_text(result: dict[str, Any]) -> str:
+    stdout = result.get("stdout", b"")
+    return stdout.decode("utf-8", errors="replace") if isinstance(stdout, bytes) else str(stdout)
+
+
+def resolve_base_ref(project_path: Path, requested: str | None = None) -> dict[str, Any]:
+    candidates = [requested] if requested else ["@{upstream}", "origin/main", "origin/master", "main", "master"]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        verify = run_complete(["git", "rev-parse", "--verify", f"{candidate}^{{commit}}"], project_path, timeout=8)
+        if not verify["ok"]:
+            continue
+        merge_base = run_complete(["git", "merge-base", str(candidate), "HEAD"], project_path, timeout=8)
+        if merge_base["ok"]:
+            return {
+                "requested": requested,
+                "resolvedRef": str(candidate),
+                "baseCommit": _git_text(merge_base).strip(),
+            }
+    if requested:
+        raise ToolError(f"Could not resolve requested base_ref: {requested}")
+    return {"requested": None, "resolvedRef": None, "baseCommit": None}
+
+
+def git_change_evidence(project_path: Path, base_ref: str | None = None) -> dict[str, Any]:
+    root_raw = git_root(project_path)
+    if not root_raw:
+        raise ToolError(f"JStack change evidence requires a git repository: {project_path}")
+    root = Path(root_raw).resolve()
+    base = resolve_base_ref(root, base_ref)
+    commands: list[tuple[str, list[str]]] = []
+    if base["baseCommit"]:
+        commands.append(("committed", ["git", "diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", f"{base['baseCommit']}..HEAD", "--"]))
+    commands.extend(
+        [
+            ("unstaged", ["git", "diff", "--no-ext-diff", "--no-textconv", "--name-only", "-z", "--"]),
+            ("staged", ["git", "diff", "--no-ext-diff", "--no-textconv", "--cached", "--name-only", "-z", "--"]),
+            ("untracked", ["git", "ls-files", "--others", "--exclude-standard", "-z"]),
+        ]
+    )
     seen: set[str] = set()
     files: list[str] = []
-    for command in commands:
-        result = safe_run(command, project_path, timeout=10)
+    sources: dict[str, list[str]] = {}
+    for source, command in commands:
+        result = run_complete(command, root, timeout=15, max_bytes=10_000_000)
         if not result["ok"]:
-            continue
-        for line in result["stdout"].splitlines():
-            item = line.strip().replace("\\", "/")
+            raise ToolError(f"Could not collect {source} git change evidence: {result['stderr']}")
+        source_files: list[str] = []
+        for raw in result["stdout"].split(b"\0"):
+            try:
+                item = raw.decode("utf-8", errors="strict").replace("\\", "/")
+            except UnicodeDecodeError as exc:
+                raise ToolError("Git returned a changed path that is not valid UTF-8; evidence cannot be represented safely.") from exc
             if item and item not in seen:
                 seen.add(item)
                 files.append(item)
-    return files
+            if item:
+                source_files.append(item)
+        sources[source] = source_files
+        if len(files) > MAX_CHANGED_FILES:
+            raise ToolError(f"Changed-file evidence exceeds the {MAX_CHANGED_FILES}-file safety limit.")
+    return {
+        "gitRoot": str(root),
+        "baseRef": base["resolvedRef"],
+        "baseCommit": base["baseCommit"],
+        "files": files,
+        "sources": sources,
+        "complete": True,
+    }
+
+
+def git_changed_files(project_path: Path, base_ref: str | None = None) -> list[str]:
+    return git_change_evidence(project_path, base_ref)["files"]
+
+
+def project_state(project_path: Path) -> dict[str, Any]:
+    root_raw = git_root(project_path)
+    if not root_raw:
+        raise ToolError("JStack evidence receipts require a git repository with a committed revision.")
+    root = Path(root_raw).resolve()
+    head_result = run_complete(["git", "rev-parse", "HEAD"], root, timeout=8)
+    if not head_result["ok"]:
+        raise ToolError("JStack evidence receipts require a valid git HEAD commit.")
+    head = _git_text(head_result).strip()
+    status_result = run_complete(
+        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        root,
+        timeout=15,
+        max_bytes=20_000_000,
+    )
+    tracked_result = run_complete(
+        ["git", "ls-files", "-s", "-z"],
+        root,
+        timeout=20,
+        max_bytes=20_000_000,
+    )
+    flags_result = run_complete(
+        ["git", "ls-files", "-v", "-z"],
+        root,
+        timeout=20,
+        max_bytes=20_000_000,
+    )
+    untracked_result = run_complete(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+        root,
+        timeout=15,
+        max_bytes=20_000_000,
+    )
+    for label, result in (
+        ("status", status_result),
+        ("tracked index", tracked_result),
+        ("index flags", flags_result),
+        ("untracked", untracked_result),
+    ):
+        if not result["ok"]:
+            raise ToolError(f"Could not fingerprint project {label}: {result['stderr']}")
+    digest = hashlib.sha256()
+    digest.update(str(root).encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(head.encode("ascii"))
+    digest.update(b"\0")
+    digest.update(status_result["stdout"])
+    digest.update(b"\0")
+    digest.update(flags_result["stdout"])
+    total_bytes = 0
+    fingerprinted_files = 0
+
+    def hash_regular_file(path: Path, label: str) -> None:
+        nonlocal total_bytes, fingerprinted_files
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ToolError(f"Cannot fingerprint non-regular file: {label}")
+            fingerprinted_files += 1
+            if fingerprinted_files > MAX_FINGERPRINT_FILES:
+                raise ToolError(f"Project fingerprint exceeds the {MAX_FINGERPRINT_FILES}-file safety limit.")
+            with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                while True:
+                    chunk = handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total_bytes += len(chunk)
+                    if total_bytes > MAX_FINGERPRINT_BYTES:
+                        raise ToolError(
+                            f"Project fingerprint exceeds the {MAX_FINGERPRINT_BYTES}-byte safety limit."
+                        )
+                    digest.update(chunk)
+        finally:
+            os.close(descriptor)
+
+    tracked: list[str] = []
+    submodules_present = False
+    for raw in tracked_result["stdout"].split(b"\0"):
+        if not raw:
+            continue
+        try:
+            index_meta, path_raw = raw.split(b"\t", 1)
+            relative = path_raw.decode("utf-8", errors="strict").replace("\\", "/")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ToolError("Git returned a tracked index entry that cannot be represented safely.") from exc
+        candidate = root / relative
+        digest.update(index_meta)
+        digest.update(b"\t")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        try:
+            metadata = candidate.lstat()
+        except FileNotFoundError:
+            digest.update(b"<missing>")
+        else:
+            if stat.S_ISLNK(metadata.st_mode):
+                target = os.readlink(candidate).encode("utf-8", errors="surrogateescape")
+                total_bytes += len(target)
+                if total_bytes > MAX_FINGERPRINT_BYTES:
+                    raise ToolError(
+                        f"Project fingerprint exceeds the {MAX_FINGERPRINT_BYTES}-byte safety limit."
+                    )
+                digest.update(b"<symlink>")
+                digest.update(target)
+            elif stat.S_ISREG(metadata.st_mode):
+                try:
+                    candidate.resolve().relative_to(root)
+                except ValueError as exc:
+                    raise ToolError(f"Tracked file resolves outside the repository: {relative}") from exc
+                hash_regular_file(candidate, relative)
+            elif stat.S_ISDIR(metadata.st_mode) and index_meta.startswith(b"160000 "):
+                submodules_present = True
+                digest.update(b"<gitlink>")
+            else:
+                raise ToolError(f"Cannot fingerprint tracked non-regular path: {relative}")
+        tracked.append(relative)
+
+    if submodules_present:
+        submodules = run_complete(
+            ["git", "submodule", "status", "--recursive"],
+            root,
+            timeout=30,
+            max_bytes=5_000_000,
+        )
+        if not submodules["ok"]:
+            raise ToolError(f"Could not fingerprint submodules: {submodules['stderr']}")
+        digest.update(submodules["stdout"])
+
+    hidden_index_flags: list[str] = []
+    for raw in flags_result["stdout"].split(b"\0"):
+        if len(raw) < 3:
+            continue
+        tag = chr(raw[0])
+        if tag.islower() or tag == "S":
+            try:
+                hidden_index_flags.append(raw[2:].decode("utf-8", errors="strict").replace("\\", "/"))
+            except UnicodeDecodeError as exc:
+                raise ToolError("Git returned an index-flag path that is not valid UTF-8.") from exc
+
+    untracked: list[str] = []
+    for raw in untracked_result["stdout"].split(b"\0"):
+        if not raw:
+            continue
+        relative = raw.decode("utf-8", errors="strict").replace("\\", "/")
+        candidate = root / relative
+        if candidate.is_symlink():
+            raise ToolError(f"Cannot fingerprint symlinked untracked path: {relative}")
+        path = candidate.resolve(strict=False)
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise ToolError(f"Untracked path escapes repository root: {relative}") from exc
+        if not path.is_file():
+            raise ToolError(f"Cannot fingerprint non-regular untracked path: {relative}")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        hash_regular_file(path, relative)
+        untracked.append(relative)
+    return {
+        "gitRoot": str(root),
+        "gitHead": head,
+        "projectFingerprint": digest.hexdigest(),
+        "clean": not bool(status_result["stdout"]) and not hidden_index_flags,
+        "trackedFileCount": len(tracked),
+        "fingerprintedBytes": total_bytes,
+        "hiddenIndexFlags": hidden_index_flags,
+        "untrackedFiles": untracked,
+    }
+
+
+def evidence_subject(project_path: Path, base_ref: str | None = None) -> dict[str, Any]:
+    state = project_state(project_path)
+    base = resolve_base_ref(Path(state["gitRoot"]), base_ref) if base_ref else {
+        "requested": None,
+        "resolvedRef": None,
+        "baseCommit": None,
+    }
+    policy = load_enterprise_policy(Path(state["gitRoot"]))
+    public_policy = {key: value for key, value in policy.items() if not key.startswith("_")}
+    policy_digest = hashlib.sha256(
+        json.dumps(public_policy, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {
+        **state,
+        "baseRef": base["resolvedRef"],
+        "baseCommit": base["baseCommit"],
+        "policyDigest": policy_digest,
+        "toolVersion": SERVER_VERSION,
+    }
+
+
+def _b64encode(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+
+def _b64decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def issue_receipt(payload: dict[str, Any]) -> str:
+    body = dict(payload)
+    body["serverSession"] = SERVER_SESSION_ID
+    body["issuedAt"] = now_iso()
+    encoded = _b64encode(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    signature = _b64encode(hmac.new(_RECEIPT_SECRET, encoded.encode("ascii"), hashlib.sha256).digest())
+    return f"{encoded}.{signature}"
+
+
+def verify_receipt(
+    receipt: str,
+    expected_kind: str,
+    state: dict[str, Any],
+    expected_subject: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    try:
+        encoded, supplied_signature = receipt.split(".", 1)
+        expected_signature = _b64encode(hmac.new(_RECEIPT_SECRET, encoded.encode("ascii"), hashlib.sha256).digest())
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+    except Exception as exc:
+        raise ToolError("Evidence receipt is malformed, expired, or was not issued by this JStack server session.") from exc
+    age = (_dt.datetime.now(_dt.timezone.utc) - issued).total_seconds()
+    checks = {
+        "kind": payload.get("kind") == expected_kind,
+        "session": payload.get("serverSession") == SERVER_SESSION_ID,
+        "projectPath": payload.get("projectPath") == state["gitRoot"],
+        "gitHead": payload.get("gitHead") == state["gitHead"],
+        "projectFingerprint": payload.get("projectFingerprint") == state["projectFingerprint"],
+        "fresh": 0 <= age <= RECEIPT_MAX_AGE_SECONDS,
+        "passed": payload.get("passed") is True,
+    }
+    if expected_subject:
+        for field in ("baseCommit", "policyDigest", "toolVersion"):
+            checks[field] = payload.get(field) == expected_subject.get(field)
+    return {"valid": all(checks.values()), "checks": checks, "payload": payload}
+
+
+def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json_text(payload) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_name, 0o600)
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
 
 
 def path_matches_patterns(path: str, patterns: list[str]) -> bool:
@@ -408,45 +1015,249 @@ def discover_test_commands(project_path: Path) -> list[dict[str, Any]]:
     scripts = package_scripts(project_path)
     for script_name in ["test", "lint", "typecheck", "type-check", "build"]:
         if script_name in scripts:
+            kind = "typecheck" if script_name == "type-check" else script_name
             commands.append(
                 {
                     "key": f"npm:{script_name}",
+                    "kind": kind,
                     "label": f"npm run {script_name}" if script_name != "test" else "npm test",
                     "source": "package.json",
                     "script": scripts[script_name],
                     "args": ["npm", "test"] if script_name == "test" else ["npm", "run", script_name],
                 }
             )
-    if (project_path / "pytest.ini").exists() or (project_path / "pyproject.toml").exists() or (project_path / "tests").exists():
+    tests_dir = project_path / "tests"
+    pyproject = project_path / "pyproject.toml"
+    pyproject_text = pyproject.read_text(encoding="utf-8-sig", errors="replace") if pyproject.exists() else ""
+    pytest_detected = (project_path / "pytest.ini").exists() or "pytest" in pyproject_text.lower()
+    if tests_dir.exists() and pytest_detected:
         commands.append(
             {
                 "key": "python:pytest",
+                "kind": "test",
                 "label": "python3 -m pytest",
                 "source": "python project detection",
                 "args": ["python3", "-m", "pytest"],
             }
         )
+    elif tests_dir.exists():
+        commands.append(
+            {
+                "key": "python:unittest",
+                "kind": "test",
+                "label": "python3 -m unittest discover -s tests -v",
+                "source": "tests directory",
+                "args": ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
+            }
+        )
     if (project_path / "Cargo.toml").exists():
-        commands.append({"key": "cargo:test", "label": "cargo test", "source": "Cargo.toml", "args": ["cargo", "test"]})
+        commands.append({"key": "cargo:test", "kind": "test", "label": "cargo test", "source": "Cargo.toml", "args": ["cargo", "test"]})
     if (project_path / "go.mod").exists():
-        commands.append({"key": "go:test", "label": "go test ./...", "source": "go.mod", "args": ["go", "test", "./..."]})
+        commands.append({"key": "go:test", "kind": "test", "label": "go test ./...", "source": "go.mod", "args": ["go", "test", "./..."]})
+    for command in commands:
+        fingerprint_input = json.dumps(
+            {key: command.get(key) for key in ("key", "kind", "source", "script", "args")},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        command["commandFingerprint"] = hashlib.sha256(fingerprint_input.encode("utf-8")).hexdigest()
+        command["executesProjectCode"] = True
     return commands
 
 
+def approved_command_env(allowlist: list[str], isolated_home: Path, project_path: Path) -> dict[str, str]:
+    safe_names = {
+        "PATH",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "LANG",
+        "LC_ALL",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+    }
+    env = {name: value for name, value in os.environ.items() if name.upper() in safe_names}
+    for name in allowlist:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise ToolError(f"Invalid env_allowlist name: {name!r}")
+        if name in os.environ:
+            env[name] = os.environ[name]
+    env.update(
+        {
+            "HOME": str(isolated_home),
+            "USERPROFILE": str(isolated_home),
+            "XDG_CONFIG_HOME": str(isolated_home / ".config"),
+            "XDG_CACHE_HOME": str(isolated_home / ".cache"),
+            "CI": "1",
+            "NO_COLOR": "1",
+            "JSTACK_QA_EXECUTION": "1",
+        }
+    )
+    trusted_path_entries: list[str] = []
+    for entry in env.get("PATH", "").split(os.pathsep):
+        if not entry or not os.path.isabs(entry):
+            continue
+        resolved = Path(entry).resolve()
+        try:
+            resolved.relative_to(project_path)
+            continue
+        except ValueError:
+            pass
+        if str(resolved) not in trusted_path_entries:
+            trusted_path_entries.append(str(resolved))
+    for entry in (Path(sys.executable).resolve().parent, Path("/usr/bin"), Path("/bin"), Path("/usr/local/bin"), Path("/opt/homebrew/bin")):
+        if entry.exists() and str(entry) not in trusted_path_entries:
+            trusted_path_entries.append(str(entry))
+    env["PATH"] = os.pathsep.join(trusted_path_entries)
+    return env
+
+
+def run_approved_project_command(
+    command: list[str], project_path: Path, timeout: int, env_allowlist: list[str]
+) -> dict[str, Any]:
+    output_limit = 1_000_000
+
+    def terminate(process: subprocess.Popen[bytes]) -> None:
+        if process.poll() is not None:
+            return
+        if os.name == "nt":
+            process.kill()
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+
+    with tempfile.TemporaryDirectory(prefix="jstack-qa-") as temp_home:
+        env = approved_command_env(env_allowlist, Path(temp_home), project_path)
+        executable = sys.executable if command[0] in {"python", "python3", "py"} else shutil.which(command[0], path=env["PATH"])
+        if not executable:
+            return {
+                "ok": False,
+                "returncode": 127,
+                "stdout": "",
+                "stderr": f"Command not found outside the project: {command[0]}",
+                "args": command,
+            }
+        executable_path = Path(executable).resolve()
+        try:
+            executable_path.relative_to(project_path)
+            return {
+                "ok": False,
+                "returncode": 126,
+                "stdout": "",
+                "stderr": f"Refusing to execute a project-local command binary: {executable_path}",
+                "args": command,
+            }
+        except ValueError:
+            pass
+        resolved_command = [str(executable_path), *command[1:]]
+        try:
+            process = subprocess.Popen(
+                resolved_command,
+                cwd=str(project_path),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                start_new_session=(os.name != "nt"),
+            )
+        except FileNotFoundError:
+            return {
+                "ok": False,
+                "returncode": 127,
+                "stdout": "",
+                "stderr": f"Command not found: {command[0]}",
+                "args": command,
+            }
+        assert process.stdout and process.stderr
+        overflow = threading.Event()
+        stdout_buffer = bytearray()
+        stderr_buffer = bytearray()
+
+        def read_stream(stream: Any, buffer: bytearray) -> None:
+            while True:
+                chunk = stream.read(8192)
+                if not chunk:
+                    return
+                remaining = output_limit - len(buffer)
+                if remaining > 0:
+                    buffer.extend(chunk[:remaining])
+                if len(chunk) > remaining:
+                    overflow.set()
+                    return
+
+        readers = [
+            threading.Thread(target=read_stream, args=(process.stdout, stdout_buffer), daemon=True),
+            threading.Thread(target=read_stream, args=(process.stderr, stderr_buffer), daemon=True),
+        ]
+        for reader in readers:
+            reader.start()
+        deadline = time.monotonic() + timeout
+        timed_out = False
+        while process.poll() is None:
+            if overflow.is_set():
+                terminate(process)
+                break
+            if time.monotonic() >= deadline:
+                timed_out = True
+                terminate(process)
+                break
+            time.sleep(0.02)
+        process.wait(timeout=5)
+        for reader in readers:
+            reader.join(timeout=2)
+        process.stdout.close()
+        process.stderr.close()
+        stdout = stdout_buffer.decode("utf-8", errors="replace")
+        stderr = stderr_buffer.decode("utf-8", errors="replace")
+        if timed_out:
+            return {
+                "ok": False,
+                "returncode": 124,
+                "stdout": truncate(stdout),
+                "stderr": truncate(stderr + f"\nTimed out after {timeout}s; process group terminated."),
+                "args": resolved_command,
+            }
+        if overflow.is_set():
+            return {
+                "ok": False,
+                "returncode": 125,
+                "stdout": truncate(stdout),
+                "stderr": truncate(stderr + f"\nOutput exceeded {output_limit} bytes; process group terminated."),
+                "args": resolved_command,
+            }
+    return {
+        "ok": process.returncode == 0,
+        "returncode": process.returncode,
+        "stdout": truncate(stdout or ""),
+        "stderr": truncate(stderr or ""),
+        "args": resolved_command,
+    }
+
+
 def skill_files() -> list[Path]:
+    files: list[Path] = []
+    jstack_root = find_jstack_root()
+    if jstack_root:
+        bundled = jstack_root / "skills" / "jstack-dev" / "SKILL.md"
+        direct = jstack_root / "SKILL.md"
+        for candidate in (bundled, direct):
+            if candidate.exists() and candidate not in files:
+                files.append(candidate)
     root = find_gstack_root()
     if not root:
-        return []
-    files = []
+        return files
     for child in sorted(root.iterdir(), key=lambda p: p.name):
         if child.name in EXCLUDED_DIRS or child.name == "node_modules":
             continue
         skill_file = child / "SKILL.md"
         if skill_file.exists():
-            files.append(skill_file)
+            if skill_file not in files:
+                files.append(skill_file)
     root_skill = root / "SKILL.md"
     if root_skill.exists():
-        files.insert(0, root_skill)
+        if root_skill not in files:
+            files.append(root_skill)
     return files
 
 
@@ -1068,11 +1879,13 @@ def choose_agent_team(
             "blockedActions": team_blocked_actions(),
         }
 
-    if mode_requested == "single-lead" or ("trivial" in classification_ids and quality_level == "standard"):
+    if mode_requested == "single-lead" or (
+        mode_requested == "auto" and "trivial" in classification_ids and quality_level == "standard"
+    ):
         return {
             "mode": "single-agent",
             "requestedMode": mode_requested,
-            "reason": "Trivial or standard-quality task; use the Lead Engineer only unless new risk appears.",
+            "reason": "Single-lead mode was requested, or auto mode classified the task as trivial and low risk.",
             "dispatchRequired": False,
             "dispatchRequirement": "No subagent dispatch required for trivial or standard-quality single-agent work.",
             "maxAgents": 1,
@@ -1085,33 +1898,25 @@ def choose_agent_team(
             "blockedActions": team_blocked_actions(),
         }
 
-    if "normal" in classification_ids:
-        add("investigator")
-        add("reviewer")
-    if "architecture" in classification_ids:
-        add("architect")
-        add("investigator")
-        add("reviewer")
-        add("docs")
-    if "product" in classification_ids:
-        add("product")
-        add("docs")
-    if "ui_product" in classification_ids:
-        add("product")
-        add("qa")
-        add("reviewer")
-    if "security_compliance" in classification_ids:
-        add("security")
-        add("reviewer")
-    if "data_financial" in classification_ids:
-        add("quant")
-        add("reviewer")
+    specialist_priority: list[str] = []
+
+    def prioritize(*agent_ids: str) -> None:
+        for agent_id in agent_ids:
+            if agent_id not in specialist_priority:
+                specialist_priority.append(agent_id)
+
     if "production_release" in classification_ids:
-        add("security")
-        add("devops")
-        add("qa")
-        add("reviewer")
-        add("docs")
+        prioritize("devops", "security", "qa")
+    if "security_compliance" in classification_ids:
+        prioritize("security", "reviewer", "qa")
+    if "ui_product" in classification_ids:
+        prioritize("product", "qa", "reviewer")
+    if "data_financial" in classification_ids:
+        prioritize("quant", "reviewer", "qa")
+    if "architecture" in classification_ids:
+        prioritize("architect", "investigator", "reviewer")
+    if "product" in classification_ids:
+        prioritize("product", "reviewer", "docs")
     if re.search(r"debug|root cause|failing|broken|crash|regression", goal_l):
         add("investigator")
         add("qa")
@@ -1126,6 +1931,18 @@ def choose_agent_team(
     if quality_level == "enterprise" and len(selected_ids) == 1:
         add("reviewer")
 
+    if re.search(r"debug|root cause|failing|broken|crash|regression", goal_l):
+        prioritize("investigator", "qa", "reviewer")
+    if re.search(r"implement|build|code|create|scaffold", goal_l):
+        prioritize("builder", "reviewer", "qa")
+    if "normal" in classification_ids:
+        prioritize("investigator", "reviewer")
+    if re.search(r"readme|docs|documentation|github repo|repository|package", goal_l):
+        prioritize("docs")
+    if not specialist_priority and (mode_requested == "smart-subagents" or quality_level == "enterprise"):
+        prioritize("investigator", "reviewer")
+    selected_ids = ["lead"] + specialist_priority[: int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])]
+
     agents = [roster_agent(agent_id) for agent_id in selected_ids]
     mode = "single-agent" if selected_ids == ["lead"] else "lead-plus-specialists"
     execution_mode = "single-lead" if selected_ids == ["lead"] else "smart-subagents"
@@ -1135,7 +1952,7 @@ def choose_agent_team(
         "mode": mode,
         "requestedMode": mode_requested,
         "executionMode": execution_mode,
-        "reason": "Team selected from task risk classes and enterprise quality level.",
+        "reason": "Right-sized team selected from task risk classes; smart mode is capped at three specialists.",
         "dispatchRequired": dispatch_required,
         "dispatchRequirement": dispatch_requirement_text(dispatch_required, goal),
         "maxAgents": 1 + int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"]),
@@ -1333,15 +2150,12 @@ def choose_skills(goal: str, quality_level: str = "enterprise") -> list[str]:
     return selected[:limit]
 
 
-def mastery_stage(stage_number: int) -> dict[str, Any]:
-    return next(stage for stage in MASTERY_STAGES if stage["stage"] == stage_number)
-
-
 def choose_mastery_stage(goal: str, classifications: list[dict[str, Any]]) -> int:
     goal_l = goal.lower()
     if re.search(r"debug|root cause|repro|broken|failing|failure", goal_l):
         return 3
-    stages = [STAGE_BY_CLASSIFICATION.get(item["id"], 2) for item in classifications]
+    domain_map = load_mastery_curriculum()["domainStageMap"]
+    stages = [int(domain_map.get(item["id"], 2)) for item in classifications]
     return max(stages) if stages else 2
 
 
@@ -1354,10 +2168,119 @@ def task_anti_slop_checklist(classifications: list[dict[str, Any]]) -> list[str]
     return checklist
 
 
-def build_task_training(goal: str, classifications: list[dict[str, Any]], required_gates: list[str]) -> dict[str, Any]:
-    stage_number = choose_mastery_stage(goal, classifications)
-    stage = mastery_stage(stage_number)
-    guidance = STAGE_TRAINING[stage_number]
+def curriculum_candidates() -> list[Path]:
+    server_dir = Path(__file__).resolve().parent
+    candidates = [
+        Path(os.environ["JSTACK_CURRICULUM"]).expanduser() if os.environ.get("JSTACK_CURRICULUM") else None,
+        server_dir / "mastery" / "curriculum.v1.json",
+        server_dir.parent / "mastery" / "curriculum.v1.json",
+        server_dir.parents[1] / "mastery" / "curriculum.v1.json",
+    ]
+    return [path.resolve() for path in candidates if path is not None]
+
+
+def load_mastery_curriculum() -> dict[str, Any]:
+    for path in curriculum_candidates():
+        if not path.exists():
+            continue
+        curriculum = read_json(path)
+        if not curriculum or curriculum.get("schemaVersion") != "jstack.mastery.curriculum.v1":
+            raise ToolError(f"Invalid JStack mastery curriculum: {path}")
+        stages = curriculum.get("stages")
+        if not isinstance(stages, list) or [item.get("stage") for item in stages if isinstance(item, dict)] != list(range(10)):
+            raise ToolError(f"JStack mastery curriculum must define ordered stages 0 through 9: {path}")
+        if not isinstance(curriculum.get("domainStageMap"), dict):
+            raise ToolError(f"JStack mastery curriculum is missing domainStageMap: {path}")
+        curriculum["_sourcePath"] = str(path)
+        return curriculum
+    raise ToolError("JStack mastery curriculum is missing. Reinstall JStack from a complete package.")
+
+
+def mastery_profile_path() -> Path:
+    return Path.home() / ".jstack" / "mastery" / "profile.json"
+
+
+def default_mastery_profile() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.mastery.profile.v1",
+        "createdAt": None,
+        "updatedAt": None,
+        "currentStage": 0,
+        "completedStages": [],
+        "attempts": [],
+    }
+
+
+def load_mastery_profile() -> dict[str, Any]:
+    path = mastery_profile_path()
+    if not path.exists():
+        return default_mastery_profile()
+    profile = read_json(path)
+    if not profile or profile.get("schemaVersion") != "jstack.mastery.profile.v1":
+        raise ToolError(f"Invalid JStack mastery profile: {path}")
+    if not isinstance(profile.get("attempts"), list) or not isinstance(profile.get("currentStage"), int):
+        raise ToolError(f"Malformed JStack mastery profile: {path}")
+    return profile
+
+
+def curriculum_stage(stage_number: int) -> dict[str, Any]:
+    curriculum = load_mastery_curriculum()
+    return next(stage for stage in curriculum["stages"] if stage["stage"] == stage_number)
+
+
+def advancement_status(profile: dict[str, Any], stage_number: int) -> dict[str, Any]:
+    attempts = [item for item in profile.get("attempts", []) if item.get("stage") == stage_number]
+    eligible = [
+        item
+        for item in attempts
+        if item.get("eligibleForAdvancement") is True
+        and item.get("assistanceLevel") in {"independent", "independent_teach"}
+    ]
+    if stage_number <= 3:
+        recent = attempts[-2:]
+        passed = len(recent) == 2 and all(item in eligible and item.get("score", 0) >= 80 for item in recent)
+        requirement = "Two consecutive independent attempts scoring at least 80."
+    elif stage_number <= 8:
+        recent = eligible[-3:]
+        scores = [float(item.get("score", 0)) for item in recent]
+        work_types = {item.get("exerciseType") for item in recent}
+        commits = {item.get("projectState", {}).get("gitHead") for item in recent}
+        passed = (
+            len(recent) == 3
+            and min(scores, default=0) >= 80
+            and sum(scores) / len(scores) >= 85
+            and {"implementation", "audit"}.issubset(work_types)
+            and len(commits) >= 2
+        )
+        requirement = "Three independent attempts across two commits, each at least 80 and mean at least 85, including implementation and audit."
+    else:
+        recent = eligible[-2:]
+        passed = (
+            len(recent) == 2
+            and all(item.get("score", 0) >= 90 and item.get("blindCapstone") is True for item in recent)
+        )
+        requirement = "Two independent blind capstones scoring at least 90 with all capstone hard gates satisfied."
+    return {
+        "passed": passed,
+        "requirement": requirement,
+        "attemptCount": len(attempts),
+        "eligibleAttemptCount": len(eligible),
+    }
+
+
+def build_task_training(
+    goal: str, classifications: list[dict[str, Any]], required_gates: list[str], learning_mode: str
+) -> dict[str, Any]:
+    profile = load_mastery_profile()
+    learner_stage_number = max(0, min(9, int(profile.get("currentStage", 0))))
+    task_domain_stage_number = choose_mastery_stage(goal, classifications)
+    stage = curriculum_stage(learner_stage_number)
+    first_drill = stage.get("drills", [{}])[0]
+    guidance = {
+        "learningObjective": stage["outcome"],
+        "expertMentalModel": "; ".join(stage.get("corePrinciples", [])),
+        "nextDrill": first_drill.get("name"),
+    }
     classification_labels = [item["label"] for item in classifications]
     benchmarks = list(stage["benchmarks"])
     if "quality" in required_gates:
@@ -1368,6 +2291,9 @@ def build_task_training(goal: str, classifications: list[dict[str, Any]], requir
         benchmarks.append("Can produce predeploy, deploy, postdeploy, log, and rollback evidence.")
     return {
         "masteryStage": stage,
+        "learnerStage": learner_stage_number,
+        "taskDomainStage": task_domain_stage_number,
+        "learningMode": learning_mode,
         "riskClasses": classification_labels,
         "learningObjective": guidance["learningObjective"],
         "expertMentalModel": guidance["expertMentalModel"],
@@ -1379,21 +2305,268 @@ def build_task_training(goal: str, classifications: list[dict[str, Any]], requir
             "scale": OPERATOR_SCORE_SCALE,
             "rule": "Score only from observed evidence after the task: orientation, implementation, verification, review judgment, and ability to explain the tradeoffs.",
         },
+        "advancement": advancement_status(profile, learner_stage_number),
+        "instructionContract": {
+            "embedded": "After the engineering result, include at most one mental model, one decision checkpoint, and one next drill in three lines.",
+            "coach": "Explain decisions interactively while preserving the full engineering gates.",
+            "assessment": "Do not provide hidden answers before the attempt; assess only submitted evidence.",
+            "off": "Run the enterprise workflow without visible teaching content.",
+        }[learning_mode],
     }
 
 
 def mastery_system() -> dict[str, Any]:
+    curriculum = load_mastery_curriculum()
     return {
         "standard": "Enterprise professional development: evidence-driven, source-backed, production-safe, and designed to train Jay from operator fundamentals to staff-level execution.",
-        "stages": MASTERY_STAGES,
+        "schemaVersion": curriculum["schemaVersion"],
+        "sourcePath": curriculum["_sourcePath"],
+        "stages": curriculum["stages"],
+        "advancementPolicy": curriculum["advancementPolicy"],
+        "scoring": curriculum["scoring"],
         "operatorScoreScale": OPERATOR_SCORE_SCALE,
         "antiSlopBase": ANTI_SLOP_BASE,
+    }
+
+
+def tool_mastery_status(args: dict[str, Any]) -> dict[str, Any]:
+    profile = load_mastery_profile()
+    current = max(0, min(9, int(profile.get("currentStage", 0))))
+    curriculum = load_mastery_curriculum()
+    stage = next(item for item in curriculum["stages"] if item["stage"] == current)
+    return {
+        "initialized": mastery_profile_path().exists(),
+        "profilePath": str(mastery_profile_path()),
+        "currentStage": stage,
+        "completedStages": profile.get("completedStages", []),
+        "attemptCount": len(profile.get("attempts", [])),
+        "advancement": advancement_status(profile, current),
+        "nextDrill": stage["drills"][0] if stage.get("drills") else None,
+        "curriculumSource": curriculum["_sourcePath"],
+        "recordType": "Local deliberate-practice record; it is not an external credential or certification.",
+    }
+
+
+def tool_mastery_start(args: dict[str, Any]) -> dict[str, Any]:
+    path = mastery_profile_path()
+    if path.exists():
+        return {"created": False, "status": tool_mastery_status({})}
+    profile = default_mastery_profile()
+    profile["createdAt"] = now_iso()
+    profile["updatedAt"] = profile["createdAt"]
+    profile["learnerName"] = str(args.get("learner_name") or "Jay").strip() or "Jay"
+    atomic_write_json(path, profile)
+    return {"created": True, "status": tool_mastery_status({})}
+
+
+def hash_mastery_artifact(project_path: Path, raw_path: str) -> dict[str, Any]:
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = project_path / candidate
+    if candidate.is_symlink():
+        raise ToolError(f"Mastery artifact may not be a symlink: {raw_path}")
+    resolved = candidate.resolve()
+    try:
+        relative = resolved.relative_to(project_path).as_posix()
+    except ValueError as exc:
+        raise ToolError(f"Mastery artifact must be inside the project: {raw_path}") from exc
+    digest = hashlib.sha256()
+    total = 0
+    if resolved.is_file():
+        content = resolved.read_bytes()
+        total = len(content)
+        if total > 10_000_000:
+            raise ToolError(f"Mastery artifact exceeds 10 MB: {raw_path}")
+        digest.update(content)
+        kind = "file"
+    elif resolved.is_dir():
+        kind = "directory"
+        found = False
+        for root, dirs, files in os.walk(resolved, followlinks=False):
+            for directory in dirs:
+                if (Path(root) / directory).is_symlink():
+                    raise ToolError(f"Mastery artifact directory contains a symlink: {raw_path}")
+            for filename in sorted(files):
+                file_path = Path(root) / filename
+                if file_path.is_symlink() or not file_path.is_file():
+                    raise ToolError(f"Mastery artifact directory contains a non-regular file: {raw_path}")
+                content = file_path.read_bytes()
+                total += len(content)
+                if total > 20_000_000:
+                    raise ToolError(f"Mastery artifact directory exceeds 20 MB: {raw_path}")
+                digest.update(file_path.relative_to(resolved).as_posix().encode("utf-8"))
+                digest.update(b"\0")
+                digest.update(hashlib.sha256(content).digest())
+                found = True
+        if not found:
+            raise ToolError(f"Mastery artifact directory is empty: {raw_path}")
+    else:
+        raise ToolError(f"Mastery artifact does not exist or is not regular: {raw_path}")
+    return {"path": relative, "kind": kind, "sha256": digest.hexdigest(), "bytes": total}
+
+
+def score_level(score: float) -> int:
+    if score < 50:
+        return 0
+    if score < 65:
+        return 1
+    if score < 80:
+        return 2
+    if score < 90:
+        return 3
+    return 4
+
+
+def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
+    if not mastery_profile_path().exists():
+        raise ToolError("Start the mastery system with jstack_mastery_start before recording an attempt.")
+    project_path = require_project_path(args.get("project_path"))
+    profile = load_mastery_profile()
+    stage_number = int(args.get("stage", -1))
+    if stage_number != profile["currentStage"]:
+        raise ToolError(f"Attempt stage must match current learner stage {profile['currentStage']}.")
+    stage = curriculum_stage(stage_number)
+    drill_id = str(args.get("drill_id") or "").strip()
+    drill = next((item for item in stage.get("drills", []) if item.get("id") == drill_id), None)
+    if not drill:
+        raise ToolError(f"Unknown drill_id for stage {stage_number}: {drill_id}")
+    assistance = str(args.get("assistance_level") or "").strip()
+    curriculum = load_mastery_curriculum()
+    caps = curriculum["scoring"]["assistanceCaps"]
+    if assistance not in caps:
+        raise ToolError("assistance_level must be observed, guided, checklist, independent, or independent_teach.")
+    assessor = str(args.get("assessor") or "").strip()
+    citations = args.get("assessor_citations") or []
+    if not assessor or not isinstance(citations, list) or not all(isinstance(item, str) and item.strip() for item in citations):
+        raise ToolError("assessor and at least one assessor_citation are required.")
+    assessment = args.get("assessment") or {}
+    weights = curriculum["scoring"]["weights"]
+    if not isinstance(assessment, dict):
+        raise ToolError("assessment must be an object with the five rubric scores.")
+    component_scores: dict[str, float] = {}
+    for component in weights:
+        try:
+            value = float(assessment[component])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ToolError(f"assessment.{component} must be a number from 0 to 100.") from exc
+        if not 0 <= value <= 100:
+            raise ToolError(f"assessment.{component} must be between 0 and 100.")
+        component_scores[component] = value
+    score = round(sum(component_scores[key] * float(weight) / 100 for key, weight in weights.items()), 2)
+    raw_level = score_level(score)
+    demonstrated_level = min(raw_level, int(caps[assistance]))
+
+    artifacts_arg = args.get("artifacts") or {}
+    if not isinstance(artifacts_arg, dict):
+        raise ToolError("artifacts must map each required artifact name to a project-relative path.")
+    missing_artifacts = [name for name in stage.get("requiredArtifacts", []) if not artifacts_arg.get(name)]
+    if missing_artifacts:
+        raise ToolError("Missing required mastery artifacts: " + ", ".join(missing_artifacts))
+    artifacts = {
+        requirement: hash_mastery_artifact(project_path, str(artifacts_arg[requirement]))
+        for requirement in stage.get("requiredArtifacts", [])
+    }
+
+    state = project_state(project_path)
+    hard_blocks = [str(item) for item in (args.get("hard_gate_failures") or []) if str(item).strip()]
+    if stage_number == 0:
+        artifact_paths = [item["path"] for item in artifacts.values()]
+        if any(not path.startswith(".jstack-training/") for path in artifact_paths):
+            hard_blocks.append("Stage 0 artifacts must live under .jstack-training/.")
+        disallowed_changes = [
+            path for path in git_changed_files(project_path) if not path.startswith(".jstack-training/")
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Stage 0 project state contains non-training changes: " + ", ".join(disallowed_changes)
+            )
+    if stage_number >= 2 and not state["clean"]:
+        hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
+    qa_receipts = args.get("qa_receipts") or []
+    if not isinstance(qa_receipts, list) or not all(isinstance(item, str) for item in qa_receipts):
+        raise ToolError("qa_receipts must be an array.")
+    qa_verifications = [verify_receipt(receipt, "qa", state) for receipt in qa_receipts]
+    valid_qa = [item for item in qa_verifications if item["valid"]]
+    if stage_number >= 2 and not valid_qa:
+        hard_blocks.append("Stage 2+ attempt requires a current passing QA evidence receipt.")
+    if stage_number >= 6:
+        valid_keys = {item["payload"].get("commandKey") for item in valid_qa}
+        missing_checks = [item["key"] for item in discover_test_commands(project_path) if item["key"] not in valid_keys]
+        if missing_checks:
+            hard_blocks.append("Stage 6+ attempt is missing QA receipts for: " + ", ".join(missing_checks))
+    security_verification = None
+    if stage_number >= 7:
+        security_receipt = str(args.get("security_receipt") or "").strip()
+        if not security_receipt:
+            hard_blocks.append("Stage 7+ attempt requires a current complete security receipt.")
+        else:
+            security_verification = verify_receipt(security_receipt, "security", state)
+            if not security_verification["valid"]:
+                hard_blocks.append("Stage 7+ security receipt is invalid or stale.")
+    blind_capstone = bool(args.get("blind_capstone") or False)
+    if stage_number == 9:
+        capstone = args.get("capstone_results") or {}
+        p0_total = int(capstone.get("p0_total") or 0)
+        p0_found = int(capstone.get("p0_found") or 0)
+        p1_total = int(capstone.get("p1_total") or 0)
+        p1_found = int(capstone.get("p1_found") or 0)
+        if not blind_capstone or p0_total <= 0 or p0_found != p0_total:
+            hard_blocks.append("Stage 9 capstone must be blind and catch every seeded P0 finding.")
+        if p1_total <= 0 or p1_found / p1_total < 0.8:
+            hard_blocks.append("Stage 9 capstone must catch at least 80 percent of seeded P1 findings.")
+        if capstone.get("release_decision_correct") is not True:
+            hard_blocks.append("Stage 9 capstone requires the correct release go/no-go decision.")
+
+    eligible = (
+        not hard_blocks
+        and assistance in {"independent", "independent_teach"}
+        and score >= (90 if stage_number == 9 else 80)
+        and demonstrated_level >= 3
+    )
+    attempt = {
+        "attemptedAt": now_iso(),
+        "stage": stage_number,
+        "drillId": drill_id,
+        "exerciseType": drill["type"],
+        "assistanceLevel": assistance,
+        "assessor": assessor,
+        "assessorCitations": citations,
+        "assessment": component_scores,
+        "score": score,
+        "rawLevel": raw_level,
+        "demonstratedLevel": demonstrated_level,
+        "artifacts": artifacts,
+        "projectState": state,
+        "qaEvidence": qa_verifications,
+        "securityEvidence": security_verification,
+        "hardGateFailures": list(dict.fromkeys(hard_blocks)),
+        "blindCapstone": blind_capstone,
+        "eligibleForAdvancement": eligible,
+    }
+    profile["attempts"].append(attempt)
+    profile["attempts"] = profile["attempts"][-500:]
+    advancement = advancement_status(profile, stage_number)
+    if advancement["passed"] and stage_number not in profile["completedStages"]:
+        profile["completedStages"].append(stage_number)
+        if stage_number < 9:
+            profile["currentStage"] = stage_number + 1
+        else:
+            profile["masteredAt"] = now_iso()
+    profile["updatedAt"] = now_iso()
+    atomic_write_json(mastery_profile_path(), profile)
+    return {
+        "recorded": True,
+        "attempt": attempt,
+        "advanced": advancement["passed"],
+        "status": tool_mastery_status({}),
+        "recordType": "Local deliberate-practice record; advancement is only as trustworthy as the independent assessor evidence.",
     }
 
 
 def tool_detect_project(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
     g_root = find_gstack_root()
+    j_root = find_jstack_root()
     bin_dir = gstack_bin()
     project_config_paths = [
         project_path / ".jstack" / "project.yaml",
@@ -1411,12 +2584,12 @@ def tool_detect_project(args: dict[str, Any]) -> dict[str, Any]:
     return {
         "projectPath": str(project_path),
         "gitRoot": git_root(project_path),
-        "jstackRoot": str(g_root) if g_root else None,
-        "jstackBin": str(bin_dir) if bin_dir else None,
-        "jstackInstalled": bool(g_root),
+        "jstackRoot": str(j_root) if j_root else None,
+        "jstackInstalled": bool(j_root),
         "gstackRoot": str(g_root) if g_root else None,
         "gstackBin": str(bin_dir) if bin_dir else None,
         "gstackInstalled": bool(g_root),
+        "upstreamGstackOptional": True,
         "skillCount": len(skill_files()),
         "projectConfig": project_config,
         "testCommands": discover_test_commands(project_path),
@@ -1463,9 +2636,15 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     if quality_level not in {"standard", "enterprise"}:
         raise ToolError("quality_level must be 'standard' or 'enterprise'.")
     mastery_mode = bool(args.get("mastery_mode", True))
+    learning_mode = str(args.get("learning_mode") or ("embedded" if mastery_mode else "off")).strip().lower()
+    if learning_mode not in {"off", "embedded", "coach", "assessment"}:
+        raise ToolError("learning_mode must be off, embedded, coach, or assessment.")
+    if not mastery_mode:
+        learning_mode = "off"
+    team_mode = normalize_team_mode(args.get("team_mode") or "single-lead")
     classifications = classify_work(goal)
     selected = choose_skills(goal, quality_level=quality_level)
-    team_plan = choose_agent_team(goal, classifications, quality_level=quality_level)
+    team_plan = choose_agent_team(goal, classifications, quality_level=quality_level, team_mode=team_mode)
     detected = tool_detect_project({"project_path": str(project_path)})
     steps = [
         {
@@ -1538,11 +2717,17 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         for gate in classification.get("requiredGates", []):
             if gate not in required_gates:
                 required_gates.append(gate)
-    task_training = build_task_training(goal, classifications, required_gates) if mastery_mode else None
+    task_training = (
+        build_task_training(goal, classifications, required_gates, learning_mode)
+        if learning_mode != "off"
+        else None
+    )
     return {
         "goal": goal,
         "qualityLevel": quality_level,
         "masteryMode": mastery_mode,
+        "learningMode": learning_mode,
+        "teamMode": team_mode,
         "classifications": classifications,
         "project": detected,
         "workflowProfile": WORKFLOW_PROFILE,
@@ -1606,6 +2791,71 @@ def normalize_agent_plan(agent: Any) -> dict[str, Any]:
     }
 
 
+def normalize_write_scope(scope: str) -> str:
+    normalized = scope.strip().replace("\\", "/")
+    if not normalized or normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        raise ToolError(f"Write scope must be a non-empty repository-relative path: {scope!r}")
+    parts = [part for part in normalized.split("/") if part not in {"", "."}]
+    if any(part == ".." for part in parts):
+        raise ToolError(f"Write scope may not escape the repository root: {scope!r}")
+    result = "/".join(parts).rstrip("/")
+    if not result:
+        raise ToolError(f"Write scope must identify a repository path, not the repository root: {scope!r}")
+    return result
+
+
+def scope_static_prefix(scope: str) -> str:
+    wildcard = min([index for index in (scope.find("*"), scope.find("?"), scope.find("[")) if index >= 0] or [len(scope)])
+    return scope[:wildcard].rstrip("/")
+
+
+def scopes_overlap(left: str, right: str) -> bool:
+    left = normalize_write_scope(left).casefold()
+    right = normalize_write_scope(right).casefold()
+    if left == right or fnmatch.fnmatch(left, right) or fnmatch.fnmatch(right, left):
+        return True
+    left_prefix = scope_static_prefix(left)
+    right_prefix = scope_static_prefix(right)
+    if not left_prefix or not right_prefix:
+        return True
+    return (
+        left_prefix == right_prefix
+        or left_prefix.startswith(right_prefix + "/")
+        or right_prefix.startswith(left_prefix + "/")
+    )
+
+
+def coordination_packet_errors(packet: Any, goal: str, team_mode: str, agent_ids: list[str]) -> list[str]:
+    if not isinstance(packet, dict):
+        return ["Specialist dispatch requires the actual coordination_packet object, not a boolean assertion."]
+    errors: list[str] = []
+    required = TEAM_COORDINATION_PROTOCOL["requiredFields"]
+    for field in required:
+        if field == "rolesNotUsed" and team_mode == "full-team":
+            continue
+        value = packet.get(field)
+        if value in (None, "", [], {}):
+            errors.append(f"Coordination packet field '{field}' is required and must be non-empty.")
+    packet_mode = normalize_team_mode(str(packet.get("mode") or team_mode))
+    if packet_mode != team_mode:
+        errors.append(f"Coordination packet mode '{packet_mode}' does not match dispatch mode '{team_mode}'.")
+    if goal and str(packet.get("goal") or "").strip() != goal:
+        errors.append("Coordination packet goal must exactly match the dispatch goal.")
+    roles_used = packet.get("rolesUsed") or []
+    used_ids: set[str] = set()
+    if isinstance(roles_used, list):
+        for role in roles_used:
+            role_id = str(role.get("id") if isinstance(role, dict) else role).strip()
+            if role_id:
+                used_ids.add(role_id)
+    if used_ids != set(agent_ids):
+        errors.append("Coordination packet rolesUsed must exactly match the proposed agent ids.")
+    ownership = packet.get("fileOwnershipMap")
+    if not isinstance(ownership, dict):
+        errors.append("Coordination packet fileOwnershipMap must be an object keyed by editing agent id.")
+    return errors
+
+
 def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
     goal = str(args.get("goal") or "").strip()
     team_mode = normalize_team_mode(args.get("team_mode"))
@@ -1626,15 +2876,38 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         max_specialists = int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])
     explicit_justification = str(args.get("lead_justification") or "").strip()
     explicit_release_requested = bool(args.get("explicit_release_requested") or False)
-    coordination_packet_supplied = bool(args.get("coordination_packet_supplied") or False)
+    coordination_packet = args.get("coordination_packet")
     classifications = classify_work(goal) if goal else []
     classification_ids = {item["id"] for item in classifications}
     blockers: list[str] = []
     warnings: list[str] = []
 
     ids = [agent["id"] for agent in agents]
+    allowed_ids = {agent["id"] for agent in AGENT_ROSTER}
+    unknown_ids = sorted(set(ids) - allowed_ids)
+    if unknown_ids:
+        blockers.append("Unknown agent ids are not allowed: " + ", ".join(unknown_ids))
     if "lead" not in ids:
         blockers.append("Agent plan must include the Lead Engineer with id 'lead'.")
+    if team_mode == "smart-subagents":
+        high_risk_requirements = {
+            "production_release": {"devops", "security", "qa"},
+            "security_compliance": {"security", "reviewer"},
+            "ui_product": {"product", "qa"},
+            "data_financial": {"quant", "reviewer"},
+            "architecture": {"architect", "reviewer"},
+            "product": {"product", "reviewer"},
+        }
+        precedence = ["production_release", "security_compliance", "ui_product", "data_financial", "architecture", "product"]
+        primary = next((item for item in precedence if item in classification_ids), None)
+        required_roles = set(high_risk_requirements[primary]) if primary else set()
+        if primary is None and "normal" in classification_ids:
+            required_roles.update({"investigator", "reviewer"})
+        missing_required = sorted(required_roles - set(ids))
+        if missing_required:
+            blockers.append(
+                "Smart-subagents plan is missing risk-required roles: " + ", ".join(missing_required)
+            )
     duplicates = sorted({agent_id for agent_id in ids if ids.count(agent_id) > 1})
     if duplicates:
         blockers.append("Duplicate agent ids are not allowed: " + ", ".join(duplicates))
@@ -1646,25 +2919,55 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         missing = sorted(expected_ids - set(ids))
         if missing:
             blockers.append("Full-team mode must account for all 11 roles. Missing ids: " + ", ".join(missing))
-        if not coordination_packet_supplied:
-            blockers.append("Full-team mode requires a coordination packet before dispatch.")
+    if team_mode == "single-lead" and specialist_count:
+        blockers.append("Single-lead mode may not include specialist agents.")
     if team_mode == "smart-subagents" and specialist_count > max_specialists and not explicit_justification:
         blockers.append("Smart-subagents mode should normally stay within two or three specialists unless the Lead justifies more.")
-    if specialist_count > 0 and not coordination_packet_supplied:
-        warnings.append("Specialist dispatch should include a coordination packet: role assignments, read/write permissions, file ownership, evidence contract, stop conditions, and verification gate.")
+    if specialist_count > 0:
+        blockers.extend(coordination_packet_errors(coordination_packet, goal, team_mode, ids))
     if "production_release" in classification_ids and not explicit_release_requested:
         blockers.append("Production/release-classified work requires explicit release approval before deploy/release actions.")
 
-    write_owners: dict[str, str] = {}
+    write_owners: list[tuple[str, str]] = []
+    ownership_map = coordination_packet.get("fileOwnershipMap", {}) if isinstance(coordination_packet, dict) else {}
     for agent in agents:
         if not agent["mayEdit"]:
+            if agent["writeScope"]:
+                warnings.append(f"Read-only specialist '{agent['id']}' declared a write scope that will not be honored.")
             continue
+        if agent["id"] not in {"lead", "builder", "docs"}:
+            blockers.append(f"Role '{agent['id']}' is read-only by policy and may not edit.")
         if agent["id"] != "lead" and not agent["writeScope"]:
-            warnings.append(f"Editing specialist '{agent['id']}' has no explicit write scope.")
-        for scope in agent["writeScope"]:
-            if scope in write_owners:
-                blockers.append(f"Write-scope overlap: '{scope}' owned by both {write_owners[scope]} and {agent['id']}.")
-            write_owners[scope] = agent["id"]
+            blockers.append(f"Editing specialist '{agent['id']}' requires an explicit write scope.")
+        normalized_scopes: list[str] = []
+        for raw_scope in agent["writeScope"]:
+            try:
+                scope = normalize_write_scope(raw_scope)
+            except ToolError as exc:
+                blockers.append(str(exc))
+                continue
+            if agent["id"] == "docs" and not (
+                scope.startswith("docs/")
+                or scope in {"README.md", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md"}
+                or scope.endswith(".md")
+            ):
+                blockers.append(f"Documentation specialist may not own non-documentation scope '{scope}'.")
+            for existing_scope, owner in write_owners:
+                if owner != agent["id"] and scopes_overlap(scope, existing_scope):
+                    blockers.append(f"Write-scope overlap: '{scope}' ({agent['id']}) overlaps '{existing_scope}' ({owner}).")
+            write_owners.append((scope, agent["id"]))
+            normalized_scopes.append(scope)
+        agent["writeScope"] = normalized_scopes
+        packet_scopes = ownership_map.get(agent["id"], []) if isinstance(ownership_map, dict) else []
+        if isinstance(packet_scopes, str):
+            packet_scopes = [packet_scopes]
+        try:
+            normalized_packet_scopes = [normalize_write_scope(str(item)) for item in packet_scopes]
+        except ToolError as exc:
+            blockers.append(str(exc))
+            normalized_packet_scopes = []
+        if agent["id"] != "lead" and sorted(normalized_packet_scopes) != sorted(normalized_scopes):
+            blockers.append(f"Coordination packet ownership for '{agent['id']}' must match the agent writeScope.")
     for agent in agents:
         if agent["id"] != "lead" and re.search(r"\bspawn\b|\bdelegate\b|\bsubagent\b", agent["task"], re.IGNORECASE):
             blockers.append(f"Subagent '{agent['id']}' task appears to delegate/spawn; only the Lead Engineer may orchestrate.")
@@ -1679,7 +2982,7 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         "specialistCount": specialist_count,
         "maxSpecialists": max_specialists,
         "leadJustification": explicit_justification,
-        "coordinationPacketSupplied": coordination_packet_supplied,
+        "coordinationPacket": coordination_packet,
         "agents": agents,
         "blockedActions": team_blocked_actions(),
         "coordinationProtocol": TEAM_COORDINATION_PROTOCOL,
@@ -1716,12 +3019,29 @@ def tool_health(args: dict[str, Any]) -> dict[str, Any]:
 
 def tool_review(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
+    evidence = git_change_evidence(project_path, str(args.get("base_ref") or "").strip() or None)
+    checks = {
+        "unstaged": safe_run(["git", "diff", "--check"], project_path, timeout=15),
+        "staged": safe_run(["git", "diff", "--cached", "--check"], project_path, timeout=15),
+    }
+    if evidence["baseCommit"]:
+        checks["committed"] = safe_run(
+            ["git", "diff", "--check", f"{evidence['baseCommit']}..HEAD", "--"], project_path, timeout=15
+        )
+    failed_checks = [name for name, result in checks.items() if result["returncode"] != 0]
+    combined = {
+        "ok": not failed_checks,
+        "returncode": 0 if not failed_checks else 1,
+        "failedChecks": failed_checks,
+        "checks": checks,
+    }
     return {
         "projectPath": str(project_path),
         "status": safe_run(["git", "status", "--short"], project_path, timeout=10),
         "diffStat": safe_run(["git", "diff", "--stat"], project_path, timeout=15),
-        "diffCheck": safe_run(["git", "diff", "--check"], project_path, timeout=15),
-        "changedFiles": safe_run(["git", "diff", "--name-only"], project_path, timeout=15),
+        "diffCheck": combined,
+        "changedFiles": evidence["files"],
+        "changeEvidence": evidence,
         "reviewGuidance": [
             "Lead with bugs, security risks, data leaks, auth/RBAC gaps, and missing tests.",
             "Check whether the diff touches secrets, auth boundaries, persistence, external integrations or deployment files.",
@@ -1739,81 +3059,242 @@ SECRET_PATTERNS = [
 
 
 def should_scan(path: Path) -> bool:
-    if path.name.startswith(".") and path.name not in {".env", ".env.example"}:
+    if path.suffix.lower() in {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip", ".gz", ".tar",
+        ".rar", ".7z", ".sqlite", ".db", ".woff", ".woff2", ".ttf", ".otf", ".mp3", ".mp4",
+        ".mov", ".avi", ".dll", ".exe", ".dylib", ".so", ".pyc",
+    }:
         return False
-    if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".tar", ".sqlite", ".db"}:
-        return False
-    try:
-        return path.stat().st_size <= 1_000_000
-    except OSError:
-        return False
+    return True
 
 
 def tool_security_audit(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
+    base_ref = str(args.get("base_ref") or "").strip() or None
+    subject = evidence_subject(project_path, base_ref)
     max_files = int(args.get("max_files") or 2000)
+    max_file_bytes = int(args.get("max_file_bytes") or 2_000_000)
     findings: list[dict[str, Any]] = []
+    scan_errors: list[dict[str, str]] = []
+    skipped_binary = 0
     scanned = 0
-    for root, dirs, files in os.walk(project_path):
-        dirs[:] = [item for item in dirs if item not in EXCLUDED_DIRS]
+    truncated = False
+    for root, dirs, files in os.walk(project_path, followlinks=False):
+        kept_dirs: list[str] = []
+        for item in dirs:
+            directory = Path(root) / item
+            if item in EXCLUDED_DIRS:
+                continue
+            if directory.is_symlink():
+                scan_errors.append({"path": str(directory.relative_to(project_path)), "reason": "symlink_directory_not_scanned"})
+                continue
+            kept_dirs.append(item)
+        dirs[:] = kept_dirs
         for filename in files:
             if scanned >= max_files:
+                truncated = True
                 break
             path = Path(root) / filename
+            relative = path.relative_to(project_path).as_posix()
+            try:
+                metadata = path.lstat()
+            except OSError as exc:
+                scan_errors.append({"path": relative, "reason": f"lstat_failed:{type(exc).__name__}"})
+                continue
+            if stat.S_ISLNK(metadata.st_mode):
+                scan_errors.append({"path": relative, "reason": "symlink_file_not_scanned"})
+                continue
+            if not stat.S_ISREG(metadata.st_mode):
+                scan_errors.append({"path": relative, "reason": "non_regular_file_not_scanned"})
+                continue
             if not should_scan(path):
+                skipped_binary += 1
+                continue
+            if metadata.st_size > max_file_bytes:
+                scan_errors.append({"path": relative, "reason": f"file_exceeds_{max_file_bytes}_byte_limit"})
                 continue
             scanned += 1
             try:
-                text = path.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
+                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                descriptor = os.open(path, flags)
+                opened = os.fstat(descriptor)
+                if not stat.S_ISREG(opened.st_mode) or (
+                    hasattr(metadata, "st_ino")
+                    and (opened.st_ino != metadata.st_ino or opened.st_dev != metadata.st_dev)
+                ):
+                    os.close(descriptor)
+                    scan_errors.append({"path": relative, "reason": "file_changed_during_scan"})
+                    continue
+                handle = os.fdopen(descriptor, "r", encoding="utf-8", errors="ignore")
+            except OSError as exc:
+                scan_errors.append({"path": relative, "reason": f"open_failed:{type(exc).__name__}"})
                 continue
-            for line_no, line in enumerate(text.splitlines(), start=1):
-                for name, pattern in SECRET_PATTERNS:
-                    if pattern.search(line):
-                        findings.append(
-                            {
-                                "file": str(path.relative_to(project_path)),
-                                "line": line_no,
-                                "pattern": name,
-                                "preview": truncate(pattern.sub("[REDACTED]", line.strip()), 240),
-                            }
-                        )
+            with handle:
+                for line_no, line in enumerate(handle, start=1):
+                    for name, pattern in SECRET_PATTERNS:
+                        if pattern.search(line):
+                            findings.append({"file": relative, "line": line_no, "pattern": name})
+                            break
+                    if len(findings) >= 100:
+                        truncated = True
                         break
-                if len(findings) >= 100:
-                    break
             if len(findings) >= 100:
                 break
         if scanned >= max_files or len(findings) >= 100:
             break
+    if scanned >= max_files:
+        truncated = True
+
+    release_range_findings = 0
+    if subject["baseCommit"] and subject["baseCommit"] != subject["gitHead"]:
+        history = run_complete(
+            [
+                "git",
+                "log",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--format=",
+                "--patch",
+                "--reverse",
+                "--unified=0",
+                f"{subject['baseCommit']}..{subject['gitHead']}",
+                "--",
+            ],
+            project_path,
+            timeout=30,
+            max_bytes=10_000_000,
+        )
+        if not history["ok"]:
+            scan_errors.append({"path": "<release-range>", "reason": f"history_scan_failed:{history['stderr']}"})
+        else:
+            for line_no, line in enumerate(_git_text(history).splitlines(), start=1):
+                if not line.startswith(("+", "-")) or line.startswith(("+++", "---")):
+                    continue
+                for name, pattern in SECRET_PATTERNS:
+                    if pattern.search(line[1:]):
+                        findings.append(
+                            {
+                                "file": "<release-range>",
+                                "line": line_no,
+                                "pattern": name,
+                                "scope": f"{subject['baseCommit']}..{subject['gitHead']}",
+                            }
+                        )
+                        release_range_findings += 1
+                        break
+                if len(findings) >= 100:
+                    truncated = True
+                    break
+    complete = not truncated and not scan_errors
+    passed = complete and not findings
+    receipt = issue_receipt(
+        {
+            "kind": "security",
+            "projectPath": subject["gitRoot"],
+            "scanRoot": subject["gitRoot"],
+            "gitHead": subject["gitHead"],
+            "projectFingerprint": subject["projectFingerprint"],
+            "baseRef": subject["baseRef"],
+            "baseCommit": subject["baseCommit"],
+            "policyDigest": subject["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "passed": passed,
+            "findingCount": len(findings),
+            "complete": complete,
+        }
+    )
     return {
         "projectPath": str(project_path),
         "scannedFiles": scanned,
-        "truncated": scanned >= max_files or len(findings) >= 100,
+        "skippedKnownBinaryFiles": skipped_binary,
+        "truncated": truncated,
+        "complete": complete,
+        "scanErrors": scan_errors,
         "findingCount": len(findings),
+        "releaseRangeFindingCount": release_range_findings,
         "findings": findings,
-        "note": "Heuristic local scan only. Use formal secret scanning and dependency/container scanning before production release.",
+        "passed": passed,
+        "evidenceReceipt": receipt,
+        "evidenceState": subject,
+        "note": "Bounded heuristic secret scan only. A complete clean result is required, and formal dependency/container/SAST scanning remains a separate production gate.",
     }
 
 
 def tool_qa(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
     commands = discover_test_commands(project_path)
+    base_ref = str(args.get("base_ref") or "").strip() or None
+    subject_before = evidence_subject(project_path, base_ref)
+    state_before = {key: subject_before[key] for key in ("gitRoot", "gitHead", "projectFingerprint", "clean", "untrackedFiles")}
     run = bool(args.get("run") or False)
     command_key = str(args.get("command_key") or "").strip()
     result: dict[str, Any] | None = None
+    receipt: str | None = None
+    mutation_detected = False
     if run:
+        if args.get("execution_approved") is not True:
+            raise ToolError(
+                "Running discovered commands executes repository-controlled code. Set execution_approved=true only after the user has approved trusted local execution."
+            )
+        trusted_revision = str(args.get("trusted_revision") or "").strip()
+        trusted_fingerprint = str(args.get("trusted_project_fingerprint") or "").strip()
+        trusted_policy_digest = str(args.get("trusted_policy_digest") or "").strip()
+        if (
+            trusted_revision != state_before["gitHead"]
+            or trusted_fingerprint != state_before["projectFingerprint"]
+            or trusted_policy_digest != subject_before["policyDigest"]
+        ):
+            raise ToolError(
+                "Trusted revision/fingerprint does not match the current project state. Rediscover commands and review the project before approving execution."
+            )
         if not command_key:
             raise ToolError("When run=true, command_key is required. Use jstack_qa with run=false to list allowed keys.")
         selected = next((command for command in commands if command["key"] == command_key), None)
         if not selected:
             raise ToolError(f"Unsupported command_key: {command_key}. Allowed: {[command['key'] for command in commands]}")
-        result = safe_run(selected["args"], project_path, timeout=int(args.get("timeout_sec") or 120))
+        env_allowlist = args.get("env_allowlist") or []
+        if not isinstance(env_allowlist, list) or not all(isinstance(item, str) for item in env_allowlist):
+            raise ToolError("env_allowlist must be an array of environment variable names.")
+        if env_allowlist:
+            raise ToolError("Forwarding host environment variables into repository-controlled QA is disabled by enterprise policy.")
+        result = run_approved_project_command(
+            selected["args"], project_path, timeout=int(args.get("timeout_sec") or 120), env_allowlist=env_allowlist
+        )
+        subject_after = evidence_subject(project_path, base_ref)
+        state_after = {key: subject_after[key] for key in ("gitRoot", "gitHead", "projectFingerprint", "clean", "untrackedFiles")}
+        mutation_detected = state_after["projectFingerprint"] != state_before["projectFingerprint"]
+        passed = bool(result["ok"]) and not mutation_detected
+        receipt = issue_receipt(
+            {
+                "kind": "qa",
+                "projectPath": state_after["gitRoot"],
+                "gitHead": state_after["gitHead"],
+                "projectFingerprint": state_after["projectFingerprint"],
+                "baseRef": subject_after["baseRef"],
+                "baseCommit": subject_after["baseCommit"],
+                "policyDigest": subject_after["policyDigest"],
+                "toolVersion": SERVER_VERSION,
+                "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+                "commandKey": selected["key"],
+                "commandFingerprint": selected["commandFingerprint"],
+                "returncode": result["returncode"],
+                "passed": passed,
+                "mutationDetected": mutation_detected,
+            }
+        )
     return {
         "projectPath": str(project_path),
+        "evidenceState": state_before,
+        "evidenceSubject": subject_before,
         "allowedCommands": commands,
         "executed": result is not None,
         "result": result,
-        "policy": "Only discovered test/build commands can be executed. No arbitrary shell is exposed.",
+        "mutationDetected": mutation_detected,
+        "evidenceReceipt": receipt,
+        "policy": (
+            "Discovery is read-only. Execution runs repository-controlled code with stdin closed, a scrubbed environment, an isolated HOME, and process-group timeout handling. "
+            "It still has the current user's filesystem and network privileges, so explicit trust approval and an exact revision/fingerprint are mandatory."
+        ),
     }
 
 
@@ -1837,12 +3318,11 @@ def tool_context_save(args: dict[str, Any]) -> dict[str, Any]:
         "filesTouched": args.get("files_touched") or [],
     }
     target_dir = context_dir(project_path)
-    target_dir.mkdir(parents=True, exist_ok=True)
     timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     save_path = target_dir / f"{timestamp}.json"
     latest_path = target_dir / "latest.json"
-    save_path.write_text(json_text(payload) + "\n", encoding="utf-8")
-    latest_path.write_text(json_text(payload) + "\n", encoding="utf-8")
+    atomic_write_json(save_path, payload)
+    atomic_write_json(latest_path, payload)
     return {"saved": True, "path": str(save_path), "latestPath": str(latest_path), "context": payload}
 
 
@@ -1859,20 +3339,44 @@ def tool_context_restore(args: dict[str, Any]) -> dict[str, Any]:
 
 def tool_ship_check(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
+    base_ref = str(args.get("base_ref") or "").strip()
     health = tool_health({"project_path": str(project_path)})
-    review = tool_review({"project_path": str(project_path)})
+    review = tool_review({"project_path": str(project_path), "base_ref": base_ref or None})
     docs = health["projectFiles"]
     blockers = []
+    if not base_ref:
+        blockers.append("Ship check requires an explicit base_ref for the release delta.")
     if review["diffCheck"]["returncode"] not in (0,):
         blockers.append("git diff --check reported whitespace or conflict-marker issues")
     if not docs.get("readme"):
         blockers.append("README is missing")
     if not health["testCommands"]:
         blockers.append("No test commands detected")
+    qa_receipts = args.get("qa_receipts") or []
+    if not isinstance(qa_receipts, list) or not all(isinstance(item, str) for item in qa_receipts):
+        raise ToolError("qa_receipts must be an array of receipts returned by jstack_qa.")
+    subject = evidence_subject(project_path, base_ref or None)
+    if base_ref and subject["baseCommit"] == subject["gitHead"]:
+        blockers.append("Ship check base_ref must resolve to a distinct pre-release commit, not HEAD itself.")
+    valid_receipts: dict[str, dict[str, Any]] = {}
+    receipt_results: list[dict[str, Any]] = []
+    for receipt in qa_receipts:
+        verification = verify_receipt(receipt, "qa", subject, expected_subject=subject)
+        receipt_results.append(verification)
+        if verification["valid"]:
+            valid_receipts[str(verification["payload"].get("commandKey") or "")] = verification["payload"]
+    for command in health["testCommands"]:
+        payload = valid_receipts.get(command["key"])
+        if not payload:
+            blockers.append(f"No current passing QA receipt for '{command['key']}'.")
+        elif payload.get("commandFingerprint") != command["commandFingerprint"]:
+            blockers.append(f"QA receipt for '{command['key']}' does not match the current command definition.")
     return {
         "projectPath": str(project_path),
         "ready": not blockers,
         "blockers": blockers,
+        "evidenceState": subject,
+        "qaEvidence": receipt_results,
         "healthSummary": {
             "branch": health["branch"],
             "dirtyFileCount": health["dirtyFileCount"],
@@ -1892,9 +3396,11 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
     goal = str(args.get("goal") or "").strip()
     explicit_release_requested = bool(args.get("explicit_release_requested") or False)
+    protected_path_approval = str(args.get("protected_path_approval") or "").strip()
     target_environment = str(args.get("target_environment") or "local").strip().lower()
     policy = load_enterprise_policy(project_path)
-    changed_files = git_changed_files(project_path)
+    change_evidence = git_change_evidence(project_path, str(args.get("base_ref") or "").strip() or None)
+    changed_files = change_evidence["files"]
     protected_patterns = [str(item) for item in policy.get("protectedPaths", [])]
     protected_matches = [path for path in changed_files if path_matches_patterns(path, protected_patterns)]
     classifications = classify_work(goal) if goal else []
@@ -1906,17 +3412,19 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
     if policy.get("_usingDefault"):
         warnings.append("No project JStack policy file found; using default enterprise policy.")
         required_actions.append("Add a project policy file such as jstack.enterprise.json or jstack.yml before treating the repo as production-governed.")
-    if protected_matches:
+    if protected_matches and not protected_path_approval:
         blockers.append("Protected paths changed without an explicit project-specific approval record.")
+    elif protected_matches:
+        required_actions.append(f"Verify protected-path approval reference before mutation: {protected_path_approval}")
     if target_environment in {"production", "prod"} and not explicit_release_requested:
         blockers.append("Production target selected but explicit release approval was not provided.")
-    if "production-release-deploy" in classification_ids and not explicit_release_requested:
+    if "production_release" in classification_ids and not explicit_release_requested:
         blockers.append("Release/deploy-classified work requires explicit release approval.")
     if goal and goal_is_sensitive(goal, policy):
         required_actions.append("Run jstack_security_audit and perform a human security/compliance review before release.")
-    if "data-financial-integration-sensitive" in classification_ids:
+    if "data_financial" in classification_ids:
         required_actions.append("Document data source, contract assumptions, failure modes, and reconciliation/rollback path.")
-    if "ui-product-sensitive" in classification_ids:
+    if "ui_product" in classification_ids:
         required_actions.append("Capture browser/visual QA evidence for changed user-facing flows.")
 
     return {
@@ -1925,8 +3433,10 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
         "usingDefaultPolicy": bool(policy.get("_usingDefault")),
         "targetEnvironment": target_environment,
         "explicitReleaseRequested": explicit_release_requested,
+        "protectedPathApproval": protected_path_approval,
         "classifications": classifications,
         "changedFiles": changed_files,
+        "changeEvidence": change_evidence,
         "protectedPatterns": protected_patterns,
         "protectedMatches": protected_matches,
         "requiredChecks": policy.get("requiredChecks", []),
@@ -1944,7 +3454,7 @@ def tool_preflight(args: dict[str, Any]) -> dict[str, Any]:
     run_secret_scan = bool(args.get("run_secret_scan", True))
     policy_check = tool_policy_check(args)
     health = tool_health({"project_path": str(project_path)})
-    review = tool_review({"project_path": str(project_path)})
+    review = tool_review({"project_path": str(project_path), "base_ref": args.get("base_ref")})
     blockers = list(policy_check["blockers"])
     warnings = list(policy_check["warnings"])
 
@@ -1959,9 +3469,19 @@ def tool_preflight(args: dict[str, Any]) -> dict[str, Any]:
 
     security: dict[str, Any] | None = None
     if run_secret_scan:
-        security = tool_security_audit({"project_path": str(project_path), "max_files": int(args.get("max_files") or 2000)})
+        security = tool_security_audit(
+            {
+                "project_path": str(project_path),
+                "base_ref": args.get("base_ref"),
+                "max_files": int(args.get("max_files") or 2000),
+            }
+        )
         if security["findingCount"] > 0:
             blockers.append("Secret/security scan found possible credentials or sensitive values.")
+        if not security["complete"]:
+            blockers.append("Secret/security scan was incomplete; truncation, symlinks, unreadable files, or size limits must be resolved.")
+    elif strict and policy_check["policy"].get("security", {}).get("secretScanRequired", True):
+        blockers.append("Strict preflight requires a complete secret/security scan.")
 
     required_evidence = [
         "Project instructions reviewed",
@@ -2000,29 +3520,82 @@ def tool_preflight(args: dict[str, Any]) -> dict[str, Any]:
 
 def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
+    base_ref = str(args.get("base_ref") or "").strip()
     target_environment = str(args.get("target_environment") or "production").strip().lower()
     explicit_release_requested = bool(args.get("explicit_release_requested") or False)
     rollback_plan = str(args.get("rollback_plan") or "").strip()
     monitoring_plan = str(args.get("monitoring_plan") or "").strip()
     canary_plan = str(args.get("canary_plan") or "").strip()
     approved_by = str(args.get("approved_by") or "").strip()
+    approval_reference = str(args.get("approval_reference") or "").strip()
+    security_reviewed_by = str(args.get("security_reviewed_by") or "").strip()
     preflight_args = dict(args)
     preflight_args["strict"] = True
     preflight_args["target_environment"] = target_environment
     preflight_args["explicit_release_requested"] = explicit_release_requested
     preflight = tool_preflight(preflight_args)
-    ship = tool_ship_check({"project_path": str(project_path)})
+    ship = tool_ship_check(
+        {
+            "project_path": str(project_path),
+            "base_ref": base_ref,
+            "qa_receipts": args.get("qa_receipts") or [],
+        }
+    )
     blockers = list(preflight["blockers"]) + list(ship["blockers"])
     warnings = list(preflight["warnings"])
+    subject = evidence_subject(project_path, base_ref or None)
+    if not base_ref:
+        blockers.append("Release readiness requires an explicit base_ref; automatic upstream discovery is not an approval boundary.")
+    elif subject["baseCommit"] == subject["gitHead"]:
+        blockers.append("Release base_ref must resolve to a distinct pre-release commit; HEAD cannot be its own baseline.")
+    if not subject["clean"]:
+        blockers.append("Release readiness requires a clean committed working tree; commit or remove local changes, then rerun all evidence checks.")
+
+    qa_receipts = args.get("qa_receipts") or []
+    if not isinstance(qa_receipts, list) or not all(isinstance(item, str) for item in qa_receipts):
+        raise ToolError("qa_receipts must be an array of receipts returned by jstack_qa.")
+    required_commands = discover_test_commands(project_path)
+    verified_qa: list[dict[str, Any]] = []
+    receipt_by_key: dict[str, dict[str, Any]] = {}
+    for receipt in qa_receipts:
+        verification = verify_receipt(receipt, "qa", subject, expected_subject=subject)
+        verified_qa.append(verification)
+        payload = verification["payload"]
+        command_key = str(payload.get("commandKey") or "")
+        if verification["valid"] and command_key:
+            receipt_by_key[command_key] = payload
+    for command in required_commands:
+        payload = receipt_by_key.get(command["key"])
+        if not payload:
+            blockers.append(f"Missing a current passing QA receipt for discovered command '{command['key']}'.")
+        elif payload.get("commandFingerprint") != command["commandFingerprint"]:
+            blockers.append(f"QA receipt for '{command['key']}' does not match the currently discovered command definition.")
+    if not required_commands:
+        blockers.append("No test/lint/typecheck/build commands were discovered; release readiness cannot be established.")
+
+    security_receipt = str(args.get("security_receipt") or "").strip()
+    if not security_receipt and preflight.get("securitySummary"):
+        security_receipt = str(preflight["securitySummary"].get("evidenceReceipt") or "")
+    verified_security: dict[str, Any] | None = None
+    if security_receipt:
+        verified_security = verify_receipt(security_receipt, "security", subject, expected_subject=subject)
+        if not verified_security["valid"]:
+            blockers.append("Security evidence receipt is not a current, complete, clean result for this commit and project state.")
+    else:
+        blockers.append("Release readiness requires a current security evidence receipt.")
 
     if not explicit_release_requested:
         blockers.append("Release readiness requires explicit user approval for this release check.")
     if target_environment in {"production", "prod"} and not approved_by:
         blockers.append("Production release requires an approver name or approval reference.")
+    if target_environment in {"production", "prod"} and not approval_reference:
+        blockers.append("Production release requires an environment-specific approval reference from outside the MCP.")
     if target_environment in {"production", "prod"} and not rollback_plan:
         blockers.append("Production release requires a rollback plan.")
     if target_environment in {"production", "prod"} and not (monitoring_plan or canary_plan):
         blockers.append("Production release requires a monitoring or canary plan.")
+    if goal_is_sensitive(str(args.get("goal") or ""), load_enterprise_policy(project_path)) and not security_reviewed_by:
+        blockers.append("Sensitive release work requires a named human security reviewer or review reference.")
 
     return {
         "projectPath": str(project_path),
@@ -2033,12 +3606,20 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
         "approval": {
             "explicitReleaseRequested": explicit_release_requested,
             "approvedBy": approved_by,
+            "approvalReference": approval_reference,
+            "securityReviewedBy": security_reviewed_by,
         },
         "plans": {
             "rollbackPlan": rollback_plan,
             "monitoringPlan": monitoring_plan,
             "canaryPlan": canary_plan,
         },
+        "evidenceState": subject,
+        "qaEvidence": {
+            "requiredCommands": required_commands,
+            "verifiedReceipts": verified_qa,
+        },
+        "securityEvidence": verified_security,
         "preflight": preflight,
         "shipCheck": ship,
         "releaseStandard": [
@@ -2089,10 +3670,22 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
         report_path = Path(report_path_raw).expanduser()
         if not report_path.is_absolute():
             report_path = project_path / report_path
-        if not report_path.exists():
+        if report_path.is_symlink():
+            blockers.append(f"Backtest report may not be a symlink: {report_path}")
+        elif not report_path.exists():
             blockers.append(f"Backtest report path does not exist: {report_path}")
+        elif not report_path.is_file():
+            blockers.append(f"Backtest report must be a regular file: {report_path}")
+        elif report_path.stat().st_size > 10_000_000:
+            blockers.append("Backtest report exceeds the 10 MB review limit.")
         else:
-            report_metrics = parse_backtest_report(report_path)
+            resolved_report = report_path.resolve()
+            try:
+                resolved_report.relative_to(project_path)
+            except ValueError:
+                blockers.append("Backtest report must be inside the reviewed project directory.")
+            else:
+                report_metrics = parse_backtest_report(resolved_report)
     elif strict:
         blockers.append("Strict quant review requires a backtest report path.")
 
@@ -2112,7 +3705,8 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
     missing: list[str] = []
     for item in required:
         aliases = key_aliases.get(item, [item])
-        if not any(evidence.get(alias) not in (None, "", False, []) for alias in aliases):
+        report_satisfies = item == "history_quality_or_modelling_quality" and report_metrics is not None and report_metrics.get("historyQualityPercent") is not None
+        if not report_satisfies and not any(evidence.get(alias) not in (None, "", False, []) for alias in aliases):
             missing.append(item)
     if missing:
         blockers.append("Missing required quant/backtest evidence: " + ", ".join(missing))
@@ -2120,7 +3714,13 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
     min_quality = float(quant_policy.get("minimumHistoryQualityPercent") or 99.0)
     supplied_quality = evidence.get("history_quality") or evidence.get("modelling_quality") or evidence.get("modeling_quality")
     detected_quality = report_metrics.get("historyQualityPercent") if report_metrics else None
-    quality_value = supplied_quality if supplied_quality is not None else detected_quality
+    quality_value = detected_quality if detected_quality is not None else supplied_quality
+    if detected_quality is not None and supplied_quality is not None:
+        try:
+            if float(str(supplied_quality).replace("%", "")) != float(detected_quality):
+                blockers.append("Supplied history/modelling quality conflicts with the parsed report; parsed report evidence takes precedence.")
+        except ValueError:
+            blockers.append("Supplied history/modelling quality is not numeric and conflicts with parsed report evidence.")
     if quality_value is not None:
         try:
             quality_float = float(str(quality_value).replace("%", ""))
@@ -2132,6 +3732,13 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
         blockers.append("No history/modelling quality value was supplied or detected.")
 
     if report_metrics:
+        if strict:
+            missing_metrics = [
+                key for key in ("historyQualityPercent", "totalTrades", "profitFactor", "totalNetProfit")
+                if report_metrics.get(key) is None
+            ]
+            if missing_metrics:
+                blockers.append("Backtest report is missing required parsed metrics: " + ", ".join(missing_metrics))
         if report_metrics.get("totalTrades") == 0:
             blockers.append("Backtest report shows zero trades.")
         if isinstance(report_metrics.get("totalNetProfit"), (int, float)) and report_metrics["totalNetProfit"] < 0:
@@ -2160,6 +3767,55 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS: dict[str, dict[str, Any]] = {
+    "gstack_mastery_status": {
+        "description": "Show the current JStack learner stage, advancement evidence, and next deliberate-practice drill.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "handler": tool_mastery_status,
+        "readOnlyHint": True,
+    },
+    "gstack_mastery_start": {
+        "description": "Initialize the local JStack mastery profile at Stage 0 without overwriting an existing profile.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"learner_name": {"type": "string", "default": "Jay"}},
+        },
+        "handler": tool_mastery_start,
+        "readOnlyHint": False,
+    },
+    "gstack_mastery_record": {
+        "description": "Record a mastery attempt from hashed artifacts, commit-bound QA/security receipts, assistance level, and independently cited rubric evidence; advancement is derived by policy.",
+        "inputSchema": {
+            "type": "object",
+            "required": ["project_path", "stage", "drill_id", "assistance_level", "assessor", "assessor_citations", "assessment", "artifacts"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "stage": {"type": "integer", "minimum": 0, "maximum": 9},
+                "drill_id": {"type": "string"},
+                "assistance_level": {"type": "string", "enum": ["observed", "guided", "checklist", "independent", "independent_teach"]},
+                "assessor": {"type": "string"},
+                "assessor_citations": {"type": "array", "items": {"type": "string"}},
+                "assessment": {
+                    "type": "object",
+                    "required": ["correctness", "evidence", "safety", "judgment", "explanation"],
+                    "properties": {
+                        "correctness": {"type": "number", "minimum": 0, "maximum": 100},
+                        "evidence": {"type": "number", "minimum": 0, "maximum": 100},
+                        "safety": {"type": "number", "minimum": 0, "maximum": 100},
+                        "judgment": {"type": "number", "minimum": 0, "maximum": 100},
+                        "explanation": {"type": "number", "minimum": 0, "maximum": 100}
+                    }
+                },
+                "artifacts": {"type": "object", "description": "Map each stage requiredArtifact name to a project-relative file or directory."},
+                "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
+                "security_receipt": {"type": "string"},
+                "hard_gate_failures": {"type": "array", "items": {"type": "string"}, "default": []},
+                "blind_capstone": {"type": "boolean", "default": False},
+                "capstone_results": {"type": "object"}
+            }
+        },
+        "handler": tool_mastery_record,
+        "readOnlyHint": False,
+    },
     "gstack_detect_project": {
         "description": "Detect git root, gstack install, project config and test commands for a project path.",
         "inputSchema": {
@@ -2203,7 +3859,9 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "goal": {"type": "string"},
                 "project_path": {"type": "string"},
                 "quality_level": {"type": "string", "enum": ["standard", "enterprise"], "default": "enterprise"},
+                "team_mode": {"type": "string", "enum": ["single-lead", "smart-subagents", "full-team"], "default": "single-lead"},
                 "mastery_mode": {"type": "boolean", "default": True, "description": "When true, include staged training objectives, benchmarks, anti-slop checklist, review rubric, and next drill."},
+                "learning_mode": {"type": "string", "enum": ["off", "embedded", "coach", "assessment"], "default": "embedded"},
             },
         },
         "handler": tool_plan,
@@ -2234,7 +3892,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "agents": {"type": "array", "items": {"type": "object"}, "description": "Alternative direct agent list."},
                 "max_specialists": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
                 "lead_justification": {"type": "string"},
-                "coordination_packet_supplied": {"type": "boolean", "default": False},
+                "coordination_packet": {
+                    "type": "object",
+                    "description": "The actual coordination packet. Its required fields, roles, and file ownership are validated.",
+                },
                 "explicit_release_requested": {"type": "boolean", "default": False},
             },
         },
@@ -2247,9 +3908,11 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Optional comparison ref. Defaults to upstream/main/master discovery."},
                 "goal": {"type": "string"},
                 "target_environment": {"type": "string", "default": "local"},
                 "explicit_release_requested": {"type": "boolean", "default": False},
+                "protected_path_approval": {"type": "string"},
             },
         },
         "handler": tool_policy_check,
@@ -2261,9 +3924,11 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Optional comparison ref. Defaults to upstream/main/master discovery."},
                 "goal": {"type": "string"},
                 "target_environment": {"type": "string", "default": "local"},
                 "explicit_release_requested": {"type": "boolean", "default": False},
+                "protected_path_approval": {"type": "string"},
                 "strict": {"type": "boolean", "default": True},
                 "run_secret_scan": {"type": "boolean", "default": True},
                 "max_files": {"type": "integer", "minimum": 100, "maximum": 10000, "default": 2000},
@@ -2274,13 +3939,25 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "gstack_health": {
         "description": "Collect safe project health signals: git status, branch, docs, stack markers and detected test commands.",
-        "inputSchema": {"type": "object", "properties": {"project_path": {"type": "string"}}},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Optional comparison ref. Defaults to upstream/main/master discovery."},
+            },
+        },
         "handler": tool_health,
         "readOnlyHint": True,
     },
     "gstack_review": {
         "description": "Run safe local review checks: git status, diff stat, changed files and git diff --check.",
-        "inputSchema": {"type": "object", "properties": {"project_path": {"type": "string"}}},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string"},
+                "base_ref": {"type": "string"},
+            },
+        },
         "handler": tool_review,
         "readOnlyHint": True,
     },
@@ -2290,21 +3967,28 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Optional release-range base for historical secret scanning."},
                 "max_files": {"type": "integer", "minimum": 100, "maximum": 10000, "default": 2000},
+                "max_file_bytes": {"type": "integer", "minimum": 10000, "maximum": 10000000, "default": 2000000},
             },
         },
         "handler": tool_security_audit,
         "readOnlyHint": True,
     },
     "gstack_qa": {
-        "description": "Discover allowed test/build commands, and optionally run one discovered command by key. No arbitrary shell is exposed.",
+        "description": "Discover test/build commands. Execution requires explicit trust approval bound to the exact git revision and project fingerprint.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Comparison base bound into the QA receipt."},
                 "run": {"type": "boolean", "default": False},
                 "command_key": {"type": "string", "description": "Required only when run=true. Use output allowedCommands keys."},
                 "timeout_sec": {"type": "integer", "minimum": 10, "maximum": 600, "default": 120},
+                "execution_approved": {"type": "boolean", "default": False, "description": "Required when run=true; acknowledges repository-controlled code execution."},
+                "trusted_revision": {"type": "string", "description": "Exact gitHead returned by discovery."},
+                "trusted_project_fingerprint": {"type": "string", "description": "Exact projectFingerprint returned by discovery."},
+                "trusted_policy_digest": {"type": "string", "description": "Exact policyDigest returned by discovery."},
             },
         },
         "handler": tool_qa,
@@ -2335,7 +4019,15 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
     "gstack_ship_check": {
         "description": "Run a pre-ship readiness summary using safe health and review checks.",
-        "inputSchema": {"type": "object", "properties": {"project_path": {"type": "string"}}},
+        "inputSchema": {
+            "type": "object",
+            "required": ["base_ref"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "base_ref": {"type": "string"},
+                "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
+            },
+        },
         "handler": tool_ship_check,
         "readOnlyHint": True,
     },
@@ -2343,16 +4035,23 @@ TOOLS: dict[str, dict[str, Any]] = {
         "description": "Run production-style release readiness: strict preflight, ship check, explicit approval, rollback, monitoring and canary evidence.",
         "inputSchema": {
             "type": "object",
+            "required": ["base_ref"],
             "properties": {
                 "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Explicit trusted comparison base for the release delta."},
                 "goal": {"type": "string"},
                 "target_environment": {"type": "string", "default": "production"},
                 "explicit_release_requested": {"type": "boolean", "default": False},
                 "approved_by": {"type": "string"},
+                "approval_reference": {"type": "string"},
+                "security_reviewed_by": {"type": "string"},
+                "protected_path_approval": {"type": "string"},
                 "rollback_plan": {"type": "string"},
                 "monitoring_plan": {"type": "string"},
                 "canary_plan": {"type": "string"},
                 "run_secret_scan": {"type": "boolean", "default": True},
+                "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
+                "security_receipt": {"type": "string"},
             },
         },
         "handler": tool_release_readiness,
@@ -2390,6 +4089,8 @@ for _name, _meta in list(TOOLS.items()):
 def tool_definitions() -> list[dict[str, Any]]:
     definitions = []
     for name, meta in TOOLS.items():
+        if name.startswith("gstack_"):
+            continue
         definitions.append(
             {
                 "name": name,
@@ -2413,22 +4114,39 @@ def mcp_result(data: Any) -> dict[str, Any]:
 
 
 def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
+    global _MCP_INITIALIZED
     method = message.get("method")
     request_id = message.get("id")
-    params = message.get("params") or {}
+    raw_params = message.get("params", {})
+    params = raw_params if raw_params is not None else {}
     try:
+        if message.get("jsonrpc") != "2.0" or not isinstance(method, str):
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32600, "message": "Invalid JSON-RPC request."}}
+        if not isinstance(params, dict):
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": "JSON-RPC params must be an object."}}
         if method == "initialize":
+            if _MCP_INITIALIZED:
+                raise ToolError("MCP server is already initialized.")
+            requested_version = str(params.get("protocolVersion") or PROTOCOL_VERSION)
+            negotiated_version = requested_version if requested_version in SUPPORTED_PROTOCOL_VERSIONS else PROTOCOL_VERSION
+            _MCP_INITIALIZED = True
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "result": {
-                    "protocolVersion": PROTOCOL_VERSION,
+                    "protocolVersion": negotiated_version,
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                 },
             }
         if method == "notifications/initialized":
             return None
+        if not _MCP_INITIALIZED:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32002, "message": "MCP server must be initialized before this method."},
+            }
         if method == "ping":
             return {"jsonrpc": "2.0", "id": request_id, "result": {}}
         if method == "tools/list":
@@ -2439,12 +4157,23 @@ def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
             if name not in TOOLS:
                 raise ToolError(f"Unknown tool: {name}")
             if not isinstance(arguments, dict):
-                raise ToolError("Tool arguments must be an object.")
+                raise InputError("Tool arguments must be an object.")
+            validate_schema_value(arguments, TOOLS[name]["inputSchema"])
             data = TOOLS[name]["handler"](arguments)
             return {"jsonrpc": "2.0", "id": request_id, "result": mcp_result(data)}
         if request_id is None:
             return None
-        raise ToolError(f"Unsupported MCP method: {method}")
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32601, "message": f"Unsupported MCP method: {method}"},
+        }
+    except InputError as exc:
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32602, "message": str(exc)},
+        }
     except ToolError as exc:
         return {
             "jsonrpc": "2.0",
@@ -2461,36 +4190,34 @@ def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def read_message() -> dict[str, Any] | None:
-    headers: dict[str, str] = {}
     while True:
-        line = sys.stdin.buffer.readline()
+        line = sys.stdin.buffer.readline(10_000_001)
         if not line:
             return None
-        if line in (b"\r\n", b"\n"):
-            break
-        decoded = line.decode("ascii", errors="replace").strip()
-        if ":" in decoded:
-            key, value = decoded.split(":", 1)
-            headers[key.lower()] = value.strip()
-    length_raw = headers.get("content-length")
-    if not length_raw:
-        return None
-    body = sys.stdin.buffer.read(int(length_raw))
-    if not body:
-        return None
-    return json.loads(body.decode("utf-8"))
+        if len(line) > 10_000_000 or (len(line) == 10_000_000 and not line.endswith(b"\n")):
+            raise ToolError("MCP message exceeds the 10 MB safety limit.")
+        stripped = line.strip()
+        if not stripped:
+            continue
+        message = json.loads(stripped.decode("utf-8"))
+        if not isinstance(message, dict):
+            raise ToolError("MCP message must be a JSON object.")
+        return message
 
 
 def write_message(message: dict[str, Any]) -> None:
-    body = json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    sys.stdout.buffer.write(f"Content-Length: {len(body)}\r\n\r\n".encode("ascii"))
+    body = json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode("utf-8") + b"\n"
     sys.stdout.buffer.write(body)
     sys.stdout.buffer.flush()
 
 
 def main() -> int:
     while True:
-        message = read_message()
+        try:
+            message = read_message()
+        except (json.JSONDecodeError, UnicodeDecodeError, ToolError) as exc:
+            write_message({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": str(exc)}})
+            continue
         if message is None:
             return 0
         response = handle_request(message)

@@ -1,10 +1,13 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Install the local jstack MCP server into Codex config.toml."""
 
 from __future__ import annotations
 
-import platform
+import json
+import os
 import shutil
+import sys
+import uuid
 from pathlib import Path
 
 
@@ -32,40 +35,66 @@ def remove_existing_block(config: str) -> str:
 
 
 def mcp_block() -> str:
-    is_windows = platform.system().lower().startswith("win")
-    command = "python" if is_windows else "python3"
-    gstack_root = Path.home() / ".gstack" / "repos" / "gstack"
-    if is_windows:
-        path = f"{gstack_root / 'bin'};C:/Windows/System32;C:/Windows;C:/Windows/System32/WindowsPowerShell/v1.0"
-    else:
-        path = f"{gstack_root / 'bin'}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    command = Path(sys.executable).as_posix()
     return f"""
 [mcp_servers.jstack]
-command = "{command}"
-args = ["{(INSTALL_DIR / "jstack_mcp_server.py").as_posix()}"]
+command = {json.dumps(command)}
+args = [{json.dumps((INSTALL_DIR / "jstack_mcp_server.py").as_posix())}]
 startup_timeout_sec = 30.0
 tool_timeout_sec = 300.0
-
-[mcp_servers.jstack.env]
-GSTACK_ROOT = "{gstack_root.as_posix()}"
-PATH = "{path}"
 """.strip()
 
 
+def atomic_write_text(path: Path, content: str) -> None:
+    if path.is_symlink():
+        raise RuntimeError(f"Refusing to write through symlink: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.parent / f".{path.name}.jstack-{uuid.uuid4().hex}"
+    temporary.write_text(content, encoding="utf-8")
+    temporary.chmod(0o600)
+    os.replace(temporary, path)
+
+
+def atomic_copytree(source: Path, target: Path) -> None:
+    if target.is_symlink():
+        raise RuntimeError(f"Refusing to replace symlink install target: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = target.parent / f".{target.name}.jstack-stage-{uuid.uuid4().hex}"
+    backup = target.parent / f".{target.name}.jstack-rollback-{uuid.uuid4().hex}"
+    shutil.copytree(source, staging, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
+    replaced = False
+    try:
+        if target.exists():
+            os.replace(target, backup)
+            replaced = True
+        os.replace(staging, target)
+        if backup.exists():
+            shutil.rmtree(backup)
+    except Exception:
+        if target.exists() and not target.is_symlink():
+            shutil.rmtree(target)
+        if replaced and backup.exists():
+            os.replace(backup, target)
+        raise
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
 def main() -> int:
+    CODEX_HOME.mkdir(parents=True, exist_ok=True)
     if not CONFIG_PATH.exists():
-        raise SystemExit(f"Codex config not found: {CONFIG_PATH}")
-    if INSTALL_DIR.exists() and INSTALL_DIR.resolve() != SOURCE_DIR.resolve():
-        shutil.rmtree(INSTALL_DIR)
-        shutil.copytree(SOURCE_DIR, INSTALL_DIR, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
+        atomic_write_text(CONFIG_PATH, "")
+    if INSTALL_DIR.resolve() != SOURCE_DIR.resolve():
+        atomic_copytree(SOURCE_DIR, INSTALL_DIR)
 
     original = CONFIG_PATH.read_text(encoding="utf-8")
     backup = CONFIG_PATH.with_suffix(".toml.jstack-mcp-backup")
-    backup.write_text(original, encoding="utf-8")
+    atomic_write_text(backup, original)
 
     updated = remove_existing_block(original)
     updated = updated.rstrip() + "\n\n" + mcp_block() + "\n"
-    CONFIG_PATH.write_text(updated, encoding="utf-8")
+    atomic_write_text(CONFIG_PATH, updated)
     print(f"Installed jstack MCP server to {INSTALL_DIR}")
     print(f"Updated Codex config: {CONFIG_PATH}")
     print(f"Backup written: {backup}")

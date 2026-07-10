@@ -1,0 +1,191 @@
+{
+  "schemaVersion": "jstack.mastery.curriculum.v1",
+  "title": "JStack Engineering Mastery",
+  "purpose": "Train an absolute beginner to operate, maintain, audit, and evolve JStack with enterprise evidence standards.",
+  "scoring": {
+    "weights": {
+      "correctness": 30,
+      "evidence": 25,
+      "safety": 20,
+      "judgment": 15,
+      "explanation": 10
+    },
+    "levels": {
+      "0": "Observed",
+      "1": "Guided",
+      "2": "Competent",
+      "3": "Independent",
+      "4": "Expert"
+    },
+    "assistanceCaps": {
+      "observed": 0,
+      "guided": 1,
+      "checklist": 2,
+      "independent": 3,
+      "independent_teach": 4
+    }
+  },
+  "advancementPolicy": {
+    "stages0To3": "Two consecutive independent attempts scoring at least 80.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
+    "stage9": "Two blind capstones scoring at least 90 with correct go/no-go decisions, all seeded P0 findings, and at least 80 percent of seeded P1 findings.",
+    "hardBlocks": [
+      "fabricated, stale, or unverifiable evidence",
+      "secret exposure or unapproved mutation",
+      "missing mandatory artifacts",
+      "missed seeded P0 defect",
+      "false production-ready claim"
+    ]
+  },
+  "domainStageMap": {
+    "trivial": 1,
+    "normal": 2,
+    "architecture": 8,
+    "product": 9,
+    "ui_product": 5,
+    "security_compliance": 7,
+    "data_financial": 4,
+    "production_release": 6
+  },
+  "stages": [
+    {
+      "stage": 0,
+      "name": "Safe Operator",
+      "outcome": "Orient in a repository and development environment without changing implementation/configuration or exposing secrets.",
+      "prerequisites": [],
+      "corePrinciples": ["Know the current path and boundary", "Inspect before changing", "Prefer reversible actions", "Separate local work from production", "Keep secrets out of prompts, logs, and commits"],
+      "drills": [
+        {"id": "s0-orientation", "name": "Clean-room repository orientation", "type": "audit"}
+      ],
+      "requiredArtifacts": ["orientation.md", "evidence-manifest.json"],
+      "benchmarks": ["Identify root, branch, dirty state, runtime, tests, protected paths, and production boundary", "Write only the required artifacts under .jstack-training", "Expose zero secrets"],
+      "hardGates": ["No implementation, configuration, git-state, or production mutation", "No destructive command", "No credential disclosure"]
+    },
+    {
+      "stage": 1,
+      "name": "JStack Reader",
+      "outcome": "Trace source truth through slash commands, skills, MCP schemas, handlers, policy, and packaged copies.",
+      "prerequisites": [0],
+      "corePrinciples": ["Read before changing", "Trace contracts end to end", "Cite source evidence", "Treat generated copies as drift risks"],
+      "drills": [
+        {"id": "s1-command-trace", "name": "Trace one command from invocation to MCP response", "type": "audit"},
+        {"id": "s1-drift-hunt", "name": "Find a planted package-copy inconsistency", "type": "audit"}
+      ],
+      "requiredArtifacts": ["module-map.md", "trace.md"],
+      "benchmarks": ["Every hop has exact file evidence", "No unsupported behavioral claim", "Detect at least one seeded inconsistency"],
+      "hardGates": ["Source citations present", "Current behavior distinguished from intended behavior"]
+    },
+    {
+      "stage": 2,
+      "name": "Scoped Maintainer",
+      "outcome": "Deliver small coherent changes with focused tests and no unrelated churn.",
+      "prerequisites": [1],
+      "corePrinciples": ["Smallest coherent diff", "Existing conventions first", "Proportional tests", "Reversible changes", "No drive-by refactors"],
+      "drills": [
+        {"id": "s2-doc-fix", "name": "Repair a command or documentation inconsistency", "type": "implementation"},
+        {"id": "s2-python-fix", "name": "Implement an isolated Python defect fix", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["change-brief.md", "verification.json"],
+      "benchmarks": ["Two accepted scoped change attempts", "No unrelated files", "Focused checks pass", "Revert path is clear"],
+      "hardGates": ["Passing focused test receipt", "Diff scope reviewed"]
+    },
+    {
+      "stage": 3,
+      "name": "Debugger and Test Author",
+      "outcome": "Reproduce, isolate, fix, and preserve regression evidence for unseen defects.",
+      "prerequisites": [2],
+      "corePrinciples": ["Reproduce before fixing", "Separate symptom from cause", "Change one variable at a time", "Fail before and pass after", "Report residual risk"],
+      "drills": [
+        {"id": "s3-routing-defect", "name": "Diagnose an unseen routing defect", "type": "implementation"},
+        {"id": "s3-parser-defect", "name": "Diagnose an unseen parser or transport defect", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["reproduction.md", "root-cause.md", "regression-test.txt"],
+      "benchmarks": ["Correct root cause", "Regression fails before and passes after", "No unexplained failure remains"],
+      "hardGates": ["Before/after evidence", "Regression coverage retained"]
+    },
+    {
+      "stage": 4,
+      "name": "MCP and Policy Engineer",
+      "outcome": "Build protocol-conformant tools and fail-closed policy enforcement with compatibility evidence.",
+      "prerequisites": [3],
+      "corePrinciples": ["Protocol conformance", "Schema-handler parity", "Policy floors", "Typed failure", "Backward compatibility is explicit"],
+      "drills": [
+        {"id": "s4-tool-contract", "name": "Add or audit one read-only MCP tool", "type": "implementation"},
+        {"id": "s4-malformed-input", "name": "Adversarially test malformed input and policy weakening", "type": "audit"}
+      ],
+      "requiredArtifacts": ["contract-matrix.md", "conformance-results.json", "compatibility-note.md"],
+      "benchmarks": ["External client initialize/list/call passes", "Aliases match", "Invalid input fails closed"],
+      "hardGates": ["Real JSONL client evidence", "No policy floor can be disabled"]
+    },
+    {
+      "stage": 5,
+      "name": "Workflow Product Engineer",
+      "outcome": "Design consistent task-first instruction across single-lead, specialist, and full-team modes.",
+      "prerequisites": [4],
+      "corePrinciples": ["Command mode is authoritative", "Staffing changes coordination, not quality", "Progressive disclosure", "Teach through evidence", "Outcome before narration"],
+      "drills": [
+        {"id": "s5-mode-matrix", "name": "Run one task through all three command modes", "type": "audit"},
+        {"id": "s5-learning-modes", "name": "Validate off, embedded, coach, and assessment instruction", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["behavior-matrix.md", "golden-transcripts/"],
+      "benchmarks": ["Core result stays consistent", "Only coordination changes by mode", "Embedded mastery capsule is at most three lines"],
+      "hardGates": ["Single-lead never silently escalates", "No eleven-role lecture in full-team output"]
+    },
+    {
+      "stage": 6,
+      "name": "Packaging and Release Engineer",
+      "outcome": "Produce reproducible cross-platform installs, upgrades, rollback, and package parity.",
+      "prerequisites": [5],
+      "corePrinciples": ["One canonical source", "Generated copies are verified", "Portable launchers", "Atomic install and rollback", "Release evidence is commit-bound"],
+      "drills": [
+        {"id": "s6-install-matrix", "name": "Clean install, upgrade, and rollback in temporary homes", "type": "implementation"},
+        {"id": "s6-package-audit", "name": "Audit source/plugin/global parity", "type": "audit"}
+      ],
+      "requiredArtifacts": ["install-matrix.json", "release-checklist.md", "rollback-runbook.md"],
+      "benchmarks": ["macOS, Linux, and Windows CI pass", "Real client discovers tools", "No BOM, hardcoded user path, or copy drift"],
+      "hardGates": ["All package parity checks pass", "Rollback rehearsal passes"]
+    },
+    {
+      "stage": 7,
+      "name": "Security and Reliability Auditor",
+      "outcome": "Find and block unsafe execution, path, secret, dispatch, and release behavior.",
+      "prerequisites": [6],
+      "corePrinciples": ["Least privilege", "Trust boundaries", "Complete scans or no-go", "Adversarial testing", "Untrusted project code is explicit", "Fail closed"],
+      "drills": [
+        {"id": "s7-threat-model", "name": "Threat-model the JStack control plane", "type": "audit"},
+        {"id": "s7-adversarial-suite", "name": "Attack policy, paths, dispatch, QA, and receipts", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["threat-model.md", "adversarial-report.md", "security-receipt.txt"],
+      "benchmarks": ["Find all seeded critical/high defects", "Leak no secrets", "Perform no unapproved mutation", "Force no-go for unresolved blockers"],
+      "hardGates": ["Complete security receipt", "All seeded P0 findings caught"]
+    },
+    {
+      "stage": 8,
+      "name": "JStack Architect",
+      "outcome": "Evolve transport, policy, evidence, or mastery state with explicit invariants and migration safety.",
+      "prerequisites": [7],
+      "corePrinciples": ["Boundaries and invariants", "Compatibility", "Migration rehearsal", "Observability", "Operational ownership", "Abstractions must reduce real complexity"],
+      "drills": [
+        {"id": "s8-architecture-evolution", "name": "Design and rehearse one control-plane evolution", "type": "implementation"},
+        {"id": "s8-independent-review", "name": "Defend the architecture under independent review", "type": "audit"}
+      ],
+      "requiredArtifacts": ["adr.md", "schema.json", "migration-plan.md", "rollback-plan.md", "test-strategy.md"],
+      "benchmarks": ["Independent review score at least 85", "Compatibility suite passes", "Migration and rollback rehearsal pass"],
+      "hardGates": ["Invariants explicit", "No untested compatibility claim"]
+    },
+    {
+      "stage": 9,
+      "name": "Staff Maintainer and Auditor",
+      "outcome": "Lead ambiguous JStack work through diagnosis, sequencing, implementation, go/no-go, release, and handoff while improving others' judgment.",
+      "prerequisites": [8],
+      "corePrinciples": ["Reduce uncertainty", "Sequence by risk", "Evidence-based go/no-go", "Teach transferable judgment", "Leave durable ownership"],
+      "drills": [
+        {"id": "s9-blind-audit", "name": "Blind audit of an unseen JStack commit", "type": "audit"},
+        {"id": "s9-release-capstone", "name": "Prepare and defend an unseen release candidate", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["audit.md", "roadmap.md", "release-dossier.md", "operator-runbook.md"],
+      "benchmarks": ["Two capstones score at least 90", "Catch all P0 and at least 80 percent of P1 defects", "Correct release decision", "Clean external-client integration"],
+      "hardGates": ["No false production-ready claim", "Complete release dossier", "Independent assessor approval"]
+    }
+  ]
+}
