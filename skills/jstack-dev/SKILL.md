@@ -33,18 +33,29 @@ dispatch, waiting, collection, and closure.
 ## Start
 
 1. Read repository instructions and relevant durable memory.
-2. Inspect git status, branch, project boundaries, stack, and existing checks.
-3. Use `jstack_detect_project`.
-4. Use `jstack_policy_check` with the task goal and comparison `base_ref` when
-   known.
-5. Use `jstack_plan` with the exact command `team_mode`,
+2. Call `jstack_runtime_status`. A successful response proves the MCP is
+   mounted. Never describe a later project, input, policy, or gate rejection as
+   an MCP attachment failure.
+3. Use `jstack_detect_project` and inspect `evidenceMode`.
+4. For `git`, inspect status, branch, project boundaries, stack, and checks,
+   then use `jstack_policy_check` with the task goal and comparison `base_ref`
+   when known.
+5. For `artifact-only`, state
+   `MCP mounted; project binding is artifact-only.`, identify the authoritative
+   source and deployment boundary, and do not call tools listed in
+   `blockedTools`. Capture direct hashes, test output, backup, immutable runtime
+   identity, rollback, monitoring, and public smoke evidence without claiming
+   commit-bound JStack receipts or release certification.
+6. Use `jstack_plan` with the exact command `team_mode`,
    `quality_level="enterprise"`, and the requested `learning_mode`.
-6. For specialist modes, use `jstack_team_plan`, build the actual coordination
+7. For specialist modes, use `jstack_team_plan`, build the actual coordination
    packet, and pass that object to `jstack_dispatch_check`.
-7. Use `jstack_preflight` before substantial implementation and before handoff.
+8. In `git` mode, use `jstack_preflight` before substantial implementation and
+   before handoff.
 
-If the JStack MCP is unavailable, apply this skill with normal Codex tools.
-Upstream gstack is optional; JStack is independently usable.
+Use the normal-Codex fallback only when `jstack_runtime_status` itself is
+unavailable or unreachable. Upstream gstack is optional; JStack is
+independently usable.
 
 ## Delivery Gates
 
@@ -94,6 +105,8 @@ Upstream gstack is optional; JStack is independently usable.
   and receipt. A discovered, skipped, blocked, timed-out, or failed command is
   not a pass.
 - Browser/UI work also needs runtime interaction and responsive visual evidence.
+- In `artifact-only` mode, run authorized checks directly and preserve the same
+  evidence fields, but label them direct evidence rather than JStack receipts.
 
 ### Security
 
@@ -113,6 +126,9 @@ Upstream gstack is optional; JStack is independently usable.
   command passing for that exact fingerprint, complete security evidence,
   approver reference, rollback plan, and monitoring or canary plan.
 - Never equate implementation completion with deployment completion.
+- `artifact-only` work may follow an explicitly approved operational release
+  boundary, but JStack release readiness remains unavailable until the
+  authoritative source has a committed Git repository.
 
 ### Handoff
 

@@ -39,6 +39,15 @@ claim is invalid. Use `jstack_plan` with
 The MCP plans and validates; platform multi-agent tools perform actual
 dispatch, collection, and closure.
 
+Call `jstack_runtime_status` before project tools. A successful call proves the
+MCP is mounted. Use `jstack_detect_project` and branch on `evidenceMode`. For
+`artifact-only`, state `MCP mounted; project binding is artifact-only.`, keep
+team planning and dispatch validation, do not call tools listed in
+`blockedTools`, and gather direct artifact evidence without claiming JStack
+receipts or release certification. Only use the MCP fallback when
+`jstack_runtime_status` itself is unavailable or unreachable; never relabel a
+Git requirement or failed gate as an MCP attachment failure.
+
 The Lead may implement. If a specialist edits implementation, it must be the
 Builder with an explicit disjoint scope. If more than three specialists are
 required, stop and recommend `/jstack-full-team`.

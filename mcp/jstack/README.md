@@ -15,6 +15,9 @@ evidence, release readiness, and mastery progression.
   HOME are hardening, not an OS sandbox.
 - Context and mastery records are atomically written under `~/.jstack` with
   private file permissions.
+- `jstack_runtime_status`, `jstack_detect_project`, and `jstack_plan` can
+  classify an existing non-Git directory as `artifact-only`. Every
+  receipt/policy/release tool still requires a valid Git repository.
 
 ## Evidence
 
@@ -33,10 +36,10 @@ secret scan, environment-specific approval reference, rollback, and monitoring.
 
 ## Tools
 
-The server exposes `jstack_*` tools for project detection, planning, team
-validation, policy/preflight, health/review, QA, security, context, release,
-quant review, and mastery. Legacy `gstack_*` aliases remain for compatibility;
-upstream gstack itself is optional.
+The server exposes `jstack_*` tools for runtime status, project detection,
+planning, team validation, policy/preflight, health/review, QA, security,
+context, release, quant review, and mastery. Legacy `gstack_*` aliases remain
+for compatibility; upstream gstack itself is optional.
 
 Use `tools/list` after MCP initialization for the authoritative schemas.
 

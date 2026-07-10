@@ -22,6 +22,8 @@ quality bar.
 ## What 0.2 Enforces
 
 - MCP newline-delimited JSON-RPC transport tested by an independent client.
+- Independent runtime mount diagnostics plus explicit Git-backed and
+  artifact-only project bindings.
 - One canonical source with deterministic plugin copies and BOM/drift checks.
 - Non-overridable policy floors.
 - Committed `base..HEAD`, staged, unstaged, and untracked change evidence.
@@ -46,6 +48,11 @@ Run untrusted projects in a container or VM.
 Receipts prevent accidental or caller-side alteration during one MCP session.
 They do not protect against compromise of the same user account.
 
+Non-Git orchestration directories can use JStack planning in `artifact-only`
+mode. That mode requires direct hashes, tests, backups, immutable runtime
+identity, rollback, monitoring, and smoke evidence, but it cannot issue
+commit-bound receipts or a JStack release-readiness result.
+
 ## Layout
 
 - `mcp/jstack/jstack_mcp_server.py`: canonical MCP server.
@@ -63,7 +70,8 @@ They do not protect against compromise of the same user account.
 
 Primary tools use the `jstack_*` prefix:
 
-- project and workflow: `detect_project`, `plan`, `policy_check`,
+- runtime and binding: `runtime_status`, `detect_project`
+- project and workflow: `plan`, `policy_check`,
   `preflight`, `health`, `review`
 - teams: `team_plan`, `dispatch_check`
 - evidence: `qa`, `security_audit`, `ship_check`,
@@ -90,15 +98,18 @@ CI runs these checks on macOS, Linux, and Windows with Python 3.9 and 3.12.
 
 ### Codex Plugins
 
-Register `plugin/` and each directory under `plugins/` in a personal
-marketplace, then install:
+Register the three directories under `plugins/` in a personal marketplace,
+then install:
 
 ~~~text
-codex plugin add jstack@personal
 codex plugin add j-stack-dev@personal
 codex plugin add jstack-subagents@personal
 codex plugin add jstack-full-team@personal
 ~~~
+
+The umbrella `plugin/` is an alternative all-in-one distribution. Do not
+install it alongside the three dedicated command plugins or the command palette
+will contain duplicates.
 
 Restart Codex or open a new task after plugin/MCP changes.
 

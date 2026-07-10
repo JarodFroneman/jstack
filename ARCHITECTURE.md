@@ -30,6 +30,20 @@ The MCP never spawns platform subagents or performs a deployment. Codex's
 platform tools perform real agent dispatch. Project-specific release tools
 perform real production mutation only after separate authorization.
 
+## Project Binding
+
+Runtime health is independent from project eligibility. `runtime_status`
+proves the MCP transport and session are active. Detection and planning accept
+any existing directory and classify it as:
+
+- `git`: the canonical repository root is the evidence subject.
+- `artifact-only`: planning can describe direct operational evidence, but all
+  Git-bound policy, receipt, context, mastery, quant, and release tools remain
+  unavailable.
+
+This prevents a valid MCP mount from being misreported as unavailable while
+preserving the commit-bound release trust model.
+
 ## Evidence Invariants
 
 A receipt binds repository root, an explicit distinct pre-release base where applicable, HEAD,
