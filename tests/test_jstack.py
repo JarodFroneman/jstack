@@ -541,6 +541,28 @@ class EvidenceTests(unittest.TestCase):
 
 
 class MasteryAndInstallTests(unittest.TestCase):
+    def test_sync_accepts_windows_checkout_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            copy_root = Path(temp) / "jstack"
+            shutil.copytree(
+                ROOT,
+                copy_root,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+            )
+            source = copy_root / "prompts" / "j-stack-dev.md"
+            target = copy_root / "plugin" / "commands" / "j-stack-dev.md"
+            canonical = source.read_bytes().replace(b"\r\n", b"\n")
+            source.write_bytes(canonical)
+            target.write_bytes(canonical.replace(b"\n", b"\r\n"))
+
+            sync = subprocess.run(
+                [sys.executable, str(copy_root / "scripts" / "sync_artifacts.py"), "--check"],
+                cwd=copy_root,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, sync.returncode, sync.stderr)
+
     def test_mastery_uses_learner_stage_and_caps_assistance(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)

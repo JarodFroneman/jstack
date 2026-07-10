@@ -93,7 +93,7 @@ def main() -> int:
             if args.write:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
-            elif not target.exists() or target.read_bytes() != data:
+            elif not target.exists() or normalized_source(target) != data:
                 errors.append(f"Generated artifact drift: {target.relative_to(ROOT)} != {source.relative_to(ROOT)}")
 
     if args.write:
