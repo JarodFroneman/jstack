@@ -111,18 +111,55 @@ class TransportTests(unittest.TestCase):
         raw = process.stdout.readline()
         self.assertFalse(raw.startswith("Content-Length"))
         response = json.loads(raw)
-        self.assertEqual("0.2.0", response["result"]["serverInfo"]["version"])
+        self.assertEqual("0.2.1", response["result"]["serverInfo"]["version"])
         process.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}) + "\n")
         process.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/list", "params": {}}) + "\n")
         process.stdin.flush()
         tools = json.loads(process.stdout.readline())["result"]["tools"]
         names = {item["name"] for item in tools}
+        self.assertIn("jstack_runtime_status", names)
         self.assertIn("jstack_plan", names)
         self.assertIn("jstack_mastery_record", names)
         self.assertFalse(any(name.startswith("gstack_") for name in names))
+
+        with tempfile.TemporaryDirectory() as temp:
+            runtime = {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {
+                    "name": "jstack_runtime_status",
+                    "arguments": {"project_path": temp},
+                },
+            }
+            process.stdin.write(json.dumps(runtime) + "\n")
+            process.stdin.flush()
+            runtime_result = json.loads(process.stdout.readline())["result"]["structuredContent"]
+            self.assertTrue(runtime_result["mcpMounted"])
+            self.assertEqual("artifact-only", runtime_result["projectBinding"]["evidenceMode"])
+
+            plan = {
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": {
+                    "name": "jstack_plan",
+                    "arguments": {
+                        "project_path": temp,
+                        "goal": "stage an artifact-only release",
+                        "learning_mode": "off",
+                    },
+                },
+            }
+            process.stdin.write(json.dumps(plan) + "\n")
+            process.stdin.flush()
+            plan_result = json.loads(process.stdout.readline())["result"]["structuredContent"]
+            self.assertEqual("artifact-only", plan_result["projectBinding"]["evidenceMode"])
+            self.assertIn("jstack_release_readiness", plan_result["blockedTools"])
+
         invalid = {
             "jsonrpc": "2.0",
-            "id": 4,
+            "id": 6,
             "method": "tools/call",
             "params": {"name": "jstack_release_readiness", "arguments": {}},
         }
@@ -158,13 +195,79 @@ class TransportTests(unittest.TestCase):
         raw = process.stdout.readline()
         self.assertFalse(raw.startswith("Content-Length"))
         response = json.loads(raw)
-        self.assertEqual("0.2.0", response["result"]["serverInfo"]["version"])
+        self.assertEqual("0.2.1", response["result"]["serverInfo"]["version"])
         process.stdin.close()
         process.wait(timeout=5)
         stderr = process.stderr.read()
         process.stdout.close()
         process.stderr.close()
         self.assertEqual("", stderr)
+
+
+class ProjectBindingTests(unittest.TestCase):
+    def test_runtime_status_proves_mount_without_project_binding(self) -> None:
+        status = server.tool_runtime_status({})
+
+        self.assertTrue(status["mcpMounted"])
+        self.assertEqual("stdio-jsonl", status["transport"])
+        self.assertEqual("unbound", status["projectBinding"]["evidenceMode"])
+
+    def test_non_git_directory_gets_artifact_only_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp) / "orchestration"
+            project.mkdir()
+            (project / "package.json").write_text(
+                json.dumps({"scripts": {"test": "node --test"}}),
+                encoding="utf-8",
+            )
+
+            detected = server.tool_detect_project({"project_path": str(project)})
+            self.assertEqual("artifact-only", detected["evidenceMode"])
+            self.assertFalse(detected["gitEvidenceAvailable"])
+            self.assertIsNone(detected["gitRoot"])
+            self.assertIn("jstack_release_readiness", detected["gitRequiredTools"])
+            self.assertEqual("npm:test", detected["testCommands"][0]["key"])
+
+            plan = server.tool_plan(
+                {
+                    "project_path": str(project),
+                    "goal": "Deploy the backend before the staged UI",
+                    "team_mode": "single-lead",
+                    "learning_mode": "off",
+                }
+            )
+            self.assertEqual("artifact-only", plan["projectBinding"]["evidenceMode"])
+            self.assertIn(server.ARTIFACT_ONLY_RELEASE_BLOCKER, plan["releaseBlockers"])
+            self.assertIn("jstack_qa", plan["gitRequiredTools"])
+            self.assertGreaterEqual(len(plan["artifactEvidenceRequirements"]), 5)
+            self.assertTrue(any(step["gate"] == "Artifact evidence" for step in plan["plan"]))
+
+    def test_git_evidence_tools_remain_fail_closed_for_artifact_only_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp) / "orchestration"
+            project.mkdir()
+
+            with self.assertRaisesRegex(server.ToolError, "require a git repository"):
+                server.tool_qa({"project_path": str(project)})
+            with self.assertRaisesRegex(server.ToolError, "require a git repository"):
+                server.tool_release_readiness(
+                    {
+                        "project_path": str(project),
+                        "base_ref": "HEAD",
+                        "explicit_release_requested": True,
+                    }
+                )
+
+    def test_git_project_retains_commit_bound_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            nested = repo / "tests"
+
+            detected = server.tool_detect_project({"project_path": str(nested)})
+            self.assertEqual("git", detected["evidenceMode"])
+            self.assertTrue(detected["gitEvidenceAvailable"])
+            self.assertEqual(str(repo.resolve()), detected["projectPath"])
+            self.assertEqual(str(nested.resolve()), detected["requestedPath"])
 
 
 class PolicyAndDispatchTests(unittest.TestCase):

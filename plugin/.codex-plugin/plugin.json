@@ -1,6 +1,6 @@
 {
   "name": "jstack",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Universal JStack slash commands, workflow skill, and MCP tools for enterprise Codex development.",
   "author": {
     "name": "Jarod Froneman",

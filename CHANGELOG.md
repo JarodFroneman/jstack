@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.1 - 2026-07-10
+
+- Added `jstack_runtime_status` so clients can prove MCP mount state without a
+  Git repository.
+- Added explicit `git` and `artifact-only` project bindings for detection and
+  planning.
+- Added artifact-only evidence requirements for hashes, tests, backups,
+  immutable runtime identity, rollback, monitoring, and smoke checks.
+- Kept policy, preflight, review, QA, security receipts, context receipts,
+  mastery records, quant review, and release readiness fail-closed on non-Git
+  directories.
+- Updated all command surfaces to distinguish MCP availability from Git project
+  eligibility and stop misreporting Git rejection as an attachment failure.
+
 ## 0.2.0 - 2026-07-10
 
 - Replaced incompatible Content-Length framing with MCP JSONL stdio transport.

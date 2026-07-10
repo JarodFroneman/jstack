@@ -17,6 +17,15 @@ Resolve learning mode first: use an explicit `off`, `coach`, or
 `assessment` request; otherwise use `embedded`. Pass that resolved value to
 every planning call.
 
+Call `jstack_runtime_status` before project tools. A successful call proves the
+MCP is mounted. Use `jstack_detect_project` and branch on `evidenceMode`. For
+`artifact-only`, state `MCP mounted; project binding is artifact-only.`, keep
+team planning and dispatch validation, do not call tools listed in
+`blockedTools`, and gather direct artifact evidence without claiming JStack
+receipts or release certification. Only use the MCP fallback when
+`jstack_runtime_status` itself is unavailable or unreachable; never relabel a
+Git requirement or failed gate as an MCP attachment failure.
+
 Use the Lead Engineer plus the right specialist team, normally 2-3 specialists:
 
 - For normal feature/bug work: Code Investigator + Reviewer.

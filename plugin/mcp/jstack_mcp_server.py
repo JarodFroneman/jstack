@@ -31,7 +31,7 @@ from typing import Any, Callable
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.2.0"
+SERVER_VERSION = "0.2.1"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -42,6 +42,33 @@ RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
+
+GIT_REQUIRED_TOOLS = [
+    "jstack_mastery_record",
+    "jstack_policy_check",
+    "jstack_preflight",
+    "jstack_health",
+    "jstack_review",
+    "jstack_security_audit",
+    "jstack_qa",
+    "jstack_context_save",
+    "jstack_context_restore",
+    "jstack_ship_check",
+    "jstack_release_readiness",
+    "jstack_quant_backtest_review",
+]
+ARTIFACT_ONLY_RELEASE_BLOCKER = (
+    "Git-backed JStack release readiness is unavailable until the authoritative source has a committed git repository."
+)
+ARTIFACT_EVIDENCE_REQUIREMENTS = [
+    "Hash every release input and deployed artifact with SHA-256 and record the path-to-hash mapping.",
+    "Record the exact build and test commands, exit statuses, timestamps, and bounded output.",
+    "Create and verify a timestamped pre-change backup before mutating the target environment.",
+    "Record the deployed container image digest, package version, or equivalent immutable runtime identity.",
+    "Document staged dependency order, approval, rollback steps, and rollback verification.",
+    "Run authenticated internal checks and independent public smoke checks against the released surface.",
+    "Capture post-release monitoring evidence and unresolved risks in the handoff.",
+]
 
 EXCLUDED_DIRS = {
     ".git",
@@ -129,16 +156,60 @@ def expand_path(path: str | None) -> Path:
     return Path.cwd().resolve()
 
 
-def require_project_path(path: str | None = None) -> Path:
+def require_directory_path(path: str | None = None) -> Path:
     project_path = expand_path(path)
     if not project_path.exists():
         raise ToolError(f"Project path does not exist: {project_path}")
     if not project_path.is_dir():
         raise ToolError(f"Project path must be a directory: {project_path}")
+    return project_path
+
+
+def require_project_path(path: str | None = None) -> Path:
+    project_path = require_directory_path(path)
     root = git_root(project_path)
     if not root:
-        raise ToolError(f"JStack project tools require a git repository: {project_path}")
+        raise ToolError(f"JStack Git-backed evidence tools require a git repository: {project_path}")
     return Path(root).resolve()
+
+
+def resolve_project_binding(path: str | None = None) -> dict[str, Any]:
+    requested_path = require_directory_path(path)
+    root = git_root(requested_path)
+    if root:
+        project_path = Path(root).resolve()
+        return {
+            "mode": "git",
+            "evidenceMode": "git",
+            "requestedPath": str(requested_path),
+            "projectPath": str(project_path),
+            "gitRoot": str(project_path),
+            "gitEvidenceAvailable": True,
+            "gitEvidenceToolsAvailable": True,
+            "releaseReadinessToolAvailable": True,
+            "gitRequiredTools": GIT_REQUIRED_TOOLS,
+            "blockedTools": [],
+            "limitations": [],
+            "diagnostic": "MCP mounted; project binding is git-backed.",
+        }
+    return {
+        "mode": "artifact-only",
+        "evidenceMode": "artifact-only",
+        "requestedPath": str(requested_path),
+        "projectPath": str(requested_path),
+        "gitRoot": None,
+        "gitEvidenceAvailable": False,
+        "gitEvidenceToolsAvailable": False,
+        "releaseReadinessToolAvailable": False,
+        "gitRequiredTools": GIT_REQUIRED_TOOLS,
+        "blockedTools": GIT_REQUIRED_TOOLS,
+        "limitations": [
+            "Commit-bound QA and security receipts cannot be issued.",
+            "Git delta, protected-path, policy, context, and release-readiness gates are unavailable.",
+            "Direct artifact evidence is supplemental and cannot be represented as JStack release certification.",
+        ],
+        "diagnostic": "MCP mounted; project binding is artifact-only because no valid git repository was found.",
+    }
 
 
 def trusted_git_line_ending_overrides(executable: str, cwd: Path, env: dict[str, str]) -> list[str]:
@@ -2602,8 +2673,39 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def tool_runtime_status(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = args.get("project_path")
+    if project_path:
+        binding = resolve_project_binding(str(project_path))
+    else:
+        binding = {
+            "mode": "unbound",
+            "evidenceMode": "unbound",
+            "requestedPath": None,
+            "projectPath": None,
+            "gitRoot": None,
+            "gitEvidenceAvailable": False,
+            "gitEvidenceToolsAvailable": False,
+            "releaseReadinessToolAvailable": False,
+            "gitRequiredTools": GIT_REQUIRED_TOOLS,
+            "blockedTools": [],
+            "limitations": [],
+            "diagnostic": "MCP mounted; no project binding was requested.",
+        }
+    return {
+        "mcpMounted": True,
+        "serverName": SERVER_NAME,
+        "serverVersion": SERVER_VERSION,
+        "transport": "stdio-jsonl",
+        "sessionId": SERVER_SESSION_ID,
+        "projectBinding": binding,
+        "diagnostic": binding["diagnostic"],
+    }
+
+
 def tool_detect_project(args: dict[str, Any]) -> dict[str, Any]:
-    project_path = require_project_path(args.get("project_path"))
+    binding = resolve_project_binding(args.get("project_path"))
+    project_path = Path(binding["projectPath"])
     g_root = find_gstack_root()
     j_root = find_jstack_root()
     bin_dir = gstack_bin()
@@ -2621,8 +2723,7 @@ def tool_detect_project(args: dict[str, Any]) -> dict[str, Any]:
     ]
     project_config = [str(path) for path in project_config_paths if path.exists()]
     return {
-        "projectPath": str(project_path),
-        "gitRoot": git_root(project_path),
+        **binding,
         "jstackRoot": str(j_root) if j_root else None,
         "jstackInstalled": bool(j_root),
         "gstackRoot": str(g_root) if g_root else None,
@@ -2670,7 +2771,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     goal = str(args.get("goal") or "").strip()
     if not goal:
         raise ToolError("goal is required.")
-    project_path = require_project_path(args.get("project_path"))
+    binding = resolve_project_binding(args.get("project_path"))
     quality_level = str(args.get("quality_level") or "enterprise").strip().lower()
     if quality_level not in {"standard", "enterprise"}:
         raise ToolError("quality_level must be 'standard' or 'enterprise'.")
@@ -2684,7 +2785,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     classifications = classify_work(goal)
     selected = choose_skills(goal, quality_level=quality_level)
     team_plan = choose_agent_team(goal, classifications, quality_level=quality_level, team_mode=team_mode)
-    detected = tool_detect_project({"project_path": str(project_path)})
+    detected = tool_detect_project({"project_path": binding["requestedPath"]})
     steps = [
         {
             "gate": "Classify",
@@ -2747,6 +2848,47 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
             "doneWhen": "The handoff states what changed, what was checked, remaining risk, and next steps.",
         },
     ]
+    if binding["evidenceMode"] == "artifact-only":
+        artifact_replacements = {
+            "Context": {
+                "skill": "jstack_detect_project -> direct context inspection",
+                "purpose": "Read project instructions, restore relevant durable memory, identify the authoritative source and deployment boundary, and record that Git evidence is unavailable.",
+                "doneWhen": "The orchestration path, authoritative source, stack, test commands, deployment boundary, and evidence limitation are known.",
+            },
+            "Quality": {
+                "skill": "normal Codex test/build tools + direct evidence capture",
+                "purpose": "Inspect and run authorized checks directly, recording exact commands, statuses, timestamps, output, and artifact hashes without claiming JStack receipts.",
+                "doneWhen": "Relevant checks pass with reviewable direct evidence, or failures and missing evidence are clearly reported.",
+            },
+            "Security/compliance": {
+                "skill": "normal Codex security review + direct scanners",
+                "purpose": "Review sensitive boundaries directly and record findings without claiming a commit-bound JStack security receipt.",
+                "doneWhen": "Relevant security risks are reviewed and unresolved findings are explicit release blockers.",
+            },
+            "Release": {
+                "skill": "artifact-only release boundary",
+                "purpose": "Prepare or deploy only with explicit approval, immutable artifact identity, verified backup, rollback, staged order, monitoring, and public smoke evidence.",
+                "doneWhen": "Direct release evidence is complete and the handoff states that JStack release readiness remains unavailable without Git.",
+            },
+            "Handoff": {
+                "skill": "direct handoff + durable memory",
+                "purpose": "Save decisions, artifact hashes, checks, backup and rollback evidence, runtime identity, smoke results, risks, and open items outside JStack Git-bound context receipts.",
+                "doneWhen": "The handoff distinguishes direct artifact evidence from unavailable Git-backed JStack certification.",
+            },
+        }
+        for step in steps:
+            replacement = artifact_replacements.get(step["gate"])
+            if replacement:
+                step.update(replacement)
+        steps.insert(
+            4,
+            {
+                "gate": "Artifact evidence",
+                "skill": "direct hashes, tests, backup, runtime identity, rollback, monitoring, and smoke checks",
+                "purpose": "Establish a reviewable evidence chain for work whose authoritative source is not bound to Git.",
+                "doneWhen": "Every required artifact-only evidence item is captured, failures are explicit, and no commit-bound receipt is claimed.",
+            },
+        )
     release_blockers: list[str] = []
     required_gates: list[str] = []
     for classification in classifications:
@@ -2756,6 +2898,10 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         for gate in classification.get("requiredGates", []):
             if gate not in required_gates:
                 required_gates.append(gate)
+    if binding["evidenceMode"] == "artifact-only":
+        release_blockers.insert(0, ARTIFACT_ONLY_RELEASE_BLOCKER)
+        if "artifact-evidence" not in required_gates:
+            required_gates.append("artifact-evidence")
     task_training = (
         build_task_training(goal, classifications, required_gates, learning_mode)
         if learning_mode != "off"
@@ -2769,6 +2915,10 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         "teamMode": team_mode,
         "classifications": classifications,
         "project": detected,
+        "projectBinding": binding,
+        "gitRequiredTools": GIT_REQUIRED_TOOLS,
+        "blockedTools": binding["blockedTools"],
+        "artifactEvidenceRequirements": ARTIFACT_EVIDENCE_REQUIREMENTS if binding["evidenceMode"] == "artifact-only" else [],
         "workflowProfile": WORKFLOW_PROFILE,
         "masterySystem": mastery_system(),
         "taskTraining": task_training,
@@ -2786,6 +2936,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
             "productionBar": "Do not call work production-ready if required tests, security, QA, or docs for the risk class are missing.",
             "antiSlopStandard": "No fake data, fake test results, hidden assumptions, unverifiable completion claims, unrelated churn, or unapproved production mutation.",
             "masteryStandard": "For non-trivial work, include the skill stage, learning objective, expert mental model, benchmarks, review rubric, and next drill.",
+            "projectBindingBoundary": "Artifact-only planning is advisory evidence capture, not commit-bound JStack QA, security, policy, context, or release certification.",
         },
     }
 
@@ -3855,8 +4006,19 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": tool_mastery_record,
         "readOnlyHint": False,
     },
+    "gstack_runtime_status": {
+        "description": "Prove that the JStack MCP is mounted and report its transport, version, session, and optional Git or artifact-only project binding without requiring a repository.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string", "description": "Optional existing project or orchestration directory to classify as git-backed or artifact-only."}
+            },
+        },
+        "handler": tool_runtime_status,
+        "readOnlyHint": True,
+    },
     "gstack_detect_project": {
-        "description": "Detect git root, gstack install, project config and test commands for a project path.",
+        "description": "Detect JStack installation, project config, test commands, and either a Git-backed or explicit artifact-only binding for an existing directory.",
         "inputSchema": {
             "type": "object",
             "properties": {"project_path": {"type": "string", "description": "Absolute or relative project directory. Defaults to MCP process cwd."}},
@@ -3890,7 +4052,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_plan": {
-        "description": "Create a gstack-oriented execution and mastery plan for a project goal using installed skills, safe quality gates, anti-slop standards, and skill benchmarks.",
+        "description": "Create a gstack-oriented execution and mastery plan for a project goal. Non-Git directories receive artifact-only planning while Git-backed evidence and release tools remain blocked.",
         "inputSchema": {
             "type": "object",
             "required": ["goal"],

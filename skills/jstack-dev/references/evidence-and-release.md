@@ -10,6 +10,23 @@ change or MCP restart.
 The signature protects against accidental or caller-side alteration. It does
 not protect against compromise of the same operating-system account.
 
+## Project Binding
+
+Call `jstack_runtime_status` first. A successful response proves the MCP is
+mounted independently of project eligibility. `jstack_detect_project` then
+returns one of two evidence modes:
+
+- `git`: commit-bound policy, QA, security, context, mastery, quant, and release
+  tools are available.
+- `artifact-only`: detection and planning are available, but every Git-bound
+  tool remains blocked.
+
+Artifact-only work must preserve direct SHA-256 mappings, exact test/build
+records, a verified pre-change backup, immutable runtime identity, staged
+dependency order, approval, rollback, monitoring, and internal/public smoke
+checks. This evidence can support an explicitly approved operational decision;
+it is not a JStack receipt or release-readiness result.
+
 ## Project Commands
 
 Test discovery reads package metadata and known language files. It does not make

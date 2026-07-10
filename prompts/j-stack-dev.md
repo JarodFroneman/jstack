@@ -22,18 +22,28 @@ planning call.
 
 1. Classify risk.
 2. Read project instructions and restore context.
-3. Use `jstack_detect_project`, `jstack_policy_check`,
-   `jstack_plan(team_mode="single-lead", learning_mode=resolved_learning_mode)`, and
-   `jstack_preflight` when available.
-4. Implement the smallest coherent change.
-5. Run focused review, security, QA, release, or quant checks required by the
-   risk class. QA execution must use the exact reviewed revision/fingerprint
-   and return evidence receipts.
-6. Report outcome, evidence, residual risk, then an optional three-line mastery
+3. Call `jstack_runtime_status` first. A successful call proves the MCP is
+   mounted. Use `jstack_detect_project`, then branch on `evidenceMode`.
+4. For `git`, use `jstack_policy_check`,
+   `jstack_plan(team_mode="single-lead", learning_mode=resolved_learning_mode)`,
+   and `jstack_preflight` when applicable.
+5. For `artifact-only`, state
+   `MCP mounted; project binding is artifact-only.`, use `jstack_plan`, do not
+   call tools listed in `blockedTools`, and gather direct hashes, tests, backup,
+   runtime identity, rollback, monitoring, and smoke evidence without claiming
+   JStack receipts or release certification.
+6. Implement the smallest coherent change.
+7. Run focused review, security, QA, release, or quant checks required by the
+   risk class. In `git` mode, QA execution must use the exact reviewed
+   revision/fingerprint and return evidence receipts. In `artifact-only` mode,
+   preserve direct evidence and its limitation instead.
+8. Report outcome, evidence, residual risk, then an optional three-line mastery
    capsule.
 
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.
 
-If the `jstack_*` MCP tools are unavailable, use the installed `jstack-dev`
-skill and normal Codex tools. Upstream gstack is optional.
+Use the installed `jstack-dev` skill and normal Codex fallback only when
+`jstack_runtime_status` itself is unavailable or unreachable. Never relabel a
+Git requirement, invalid input, policy denial, or failed gate as an MCP
+attachment failure. Upstream gstack is optional.
