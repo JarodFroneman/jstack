@@ -1,4 +1,4 @@
-﻿schemaVersion: jstack.enterprise.v1
+schemaVersion: jstack.enterprise.v1
 standard: enterprise
 
 # This YAML template is intentionally simple so the local MCP can parse it

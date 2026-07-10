@@ -8,8 +8,8 @@ they do not replace accountability.
 
 ## Command Modes
 
-- `/j-stack-dev`: Lead Engineer only unless the user separately asks for
-  subagents in the same prompt.
+- `/j-stack-dev`: Lead Engineer only. Use another command when subagents are
+  wanted.
 - `/jstack-subagents`: Lead Engineer plus the right specialist team, normally
   2-3 specialists.
 - `/jstack-full-team`: full 11-role professional coverage, usually dispatched
@@ -39,7 +39,8 @@ they do not replace accountability.
 - Architecture/API/database/integration: add Architect.
 - UI/product: add Product / UX and QA.
 - Security/compliance/auth/payment/PII: add Security.
-- Production/release/deploy: add DevOps, Security, QA, Reviewer.
+- Production/release/deploy: DevOps, Security, and QA in smart mode; full-team
+  mode adds complete review coverage.
 - Trading/EA/quant/backtest: add Quant / Backtest.
 - Documentation-heavy packaging: add Documentation / Handoff.
 
@@ -84,6 +85,9 @@ must define:
 - stop conditions
 - verification gate
 - handoff gate
+
+Pass the actual packet object to `jstack_dispatch_check`. The MCP validates
+the plan; platform multi-agent tools perform real dispatch.
 
 ## Full-Team Wave Pattern
 

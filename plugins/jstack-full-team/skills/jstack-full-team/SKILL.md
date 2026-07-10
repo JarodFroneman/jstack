@@ -35,25 +35,30 @@ Operating rules:
 4. Documentation / Handoff Writer may edit docs only when assigned.
 5. If concurrency limits prevent all specialists from running at once, dispatch them in waves.
 6. Before dispatch, require a coordination packet.
+7. Pass the actual packet to `jstack_dispatch_check` and call
+   `jstack_plan` with `team_mode="full-team"` and
+   the resolved learning mode: explicit `off`, `coach`, or `assessment`,
+   otherwise `embedded`.
+8. The MCP plans and validates; platform multi-agent tools perform actual
+   dispatch, collection, and closure.
 
 Coordination packet:
 
-- goal
-- risk class
-- roles used and why
-- read/write permissions
-- file ownership map
-- evidence contract
-- conflict rule
-- stop conditions
-- verification gate
-- handoff gate
+- `goal`
+- `riskClass` array
+- `mode: full-team`
+- `rolesUsed` (all 11) and empty `rolesNotUsed`
+- `readWritePermissions` and `fileOwnershipMap`
+- `evidenceContract`, `conflictRule`, and `stopConditions`
+- `verificationGate` and `handoffGate`
 
 Full-team wave pattern:
 
-1. Discovery: Architect, Code Investigator, Product/UX or Quant when relevant.
+1. Discovery: Architect, Code Investigator, Product/UX, and Quant.
 2. Build: Builder only after Lead approval of scope.
 3. Review: Reviewer, QA, Security, DevOps, Documentation.
 4. Synthesis: Lead reconciles evidence, resolves conflicts, verifies, and hands off.
 
-If multi-agent tools are unavailable, state `No subagents deployed:` with the concrete reason, then continue with the single-lead workflow while manually applying the full-team review rubric.
+If multi-agent tools are unavailable, state `No subagents deployed:` with the
+concrete reason. Retain `team_mode="full-team"` in planning and apply its
+evidence rubric while one Lead performs the work.

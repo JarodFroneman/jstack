@@ -1,11 +1,16 @@
-﻿# JStack Release Checklist
+# JStack Release Checklist
 
 ## Approval
 
 - Explicit release request:
 - Approved by:
+- External approval reference:
+- Human security reviewer/reference:
 - Target environment:
 - Release scope:
+- Explicit comparison base:
+- HEAD commit:
+- Policy digest:
 
 ## Preflight
 
@@ -13,8 +18,8 @@
 - Git status:
 - Protected paths:
 - Diff hygiene:
-- Tests/build:
-- Secret scan:
+- QA receipt for every discovered test/lint/typecheck/build command:
+- Complete current-tree and release-history security receipt:
 - Security/compliance review:
 
 ## Rollback

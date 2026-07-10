@@ -13,6 +13,10 @@ Mode: `full-team`.
 The user invoked `/jstack-full-team`, which is explicit approval to deploy the
 full JStack specialist team when multi-agent tools are available.
 
+Resolve learning mode first: use an explicit `off`, `coach`, or
+`assessment` request; otherwise use `embedded`. Pass that resolved value to
+every planning call.
+
 Use the full 11-role roster:
 
 1. Lead Engineer
@@ -38,27 +42,35 @@ dispatch them in waves while preserving the full-team evidence contract.
 Full team means complete professional coverage, not uncontrolled concurrency.
 Before dispatching, create a coordination packet with:
 
-- goal
-- risk class
-- roles used and why
-- read/write permissions
-- file ownership map
-- evidence contract
-- conflict rule
-- stop conditions
-- verification gate
-- handoff gate
+- `goal`: exact objective
+- `riskClass`: array of every matched risk class
+- `mode`: `full-team`
+- `rolesUsed`: all 11 roles and reasons
+- `rolesNotUsed`: empty because all 11 are accounted for
+- `readWritePermissions`
+- `fileOwnershipMap`
+- `evidenceContract`
+- `conflictRule`
+- `stopConditions`
+- `verificationGate`
+- `handoffGate`
 
 Use `jstack_team_plan` with `team_mode="full-team"` and
 `jstack_dispatch_check` with `team_mode="full-team"` and
-`coordination_packet_supplied=true` when available. If multi-agent tools are
-unavailable, write `No subagents deployed:` and give the concrete reason, then
-continue with the single-lead enterprise workflow while manually applying the
-full-team review rubric.
+the actual `coordination_packet` object when available. Also use
+`jstack_plan(team_mode="full-team", learning_mode=resolved_learning_mode)`. The MCP
+plans and validates the team; platform multi-agent tools perform real dispatch.
+If multi-agent tools are unavailable, write `No subagents deployed:` and give
+the concrete reason. Retain `team_mode="full-team"` in planning and apply
+the full-team evidence rubric while one Lead performs the actual work.
 
 When concurrency would create noise, dispatch the full team in waves:
 
-1. Discovery: Architect, Code Investigator, Product/UX or Quant when relevant.
+1. Discovery: Architect, Code Investigator, Product/UX, and Quant. Every role
+   returns bounded evidence, even when its finding is "not applicable".
 2. Build: Builder only after Lead approval of scope.
 3. Review: Reviewer, QA, Security, DevOps, Documentation.
 4. Synthesis: Lead reconciles findings, verifies, and hands off.
+
+Finish in the order outcome, evidence, residual risk, then an optional
+three-line mastery capsule. Do not emit eleven role-by-role lessons.

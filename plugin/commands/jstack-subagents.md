@@ -13,6 +13,10 @@ Mode: `smart-subagents`.
 The user invoked `/jstack-subagents`, which is explicit approval to deploy
 subagents for this task when multi-agent tools are available.
 
+Resolve learning mode first: use an explicit `off`, `coach`, or
+`assessment` request; otherwise use `embedded`. Pass that resolved value to
+every planning call.
+
 Use the Lead Engineer plus the right specialist team, normally 2-3 specialists:
 
 - For normal feature/bug work: Code Investigator + Reviewer.
@@ -27,24 +31,38 @@ Use the Lead Engineer plus the right specialist team, normally 2-3 specialists:
 - For trading/EA/quant/backtest work: Quant / Backtest Reviewer + Reviewer +
   QA Engineer.
 
-Before spawning several specialists or assigning any file edits, create a
+Before spawning any specialist or assigning any file edits, create a
 coordination packet:
 
-- goal
-- risk class
-- roles used and why
-- roles skipped and why
-- read/write permissions
-- file ownership map
-- evidence contract
-- stop conditions
-- verification gate
+- `goal`: exact objective
+- `riskClass`: array of every matched risk class
+- `mode`: `smart-subagents`
+- `rolesUsed`: exact roles and reasons
+- `rolesNotUsed`: skipped roles and reasons
+- `readWritePermissions`
+- `fileOwnershipMap`
+- `evidenceContract`
+- `conflictRule`
+- `stopConditions`
+- `verificationGate`
+- `handoffGate`
 
 Use `jstack_team_plan` with `team_mode="smart-subagents"` and
 `jstack_dispatch_check` with `team_mode="smart-subagents"` and
-`coordination_packet_supplied=true` when available. Specialists are read-only
-by default. Only a Builder may edit, and only inside an explicitly assigned
-disjoint write scope.
+the actual `coordination_packet` object when available. Also use
+`jstack_plan(team_mode="smart-subagents", learning_mode=resolved_learning_mode)`.
+Specialists are read-only by default. The Lead may implement. If an editing
+specialist is used, only a Builder may edit implementation, and only inside an
+explicitly assigned disjoint write scope.
+
+The MCP plans and validates the team; it does not spawn one. Use platform
+multi-agent tools for actual dispatch, collection, and closure. Finish in the
+order outcome, evidence, residual risk, then an optional three-line mastery
+capsule.
+
+If more than three specialists are materially required, stop and recommend
+`/jstack-full-team` instead of silently widening smart mode.
 
 If multi-agent tools are unavailable, write `No subagents deployed:` and give
-the concrete reason, then continue with the single-lead enterprise workflow.
+the concrete reason. Retain `team_mode="smart-subagents"` in planning and
+apply its evidence rubric, while one Lead performs the actual work.

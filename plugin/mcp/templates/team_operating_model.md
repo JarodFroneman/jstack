@@ -1,10 +1,11 @@
-﻿# JStack Virtual Engineering Team
+# JStack Virtual Engineering Team
 
 ## Principle
 
-`/j-stack-dev` is a lead-agent workflow. The Lead Engineer owns scope,
+JStack specialist modes are lead-agent workflows. The Lead Engineer owns scope,
 dispatch, implementation decisions, verification, and handoff. Specialists
-reduce risk; they do not replace accountability.
+reduce risk; they do not replace accountability. `/j-stack-dev` remains
+strictly single-lead.
 
 ## Default Roster
 
@@ -28,7 +29,7 @@ reduce risk; they do not replace accountability.
 - Architecture/API/database/integration: add Architect.
 - UI/product: add Product / UX and QA.
 - Security/compliance/auth/payment/PII: add Security.
-- Production/release/deploy: add DevOps, Security, QA, Reviewer.
+- Production/release/deploy smart mode: DevOps, Security, and QA.
 - Trading/EA/quant/backtest: add Quant / Backtest.
 - Documentation-heavy packaging: add Documentation / Handoff.
 
@@ -38,6 +39,8 @@ reduce risk; they do not replace accountability.
 - More than three specialists requires a lead justification.
 - Subagents are read-only by default.
 - Only one writer may own a file/module scope.
+- Pass the actual coordination packet to `jstack_dispatch_check`; a boolean
+  assertion is not accepted.
 - Subagents must not spawn other subagents.
 - No deploy, push, merge, deletion, reset, production mutation, DNS/SSL change,
   or live-system restart without explicit user approval.

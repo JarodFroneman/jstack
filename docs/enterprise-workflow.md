@@ -2,7 +2,7 @@
 
 ## Commands
 
-1. `/j-stack-dev`: single Lead Engineer, no subagents by default.
+1. `/j-stack-dev`: single Lead Engineer, no subagents.
 2. `/jstack-subagents`: Lead Engineer plus the right specialist team, normally
    2-3 specialists.
 3. `/jstack-full-team`: full 11-role JStack team for major or explicitly
@@ -27,22 +27,22 @@
 - file ownership map
 - protected-path checks
 - diff hygiene
-- test command discovery
-- secret scan
-- release approval
+- commit-bound QA receipts for every discovered command
+- complete current-tree and release-history secret evidence
+- explicit base and environment-specific approval reference
 - rollback plan
 - canary or monitoring plan
 - quant/backtest evidence gates
 
 ## Mastery Path
 
-0. Operator setup
-1. Code reading
-2. Scoped fixes
-3. Testing and debugging
-4. Backend/API/data contracts
-5. Frontend and product execution
-6. DevOps and release
-7. Security and reliability
-8. Architecture
-9. Staff-level execution
+0. Safe Operator
+1. JStack Reader
+2. Scoped Maintainer
+3. Debugger and Test Author
+4. MCP and Policy Engineer
+5. Workflow Product Engineer
+6. Packaging and Release Engineer
+7. Security and Reliability Auditor
+8. JStack Architect
+9. Staff Maintainer and Auditor

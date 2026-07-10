@@ -1,160 +1,132 @@
-# JStack Commands
+# JStack
 
-Custom Codex slash commands, skill, MCP server, and policy templates for
-enterprise-grade software work.
+JStack is an independent Codex workflow, plugin, MCP control plane, and
+deliberate-practice system for evidence-driven software delivery. Upstream
+gstack can provide optional extra skills, but it is not required.
 
-JStack is our project-specific wrapper around the upstream gstack workflow. The
-user-facing command surface is JStack; upstream gstack skills remain available
-as implementation building blocks where useful.
+JStack does not turn generated code into enterprise code by declaration. It
+raises the probability of professional outcomes by enforcing scope, review,
+tests, security evidence, release controls, and honest residual-risk reporting.
 
 ## Commands
 
-- `/j-stack-dev` - single Lead Engineer workflow; no subagents by default.
-- `/jstack-subagents` - Lead Engineer plus the right specialist team, normally
-  2-3 specialists.
-- `/jstack-full-team` - full 11-role JStack team for major, high-risk, or
-  explicitly requested full-team work.
+- `/j-stack-dev`: one Lead Engineer, no subagents.
+- `/jstack-subagents`: Lead plus a right-sized team, normally two or three
+  specialists.
+- `/jstack-full-team`: all 11 professional roles, dispatched in controlled
+  waves.
 
-## Included
+Command choice is authoritative. All three modes use the same enterprise
+quality bar.
 
-- `plugin/` - installable Codex plugin package for universal slash commands.
-- `plugin/commands/` - global `/j-stack-dev`, `/jstack-subagents`, and
-  `/jstack-full-team` command definitions.
-- `plugins/j-stack-dev/` - top-level alias plugin that exposes `/j-stack-dev`.
-- `plugins/jstack-subagents/` - top-level alias plugin that exposes
-  `/jstack-subagents`.
-- `plugins/jstack-full-team/` - top-level alias plugin that exposes
-  `/jstack-full-team`.
-- `prompts/j-stack-dev.md` - single-lead slash command.
-- `prompts/jstack-subagents.md` - smart specialist-team slash command.
-- `prompts/jstack-full-team.md` - full-team slash command.
-- `skills/jstack-dev/SKILL.md` - full operating workflow and mastery system.
-- `mcp/jstack/jstack_mcp_server.py` - local stdio MCP server.
-- `mcp/jstack/templates/` - enterprise policy, release, PR, team, and quant templates.
-- `docs/agent-coordination-protocol.md` - rules that prevent multi-agent
-  overlap, duplicate work, and uncontrolled edits.
-- `docs/mastery-system.md` - staged training system from beginner to expert.
-- `examples/jstack.enterprise.json` - starter project policy.
-- `scripts/install.py` - cross-platform installer for Codex.
-- `scripts/install.ps1` - Windows PowerShell wrapper.
+## What 0.2 Enforces
+
+- MCP newline-delimited JSON-RPC transport tested by an independent client.
+- One canonical source with deterministic plugin copies and BOM/drift checks.
+- Non-overridable policy floors.
+- Committed `base..HEAD`, staged, unstaged, and untracked change evidence.
+- Explicit-trust QA execution bound to revision, workspace, policy, and command.
+- Signed session-local QA and security receipts.
+- Current-tree and release-range secret scanning that fails on incomplete
+  coverage.
+- Release denial without an explicit distinct pre-release base, clean commit, all current QA
+  receipts, complete security evidence, external approval reference, rollback,
+  and monitoring.
+- Actual coordination-packet, role, permission, and write-scope validation.
+- A ten-stage mastery curriculum with artifacts, assistance caps, repeated
+  independent attempts, and blind capstones.
+
+## Trust Boundary
+
+The QA runner closes stdin, avoids a shell, scrubs inherited variables, isolates
+HOME, caps output/time, and kills its process group. It is not an OS sandbox:
+repository code still has the current user's filesystem and network privileges.
+Run untrusted projects in a container or VM.
+
+Receipts prevent accidental or caller-side alteration during one MCP session.
+They do not protect against compromise of the same user account.
+
+## Layout
+
+- `mcp/jstack/jstack_mcp_server.py`: canonical MCP server.
+- `prompts/`: canonical slash-command prompts.
+- `skills/jstack-dev/`: canonical workflow skill and references.
+- `mastery/curriculum.v1.json`: canonical training curriculum.
+- `plugin/`: generated umbrella plugin with portable Node/Python launcher.
+- `plugins/`: three top-level alias plugins.
+- `scripts/sync_artifacts.py`: generated-artifact and version enforcement.
+- `scripts/install.py`: staged legacy direct installer.
+- `tests/`: unit, transport, adversarial, release, mastery, and install tests.
+- `jstack.enterprise.json`: this repository's policy.
 
 ## MCP Tools
 
-The JStack MCP exposes `jstack_*` tools:
+Primary tools use the `jstack_*` prefix:
 
-- `jstack_detect_project`
-- `jstack_list_skills`
-- `jstack_read_skill`
-- `jstack_plan`
-- `jstack_team_plan`
-- `jstack_dispatch_check`
-- `jstack_policy_check`
-- `jstack_preflight`
-- `jstack_health`
-- `jstack_review`
-- `jstack_security_audit`
-- `jstack_qa`
-- `jstack_context_save`
-- `jstack_context_restore`
-- `jstack_ship_check`
-- `jstack_release_readiness`
-- `jstack_quant_backtest_review`
+- project and workflow: `detect_project`, `plan`, `policy_check`,
+  `preflight`, `health`, `review`
+- teams: `team_plan`, `dispatch_check`
+- evidence: `qa`, `security_audit`, `ship_check`,
+  `release_readiness`
+- continuity: `context_save`, `context_restore`
+- specialist review: `quant_backtest_review`
+- learning: `mastery_start`, `mastery_status`, `mastery_record`
 
-Legacy `gstack_*` tool aliases are retained for compatibility, but new prompts
-and docs should use `jstack_*`.
+Legacy `gstack_*` aliases remain for compatibility.
+
+## Validate
+
+~~~text
+python scripts/sync_artifacts.py --write
+python scripts/sync_artifacts.py --check
+python -m compileall -q mcp scripts tests
+python -m unittest discover -s tests -v
+python mcp/jstack/smoke_test.py
+~~~
+
+CI runs these checks on macOS, Linux, and Windows with Python 3.9 and 3.12.
 
 ## Install
 
-### Universal Codex Plugin
+### Codex Plugins
 
-This is the preferred install path. It makes the commands available globally in
-Codex threads and projects through the plugin command registry.
+Register `plugin/` and each directory under `plugins/` in a personal
+marketplace, then install:
 
-Codex currently exposes the plugin name itself as a top-level slash command.
-For that reason this repo ships both:
+~~~text
+codex plugin add jstack@personal
+codex plugin add j-stack-dev@personal
+codex plugin add jstack-subagents@personal
+codex plugin add jstack-full-team@personal
+~~~
 
-- the umbrella `jstack` plugin, which appears as `/jstack`; and
-- three alias plugins, which appear as `/j-stack-dev`, `/jstack-subagents`,
-  and `/jstack-full-team`.
-
-On this machine the plugin is registered from the personal marketplace at:
-
-```text
-C:\Users\TE05\.agents\plugins\marketplace.json
-```
-
-Install or refresh it with:
-
-```powershell
-python C:\Users\TE05\.codex\skills\.system\plugin-creator\scripts\validate_plugin.py C:\Users\TE05\plugins\jstack
-python C:\Users\TE05\.codex\skills\.system\plugin-creator\scripts\update_plugin_cachebuster.py C:\Users\TE05\plugins\jstack
-& C:\Users\TE05\AppData\Roaming\npm\codex.cmd plugin add jstack@personal
-& C:\Users\TE05\AppData\Roaming\npm\codex.cmd plugin add j-stack-dev@personal
-& C:\Users\TE05\AppData\Roaming\npm\codex.cmd plugin add jstack-subagents@personal
-& C:\Users\TE05\AppData\Roaming\npm\codex.cmd plugin add jstack-full-team@personal
-```
-
-After installing, restart Codex or open a new thread so the command registry
-reloads.
+Restart Codex or open a new task after plugin/MCP changes.
 
 ### Legacy Direct Install
 
-This path copies prompt files, the skill, and the MCP server directly into
-`~/.codex`. It is kept for compatibility, but the plugin install above is the
-global slash-command route.
+~~~text
+python scripts/install.py
+~~~
 
-From the repo root:
+This installs prompts, the umbrella skill, MCP server, curriculum, and MCP
+configuration under `~/.codex` using staged directory replacement and config
+backups.
 
-```powershell
-python .\scripts\install.py
-```
+## Mastery
 
-Or on Windows:
+Start at Stage 0:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
-```
+1. Call `jstack_mastery_start`.
+2. Use `jstack_mastery_status` to select the next drill.
+3. Complete the real task and required artifacts.
+4. Gather commit-bound QA/security evidence.
+5. Record independently cited assessment with `jstack_mastery_record`.
 
-Restart Codex or open a new thread after installing so custom commands and MCP
-tools reload.
+Read [the mastery system](docs/mastery-system.md) for stages, scoring,
+advancement, and capstones. The profile is a local deliberate-practice record,
+not an accredited credential.
 
-## Smoke Test
+## Governance
 
-```powershell
-python .\mcp\jstack\smoke_test.py
-```
-
-Expected:
-
-```text
-jstack MCP smoke test passed
-```
-
-## Project Policy
-
-Copy this into a project root and customize it:
-
-```text
-examples/jstack.enterprise.json
-```
-
-The MCP will look for:
-
-- `jstack.enterprise.json`
-- `jstack.policy.json`
-- `jstack.yml`
-- `.jstack/jstack.enterprise.json`
-- `.jstack/jstack.yml`
-
-Legacy `gstack.*` policy files are still accepted so existing projects do not
-break during migration.
-
-## Operating Standard
-
-Small tasks stay single-lead. Complex tasks use a controlled lead-plus-
-specialists model. Specialists are read-only by default. Any editing specialist
-must have a disjoint write scope. The Lead Engineer owns final synthesis,
-verification, and handoff.
-
-Full team means complete professional coverage, not uncontrolled concurrency.
-This is intentionally not an uncontrolled swarm executor.
+See [architecture](ARCHITECTURE.md), [security](SECURITY.md),
+[contributing](CONTRIBUTING.md), and [changelog](CHANGELOG.md).
