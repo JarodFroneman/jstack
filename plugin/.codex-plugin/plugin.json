@@ -1,7 +1,7 @@
 {
   "name": "jstack",
-  "version": "0.2.1",
-  "description": "Universal JStack slash commands, workflow skill, and MCP tools for enterprise Codex development.",
+  "version": "0.3.0",
+  "description": "Universal JStack development and read-only audit commands, workflow skills, and MCP evidence tools for Codex.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"
@@ -15,14 +15,15 @@
     "commands",
     "workflow",
     "subagents",
+    "audit",
     "enterprise"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "JStack",
-    "shortDescription": "Universal enterprise workflow slash commands for Codex",
-    "longDescription": "JStack adds three global Codex slash commands: single-lead development, right-sized specialist subagents, and full 11-role team mode. It includes a JStack skill and MCP quality-gate tools for planning, review, QA, release readiness, and quant/backtest checks.",
+    "shortDescription": "Enterprise development and audit workflows for Codex",
+    "longDescription": "JStack adds four Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, and evidence-bound read-only repository audits. It includes JStack skills and MCP quality gates for planning, review, QA, audit finalization, release readiness, and quant/backtest checks.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [
@@ -33,7 +34,8 @@
     "defaultPrompt": [
       "Use /j-stack-dev to run the single-lead workflow.",
       "Use /jstack-subagents for the right specialist team.",
-      "Use /jstack-full-team for the full 11-role team."
+      "Use /jstack-full-team for the full 11-role team.",
+      "Use /jstack-audit for a read-only evidence-bound repository audit."
     ],
     "websiteURL": "https://github.com/JarodFroneman/jstack",
     "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",

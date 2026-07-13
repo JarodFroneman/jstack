@@ -56,6 +56,26 @@
       "production"
     ]
   },
+  "audit": {
+    "defaultProfile": "standard",
+    "releaseProfile": "release",
+    "failOnSeverity": "high",
+    "requiredDomains": [
+      "correctness",
+      "security",
+      "maintainability",
+      "architecture",
+      "reliability"
+    ],
+    "networkAllowed": false,
+    "automaticFixesAllowed": false,
+    "arbitraryExecutablesAllowed": false,
+    "rawSecretsAllowed": false,
+    "incompleteCanPass": false,
+    "suppressionRequiresOwner": true,
+    "suppressionRequiresExpiry": true,
+    "releaseRequiresAuditReceipt": false
+  },
   "quant": {
     "minimumHistoryQualityPercent": 99.0,
     "requiresParameterFreeze": true,

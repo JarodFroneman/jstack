@@ -1,0 +1,953 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/audit-result.v1.schema.json",
+  "title": "JStack audit finding and result contracts",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/jstack.audit.finding.v1"
+    },
+    {
+      "$ref": "#/$defs/jstack.audit.result.v1"
+    }
+  ],
+  "$defs": {
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:\\.|(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+)$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "startLine",
+        "endLine"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "findingEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "status",
+        "summary",
+        "subjectFingerprint",
+        "reproducible"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "complete",
+            "incomplete",
+            "unsupported",
+            "unknown",
+            "capped",
+            "stale"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subjectFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reproducible": {
+          "type": "boolean"
+        }
+      }
+    },
+    "suppressionNone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "const": "none"
+        }
+      }
+    },
+    "suppressionAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "fingerprint",
+        "scope",
+        "owner",
+        "reason",
+        "approvalReference",
+        "createdAt",
+        "expiresAt",
+        "compensatingControl",
+        "residualRisk"
+      ],
+      "properties": {
+        "state": {
+          "const": "accepted"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          }
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approvalReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "compensatingControl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "residualRisk": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "jstack.audit.finding.v1": {
+      "$anchor": "jstack-audit-finding-v1",
+      "title": "jstack.audit.finding.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "findingId",
+        "fingerprint",
+        "ruleId",
+        "domain",
+        "title",
+        "severity",
+        "confidence",
+        "priority",
+        "verificationState",
+        "status",
+        "blocking",
+        "location",
+        "scope",
+        "claim",
+        "evidence",
+        "failurePath",
+        "preconditions",
+        "impact",
+        "likelihood",
+        "standards",
+        "remediation",
+        "verificationPlan",
+        "residualRisk",
+        "validationNotes",
+        "suppression"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.audit.finding.v1"
+        },
+        "findingId": {
+          "type": "string",
+          "pattern": "^JSA-[0-9A-F]{24}$"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "ruleId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "domain": {
+          "enum": [
+            "correctness",
+            "security",
+            "maintainability",
+            "architecture",
+            "performance",
+            "supply-chain",
+            "testability",
+            "operations",
+            "data-integrity",
+            "api-compatibility"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "priority": {
+          "enum": [
+            "P0",
+            "P1",
+            "P2",
+            "P3",
+            "P4"
+          ]
+        },
+        "verificationState": {
+          "enum": [
+            "test-reproduced",
+            "tool-confirmed",
+            "source-proven",
+            "reasoned-strong-evidence",
+            "unverified-hypothesis"
+          ]
+        },
+        "status": {
+          "enum": [
+            "open",
+            "suppressed"
+          ]
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "location": {
+          "$ref": "#/$defs/location"
+        },
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          }
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/findingEvidence"
+          }
+        },
+        "failurePath": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "impact": {
+          "type": "string",
+          "minLength": 1
+        },
+        "likelihood": {
+          "type": "string",
+          "minLength": 1
+        },
+        "standards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "remediation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recommendedChange",
+            "alternatives",
+            "tradeoffs"
+          ],
+          "properties": {
+            "recommendedChange": {
+              "type": "string",
+              "minLength": 1
+            },
+            "alternatives": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "tradeoffs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "verificationPlan": {
+          "type": "string",
+          "minLength": 1
+        },
+        "residualRisk": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validationNotes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "securityContext": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reachablePath",
+            "affectedAsset",
+            "controlReview"
+          ],
+          "properties": {
+            "reachablePath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "affectedAsset": {
+              "type": "string",
+              "minLength": 1
+            },
+            "controlReview": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "suppression": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/suppressionNone"
+            },
+            {
+              "$ref": "#/$defs/suppressionAccepted"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verificationState": {
+                "const": "unverified-hypothesis"
+              }
+            },
+            "required": [
+              "verificationState"
+            ]
+          },
+          "then": {
+            "properties": {
+              "blocking": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "suppressed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "blocking": {
+                "const": false
+              },
+              "suppression": {
+                "$ref": "#/$defs/suppressionAccepted"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "suppression": {
+                "$ref": "#/$defs/suppressionNone"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "coverageGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "key",
+        "status",
+        "detail"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "domain",
+            "evidence",
+            "adapter",
+            "subject"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "profile",
+        "complete",
+        "requiredDomains",
+        "domains",
+        "requiredEvidence",
+        "evidence",
+        "adapterRequirements",
+        "adapters",
+        "gaps"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.audit.coverage.v1"
+        },
+        "profile": {
+          "enum": [
+            "quick",
+            "standard",
+            "deep",
+            "release"
+          ]
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "requiredDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "domain",
+              "status",
+              "reason",
+              "evidenceIds"
+            ],
+            "properties": {
+              "domain": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requiredEvidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "status",
+              "subjectFingerprint",
+              "summary"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "subjectFingerprint": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "adapterRequirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required",
+            "optional"
+          ],
+          "properties": {
+            "required": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "optional": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "adapters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "adapterId",
+              "capability",
+              "status",
+              "subjectValidated",
+              "evidenceFingerprint"
+            ],
+            "properties": {
+              "adapterId": {
+                "type": "string"
+              },
+              "capability": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "subjectValidated": {
+                "type": "boolean"
+              },
+              "evidenceFingerprint": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/coverageGap"
+          }
+        }
+      }
+    },
+    "jstack.audit.result.v1": {
+      "$anchor": "jstack-audit-result-v1",
+      "title": "jstack.audit.result.v1",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "profile",
+        "status",
+        "passed",
+        "evaluatedAt",
+        "failOn",
+        "coverage",
+        "findings",
+        "findingCounts",
+        "blockingFindingIds",
+        "suppressionDecisions",
+        "errors"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.audit.result.v1"
+        },
+        "profile": {
+          "enum": [
+            "quick",
+            "standard",
+            "deep",
+            "release"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "incomplete",
+            "error"
+          ]
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "evaluatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "failOn": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jstack.audit.finding.v1"
+          }
+        },
+        "findingCounts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total",
+            "blocking",
+            "suppressed",
+            "bySeverity"
+          ],
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blocking": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "suppressed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "bySeverity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "critical",
+                "high",
+                "medium",
+                "low",
+                "info"
+              ],
+              "properties": {
+                "critical": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "high": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "medium": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "low": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "info": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "blockingFindingIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^JSA-[0-9A-F]{24}$"
+          }
+        },
+        "suppressionDecisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fingerprint",
+              "findingId",
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "fingerprint": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "findingId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "applied",
+                  "rejected"
+                ]
+              },
+              "reason": {
+                "enum": [
+                  "accepted",
+                  "malformed",
+                  "stale-fingerprint",
+                  "scope-mismatch",
+                  "future-created",
+                  "expired",
+                  "duplicate-active"
+                ]
+              }
+            }
+          }
+        },
+        "errors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "passed": {
+                "const": true
+              },
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              },
+              "blockingFindingIds": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "fail"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "passed": {
+                "const": false
+              },
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              },
+              "blockingFindingIds": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "incomplete"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "passed": {
+                "const": false
+              },
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "error"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "passed": {
+                "const": false
+              },
+              "errors": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

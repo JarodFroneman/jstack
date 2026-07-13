@@ -1,0 +1,94 @@
+---
+name: jstack-audit
+description: Run evidence-bound, read-only JStack code audits across correctness, security, architecture, maintainability, performance, supply chain, tests, data integrity, compatibility, and operations. Use when the user invokes the jstack-audit skill or command, requests a repository audit or release go/no-go review, asks to challenge existing findings, or wants the JStack audit mastery track.
+---
+
+# JStack Audit
+
+Audit the declared subject without changing application code, configuration,
+Git state, installed tools, or production. Treat the MCP as a deterministic
+evidence and validation layer; semantic code review remains the Audit Lead's
+reasoned work.
+
+## Start
+
+1. Parse `[SCOPE]` and the options `--profile`, `--focus`, `--base`,
+   `--fail-on`, `--format`, `--verify`, `--learning-mode`, and `--team-mode`.
+2. Return usage only for `help`, `--help`, or `?`; do not inspect a repository.
+3. Read project instructions and relevant durable context.
+4. Call `jstack_runtime_status`, then `jstack_detect_project`.
+5. Call `jstack_audit` to bind the subject, controls, profile, scope manifest,
+   adapter inventory, review evidence, and existing secret-scan evidence.
+6. Generate candidate findings from cited source evidence, then run a separate
+   challenge pass that looks for guards, callers, tests, reachability limits,
+   and mitigating controls.
+7. Call `jstack_audit_finalize` with the coverage manifest, surviving findings,
+   accepted-risk records, and requested formats.
+8. Report the result, coverage, findings, blockers, residual risk, and next
+   action. Never translate `incomplete` or `error` into a clean result.
+
+Use [audit-methodology.md](references/audit-methodology.md) for profiles,
+coverage, evidence collection, team waves, and report structure. Use
+[finding-contract.md](references/finding-contract.md) while creating or
+challenging findings. Read [audit-mastery.md](references/audit-mastery.md) only
+when learning or assessment is requested.
+
+## Project Modes
+
+For `git`, require an exact repository root, HEAD, base commit when supplied,
+workspace fingerprint, policy digest, control digest, scope-manifest digest,
+adapter inventory, and active MCP session. Any relevant state change makes the
+session stale.
+
+For `artifact-only`, return the aggregate scope-manifest digest and explicit limitations. Do not
+issue a Git-bound audit receipt, call the result release certification, or
+report formal release readiness.
+
+## Finding Standard
+
+- Separate severity, confidence, and organisational priority.
+- Cite a repository-relative path and exact source range.
+- Classify evidence as `test-reproduced`, `tool-confirmed`, `source-proven`,
+  `reasoned-strong-evidence`, or `unverified-hypothesis`.
+- Do not let an unverified hypothesis block a release.
+- Do not call a security weakness exploitable without a reachable path,
+  preconditions, affected asset, and mitigating-control review.
+- Do not claim a performance gain without a retained reproducible benchmark.
+- Do not report style preferences as maintainability defects.
+- Never include raw secret values, credentials, private keys, or sensitive
+  source previews.
+
+## Safety
+
+- Keep the audit read-only. Remediation belongs in a separate development task.
+- Do not run repository-controlled code by default.
+- Never run repository-controlled code under the Quick profile.
+- Run only a curated adapter after exact execution approval is bound to the
+  current revision, workspace fingerprint, policy digest, and adapter command.
+- Do not accept caller-defined executable paths, commands, shell strings, or
+  network-enabled adapters.
+- Treat offline adapter flags as requests, not network isolation. Approved
+  adapters still require trusted code or an externally enforced container/VM.
+- Stop on scope escape, symlink traversal, file identity change, size/time/output
+  caps, stale evidence, missing mandatory coverage, or malformed suppression.
+- Preserve `jstack_security_audit` as a separate bounded secret scanner and
+  preserve its existing receipt semantics.
+
+## Team Modes
+
+Default to one Audit Lead. `smart-subagents` may use up to three relevant
+read-only specialists with a validated coordination packet. `full-team` uses
+controlled discovery, domain review, verification, and synthesis waves. No
+specialist edits audited code. The Audit Lead owns the final evidence decision.
+
+## Result Semantics
+
+- `pass`: required coverage is complete and no verified unsuppressed finding
+  meets the failure threshold.
+- `fail`: coverage is complete and at least one verified unsuppressed blocker
+  meets the threshold.
+- `incomplete`: required evidence, files, tools, adapters, tests, or coverage
+  are missing, capped, stale, or inconclusive.
+- `error`: invalid input or a protocol/system failure prevented completion.
+
+Only `pass` sets `passed=true`.

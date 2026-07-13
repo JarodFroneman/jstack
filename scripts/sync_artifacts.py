@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,12 +19,39 @@ FILE_MAP = {
     ROOT / "prompts" / "j-stack-dev.md": [ROOT / "plugin" / "commands" / "j-stack-dev.md"],
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
+    ROOT / "prompts" / "jstack-audit.md": [ROOT / "plugin" / "commands" / "jstack-audit.md"],
     ROOT / "skills" / "jstack-dev" / "SKILL.md": [ROOT / "plugin" / "skills" / "jstack-dev" / "SKILL.md"],
     ROOT / "mastery" / "curriculum.v1.json": [
         ROOT / "mcp" / "jstack" / "mastery" / "curriculum.v1.json",
         ROOT / "plugin" / "mcp" / "mastery" / "curriculum.v1.json",
     ],
+    ROOT / "mastery" / "audit-curriculum.v1.json": [
+        ROOT / "mcp" / "jstack" / "mastery" / "audit-curriculum.v1.json",
+        ROOT / "plugin" / "mcp" / "mastery" / "audit-curriculum.v1.json",
+    ],
 }
+
+for source in sorted((ROOT / "tests" / "fixtures" / "audit").glob("*.json")):
+    FILE_MAP[source] = [
+        ROOT / "mcp" / "jstack" / "audit" / "benchmark-corpus" / source.name,
+        ROOT / "plugin" / "mcp" / "audit" / "benchmark-corpus" / source.name,
+    ]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "audit").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "audit")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "audit" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "schemas").glob("*.json")):
+    FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "schemas" / source.name]
+
+for source in sorted((ROOT / "skills" / "jstack-audit").rglob("*")):
+    if source.is_file():
+        relative = source.relative_to(ROOT / "skills" / "jstack-audit")
+        FILE_MAP[source] = [
+            ROOT / "plugin" / "skills" / "jstack-audit" / relative,
+            ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit" / relative,
+        ]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "templates").glob("*")):
     if source.is_file():
@@ -34,6 +61,16 @@ for source in sorted((ROOT / "skills" / "jstack-dev" / "references").glob("*.md"
     FILE_MAP[source] = [ROOT / "plugin" / "skills" / "jstack-dev" / "references" / source.name]
 FILE_MAP[ROOT / "skills" / "jstack-dev" / "references" / "mastery-system.md"].append(
     ROOT / "docs" / "mastery-system.md"
+)
+
+TREE_MIRRORS = (
+    (ROOT / "mcp" / "jstack" / "audit", ROOT / "plugin" / "mcp" / "audit"),
+    (ROOT / "mcp" / "jstack" / "schemas", ROOT / "plugin" / "mcp" / "schemas"),
+    (ROOT / "skills" / "jstack-audit", ROOT / "plugin" / "skills" / "jstack-audit"),
+    (
+        ROOT / "skills" / "jstack-audit",
+        ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit",
+    ),
 )
 
 
@@ -46,14 +83,62 @@ def normalized_source(path: Path) -> bytes:
     return data
 
 
-def tracked_text_files() -> list[Path]:
-    excluded = {".git", "__pycache__", ".pytest_cache"}
+def git_tracked_files() -> set[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        return set()
+    paths = set()
+    for raw in result.stdout.split(b"\0"):
+        if raw:
+            paths.add(ROOT / raw.decode("utf-8", errors="strict"))
+    return paths
+
+
+def managed_text_files() -> list[Path]:
     suffixes = {".md", ".py", ".json", ".yml", ".yaml", ".toml", ".mjs", ".txt"}
-    return [
-        path
-        for path in ROOT.rglob("*")
-        if path.is_file() and path.suffix.lower() in suffixes and not any(part in excluded for part in path.parts)
-    ]
+    managed = git_tracked_files()
+    managed.update(FILE_MAP)
+    managed.update(target for targets in FILE_MAP.values() for target in targets)
+    managed.update(ROOT.glob("plugins/*/.codex-plugin/plugin.json"))
+    managed.add(ROOT / "plugin" / ".codex-plugin" / "plugin.json")
+    return sorted(
+        path for path in managed if path.is_file() and path.suffix.lower() in suffixes
+    )
+
+
+def tree_inventory(root: Path) -> set[str]:
+    if not root.exists():
+        return set()
+    return {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+    }
+
+
+def validate_tree_mirrors(errors: list[str], write: bool) -> None:
+    for source, target in TREE_MIRRORS:
+        expected = tree_inventory(source)
+        actual = tree_inventory(target)
+        extras = sorted(actual - expected)
+        if write:
+            for relative in extras:
+                (target / relative).unlink()
+        elif extras:
+            try:
+                target_label = target.relative_to(ROOT)
+            except ValueError:
+                target_label = target
+            errors.append(
+                "Stale generated artifacts under %s: %s"
+                % (target_label, ", ".join(extras))
+            )
 
 
 def validate_versions(errors: list[str]) -> None:
@@ -69,9 +154,9 @@ def validate_versions(errors: list[str]) -> None:
             errors.append(f"Manifest version drift: {manifest.relative_to(ROOT)} has {data.get('version')}, expected {version} base.")
 
 
-def check_json(errors: list[str]) -> None:
-    for path in ROOT.rglob("*.json"):
-        if ".git" in path.parts:
+def check_json(errors: list[str], paths: list[Path]) -> None:
+    for path in paths:
+        if path.suffix.lower() != ".json":
             continue
         try:
             json.loads(path.read_text(encoding="utf-8"))
@@ -97,14 +182,16 @@ def main() -> int:
                 errors.append(f"Generated artifact drift: {target.relative_to(ROOT)} != {source.relative_to(ROOT)}")
 
     if args.write:
-        # Normalize canonical text too, removing historical BOM/CRLF drift.
-        for path in tracked_text_files():
+        # Normalize only Git-tracked or explicitly declared canonical/generated files.
+        for path in managed_text_files():
             path.write_bytes(normalized_source(path))
 
-    for path in tracked_text_files():
+    validate_tree_mirrors(errors, args.write)
+    managed_files = managed_text_files()
+    for path in managed_files:
         if path.read_bytes().startswith(b"\xef\xbb\xbf"):
             errors.append(f"UTF-8 BOM is not allowed: {path.relative_to(ROOT)}")
-    check_json(errors)
+    check_json(errors, managed_files)
     validate_versions(errors)
 
     if errors:

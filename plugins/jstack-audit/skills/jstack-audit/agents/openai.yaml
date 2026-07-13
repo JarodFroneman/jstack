@@ -1,0 +1,4 @@
+interface:
+  display_name: "JStack Audit"
+  short_description: "Evidence-bound read-only code audits"
+  default_prompt: "Use $jstack-audit to run a read-only, evidence-bound audit of this repository."

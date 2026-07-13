@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "jstack.audit.benchmark-answer-key.v1",
+  "corpusId": "jstack.audit.synthetic.v1",
+  "fixtureSetDigest": "sha256:903e95248f4293031e4245aa248e53ff6d4e826119a0f514d93f9ff3580fb5de",
+  "fixtures": [
+    {
+      "fixtureId": "FX-CRITICAL-AUTHZ",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "unresolved-p0",
+      "seeds": [
+        {
+          "seedId": "SEED-AUTHZ-001",
+          "severity": "critical",
+          "priority": "P0",
+          "evidenceAnchors": [
+            "src/export.py:L8-L9:tenant-lookup-without-owner-check"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-DUPLICATE-SOURCES",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "unresolved-high",
+      "seeds": [
+        {
+          "seedId": "SEED-LOST-UPDATE-001",
+          "severity": "high",
+          "priority": "P1",
+          "evidenceAnchors": [
+            "src/cache.py:L6-L8:non-atomic-read-modify-write",
+            "reports/static.json:$.findingCode:non-atomic-read-modify-write"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-UNREACHABLE-LOOKALIKE",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "go",
+      "releaseRationaleCode": "no-seeded-defect",
+      "seeds": []
+    },
+    {
+      "fixtureId": "FX-MITIGATED-SECURITY",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "go",
+      "releaseRationaleCode": "control-effective",
+      "seeds": []
+    },
+    {
+      "fixtureId": "FX-UNMEASURED-PERFORMANCE",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "go",
+      "releaseRationaleCode": "performance-claim-unmeasured",
+      "seeds": []
+    },
+    {
+      "fixtureId": "FX-MEASURED-PERFORMANCE",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "measured-high-defect",
+      "seeds": [
+        {
+          "seedId": "SEED-PERFORMANCE-001",
+          "severity": "high",
+          "priority": "P1",
+          "evidenceAnchors": [
+            "src/dedupe.py:L3-L6:nested-membership-scan",
+            "EVID-PERF-QUADRATIC-01:rows-1000-2000-4000"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-GENERATED-DRIFT",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "packaged-copy-drift",
+      "seeds": [
+        {
+          "seedId": "SEED-GENERATED-DRIFT-001",
+          "severity": "high",
+          "priority": "P1",
+          "evidenceAnchors": [
+            "generated/policy.json:$.requiresApproval:false"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-PATH-TRAVERSAL",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "unresolved-p0",
+      "seeds": [
+        {
+          "seedId": "SEED-PATH-TRAVERSAL-001",
+          "severity": "critical",
+          "priority": "P0",
+          "evidenceAnchors": [
+            "src/archive.py:L5-L7:unbounded-user-path"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-SYMLINK-ESCAPE",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "unresolved-p0",
+      "seeds": [
+        {
+          "seedId": "SEED-SYMLINK-001",
+          "severity": "high",
+          "priority": "P0",
+          "evidenceAnchors": [
+            "src/publisher.py:L6-L10:symlink-followed-after-lexical-check",
+            "public/latest.txt:symlink:../../synthetic-outside/readonly.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-EXPIRED-RISK",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "accepted-risk-expired",
+      "seeds": [
+        {
+          "seedId": "SEED-EXPIRED-RISK-001",
+          "severity": "high",
+          "priority": "P0",
+          "evidenceAnchors": [
+            "risk/accepted.json:$.expiresOn:2026-06-30"
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-UNSUPPORTED-LANGUAGE",
+      "coverageExpectation": "unsupported",
+      "expectedReleaseDecision": "no-go",
+      "releaseRationaleCode": "required-coverage-unsupported",
+      "seeds": []
+    },
+    {
+      "fixtureId": "FX-CLEAN-CONTROL",
+      "coverageExpectation": "complete",
+      "expectedReleaseDecision": "go",
+      "releaseRationaleCode": "clean-control",
+      "seeds": []
+    }
+  ],
+  "contentDigest": "sha256:c78568bb35ed10bc69b85654810a4965395671b1cc6671cba6bdf876ab2e2dcb"
+}

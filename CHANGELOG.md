@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0 - Unreleased
+
+- Added the read-only `/jstack-audit` workflow with quick, standard, deep, and
+  release profiles.
+- Added deterministic `jstack_audit` and `jstack_audit_finalize` MCP contracts,
+  versioned findings/results, coverage matrices, Markdown summaries, and SARIF
+  2.1.0 output with stable fingerprints.
+- Added a versioned control catalogue, repository/path/limit/redaction
+  hardening, curated analyzer discovery, and explicit suppression validation.
+- Added session-local audit receipts while preserving the existing secret-scan
+  receipt and release-readiness behavior; the audit release gate is opt-in.
+- Added a separate ten-stage audit mastery curriculum and atomic profile v1 to
+  v2 migration with engineering remaining the default track.
+- Added umbrella, dedicated plugin, legacy installer, compatibility,
+  adversarial, and seeded audit fixture coverage.
+- Bound suppression expiry to server time and release-time revalidation, and
+  made release receipts require complete repository and release-range scope.
+- Made Quick execution impossible, failed adapters incomplete, Node launchers
+  discovery-only until toolchain identity can be attested, and requested output
+  formats transport-bounded.
+- Made Stage 9 blindness depend on runtime-keyed independent assessor
+  attestations for two distinct challenge subjects; the bundled answer key is
+  explicitly a transparent practice benchmark.
+- Added transaction-wide installer rollback and exact generated-tree inventory
+  checks that reject stale packaged files without rewriting unrelated files.
+
 ## 0.2.1 - 2026-07-10
 
 - Added `jstack_runtime_status` so clients can prove MCP mount state without a

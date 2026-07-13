@@ -1,0 +1,503 @@
+{
+  "schemaVersion": "jstack.audit.controls.v1",
+  "catalogVersion": "1.0.0",
+  "domains": [
+    "correctness",
+    "security",
+    "maintainability",
+    "architecture",
+    "performance",
+    "supply-chain",
+    "testability",
+    "operations",
+    "data-integrity",
+    "api-compatibility"
+  ],
+  "verificationStates": [
+    "test-reproduced",
+    "tool-confirmed",
+    "source-proven",
+    "reasoned-strong-evidence",
+    "unverified-hypothesis"
+  ],
+  "controls": [
+    {
+      "id": "correctness.behavior",
+      "domain": "correctness",
+      "objective": "Changed behavior preserves explicit contracts, invariants, and error semantics.",
+      "applicability": "Applies to executable behavior, configuration interpretation, and generated runtime artifacts.",
+      "requiredEvidence": [
+        "source-review",
+        "caller-trace",
+        "contract-review"
+      ],
+      "defaultSeverity": "high",
+      "falsePositiveConditions": [
+        "The challenged branch is unreachable in the bound subject.",
+        "A stronger caller or invariant proves the reported state cannot occur."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Cite the exact source range and violated contract.",
+        "Trace at least one reachable caller or entry point.",
+        "Review guards and associated tests before retaining the finding."
+      ],
+      "standardsMappings": [
+        "CWE-670",
+        "ISO/IEC 25010 functional suitability"
+      ],
+      "remediationGuidance": "Restore the explicit behavior or invariant and retain a deterministic regression check.",
+      "testFixtureIds": [
+        "finding-stable-fingerprint",
+        "finding-unverified-nonblocking"
+      ]
+    },
+    {
+      "id": "security.trust-boundaries",
+      "domain": "security",
+      "objective": "Reachable trust boundaries enforce authentication, authorization, validation, and secret handling.",
+      "applicability": "Applies wherever untrusted identities, input, data, files, processes, or networks cross a control boundary.",
+      "requiredEvidence": [
+        "source-review",
+        "trust-boundary-map",
+        "secret-scan"
+      ],
+      "defaultSeverity": "high",
+      "falsePositiveConditions": [
+        "The input is not attacker-controlled in the bound deployment path.",
+        "An independently verified authorization or validation control blocks the failure path."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Identify preconditions, a reachable path, the affected asset, and mitigating controls before claiming exploitability.",
+        "Redact all secret-like values and retain no sensitive source preview.",
+        "Use CVSS only for a genuine reachable vulnerability."
+      ],
+      "standardsMappings": [
+        "OWASP ASVS 5.0",
+        "CWE",
+        "NIST SSDF"
+      ],
+      "remediationGuidance": "Place least-privilege authentication, authorization, validation, and secret controls at the reachable boundary.",
+      "testFixtureIds": [
+        "finding-security-exploitability-gate",
+        "redaction-secret-values"
+      ]
+    },
+    {
+      "id": "maintainability.ownership",
+      "domain": "maintainability",
+      "objective": "Change ownership, complexity, generated sources, and operational comprehension remain defensible.",
+      "applicability": "Applies to maintained source, configuration, generated copies, and operational procedures.",
+      "requiredEvidence": [
+        "source-review",
+        "ownership-map",
+        "challenge-pass"
+      ],
+      "defaultSeverity": "medium",
+      "falsePositiveConditions": [
+        "The reported duplication is an intentionally generated or compatibility-owned copy.",
+        "The concern is a style preference without a concrete failure or ownership cost."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Identify the concrete comprehension, ownership, or change-amplification failure.",
+        "Check generated-source and compatibility constraints.",
+        "Exclude style-only preferences."
+      ],
+      "standardsMappings": [
+        "ISO/IEC 25010 maintainability"
+      ],
+      "remediationGuidance": "Clarify ownership and reduce demonstrated change amplification without rewriting stable unrelated code.",
+      "testFixtureIds": [
+        "coverage-maintainability-domain"
+      ]
+    },
+    {
+      "id": "architecture.boundaries",
+      "domain": "architecture",
+      "objective": "Dependencies and component boundaries preserve the intended system design.",
+      "applicability": "Applies to component dependencies, trust boundaries, state ownership, and integration contracts.",
+      "requiredEvidence": [
+        "architecture-map",
+        "dependency-map",
+        "source-review"
+      ],
+      "defaultSeverity": "medium",
+      "falsePositiveConditions": [
+        "The dependency is explicitly allowed by the bound architecture contract.",
+        "The apparent cycle exists only in build-time or generated metadata."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Map both sides of the boundary and the real dependency direction.",
+        "Identify the violated architectural decision or operational consequence.",
+        "Challenge the finding against compatibility and generated-copy constraints."
+      ],
+      "standardsMappings": [
+        "ISO/IEC 25010 compatibility",
+        "ISO/IEC 25010 maintainability"
+      ],
+      "remediationGuidance": "Restore the intended dependency direction or document and verify an intentional boundary change.",
+      "testFixtureIds": [
+        "coverage-architecture-domain"
+      ]
+    },
+    {
+      "id": "performance.measured",
+      "domain": "performance",
+      "objective": "Material performance claims are supported by retained reproducible benchmarks.",
+      "applicability": "Applies to latency, throughput, memory, storage, network, and scalability claims.",
+      "requiredEvidence": [
+        "source-review",
+        "benchmark"
+      ],
+      "defaultSeverity": "medium",
+      "falsePositiveConditions": [
+        "The measured change is within retained benchmark noise or uncertainty.",
+        "The benchmark does not represent the affected production path."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Retain a subject-bound reproducible benchmark for every percentage claim.",
+        "Record baseline, candidate, workload, environment, repetitions, and uncertainty outside sensitive output.",
+        "Downgrade unsupported percentage claims to unverified hypotheses."
+      ],
+      "standardsMappings": [
+        "ISO/IEC 25010 performance efficiency"
+      ],
+      "remediationGuidance": "Optimize only the measured bottleneck and rerun the retained benchmark against the same subject and workload.",
+      "testFixtureIds": [
+        "finding-performance-benchmark-gate"
+      ]
+    },
+    {
+      "id": "supply-chain.provenance",
+      "domain": "supply-chain",
+      "objective": "Dependencies, build inputs, and generated artifacts have bounded provenance and integrity.",
+      "applicability": "Applies to third-party dependencies, lockfiles, build tools, generated artifacts, and release inputs.",
+      "requiredEvidence": [
+        "dependency-map",
+        "provenance-review",
+        "source-review"
+      ],
+      "defaultSeverity": "high",
+      "falsePositiveConditions": [
+        "The dependency is not present in the resolved bound artifact.",
+        "A verified vendor backport or compensating integrity control removes the reported exposure."
+      ],
+      "supportedStacks": [
+        "all",
+        "python",
+        "node",
+        "go",
+        "rust"
+      ],
+      "verificationRequirements": [
+        "Bind dependency evidence to an exact lockfile or artifact digest.",
+        "Request offline dependency resolution for curated local adapters and disclose that runner-level network isolation is not provided.",
+        "Treat stale or unavailable advisory data as incomplete coverage."
+      ],
+      "standardsMappings": [
+        "SLSA",
+        "NIST SSDF",
+        "OWASP SCVS"
+      ],
+      "remediationGuidance": "Pin trusted inputs, update or remove affected dependencies, and retain provenance for rebuilt artifacts.",
+      "testFixtureIds": [
+        "adapter-registry-command-rejection",
+        "coverage-required-adapter"
+      ]
+    },
+    {
+      "id": "testability.evidence",
+      "domain": "testability",
+      "objective": "Critical behavior can be verified with deterministic, appropriately scoped evidence.",
+      "applicability": "Applies to changed or critical behavior and the seams needed to verify it deterministically.",
+      "requiredEvidence": [
+        "test-map",
+        "source-review",
+        "challenge-pass"
+      ],
+      "defaultSeverity": "medium",
+      "falsePositiveConditions": [
+        "Equivalent deterministic coverage exists at a stronger integration boundary.",
+        "The behavior is declarative and completely proven by a validated static contract."
+      ],
+      "supportedStacks": [
+        "all",
+        "python",
+        "node",
+        "go",
+        "rust"
+      ],
+      "verificationRequirements": [
+        "Map the affected behavior to retained deterministic evidence.",
+        "Do not execute repository-controlled tests without exact subject approval.",
+        "Report unavailable or capped verification as incomplete coverage."
+      ],
+      "standardsMappings": [
+        "ISO/IEC 25010 maintainability",
+        "NIST SSDF PW.8"
+      ],
+      "remediationGuidance": "Add the narrowest deterministic test seam that proves the contract without introducing production-only hooks.",
+      "testFixtureIds": [
+        "adapter-exact-subject-approval",
+        "finding-unverified-nonblocking"
+      ]
+    },
+    {
+      "id": "operations.recovery",
+      "domain": "operations",
+      "objective": "Runtime observability, failure handling, rollout, and recovery are explicit and testable.",
+      "applicability": "Applies to deployable services, jobs, stateful processes, scheduled work, and operator-owned artifacts.",
+      "requiredEvidence": [
+        "operations-review",
+        "source-review",
+        "rollback-context"
+      ],
+      "defaultSeverity": "high",
+      "falsePositiveConditions": [
+        "The component is not deployed or operated in the bound subject.",
+        "A verified platform control provides the reported missing recovery behavior."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Trace runtime failure detection, bounded retries, rollback, and recovery verification.",
+        "Identify the operator-visible signal and affected service objective.",
+        "Require current rollback context for release-profile completion."
+      ],
+      "standardsMappings": [
+        "ISO/IEC 25010 reliability",
+        "NIST SSDF RV.1"
+      ],
+      "remediationGuidance": "Add bounded failure handling, actionable telemetry, and a tested rollback or recovery procedure.",
+      "testFixtureIds": [
+        "coverage-release-evidence"
+      ]
+    },
+    {
+      "id": "data-integrity.invariants",
+      "domain": "data-integrity",
+      "objective": "Persistence, concurrency, migration, and validation preserve data invariants.",
+      "applicability": "Applies to persisted, cached, queued, replicated, migrated, or concurrently updated data.",
+      "requiredEvidence": [
+        "data-flow-map",
+        "invariant-review",
+        "source-review"
+      ],
+      "defaultSeverity": "high",
+      "falsePositiveConditions": [
+        "The state is ephemeral and cannot affect an external or retained invariant.",
+        "A verified transaction, constraint, or idempotency control blocks the failure path."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Name the invariant, write path, concurrency or migration preconditions, and failure outcome.",
+        "Review transactions, constraints, retries, and idempotency controls.",
+        "Bind evidence to the exact schema and source subject."
+      ],
+      "standardsMappings": [
+        "ISO/IEC 25010 reliability",
+        "CWE-362"
+      ],
+      "remediationGuidance": "Enforce the invariant at the authoritative write boundary and verify rollback, retry, and migration behavior.",
+      "testFixtureIds": [
+        "coverage-data-integrity-domain"
+      ]
+    },
+    {
+      "id": "api-compatibility.contracts",
+      "domain": "api-compatibility",
+      "objective": "Public interfaces and serialized contracts remain intentionally compatible.",
+      "applicability": "Applies to public APIs, CLIs, events, files, schemas, protocols, and cross-version persisted representations.",
+      "requiredEvidence": [
+        "api-map",
+        "caller-trace",
+        "contract-review"
+      ],
+      "defaultSeverity": "high",
+      "falsePositiveConditions": [
+        "The interface is private to an atomically released and verified boundary.",
+        "The breaking change is explicitly versioned with a complete migration path."
+      ],
+      "supportedStacks": [
+        "all"
+      ],
+      "verificationRequirements": [
+        "Identify consumers, versioning rules, serialization defaults, and migration behavior.",
+        "Compare the exact before and after contract.",
+        "Review generated clients and compatibility-owned copies."
+      ],
+      "standardsMappings": [
+        "Semantic Versioning 2.0.0",
+        "ISO/IEC 25010 compatibility"
+      ],
+      "remediationGuidance": "Preserve the existing contract, introduce an explicit version, or provide a tested migration and deprecation path.",
+      "testFixtureIds": [
+        "coverage-api-compatibility-domain"
+      ]
+    }
+  ],
+  "profiles": {
+    "quick": {
+      "description": "Bounded change review without a whole-repository cleanliness claim.",
+      "requiredDomains": [
+        "correctness",
+        "security",
+        "testability"
+      ],
+      "requiredEvidence": [
+        "subject-binding",
+        "scope-inventory",
+        "source-review",
+        "secret-scan",
+        "challenge-pass"
+      ],
+      "adapterRequirements": {
+        "required": [],
+        "optional": []
+      },
+      "limits": {
+        "maxFiles": 5000,
+        "maxBytes": 67108864,
+        "maxSeconds": 30
+      }
+    },
+    "standard": {
+      "description": "Changed modules, callers, dependencies, interfaces, tests, configuration, and applicable domains.",
+      "requiredDomains": [
+        "correctness",
+        "security",
+        "maintainability",
+        "architecture",
+        "performance",
+        "supply-chain",
+        "testability",
+        "operations",
+        "data-integrity",
+        "api-compatibility"
+      ],
+      "requiredEvidence": [
+        "subject-binding",
+        "scope-inventory",
+        "dependency-map",
+        "test-map",
+        "trust-boundary-map",
+        "source-review",
+        "secret-scan",
+        "challenge-pass"
+      ],
+      "adapterRequirements": {
+        "required": [],
+        "optional": [
+          "tests",
+          "static-analysis"
+        ]
+      },
+      "limits": {
+        "maxFiles": 20000,
+        "maxBytes": 268435456,
+        "maxSeconds": 90
+      }
+    },
+    "deep": {
+      "description": "Bounded whole-repository review with architecture, trust maps, challenge, and analyser evidence.",
+      "requiredDomains": [
+        "correctness",
+        "security",
+        "maintainability",
+        "architecture",
+        "performance",
+        "supply-chain",
+        "testability",
+        "operations",
+        "data-integrity",
+        "api-compatibility"
+      ],
+      "requiredEvidence": [
+        "subject-binding",
+        "scope-inventory",
+        "dependency-map",
+        "test-map",
+        "architecture-map",
+        "trust-boundary-map",
+        "data-flow-map",
+        "source-review",
+        "secret-scan",
+        "challenge-pass"
+      ],
+      "adapterRequirements": {
+        "required": [
+          "tests",
+          "static-analysis"
+        ],
+        "optional": [
+          "dependency-analysis"
+        ]
+      },
+      "limits": {
+        "maxFiles": 50000,
+        "maxBytes": 536870912,
+        "maxSeconds": 180
+      }
+    },
+    "release": {
+      "description": "Exact release-range go/no-go review with complete, current, uncapped evidence.",
+      "requiredDomains": [
+        "correctness",
+        "security",
+        "maintainability",
+        "architecture",
+        "performance",
+        "supply-chain",
+        "testability",
+        "operations",
+        "data-integrity",
+        "api-compatibility"
+      ],
+      "requiredEvidence": [
+        "subject-binding",
+        "distinct-release-base",
+        "scope-inventory",
+        "dependency-map",
+        "test-map",
+        "architecture-map",
+        "trust-boundary-map",
+        "data-flow-map",
+        "source-review",
+        "current-qa-receipt",
+        "current-security-receipt",
+        "rollback-context",
+        "challenge-pass"
+      ],
+      "adapterRequirements": {
+        "required": [
+          "tests",
+          "static-analysis",
+          "dependency-analysis"
+        ],
+        "optional": []
+      },
+      "limits": {
+        "maxFiles": 100000,
+        "maxBytes": 536870912,
+        "maxSeconds": 300
+      }
+    }
+  }
+}

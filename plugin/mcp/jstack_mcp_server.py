@@ -27,18 +27,29 @@ import threading
 import time
 import traceback
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
+
+
+_SERVER_DIR = Path(__file__).resolve().parent
+if str(_SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVER_DIR))
+import audit as audit_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.2.1"
+SERVER_VERSION = "0.3.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
 MAX_CHANGED_FILES = 10_000
 MAX_FINGERPRINT_BYTES = 512_000_000
 MAX_FINGERPRINT_FILES = 100_000
+AUDIT_MAX_STRUCTURED_INPUT_BYTES = 2_000_000
+AUDIT_MAX_STRUCTURED_OUTPUT_BYTES = 5_000_000
 RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
+AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+AUDIT_CAPSTONE_ATTESTATION_SCHEMA = "jstack.audit.capstone-attestation.v1"
+AUDIT_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_AUDIT_ASSESSOR_HMAC_KEY"
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
@@ -128,6 +139,10 @@ def validate_schema_value(value: Any, schema: dict[str, Any], path: str = "argum
             if field not in value:
                 raise InputError(f"{path}.{field} is required.")
         properties = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            unknown = sorted(set(value) - set(properties))
+            if unknown:
+                raise InputError(f"{path} contains unsupported fields: {', '.join(unknown)}")
         for field, child in value.items():
             if field in properties:
                 validate_schema_value(child, properties[field], f"{path}.{field}")
@@ -150,13 +165,13 @@ def json_text(data: Any) -> str:
     return json.dumps(data, indent=2, sort_keys=True)
 
 
-def expand_path(path: str | None) -> Path:
+def expand_path(path: Optional[str]) -> Path:
     if path:
         return Path(path).expanduser().resolve()
     return Path.cwd().resolve()
 
 
-def require_directory_path(path: str | None = None) -> Path:
+def require_directory_path(path: Optional[str] = None) -> Path:
     project_path = expand_path(path)
     if not project_path.exists():
         raise ToolError(f"Project path does not exist: {project_path}")
@@ -165,7 +180,7 @@ def require_directory_path(path: str | None = None) -> Path:
     return project_path
 
 
-def require_project_path(path: str | None = None) -> Path:
+def require_project_path(path: Optional[str] = None) -> Path:
     project_path = require_directory_path(path)
     root = git_root(project_path)
     if not root:
@@ -173,7 +188,7 @@ def require_project_path(path: str | None = None) -> Path:
     return Path(root).resolve()
 
 
-def resolve_project_binding(path: str | None = None) -> dict[str, Any]:
+def resolve_project_binding(path: Optional[str] = None) -> dict[str, Any]:
     requested_path = require_directory_path(path)
     root = git_root(requested_path)
     if root:
@@ -249,7 +264,7 @@ def trusted_git_line_ending_overrides(executable: str, cwd: Path, env: dict[str,
     return overrides
 
 
-def process_environment(args: list[str], cwd: Path) -> tuple[list[str], dict[str, str] | None]:
+def process_environment(args: list[str], cwd: Path) -> tuple[list[str], Optional[dict[str, str]]]:
     if not args or args[0] != "git":
         return args, None
     candidates = [
@@ -262,7 +277,7 @@ def process_environment(args: list[str], cwd: Path) -> tuple[list[str], dict[str
     discovered = shutil.which("git")
     if discovered:
         candidates.append(Path(discovered))
-    executable: str | None = None
+    executable: Optional[str] = None
     for candidate in candidates:
         if not candidate.exists() or not candidate.is_file():
             continue
@@ -413,14 +428,14 @@ def run_complete(args: list[str], cwd: Path, timeout: int = 20, max_bytes: int =
     }
 
 
-def git_root(project_path: Path) -> str | None:
+def git_root(project_path: Path) -> Optional[str]:
     result = safe_run(["git", "rev-parse", "--show-toplevel"], project_path, timeout=8)
     if result["ok"] and result["stdout"].strip():
         return result["stdout"].strip()
     return None
 
 
-def find_gstack_root() -> Path | None:
+def find_gstack_root() -> Optional[Path]:
     candidates = [
         os.environ.get("GSTACK_ROOT"),
         str(Path.home() / ".gstack" / "repos" / "gstack"),
@@ -435,7 +450,7 @@ def find_gstack_root() -> Path | None:
     return None
 
 
-def find_jstack_root() -> Path | None:
+def find_jstack_root() -> Optional[Path]:
     server_dir = Path(__file__).resolve().parent
     candidates = [
         os.environ.get("JSTACK_ROOT"),
@@ -452,7 +467,7 @@ def find_jstack_root() -> Path | None:
     return None
 
 
-def gstack_bin() -> Path | None:
+def gstack_bin() -> Optional[Path]:
     root = find_gstack_root()
     if not root:
         return None
@@ -466,7 +481,7 @@ def project_slug(project_path: Path) -> str:
     return f"{base}-{digest}"
 
 
-def read_json(path: Path) -> dict[str, Any] | None:
+def read_json(path: Path) -> Optional[dict[str, Any]]:
     try:
         value = json.loads(path.read_text(encoding="utf-8-sig"))
         return value if isinstance(value, dict) else None
@@ -527,6 +542,26 @@ DEFAULT_ENTERPRISE_POLICY: dict[str, Any] = {
             "production",
         ],
     },
+    "audit": {
+        "defaultProfile": "standard",
+        "releaseProfile": "release",
+        "failOnSeverity": "high",
+        "requiredDomains": [
+            "correctness",
+            "security",
+            "maintainability",
+            "architecture",
+            "reliability",
+        ],
+        "networkAllowed": False,
+        "automaticFixesAllowed": False,
+        "arbitraryExecutablesAllowed": False,
+        "rawSecretsAllowed": False,
+        "incompleteCanPass": False,
+        "suppressionRequiresOwner": True,
+        "suppressionRequiresExpiry": True,
+        "releaseRequiresAuditReceipt": False,
+    },
     "quant": {
         "requiredEvidence": [
             "symbol",
@@ -573,10 +608,10 @@ def parse_scalar(value: str) -> Any:
         return value
 
 
-def parse_simple_yaml(text: str) -> dict[str, Any] | None:
+def parse_simple_yaml(text: str) -> Optional[dict[str, Any]]:
     """Parse a conservative one-level YAML subset without external deps."""
     data: dict[str, Any] = {}
-    current_key: str | None = None
+    current_key: Optional[str] = None
     for raw_line in text.splitlines():
         line_no_comment = raw_line.split("#", 1)[0].rstrip()
         if not line_no_comment.strip():
@@ -604,14 +639,23 @@ def parse_simple_yaml(text: str) -> dict[str, Any] | None:
     return data or None
 
 
-def read_policy_file(path: Path) -> dict[str, Any] | None:
-    if path.suffix.lower() == ".json":
-        return read_json(path)
-    if path.suffix.lower() in {".yml", ".yaml"}:
-        try:
-            return parse_simple_yaml(path.read_text(encoding="utf-8-sig", errors="strict"))
-        except OSError:
-            return None
+def read_policy_file(project_path: Path, path: Path) -> Optional[dict[str, Any]]:
+    try:
+        relative = path.relative_to(project_path).as_posix()
+        content = audit_core.read_repository_file(
+            project_path,
+            relative,
+            max_bytes=1_000_000,
+            max_seconds=10,
+        )
+        text = content.decode("utf-8-sig", errors="strict")
+        if path.suffix.lower() == ".json":
+            value = json.loads(text)
+            return value if isinstance(value, dict) else None
+        if path.suffix.lower() in {".yml", ".yaml"}:
+            return parse_simple_yaml(text)
+    except (ValueError, UnicodeError, json.JSONDecodeError, audit_core.AuditError):
+        return None
     return None
 
 
@@ -648,12 +692,27 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
     for field in ("requiredChecks", "protectedPaths"):
         if field in value:
             _string_list(value[field], field)
-    for section in ("release", "security", "quant"):
+    for section in ("release", "security", "audit", "quant"):
         if section in value and not isinstance(value[section], dict):
             raise ToolError(f"JStack policy field '{section}' must be an object.")
     security = value.get("security") or {}
     if "sensitiveKeywords" in security:
         _string_list(security["sensitiveKeywords"], "security.sensitiveKeywords")
+    audit = value.get("audit") or {}
+    if "requiredDomains" in audit:
+        configured_domains = _string_list(audit["requiredDomains"], "audit.requiredDomains")
+        unsupported_domains = sorted(set(configured_domains) - set(audit_core.DOMAINS) - {"reliability"})
+        if unsupported_domains:
+            raise ToolError(
+                "JStack policy audit.requiredDomains contains unsupported domains: "
+                + ", ".join(unsupported_domains)
+            )
+    if "defaultProfile" in audit and audit["defaultProfile"] not in {"quick", "standard", "deep", "release"}:
+        raise ToolError("JStack policy audit.defaultProfile must be quick, standard, deep, or release.")
+    if "releaseProfile" in audit and audit["releaseProfile"] not in {"quick", "standard", "deep", "release"}:
+        raise ToolError("JStack policy audit.releaseProfile must be quick, standard, deep, or release.")
+    if "failOnSeverity" in audit and audit["failOnSeverity"] not in {"critical", "high", "medium", "low", "info"}:
+        raise ToolError("JStack policy audit.failOnSeverity must be critical, high, medium, low, or info.")
     quant = value.get("quant") or {}
     if "requiredEvidence" in quant:
         _string_list(quant["requiredEvidence"], "quant.requiredEvidence")
@@ -691,6 +750,27 @@ def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str,
         _string_list(DEFAULT_ENTERPRISE_POLICY["security"]["sensitiveKeywords"], "security.sensitiveKeywords"),
         _string_list(policy["security"].get("sensitiveKeywords", []), "security.sensitiveKeywords"),
     )
+    audit = policy.setdefault("audit", {})
+    default_audit = DEFAULT_ENTERPRISE_POLICY["audit"]
+    audit["releaseProfile"] = "release"
+    audit["networkAllowed"] = False
+    audit["automaticFixesAllowed"] = False
+    audit["arbitraryExecutablesAllowed"] = False
+    audit["rawSecretsAllowed"] = False
+    audit["incompleteCanPass"] = False
+    audit["suppressionRequiresOwner"] = True
+    audit["suppressionRequiresExpiry"] = True
+    audit["requiredDomains"] = _merge_unique(
+        _string_list(default_audit["requiredDomains"], "audit.requiredDomains"),
+        _string_list(audit.get("requiredDomains", []), "audit.requiredDomains"),
+    )
+    audit.setdefault("defaultProfile", default_audit["defaultProfile"])
+    severity_order = ["info", "low", "medium", "high", "critical"]
+    configured_threshold = str(audit.get("failOnSeverity") or default_audit["failOnSeverity"])
+    audit["failOnSeverity"] = severity_order[
+        min(severity_order.index("high"), severity_order.index(configured_threshold))
+    ]
+    audit["releaseRequiresAuditReceipt"] = bool(audit.get("releaseRequiresAuditReceipt", False))
     policy.setdefault("quant", {})["requiresParameterFreeze"] = True
     policy["quant"]["requiresOutOfSample"] = True
     policy["quant"]["requiresCostModel"] = True
@@ -729,6 +809,7 @@ def policy_candidates(project_path: Path) -> list[Path]:
 
 
 def load_enterprise_policy(project_path: Path) -> dict[str, Any]:
+    project_path = project_path.resolve()
     existing = [path for path in policy_candidates(project_path) if path.exists() or path.is_symlink()]
     if len(existing) > 1:
         raise ToolError(
@@ -740,7 +821,7 @@ def load_enterprise_policy(project_path: Path) -> dict[str, Any]:
         metadata = path.lstat()
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1_000_000:
             raise ToolError(f"JStack policy must be a regular file no larger than 1 MB: {path}")
-        parsed = read_policy_file(path)
+        parsed = read_policy_file(project_path, path)
         if parsed is None:
             raise ToolError(f"Could not parse JStack policy file: {path}")
         validate_policy_override(parsed, path)
@@ -759,7 +840,7 @@ def _git_text(result: dict[str, Any]) -> str:
     return stdout.decode("utf-8", errors="replace") if isinstance(stdout, bytes) else str(stdout)
 
 
-def resolve_base_ref(project_path: Path, requested: str | None = None) -> dict[str, Any]:
+def resolve_base_ref(project_path: Path, requested: Optional[str] = None) -> dict[str, Any]:
     candidates = [requested] if requested else ["@{upstream}", "origin/main", "origin/master", "main", "master"]
     for candidate in candidates:
         if not candidate:
@@ -779,7 +860,7 @@ def resolve_base_ref(project_path: Path, requested: str | None = None) -> dict[s
     return {"requested": None, "resolvedRef": None, "baseCommit": None}
 
 
-def git_change_evidence(project_path: Path, base_ref: str | None = None) -> dict[str, Any]:
+def git_change_evidence(project_path: Path, base_ref: Optional[str] = None) -> dict[str, Any]:
     root_raw = git_root(project_path)
     if not root_raw:
         raise ToolError(f"JStack change evidence requires a git repository: {project_path}")
@@ -826,7 +907,7 @@ def git_change_evidence(project_path: Path, base_ref: str | None = None) -> dict
     }
 
 
-def git_changed_files(project_path: Path, base_ref: str | None = None) -> list[str]:
+def git_changed_files(project_path: Path, base_ref: Optional[str] = None) -> list[str]:
     return git_change_evidence(project_path, base_ref)["files"]
 
 
@@ -882,30 +963,29 @@ def project_state(project_path: Path) -> dict[str, Any]:
     total_bytes = 0
     fingerprinted_files = 0
 
-    def hash_regular_file(path: Path, label: str) -> None:
+    def hash_regular_file(relative: str, label: str) -> None:
         nonlocal total_bytes, fingerprinted_files
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(path, flags)
+        remaining = MAX_FINGERPRINT_BYTES - total_bytes
+        if remaining <= 0:
+            raise ToolError(
+                f"Project fingerprint exceeds the {MAX_FINGERPRINT_BYTES}-byte safety limit."
+            )
         try:
-            metadata = os.fstat(descriptor)
-            if not stat.S_ISREG(metadata.st_mode):
-                raise ToolError(f"Cannot fingerprint non-regular file: {label}")
-            fingerprinted_files += 1
-            if fingerprinted_files > MAX_FINGERPRINT_FILES:
-                raise ToolError(f"Project fingerprint exceeds the {MAX_FINGERPRINT_FILES}-file safety limit.")
-            with os.fdopen(descriptor, "rb", closefd=False) as handle:
-                while True:
-                    chunk = handle.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    total_bytes += len(chunk)
-                    if total_bytes > MAX_FINGERPRINT_BYTES:
-                        raise ToolError(
-                            f"Project fingerprint exceeds the {MAX_FINGERPRINT_BYTES}-byte safety limit."
-                        )
-                    digest.update(chunk)
-        finally:
-            os.close(descriptor)
+            size, file_digest = audit_core.digest_repository_file(
+                root,
+                relative,
+                max_bytes=remaining,
+                max_seconds=30,
+            )
+        except audit_core.AuditError as exc:
+            raise ToolError(f"Cannot fingerprint regular file safely: {label}") from exc
+        fingerprinted_files += 1
+        if fingerprinted_files > MAX_FINGERPRINT_FILES:
+            raise ToolError(f"Project fingerprint exceeds the {MAX_FINGERPRINT_FILES}-file safety limit.")
+        total_bytes += size
+        digest.update(b"<sha256>")
+        digest.update(size.to_bytes(8, "big"))
+        digest.update(bytes.fromhex(file_digest))
 
     tracked: list[str] = []
     submodules_present = False
@@ -941,7 +1021,7 @@ def project_state(project_path: Path) -> dict[str, Any]:
                     candidate.resolve().relative_to(root)
                 except ValueError as exc:
                     raise ToolError(f"Tracked file resolves outside the repository: {relative}") from exc
-                hash_regular_file(candidate, relative)
+                hash_regular_file(relative, relative)
             elif stat.S_ISDIR(metadata.st_mode) and index_meta.startswith(b"160000 "):
                 submodules_present = True
                 digest.update(b"<gitlink>")
@@ -988,7 +1068,7 @@ def project_state(project_path: Path) -> dict[str, Any]:
             raise ToolError(f"Cannot fingerprint non-regular untracked path: {relative}")
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        hash_regular_file(path, relative)
+        hash_regular_file(relative, relative)
         untracked.append(relative)
     return {
         "gitRoot": str(root),
@@ -1002,7 +1082,7 @@ def project_state(project_path: Path) -> dict[str, Any]:
     }
 
 
-def evidence_subject(project_path: Path, base_ref: str | None = None) -> dict[str, Any]:
+def evidence_subject(project_path: Path, base_ref: Optional[str] = None) -> dict[str, Any]:
     state = project_state(project_path)
     base = resolve_base_ref(Path(state["gitRoot"]), base_ref) if base_ref else {
         "requested": None,
@@ -1040,11 +1120,41 @@ def issue_receipt(payload: dict[str, Any]) -> str:
     return f"{encoded}.{signature}"
 
 
+def verify_signed_session_token(token: str, expected_kind: str) -> dict[str, Any]:
+    try:
+        encoded, supplied_signature = token.split(".", 1)
+        expected_signature = _b64encode(
+            hmac.new(_RECEIPT_SECRET, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("timezone-aware timestamps required")
+    except Exception as exc:
+        raise ToolError(
+            "Audit session token is malformed, expired, or was not issued by this JStack server session."
+        ) from exc
+    now = _dt.datetime.now(_dt.timezone.utc)
+    checks = {
+        "kind": payload.get("kind") == expected_kind,
+        "session": payload.get("serverSession") == SERVER_SESSION_ID,
+        "fresh": issued <= now < expires,
+        "boundedExpiry": 0 < (expires - issued).total_seconds() <= RECEIPT_MAX_AGE_SECONDS,
+    }
+    if not all(checks.values()):
+        raise ToolError("Audit session token is stale or does not match this JStack server session.")
+    return payload
+
+
 def verify_receipt(
     receipt: str,
     expected_kind: str,
     state: dict[str, Any],
-    expected_subject: dict[str, Any] | None = None,
+    expected_subject: Optional[dict[str, Any]] = None,
+    require_passed: bool = True,
 ) -> dict[str, Any]:
     try:
         encoded, supplied_signature = receipt.split(".", 1)
@@ -1053,6 +1163,13 @@ def verify_receipt(
             raise ValueError("signature mismatch")
         payload = json.loads(_b64decode(encoded).decode("utf-8"))
         issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        if issued.tzinfo is None:
+            raise ValueError("timezone-aware issuedAt required")
+        expires = None
+        if payload.get("expiresAt") is not None:
+            expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
+            if expires.tzinfo is None:
+                raise ValueError("timezone-aware expiresAt required")
     except Exception as exc:
         raise ToolError("Evidence receipt is malformed, expired, or was not issued by this JStack server session.") from exc
     age = (_dt.datetime.now(_dt.timezone.utc) - issued).total_seconds()
@@ -1063,8 +1180,13 @@ def verify_receipt(
         "gitHead": payload.get("gitHead") == state["gitHead"],
         "projectFingerprint": payload.get("projectFingerprint") == state["projectFingerprint"],
         "fresh": 0 <= age <= RECEIPT_MAX_AGE_SECONDS,
-        "passed": payload.get("passed") is True,
     }
+    if require_passed:
+        checks["passed"] = payload.get("passed") is True
+    if expires is not None:
+        now = _dt.datetime.now(_dt.timezone.utc)
+        checks["notExpired"] = issued <= now < expires
+        checks["boundedExpiry"] = 0 < (expires - issued).total_seconds() <= RECEIPT_MAX_AGE_SECONDS
     if expected_subject:
         for field in ("baseCommit", "policyDigest", "toolVersion"):
             checks[field] = payload.get(field) == expected_subject.get(field)
@@ -1097,7 +1219,7 @@ def goal_is_sensitive(goal: str, policy: dict[str, Any]) -> bool:
     return any(str(keyword).lower() in goal_l for keyword in keywords)
 
 
-def percentage_from_text(text: str, labels: list[str]) -> float | None:
+def percentage_from_text(text: str, labels: list[str]) -> Optional[float]:
     for label in labels:
         pattern = re.compile(re.escape(label) + r"[^0-9]{0,40}([0-9]+(?:\.[0-9]+)?)\s*%", re.IGNORECASE)
         match = pattern.search(text)
@@ -1225,7 +1347,11 @@ def approved_command_env(allowlist: list[str], isolated_home: Path, project_path
 
 
 def run_approved_project_command(
-    command: list[str], project_path: Path, timeout: int, env_allowlist: list[str]
+    command: list[str],
+    project_path: Path,
+    timeout: int,
+    env_allowlist: list[str],
+    fixed_env: Optional[dict[str, str]] = None,
 ) -> dict[str, Any]:
     output_limit = 1_000_000
 
@@ -1233,12 +1359,33 @@ def run_approved_project_command(
         if process.poll() is not None:
             return
         if os.name == "nt":
-            process.kill()
+            system_root = Path(os.environ.get("SystemRoot") or os.environ.get("WINDIR") or "C:/Windows")
+            taskkill = system_root / "System32" / "taskkill.exe"
+            if taskkill.is_file():
+                try:
+                    subprocess.run(
+                        [str(taskkill), "/PID", str(process.pid), "/T", "/F"],
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=5,
+                        check=False,
+                    )
+                except (OSError, subprocess.TimeoutExpired):
+                    process.kill()
+            else:
+                process.kill()
         else:
             os.killpg(process.pid, signal.SIGKILL)
 
     with tempfile.TemporaryDirectory(prefix="jstack-qa-") as temp_home:
         env = approved_command_env(env_allowlist, Path(temp_home), project_path)
+        for name, value in (fixed_env or {}).items():
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                raise ToolError(f"Invalid fixed command environment name: {name!r}")
+            if not isinstance(value, str) or "\x00" in value:
+                raise ToolError(f"Invalid fixed command environment value for {name!r}.")
+            env[name] = value
         executable = sys.executable if command[0] in {"python", "python3", "py"} else shutil.which(command[0], path=env["PATH"])
         if not executable:
             return {
@@ -1270,6 +1417,11 @@ def run_approved_project_command(
                 stderr=subprocess.PIPE,
                 env=env,
                 start_new_session=(os.name != "nt"),
+                creationflags=(
+                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                    if os.name == "nt"
+                    else 0
+                ),
             )
         except FileNotFoundError:
             return {
@@ -1313,13 +1465,24 @@ def run_approved_project_command(
                 terminate(process)
                 break
             time.sleep(0.02)
-        process.wait(timeout=5)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
         for reader in readers:
             reader.join(timeout=2)
         process.stdout.close()
         process.stderr.close()
-        stdout = stdout_buffer.decode("utf-8", errors="replace")
-        stderr = stderr_buffer.decode("utf-8", errors="replace")
+        stdout_bytes = bytes(stdout_buffer)
+        stderr_bytes = bytes(stderr_buffer)
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        stderr = stderr_bytes.decode("utf-8", errors="replace")
+        capture_evidence = {
+            "stdoutSha256": hashlib.sha256(stdout_bytes).hexdigest(),
+            "stderrSha256": hashlib.sha256(stderr_bytes).hexdigest(),
+            "capturedOutputBytes": len(stdout_bytes) + len(stderr_bytes),
+        }
         if timed_out:
             return {
                 "ok": False,
@@ -1327,6 +1490,7 @@ def run_approved_project_command(
                 "stdout": truncate(stdout),
                 "stderr": truncate(stderr + f"\nTimed out after {timeout}s; process group terminated."),
                 "args": resolved_command,
+                **capture_evidence,
             }
         if overflow.is_set():
             return {
@@ -1335,6 +1499,7 @@ def run_approved_project_command(
                 "stdout": truncate(stdout),
                 "stderr": truncate(stderr + f"\nOutput exceeded {output_limit} bytes; process group terminated."),
                 "args": resolved_command,
+                **capture_evidence,
             }
     return {
         "ok": process.returncode == 0,
@@ -1342,6 +1507,7 @@ def run_approved_project_command(
         "stdout": truncate(stdout or ""),
         "stderr": truncate(stderr or ""),
         "args": resolved_command,
+        **capture_evidence,
     }
 
 
@@ -1350,8 +1516,9 @@ def skill_files() -> list[Path]:
     jstack_root = find_jstack_root()
     if jstack_root:
         bundled = jstack_root / "skills" / "jstack-dev" / "SKILL.md"
+        audit_skill = jstack_root / "skills" / "jstack-audit" / "SKILL.md"
         direct = jstack_root / "SKILL.md"
-        for candidate in (bundled, direct):
+        for candidate in (bundled, audit_skill, direct):
             if candidate.exists() and candidate not in files:
                 files.append(candidate)
     root = find_gstack_root()
@@ -1933,7 +2100,7 @@ def roster_agent(agent_id: str) -> dict[str, Any]:
     return next(agent for agent in AGENT_ROSTER if agent["id"] == agent_id)
 
 
-def normalize_team_mode(team_mode: str | None) -> str:
+def normalize_team_mode(team_mode: Optional[str]) -> str:
     normalized = (team_mode or "auto").strip().lower().replace("_", "-")
     aliases = {
         "single": "single-lead",
@@ -1958,7 +2125,7 @@ def choose_agent_team(
     goal: str,
     classifications: list[dict[str, Any]],
     quality_level: str = "enterprise",
-    team_mode: str | None = "auto",
+    team_mode: Optional[str] = "auto",
 ) -> dict[str, Any]:
     mode_requested = normalize_team_mode(team_mode)
     classification_ids = {item["id"] for item in classifications}
@@ -2278,47 +2445,105 @@ def task_anti_slop_checklist(classifications: list[dict[str, Any]]) -> list[str]
     return checklist
 
 
-def curriculum_candidates() -> list[Path]:
+MASTERY_TRACKS = {"engineering", "audit"}
+
+
+def normalize_mastery_track(value: Any = None) -> str:
+    track = str(value or "engineering").strip().lower()
+    if track not in MASTERY_TRACKS:
+        raise ToolError("track must be engineering or audit.")
+    return track
+
+
+def curriculum_candidates(track: str = "engineering") -> list[Path]:
+    track = normalize_mastery_track(track)
     server_dir = Path(__file__).resolve().parent
+    filename = "curriculum.v1.json" if track == "engineering" else "audit-curriculum.v1.json"
+    env_name = "JSTACK_CURRICULUM" if track == "engineering" else "JSTACK_AUDIT_CURRICULUM"
     candidates = [
-        Path(os.environ["JSTACK_CURRICULUM"]).expanduser() if os.environ.get("JSTACK_CURRICULUM") else None,
-        server_dir / "mastery" / "curriculum.v1.json",
-        server_dir.parent / "mastery" / "curriculum.v1.json",
-        server_dir.parents[1] / "mastery" / "curriculum.v1.json",
+        Path(os.environ[env_name]).expanduser() if os.environ.get(env_name) else None,
+        server_dir / "mastery" / filename,
+        server_dir.parent / "mastery" / filename,
+        server_dir.parents[1] / "mastery" / filename,
     ]
     return [path.resolve() for path in candidates if path is not None]
 
 
-def load_mastery_curriculum() -> dict[str, Any]:
-    for path in curriculum_candidates():
+def load_mastery_curriculum(track: str = "engineering") -> dict[str, Any]:
+    track = normalize_mastery_track(track)
+    expected_schema = (
+        "jstack.mastery.curriculum.v1"
+        if track == "engineering"
+        else "jstack.audit.mastery.curriculum.v1"
+    )
+    for path in curriculum_candidates(track):
         if not path.exists():
             continue
         curriculum = read_json(path)
-        if not curriculum or curriculum.get("schemaVersion") != "jstack.mastery.curriculum.v1":
+        if not curriculum or curriculum.get("schemaVersion") != expected_schema:
             raise ToolError(f"Invalid JStack mastery curriculum: {path}")
         stages = curriculum.get("stages")
         if not isinstance(stages, list) or [item.get("stage") for item in stages if isinstance(item, dict)] != list(range(10)):
             raise ToolError(f"JStack mastery curriculum must define ordered stages 0 through 9: {path}")
-        if not isinstance(curriculum.get("domainStageMap"), dict):
+        if track == "engineering" and not isinstance(curriculum.get("domainStageMap"), dict):
             raise ToolError(f"JStack mastery curriculum is missing domainStageMap: {path}")
         curriculum["_sourcePath"] = str(path)
         return curriculum
-    raise ToolError("JStack mastery curriculum is missing. Reinstall JStack from a complete package.")
+    raise ToolError(f"JStack {track} mastery curriculum is missing. Reinstall JStack from a complete package.")
+
+
+def mastery_curriculum_digest(curriculum: dict[str, Any]) -> str:
+    public = {key: value for key, value in curriculum.items() if not key.startswith("_")}
+    return hashlib.sha256(
+        json.dumps(public, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def mastery_profile_path() -> Path:
     return Path.home() / ".jstack" / "mastery" / "profile.json"
 
 
-def default_mastery_profile() -> dict[str, Any]:
+def default_mastery_track() -> dict[str, Any]:
     return {
-        "schemaVersion": "jstack.mastery.profile.v1",
-        "createdAt": None,
-        "updatedAt": None,
         "currentStage": 0,
         "completedStages": [],
         "attempts": [],
     }
+
+
+def default_mastery_profile() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.mastery.profile.v2",
+        "createdAt": None,
+        "updatedAt": None,
+        "learnerName": "Jay",
+        "activeTrack": "engineering",
+        "tracks": {
+            "engineering": default_mastery_track(),
+            "audit": default_mastery_track(),
+        },
+    }
+
+
+def migrate_mastery_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    if profile.get("schemaVersion") == "jstack.mastery.profile.v2":
+        return profile
+    if profile.get("schemaVersion") != "jstack.mastery.profile.v1":
+        raise ToolError(f"Unsupported JStack mastery profile schema: {profile.get('schemaVersion')!r}")
+    migrated = default_mastery_profile()
+    migrated["createdAt"] = profile.get("createdAt")
+    migrated["updatedAt"] = now_iso()
+    migrated["learnerName"] = str(profile.get("learnerName") or "Jay")
+    migrated["tracks"]["engineering"] = {
+        "currentStage": int(profile.get("currentStage", 0)),
+        "completedStages": list(profile.get("completedStages") or []),
+        "attempts": list(profile.get("attempts") or []),
+    }
+    migrated["migration"] = {
+        "fromSchema": "jstack.mastery.profile.v1",
+        "migratedAt": migrated["updatedAt"],
+    }
+    return migrated
 
 
 def load_mastery_profile() -> dict[str, Any]:
@@ -2326,20 +2551,37 @@ def load_mastery_profile() -> dict[str, Any]:
     if not path.exists():
         return default_mastery_profile()
     profile = read_json(path)
-    if not profile or profile.get("schemaVersion") != "jstack.mastery.profile.v1":
+    if not profile:
         raise ToolError(f"Invalid JStack mastery profile: {path}")
-    if not isinstance(profile.get("attempts"), list) or not isinstance(profile.get("currentStage"), int):
+    if profile.get("schemaVersion") == "jstack.mastery.profile.v1":
+        profile = migrate_mastery_profile(profile)
+        atomic_write_json(path, profile)
+    if profile.get("schemaVersion") != "jstack.mastery.profile.v2":
+        raise ToolError(f"Invalid JStack mastery profile: {path}")
+    tracks = profile.get("tracks")
+    if not isinstance(tracks, dict) or set(tracks) != MASTERY_TRACKS:
         raise ToolError(f"Malformed JStack mastery profile: {path}")
+    for track in MASTERY_TRACKS:
+        state = tracks.get(track)
+        if not isinstance(state, dict) or not isinstance(state.get("attempts"), list) or not isinstance(state.get("currentStage"), int):
+            raise ToolError(f"Malformed JStack mastery profile track '{track}': {path}")
+    normalize_mastery_track(profile.get("activeTrack"))
     return profile
 
 
-def curriculum_stage(stage_number: int) -> dict[str, Any]:
-    curriculum = load_mastery_curriculum()
+def mastery_track_state(profile: dict[str, Any], track: str) -> dict[str, Any]:
+    return profile["tracks"][normalize_mastery_track(track)]
+
+
+def curriculum_stage(stage_number: int, track: str = "engineering") -> dict[str, Any]:
+    curriculum = load_mastery_curriculum(track)
     return next(stage for stage in curriculum["stages"] if stage["stage"] == stage_number)
 
 
-def advancement_status(profile: dict[str, Any], stage_number: int) -> dict[str, Any]:
-    attempts = [item for item in profile.get("attempts", []) if item.get("stage") == stage_number]
+def advancement_status(profile: dict[str, Any], stage_number: int, track: str = "engineering") -> dict[str, Any]:
+    track = normalize_mastery_track(track)
+    state = mastery_track_state(profile, track)
+    attempts = [item for item in state.get("attempts", []) if item.get("stage") == stage_number]
     eligible = [
         item
         for item in attempts
@@ -2365,11 +2607,30 @@ def advancement_status(profile: dict[str, Any], stage_number: int) -> dict[str, 
         requirement = "Three independent attempts across two commits, each at least 80 and mean at least 85, including implementation and audit."
     else:
         recent = eligible[-2:]
-        passed = (
+        base_passed = (
             len(recent) == 2
             and all(item.get("score", 0) >= 90 and item.get("blindCapstone") is True for item in recent)
         )
-        requirement = "Two independent blind capstones scoring at least 90 with all capstone hard gates satisfied."
+        if track == "audit":
+            challenge_digests = {
+                item.get("capstoneAttestation", {}).get("challengeDigest") for item in recent
+            }
+            passed = (
+                base_passed
+                and all(
+                    item.get("capstoneAttestation", {}).get("valid") is True
+                    for item in recent
+                )
+                and None not in challenge_digests
+                and len(challenge_digests) == 2
+            )
+            requirement = (
+                "Two independently attested blind capstones on distinct challenge subjects, "
+                "each scoring at least 90 with all capstone hard gates satisfied."
+            )
+        else:
+            passed = base_passed
+            requirement = "Two independent blind capstones scoring at least 90 with all capstone hard gates satisfied."
     return {
         "passed": passed,
         "requirement": requirement,
@@ -2382,9 +2643,10 @@ def build_task_training(
     goal: str, classifications: list[dict[str, Any]], required_gates: list[str], learning_mode: str
 ) -> dict[str, Any]:
     profile = load_mastery_profile()
-    learner_stage_number = max(0, min(9, int(profile.get("currentStage", 0))))
+    engineering = mastery_track_state(profile, "engineering")
+    learner_stage_number = max(0, min(9, int(engineering.get("currentStage", 0))))
     task_domain_stage_number = choose_mastery_stage(goal, classifications)
-    stage = curriculum_stage(learner_stage_number)
+    stage = curriculum_stage(learner_stage_number, "engineering")
     first_drill = stage.get("drills", [{}])[0]
     guidance = {
         "learningObjective": stage["outcome"],
@@ -2415,7 +2677,8 @@ def build_task_training(
             "scale": OPERATOR_SCORE_SCALE,
             "rule": "Score only from observed evidence after the task: orientation, implementation, verification, review judgment, and ability to explain the tradeoffs.",
         },
-        "advancement": advancement_status(profile, learner_stage_number),
+        "masteryTrack": "engineering",
+        "advancement": advancement_status(profile, learner_stage_number, "engineering"),
         "instructionContract": {
             "embedded": "After the engineering result, include at most one mental model, one decision checkpoint, and one next drill in three lines.",
             "coach": "Explain decisions interactively while preserving the full engineering gates.",
@@ -2426,7 +2689,8 @@ def build_task_training(
 
 
 def mastery_system() -> dict[str, Any]:
-    curriculum = load_mastery_curriculum()
+    curriculum = load_mastery_curriculum("engineering")
+    audit_curriculum = load_mastery_curriculum("audit")
     return {
         "standard": "Enterprise professional development: evidence-driven, source-backed, production-safe, and designed to train Jay from operator fundamentals to staff-level execution.",
         "schemaVersion": curriculum["schemaVersion"],
@@ -2436,40 +2700,66 @@ def mastery_system() -> dict[str, Any]:
         "scoring": curriculum["scoring"],
         "operatorScoreScale": OPERATOR_SCORE_SCALE,
         "antiSlopBase": ANTI_SLOP_BASE,
+        "tracks": {
+            "engineering": {
+                "schemaVersion": curriculum["schemaVersion"],
+                "sourcePath": curriculum["_sourcePath"],
+                "digest": mastery_curriculum_digest(curriculum),
+            },
+            "audit": {
+                "schemaVersion": audit_curriculum["schemaVersion"],
+                "sourcePath": audit_curriculum["_sourcePath"],
+                "digest": mastery_curriculum_digest(audit_curriculum),
+            },
+        },
     }
 
 
 def tool_mastery_status(args: dict[str, Any]) -> dict[str, Any]:
+    track = normalize_mastery_track(args.get("track"))
     profile = load_mastery_profile()
-    current = max(0, min(9, int(profile.get("currentStage", 0))))
-    curriculum = load_mastery_curriculum()
+    state = mastery_track_state(profile, track)
+    current = max(0, min(9, int(state.get("currentStage", 0))))
+    curriculum = load_mastery_curriculum(track)
     stage = next(item for item in curriculum["stages"] if item["stage"] == current)
     return {
         "initialized": mastery_profile_path().exists(),
         "profilePath": str(mastery_profile_path()),
+        "profileSchemaVersion": profile["schemaVersion"],
+        "activeTrack": profile["activeTrack"],
+        "track": track,
         "currentStage": stage,
-        "completedStages": profile.get("completedStages", []),
-        "attemptCount": len(profile.get("attempts", [])),
-        "advancement": advancement_status(profile, current),
+        "completedStages": state.get("completedStages", []),
+        "attemptCount": len(state.get("attempts", [])),
+        "advancement": advancement_status(profile, current, track),
         "nextDrill": stage["drills"][0] if stage.get("drills") else None,
         "curriculumSource": curriculum["_sourcePath"],
+        "curriculumDigest": mastery_curriculum_digest(curriculum),
         "recordType": "Local deliberate-practice record; it is not an external credential or certification.",
     }
 
 
 def tool_mastery_start(args: dict[str, Any]) -> dict[str, Any]:
+    track = normalize_mastery_track(args.get("track"))
     path = mastery_profile_path()
     if path.exists():
-        return {"created": False, "status": tool_mastery_status({})}
+        profile = load_mastery_profile()
+        if profile["activeTrack"] != track:
+            profile["activeTrack"] = track
+            profile["updatedAt"] = now_iso()
+            atomic_write_json(path, profile)
+        return {"created": False, "status": tool_mastery_status({"track": track})}
     profile = default_mastery_profile()
     profile["createdAt"] = now_iso()
     profile["updatedAt"] = profile["createdAt"]
     profile["learnerName"] = str(args.get("learner_name") or "Jay").strip() or "Jay"
+    profile["activeTrack"] = track
     atomic_write_json(path, profile)
-    return {"created": True, "status": tool_mastery_status({})}
+    return {"created": True, "status": tool_mastery_status({"track": track})}
 
 
 def hash_mastery_artifact(project_path: Path, raw_path: str) -> dict[str, Any]:
+    project_path = project_path.resolve()
     candidate = Path(raw_path).expanduser()
     if not candidate.is_absolute():
         candidate = project_path / candidate
@@ -2480,39 +2770,77 @@ def hash_mastery_artifact(project_path: Path, raw_path: str) -> dict[str, Any]:
         relative = resolved.relative_to(project_path).as_posix()
     except ValueError as exc:
         raise ToolError(f"Mastery artifact must be inside the project: {raw_path}") from exc
-    digest = hashlib.sha256()
-    total = 0
-    if resolved.is_file():
-        content = resolved.read_bytes()
-        total = len(content)
-        if total > 10_000_000:
-            raise ToolError(f"Mastery artifact exceeds 10 MB: {raw_path}")
-        digest.update(content)
-        kind = "file"
-    elif resolved.is_dir():
-        kind = "directory"
-        found = False
-        for root, dirs, files in os.walk(resolved, followlinks=False):
-            for directory in dirs:
-                if (Path(root) / directory).is_symlink():
-                    raise ToolError(f"Mastery artifact directory contains a symlink: {raw_path}")
-            for filename in sorted(files):
-                file_path = Path(root) / filename
-                if file_path.is_symlink() or not file_path.is_file():
-                    raise ToolError(f"Mastery artifact directory contains a non-regular file: {raw_path}")
-                content = file_path.read_bytes()
-                total += len(content)
-                if total > 20_000_000:
-                    raise ToolError(f"Mastery artifact directory exceeds 20 MB: {raw_path}")
-                digest.update(file_path.relative_to(resolved).as_posix().encode("utf-8"))
-                digest.update(b"\0")
-                digest.update(hashlib.sha256(content).digest())
-                found = True
-        if not found:
-            raise ToolError(f"Mastery artifact directory is empty: {raw_path}")
+    expected_file = resolved.is_file()
+    try:
+        inventory = audit_core.inventory_repository(
+            project_path,
+            [relative],
+            max_files=1000,
+            max_bytes=10_000_000 if expected_file else 20_000_000,
+            max_seconds=30,
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(f"Mastery artifact could not be inventoried safely: {raw_path}") from exc
+    if inventory.get("complete") is not True:
+        raise ToolError(f"Mastery artifact is unreadable, unsafe, or exceeds its limits: {raw_path}")
+    files = inventory.get("files") or []
+    if not files:
+        raise ToolError(f"Mastery artifact directory is empty: {raw_path}")
+    exact = len(files) == 1 and files[0].get("path") == relative
+    kind = "file" if exact else "directory"
+    total = int(inventory.get("totalBytes") or 0)
+    if kind == "file" and total > 10_000_000:
+        raise ToolError(f"Mastery artifact exceeds 10 MB: {raw_path}")
+    if kind == "file":
+        digest_value = str(files[0]["sha256"])
     else:
-        raise ToolError(f"Mastery artifact does not exist or is not regular: {raw_path}")
-    return {"path": relative, "kind": kind, "sha256": digest.hexdigest(), "bytes": total}
+        digest = hashlib.sha256()
+        for item in files:
+            nested = str(item["path"])
+            prefix = relative.rstrip("/") + "/"
+            if not nested.startswith(prefix):
+                raise ToolError(f"Mastery artifact inventory escaped its directory: {raw_path}")
+            digest.update(nested[len(prefix) :].encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(bytes.fromhex(str(item["sha256"])))
+        digest_value = digest.hexdigest()
+    return {"path": relative, "kind": kind, "sha256": digest_value, "bytes": total}
+
+
+def load_mastery_json_artifact(project_path: Path, artifact: dict[str, Any]) -> dict[str, Any]:
+    if artifact.get("kind") != "file":
+        raise ToolError("Mastery benchmark evaluation must be a regular JSON file.")
+    relative = str(artifact.get("path") or "")
+    try:
+        content = audit_core.read_repository_file(
+            project_path,
+            relative,
+            max_bytes=10_000_000,
+            max_seconds=30,
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError("Mastery benchmark evaluation could not be read safely.") from exc
+    if (
+        len(content) != artifact.get("bytes")
+        or hashlib.sha256(content).hexdigest() != artifact.get("sha256")
+    ):
+        raise ToolError("Mastery benchmark evaluation changed after artifact hashing.")
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ToolError("Mastery benchmark evaluation contains a duplicate JSON key.")
+            value[key] = item
+        return value
+
+    try:
+        parsed = json.loads(content.decode("utf-8"), object_pairs_hook=reject_duplicates)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ToolError("Mastery benchmark evaluation must be valid UTF-8 JSON.") from exc
+    if not isinstance(parsed, dict):
+        raise ToolError("Mastery benchmark evaluation must contain a JSON object.")
+    return parsed
 
 
 def score_level(score: float) -> int:
@@ -2527,21 +2855,147 @@ def score_level(score: float) -> int:
     return 4
 
 
+def mastery_attempt_evidence_digest(
+    track: str,
+    stage_number: int,
+    drill_id: str,
+    assistance: str,
+    assessor: str,
+    citations: list[str],
+    component_scores: dict[str, float],
+    artifacts: dict[str, dict[str, Any]],
+    state: dict[str, Any],
+    benchmark_evaluation: Optional[dict[str, Any]],
+) -> str:
+    return audit_json_digest(
+        {
+            "track": track,
+            "stage": stage_number,
+            "drillId": drill_id,
+            "assistanceLevel": assistance,
+            "assessor": assessor,
+            "assessorCitations": citations,
+            "assessment": component_scores,
+            "artifacts": artifacts,
+            "projectState": {
+                "gitRoot": state.get("gitRoot"),
+                "gitHead": state.get("gitHead"),
+                "projectFingerprint": state.get("projectFingerprint"),
+            },
+            "benchmarkEvaluationDigest": (
+                benchmark_evaluation.get("evaluationDigest")
+                if benchmark_evaluation is not None
+                else None
+            ),
+        }
+    )
+
+
+def verify_audit_capstone_attestation(
+    raw_attestation: Any,
+    expected_assessor: str,
+    expected_attempt_digest: str,
+    expected_evaluation_digest: str,
+) -> dict[str, Any]:
+    required = {
+        "schemaVersion",
+        "assessorId",
+        "challengeId",
+        "challengeDigest",
+        "attemptEvidenceDigest",
+        "evaluationDigest",
+        "issuedAt",
+        "expiresAt",
+        "blind",
+        "independent",
+        "signature",
+    }
+    if not isinstance(raw_attestation, dict) or set(raw_attestation) != required:
+        return {"valid": False, "reason": "malformed"}
+    body = {key: raw_attestation[key] for key in sorted(required - {"signature"})}
+    signature = str(raw_attestation.get("signature") or "")
+    key_value = os.environ.get(AUDIT_CAPSTONE_ASSESSOR_KEY_ENV, "")
+    checks: dict[str, bool] = {
+        "schema": body.get("schemaVersion") == AUDIT_CAPSTONE_ATTESTATION_SCHEMA,
+        "assessor": body.get("assessorId") == expected_assessor,
+        "challengeId": bool(
+            re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", str(body.get("challengeId") or ""))
+        ),
+        "challengeDigest": bool(
+            re.fullmatch(r"sha256:[0-9a-f]{64}", str(body.get("challengeDigest") or ""))
+        ),
+        "attemptEvidenceDigest": body.get("attemptEvidenceDigest") == expected_attempt_digest,
+        "evaluationDigest": body.get("evaluationDigest") == expected_evaluation_digest,
+        "blind": body.get("blind") is True,
+        "independent": body.get("independent") is True,
+        "keyConfigured": len(key_value.encode("utf-8")) >= 32,
+        "signatureFormat": bool(re.fullmatch(r"sha256:[0-9a-f]{64}", signature)),
+    }
+    try:
+        issued = _dt.datetime.fromisoformat(str(body["issuedAt"]).replace("Z", "+00:00"))
+        expires = _dt.datetime.fromisoformat(str(body["expiresAt"]).replace("Z", "+00:00"))
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("timezone required")
+        issued = issued.astimezone(_dt.timezone.utc)
+        expires = expires.astimezone(_dt.timezone.utc)
+        now = _dt.datetime.now(_dt.timezone.utc)
+        checks["timeWindow"] = (
+            issued <= now < expires
+            and 0 < (expires - issued).total_seconds()
+            <= AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS
+        )
+    except (KeyError, TypeError, ValueError):
+        checks["timeWindow"] = False
+    if checks["keyConfigured"] and checks["signatureFormat"]:
+        message = json.dumps(
+            body,
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        expected_signature = "sha256:" + hmac.new(
+            key_value.encode("utf-8"), message, hashlib.sha256
+        ).hexdigest()
+        checks["signature"] = hmac.compare_digest(signature, expected_signature)
+    else:
+        checks["signature"] = False
+    valid = all(checks.values())
+    return {
+        "valid": valid,
+        "reason": "verified" if valid else "attestation-check-failed",
+        "schemaVersion": body.get("schemaVersion"),
+        "assessorId": body.get("assessorId"),
+        "challengeId": body.get("challengeId"),
+        "challengeDigest": body.get("challengeDigest"),
+        "attemptEvidenceDigest": body.get("attemptEvidenceDigest"),
+        "evaluationDigest": body.get("evaluationDigest"),
+        "issuedAt": body.get("issuedAt"),
+        "expiresAt": body.get("expiresAt"),
+        "blind": body.get("blind") is True,
+        "independent": body.get("independent") is True,
+        "attestationDigest": audit_json_digest(body),
+        "checks": checks,
+    }
+
+
 def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     if not mastery_profile_path().exists():
         raise ToolError("Start the mastery system with jstack_mastery_start before recording an attempt.")
     project_path = require_project_path(args.get("project_path"))
+    track = normalize_mastery_track(args.get("track"))
     profile = load_mastery_profile()
+    track_state = mastery_track_state(profile, track)
     stage_number = int(args.get("stage", -1))
-    if stage_number != profile["currentStage"]:
-        raise ToolError(f"Attempt stage must match current learner stage {profile['currentStage']}.")
-    stage = curriculum_stage(stage_number)
+    if stage_number != track_state["currentStage"]:
+        raise ToolError(f"Attempt stage must match current {track} learner stage {track_state['currentStage']}.")
+    stage = curriculum_stage(stage_number, track)
     drill_id = str(args.get("drill_id") or "").strip()
     drill = next((item for item in stage.get("drills", []) if item.get("id") == drill_id), None)
     if not drill:
         raise ToolError(f"Unknown drill_id for stage {stage_number}: {drill_id}")
     assistance = str(args.get("assistance_level") or "").strip()
-    curriculum = load_mastery_curriculum()
+    curriculum = load_mastery_curriculum(track)
     caps = curriculum["scoring"]["assistanceCaps"]
     if assistance not in caps:
         raise ToolError("assistance_level must be observed, guided, checklist, independent, or independent_teach.")
@@ -2576,8 +3030,44 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         requirement: hash_mastery_artifact(project_path, str(artifacts_arg[requirement]))
         for requirement in stage.get("requiredArtifacts", [])
     }
+    benchmark_evaluation = None
+    if track == "audit" and stage_number == 9:
+        if args.get("capstone_results") not in (None, {}):
+            raise ToolError(
+                "Audit Stage 9 does not accept caller-supplied aggregate capstone_results; "
+                "metrics are derived from the evaluation-results.json benchmark submissions."
+            )
+        evaluation = load_mastery_json_artifact(
+            project_path,
+            artifacts["evaluation-results.json"],
+        )
+        try:
+            benchmark_evaluation = audit_core.score_benchmark_evaluation(evaluation)
+        except audit_core.AuditError as exc:
+            raise ToolError(f"Audit Stage 9 benchmark evaluation is invalid: {exc}") from exc
 
     state = project_state(project_path)
+    capstone_attestation = None
+    if track == "audit" and stage_number == 9:
+        assert benchmark_evaluation is not None
+        attempt_digest = mastery_attempt_evidence_digest(
+            track,
+            stage_number,
+            drill_id,
+            assistance,
+            assessor,
+            citations,
+            component_scores,
+            artifacts,
+            state,
+            benchmark_evaluation,
+        )
+        capstone_attestation = verify_audit_capstone_attestation(
+            args.get("assessor_attestation"),
+            assessor,
+            attempt_digest,
+            str(benchmark_evaluation["evaluationDigest"]),
+        )
     hard_blocks = [str(item) for item in (args.get("hard_gate_failures") or []) if str(item).strip()]
     if stage_number == 0:
         artifact_paths = [item["path"] for item in artifacts.values()]
@@ -2613,19 +3103,78 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             security_verification = verify_receipt(security_receipt, "security", state)
             if not security_verification["valid"]:
                 hard_blocks.append("Stage 7+ security receipt is invalid or stale.")
-    blind_capstone = bool(args.get("blind_capstone") or False)
+    audit_verification = None
+    if track == "audit" and stage_number >= 8:
+        audit_receipt = str(args.get("audit_receipt") or "").strip()
+        if not audit_receipt:
+            hard_blocks.append("Audit Stage 8+ attempt requires a current complete audit receipt.")
+        else:
+            audit_verification = verify_receipt(
+                audit_receipt,
+                "audit",
+                state,
+                require_passed=False,
+            )
+            payload = audit_verification.get("payload") or {}
+            if (
+                not audit_verification["valid"]
+                or payload.get("complete") is not True
+                or payload.get("resultStatus") not in {"pass", "fail"}
+            ):
+                hard_blocks.append("Audit Stage 8+ receipt is invalid, stale, or incomplete.")
+    blind_capstone = (
+        capstone_attestation is not None
+        and capstone_attestation.get("valid") is True
+        and capstone_attestation.get("blind") is True
+        if track == "audit" and stage_number == 9
+        else bool(args.get("blind_capstone") or False)
+    )
     if stage_number == 9:
-        capstone = args.get("capstone_results") or {}
-        p0_total = int(capstone.get("p0_total") or 0)
-        p0_found = int(capstone.get("p0_found") or 0)
-        p1_total = int(capstone.get("p1_total") or 0)
-        p1_found = int(capstone.get("p1_found") or 0)
-        if not blind_capstone or p0_total <= 0 or p0_found != p0_total:
-            hard_blocks.append("Stage 9 capstone must be blind and catch every seeded P0 finding.")
-        if p1_total <= 0 or p1_found / p1_total < 0.8:
-            hard_blocks.append("Stage 9 capstone must catch at least 80 percent of seeded P1 findings.")
-        if capstone.get("release_decision_correct") is not True:
-            hard_blocks.append("Stage 9 capstone requires the correct release go/no-go decision.")
+        if track == "audit":
+            assert benchmark_evaluation is not None
+            metrics = benchmark_evaluation["primary"]["metrics"]
+            if capstone_attestation is None or capstone_attestation.get("valid") is not True:
+                hard_blocks.append(
+                    "Audit Stage 9 requires a current independently signed assessor attestation bound to the exact attempt and unseen challenge subject."
+                )
+            if not blind_capstone or metrics["p0Total"] <= 0 or metrics["p0Found"] != metrics["p0Total"]:
+                hard_blocks.append("Stage 9 capstone must be blind and catch every seeded P0 finding.")
+            if metrics["p1Total"] <= 0 or metrics["p1Found"] / metrics["p1Total"] < 0.8:
+                hard_blocks.append("Stage 9 capstone must catch at least 80 percent of seeded P1 findings.")
+            if metrics["releaseDecisionCorrect"] is not True:
+                hard_blocks.append("Stage 9 capstone requires the correct release go/no-go decision.")
+            if metrics["coverage"] != 1.0:
+                hard_blocks.append("Audit Stage 9 capstone requires 100 percent scored fixture coverage.")
+            if metrics["coverageClassificationCorrect"] is not True:
+                hard_blocks.append(
+                    "Audit Stage 9 capstone must report unsupported and complete coverage classifications exactly."
+                )
+            if metrics["severityUnderRanked"] != 0 or metrics["priorityMiscalibrated"] != 0:
+                hard_blocks.append(
+                    "Audit Stage 9 capstone may not under-rank seeded severity or miscalibrate seeded priority."
+                )
+            if metrics["precision"] < 0.8:
+                hard_blocks.append("Audit Stage 9 capstone requires precision of at least 80 percent.")
+            if metrics["duplicateRate"] > 0.05:
+                hard_blocks.append("Audit Stage 9 capstone duplicate rate may not exceed 5 percent.")
+            if metrics["falseP0"] != 0:
+                hard_blocks.append("Audit Stage 9 capstone permits no false-P0 findings.")
+            if benchmark_evaluation["deterministicEquivalent"] is not True:
+                hard_blocks.append("Audit Stage 9 capstone requires deterministic repeated results.")
+            for code in benchmark_evaluation["failureCodes"]:
+                hard_blocks.append(f"Audit Stage 9 benchmark gate failed: {code}.")
+        else:
+            capstone = args.get("capstone_results") or {}
+            p0_total = int(capstone.get("p0_total") or 0)
+            p0_found = int(capstone.get("p0_found") or 0)
+            p1_total = int(capstone.get("p1_total") or 0)
+            p1_found = int(capstone.get("p1_found") or 0)
+            if not blind_capstone or p0_total <= 0 or p0_found != p0_total:
+                hard_blocks.append("Stage 9 capstone must be blind and catch every seeded P0 finding.")
+            if p1_total <= 0 or p1_found / p1_total < 0.8:
+                hard_blocks.append("Stage 9 capstone must catch at least 80 percent of seeded P1 findings.")
+            if capstone.get("release_decision_correct") is not True:
+                hard_blocks.append("Stage 9 capstone requires the correct release go/no-go decision.")
 
     eligible = (
         not hard_blocks
@@ -2635,6 +3184,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     )
     attempt = {
         "attemptedAt": now_iso(),
+        "track": track,
         "stage": stage_number,
         "drillId": drill_id,
         "exerciseType": drill["type"],
@@ -2649,26 +3199,32 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "projectState": state,
         "qaEvidence": qa_verifications,
         "securityEvidence": security_verification,
+        "auditEvidence": audit_verification,
+        "curriculumDigest": mastery_curriculum_digest(curriculum),
+        "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
+        "benchmarkEvaluation": benchmark_evaluation,
+        "capstoneAttestation": capstone_attestation,
         "hardGateFailures": list(dict.fromkeys(hard_blocks)),
         "blindCapstone": blind_capstone,
         "eligibleForAdvancement": eligible,
     }
-    profile["attempts"].append(attempt)
-    profile["attempts"] = profile["attempts"][-500:]
-    advancement = advancement_status(profile, stage_number)
-    if advancement["passed"] and stage_number not in profile["completedStages"]:
-        profile["completedStages"].append(stage_number)
+    track_state["attempts"].append(attempt)
+    track_state["attempts"] = track_state["attempts"][-500:]
+    advancement = advancement_status(profile, stage_number, track)
+    if advancement["passed"] and stage_number not in track_state["completedStages"]:
+        track_state["completedStages"].append(stage_number)
         if stage_number < 9:
-            profile["currentStage"] = stage_number + 1
+            track_state["currentStage"] = stage_number + 1
         else:
-            profile["masteredAt"] = now_iso()
+            track_state["masteredAt"] = now_iso()
+    profile["activeTrack"] = track
     profile["updatedAt"] = now_iso()
     atomic_write_json(mastery_profile_path(), profile)
     return {
         "recorded": True,
         "attempt": attempt,
         "advanced": advancement["passed"],
-        "status": tool_mastery_status({}),
+        "status": tool_mastery_status({"track": track}),
         "recordType": "Local deliberate-practice record; advancement is only as trustworthy as the independent assessor evidence.",
     }
 
@@ -3410,6 +3966,1305 @@ def tool_security_audit(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def audit_json_digest(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def audit_enforce_json_limit(value: Any, label: str, maximum: int) -> None:
+    try:
+        size = len(
+            json.dumps(
+                value,
+                ensure_ascii=True,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"{label} must be canonical JSON data.") from exc
+    if size > maximum:
+        raise ToolError(f"{label} exceeds the {maximum}-byte safety limit.")
+
+
+def audit_reject_secret_values(value: Any, label: str) -> None:
+    if isinstance(value, str):
+        if audit_core.contains_secret_like(value):
+            raise ToolError(
+                f"{label} contains a secret-like value. Submit only a redacted classification and source location."
+            )
+        return
+    if isinstance(value, dict):
+        for child in value.values():
+            audit_reject_secret_values(child, label)
+        return
+    if isinstance(value, list):
+        for child in value:
+            audit_reject_secret_values(child, label)
+
+
+def audit_public_policy(project_path: Path) -> tuple[dict[str, Any], str]:
+    policy = load_enterprise_policy(project_path)
+    public = {key: value for key, value in policy.items() if not key.startswith("_")}
+    return policy, audit_json_digest(public).split(":", 1)[1]
+
+
+def audit_git_inventory_paths(project_path: Path) -> list[str]:
+    result = run_complete(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        project_path,
+        timeout=30,
+        max_bytes=20_000_000,
+    )
+    if not result["ok"]:
+        raise ToolError(f"Could not enumerate the Git audit scope: {result['stderr']}")
+    paths: list[str] = []
+    for raw in result["stdout"].split(b"\0"):
+        if not raw:
+            continue
+        try:
+            relative = raw.decode("utf-8", errors="strict").replace("\\", "/")
+            relative = audit_core.normalize_repo_path(relative, "git audit path")
+        except (UnicodeDecodeError, audit_core.AuditError) as exc:
+            raise ToolError("Git returned an audit path that cannot be represented safely.") from exc
+        candidate = project_path / relative
+        if candidate.is_file() or candidate.is_symlink():
+            paths.append(relative)
+    return sorted(set(paths))
+
+
+def audit_effective_scope(
+    project_path: Path,
+    evidence_mode: str,
+    profile: str,
+    requested_scope: Any,
+    base_ref: Optional[str],
+) -> tuple[str, list[str], list[str]]:
+    if requested_scope is not None:
+        try:
+            normalized_request = audit_core.normalize_scope(requested_scope)
+        except audit_core.AuditError as exc:
+            raise ToolError(str(exc)) from exc
+        if profile == "release":
+            if normalized_request != ["."]:
+                raise ToolError(
+                    "Release audits require repository scope; a caller-selected partial scope cannot certify a release."
+                )
+            scope_mode = "repository"
+        else:
+            scope_mode = "explicit"
+    elif evidence_mode == "git" and profile == "quick":
+        normalized_request = []
+        scope_mode = "changed"
+    else:
+        normalized_request = ["."]
+        scope_mode = "repository"
+
+    if evidence_mode != "git":
+        return scope_mode, normalized_request or ["."], normalized_request or ["."]
+
+    all_paths = audit_git_inventory_paths(project_path)
+    if scope_mode == "changed":
+        changed = git_change_evidence(project_path, base_ref)["files"]
+        effective = [path for path in changed if path in set(all_paths)]
+        if not effective:
+            effective = all_paths
+        return scope_mode, ["<current-delta>"], effective or ["jstack.enterprise.json"]
+    if normalized_request == ["."]:
+        return scope_mode, normalized_request, all_paths or ["jstack.enterprise.json"]
+
+    expanded: list[str] = []
+    for requested in normalized_request:
+        exact = requested in all_paths
+        prefix = requested.rstrip("/") + "/"
+        matches = [path for path in all_paths if path.startswith(prefix)]
+        if exact:
+            expanded.append(requested)
+        expanded.extend(matches)
+        if not exact and not matches:
+            expanded.append(requested)
+    return scope_mode, normalized_request, sorted(set(expanded))
+
+
+def audit_release_range_digest(project_path: Path, base_ref: Optional[str]) -> Optional[str]:
+    if not base_ref:
+        return None
+    evidence = git_change_evidence(project_path, base_ref)
+    head = run_complete(
+        ["git", "rev-parse", "HEAD"],
+        project_path,
+        timeout=10,
+        max_bytes=4096,
+    )
+    if not head["ok"]:
+        raise ToolError("Could not bind the audit release range to HEAD.")
+    return audit_json_digest(
+        {
+            "baseCommit": evidence.get("baseCommit"),
+            "gitHead": head["stdout"].decode("ascii", errors="strict").strip(),
+            "files": sorted(set(evidence.get("files") or [])),
+        }
+    )
+
+
+def audit_inventory_summary(inventory: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schemaVersion": inventory.get("schemaVersion"),
+        "scopeManifestDigest": inventory.get("scopeManifestDigest"),
+        "fileCount": inventory.get("fileCount"),
+        "totalBytes": inventory.get("totalBytes"),
+        "complete": inventory.get("complete"),
+        "limits": inventory.get("limits"),
+        "gaps": inventory.get("gaps"),
+    }
+
+
+def audit_subject_for_binding(
+    project_path: Path,
+    evidence_mode: str,
+    base_ref: Optional[str],
+    inventory: dict[str, Any],
+) -> dict[str, Any]:
+    if evidence_mode == "git":
+        subject = evidence_subject(project_path, base_ref)
+        return {
+            **subject,
+            "evidenceMode": "git",
+            "projectPath": subject["gitRoot"],
+        }
+    _, policy_digest = audit_public_policy(project_path)
+    return {
+        "evidenceMode": "artifact-only",
+        "projectPath": str(project_path),
+        "gitRoot": None,
+        "gitHead": None,
+        "baseRef": None,
+        "baseCommit": None,
+        "projectFingerprint": str(inventory["scopeManifestDigest"]),
+        "policyDigest": policy_digest,
+        "toolVersion": SERVER_VERSION,
+        "clean": None,
+    }
+
+
+def audit_adapter_executable(command: list[str], project_path: Path) -> dict[str, Any]:
+    if command and command[0] in {"npm", "npx"}:
+        return {
+            "available": False,
+            "reason": "project-local-node-toolchain-not-attested",
+        }
+    with tempfile.TemporaryDirectory(prefix="jstack-audit-plan-") as temp_home:
+        env = approved_command_env([], Path(temp_home), project_path)
+        executable = (
+            sys.executable
+            if command and command[0] in {"python", "python3", "py"}
+            else shutil.which(command[0], path=env["PATH"]) if command else None
+        )
+    if not executable:
+        return {"available": False, "reason": "executable-not-found"}
+    resolved = Path(executable).resolve()
+    try:
+        resolved.relative_to(project_path)
+    except ValueError:
+        pass
+    else:
+        return {"available": False, "reason": "project-local-executable-rejected"}
+    try:
+        metadata = resolved.stat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 100_000_000:
+            return {"available": False, "reason": "executable-identity-unsupported"}
+        digest = hashlib.sha256()
+        with resolved.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError:
+        return {"available": False, "reason": "executable-unreadable"}
+    return {
+        "available": True,
+        "resolvedExecutable": str(resolved),
+        "executableSha256": digest.hexdigest(),
+    }
+
+
+def audit_adapter_plans(
+    inventory: dict[str, Any],
+    subject: dict[str, Any],
+    control_digest: str,
+    project_path: Path,
+) -> list[dict[str, Any]]:
+    binding = {
+        "repositoryRoot": str(project_path),
+        "revision": str(subject.get("gitHead") or inventory["scopeManifestDigest"]),
+        "workspaceFingerprint": str(subject["projectFingerprint"]),
+        "policyDigest": str(subject["policyDigest"]),
+        "controlDigest": control_digest,
+        "scopeManifestDigest": str(inventory["scopeManifestDigest"]),
+    }
+    discovery = audit_core.discover_adapters(inventory, binding)
+    plans: list[dict[str, Any]] = []
+    for raw_plan in discovery["adapters"]:
+        plan = dict(raw_plan)
+        executable = audit_adapter_executable(list(plan["command"]), project_path)
+        adapter_version = audit_json_digest(
+            {
+                "adapterId": plan["adapterId"],
+                "capability": plan["capability"],
+                "command": plan["command"],
+                "environment": plan["environment"],
+            }
+        )
+        plan["adapterVersion"] = adapter_version
+        plan["availability"] = executable
+        if executable.get("available"):
+            subject_value = dict(plan["approvalSubject"])
+            subject_value.update(
+                {
+                    "adapterVersion": adapter_version,
+                    "resolvedExecutable": executable["resolvedExecutable"],
+                    "executableSha256": executable["executableSha256"],
+                    "serverVersion": SERVER_VERSION,
+                }
+            )
+            plan["approvalSubject"] = subject_value
+            plan["approvalSubjectDigest"] = audit_json_digest(subject_value)
+        plans.append(plan)
+    return plans
+
+
+def audit_run_approved_adapters(
+    approvals: Any,
+    plans: list[dict[str, Any]],
+    project_path: Path,
+    evidence_mode: str,
+    base_ref: Optional[str],
+    inventory: dict[str, Any],
+    timeout: int,
+) -> list[dict[str, Any]]:
+    if approvals is None:
+        return []
+    if not isinstance(approvals, list):
+        raise ToolError("adapter_approvals must be an array.")
+    by_id = {plan["adapterId"]: plan for plan in plans}
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for approval in approvals:
+        if not isinstance(approval, dict):
+            raise ToolError("Each adapter approval must be an object.")
+        raw_subject = approval.get("subject")
+        adapter_id = str(raw_subject.get("adapterId") or "") if isinstance(raw_subject, dict) else ""
+        if not adapter_id or adapter_id in seen or adapter_id not in by_id:
+            raise ToolError("Adapter approvals must reference unique applicable curated adapter subjects.")
+        seen.add(adapter_id)
+        plan = by_id[adapter_id]
+        if not plan.get("availability", {}).get("available"):
+            raise ToolError(f"Approved audit adapter is unavailable: {adapter_id}")
+        for field in ("approvedBy", "approvalReference", "approvedAt"):
+            if not isinstance(approval.get(field), str) or not str(approval[field]).strip():
+                raise ToolError(f"Audit adapter approval requires non-empty {field} metadata.")
+        try:
+            approved_at = _dt.datetime.fromisoformat(str(approval["approvedAt"]).replace("Z", "+00:00"))
+            if approved_at.tzinfo is None:
+                raise ValueError("timezone required")
+            approval_age = (_dt.datetime.now(_dt.timezone.utc) - approved_at.astimezone(_dt.timezone.utc)).total_seconds()
+        except ValueError as exc:
+            raise ToolError("Audit adapter approvedAt must be an unambiguous ISO-8601 timestamp.") from exc
+        if not 0 <= approval_age <= RECEIPT_MAX_AGE_SECONDS:
+            raise ToolError("Audit adapter approval is future-dated or older than the active evidence window.")
+        audit_core.require_adapter_approval(approval, plan["approvalSubject"])
+        current_executable = audit_adapter_executable(list(plan["command"]), project_path)
+        expected_executable = plan["approvalSubject"]
+        if (
+            not current_executable.get("available")
+            or current_executable.get("resolvedExecutable") != expected_executable["resolvedExecutable"]
+            or current_executable.get("executableSha256") != expected_executable["executableSha256"]
+        ):
+            raise ToolError("Approved audit adapter executable identity changed before execution.")
+        before = (
+            project_state(project_path)["projectFingerprint"]
+            if evidence_mode == "git"
+            else inventory["scopeManifestDigest"]
+        )
+        execution = run_approved_project_command(
+            list(plan["command"]),
+            project_path,
+            timeout=timeout,
+            env_allowlist=[],
+            fixed_env={**plan["environment"], "JSTACK_AUDIT_EXECUTION": "1"},
+        )
+        after_inventory = audit_core.inventory_repository(
+            project_path,
+            inventory["scope"],
+            max_files=int(inventory["limits"]["maxFiles"]),
+            max_bytes=int(inventory["limits"]["maxBytes"]),
+            max_seconds=float(inventory["limits"]["maxSeconds"]),
+        )
+        after = (
+            project_state(project_path)["projectFingerprint"]
+            if evidence_mode == "git"
+            else after_inventory["scopeManifestDigest"]
+        )
+        mutation_detected = before != after or after_inventory["scopeManifestDigest"] != inventory["scopeManifestDigest"]
+        status = "stale" if mutation_detected else "passed" if execution["ok"] else "failed"
+        if execution["returncode"] in {124, 125}:
+            status = "capped"
+        output_fingerprint = audit_json_digest(
+            {
+                "adapterVersion": plan["adapterVersion"],
+                "returncode": execution["returncode"],
+                "stdoutSha256": execution.get("stdoutSha256")
+                or hashlib.sha256(str(execution["stdout"]).encode("utf-8")).hexdigest(),
+                "stderrSha256": execution.get("stderrSha256")
+                or hashlib.sha256(str(execution["stderr"]).encode("utf-8")).hexdigest(),
+                "capturedOutputBytes": execution.get("capturedOutputBytes"),
+                "mutationDetected": mutation_detected,
+            }
+        )
+        result = audit_core.make_adapter_result(
+            plan,
+            approval,
+            status,
+            evidence_fingerprint=output_fingerprint,
+            capped=status == "capped",
+        )
+        result.update(
+            {
+                "adapterVersion": plan["adapterVersion"],
+                "returnCode": execution["returncode"],
+                "mutationDetected": mutation_detected,
+                "outputFingerprint": output_fingerprint,
+            }
+        )
+        results.append(result)
+    return sorted(results, key=lambda item: item["adapterId"])
+
+
+def audit_artifact_secret_scan(project_path: Path, inventory: dict[str, Any]) -> dict[str, Any]:
+    findings: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    scanned = 0
+    for item in inventory.get("files", []):
+        relative = str(item.get("path") or "")
+        path = project_path / relative
+        if not should_scan(path):
+            continue
+        if int(item.get("size") or 0) > 2_000_000:
+            errors.append({"path": relative, "reason": "unsupported_or_oversized"})
+            continue
+        try:
+            content = audit_core.read_repository_file(
+                project_path,
+                relative,
+                max_bytes=max(1, int(item.get("size") or 0)),
+                max_seconds=10,
+            )
+        except audit_core.AuditError as exc:
+            errors.append({"path": relative, "reason": f"open_failed:{type(exc).__name__}"})
+            continue
+        if (
+            len(content) != item.get("size")
+            or hashlib.sha256(content).hexdigest() != item.get("sha256")
+        ):
+            errors.append({"path": relative, "reason": "file_identity_changed"})
+            continue
+        scanned += 1
+        for line_number, line in enumerate(content.decode("utf-8", errors="ignore").splitlines(), start=1):
+            for pattern_name, pattern in SECRET_PATTERNS:
+                if pattern.search(line):
+                    findings.append(
+                        {"file": relative, "line": line_number, "pattern": pattern_name}
+                    )
+                    break
+            if len(findings) >= 100:
+                break
+        if len(findings) >= 100:
+            break
+    complete = inventory.get("complete") is True and not errors and len(findings) < 100
+    return {
+        "scannedFiles": scanned,
+        "complete": complete,
+        "passed": complete and not findings,
+        "findingCount": len(findings),
+        "findings": findings,
+        "scanErrors": errors,
+        "evidenceReceipt": None,
+        "note": "Advisory artifact-only credential-pattern scan; no Git-bound security receipt is available.",
+    }
+
+
+def audit_deterministic_evidence(
+    subject_digest: str,
+    inventory: dict[str, Any],
+    security: dict[str, Any],
+    review: Optional[dict[str, Any]],
+    profile: str,
+    subject: dict[str, Any],
+) -> list[dict[str, Any]]:
+    evidence = [
+        {
+            "id": "jstack-subject-binding",
+            "type": "subject-binding",
+            "status": "complete",
+            "subjectFingerprint": subject_digest,
+            "summary": "Repository or artifact subject is bound to the active MCP session.",
+        },
+        {
+            "id": "jstack-scope-inventory",
+            "type": "scope-inventory",
+            "status": "complete" if inventory.get("complete") is True else "incomplete",
+            "subjectFingerprint": subject_digest,
+            "summary": "Bounded content-free inventory completed without a coverage gap."
+            if inventory.get("complete") is True
+            else "Bounded inventory reported one or more coverage gaps.",
+        },
+        {
+            "id": "jstack-secret-scan",
+            "type": "secret-scan",
+            "status": "complete" if security.get("complete") is True else "incomplete",
+            "subjectFingerprint": subject_digest,
+            "summary": "Credential-pattern scan completed; finding values were not retained."
+            if security.get("complete") is True
+            else "Credential-pattern scan coverage was incomplete.",
+        },
+    ]
+    if review is not None:
+        diff_clean = bool(review.get("diffCheck", {}).get("ok"))
+        evidence.append(
+            {
+                "id": "jstack-diff-hygiene",
+                "type": "diff-hygiene",
+                "status": "complete" if diff_clean else "incomplete",
+                "subjectFingerprint": subject_digest,
+                "summary": "Git diff whitespace/error checks passed."
+                if diff_clean
+                else "One or more Git diff checks failed.",
+            }
+        )
+    if profile == "release":
+        distinct = bool(subject.get("baseCommit")) and subject.get("baseCommit") != subject.get("gitHead")
+        evidence.extend(
+            [
+                {
+                    "id": "jstack-distinct-release-base",
+                    "type": "distinct-release-base",
+                    "status": "complete" if distinct else "incomplete",
+                    "subjectFingerprint": subject_digest,
+                    "summary": "Release audit has an exact distinct pre-release baseline."
+                    if distinct
+                    else "Release audit lacks an exact distinct pre-release baseline.",
+                },
+                {
+                    "id": "jstack-current-security-receipt",
+                    "type": "current-security-receipt",
+                    "status": "complete"
+                    if security.get("complete") is True and security.get("evidenceReceipt")
+                    else "incomplete",
+                    "subjectFingerprint": subject_digest,
+                    "summary": "A current session-local security scan receipt is available."
+                    if security.get("evidenceReceipt")
+                    else "A Git-bound security scan receipt is unavailable.",
+                },
+            ]
+        )
+    return evidence
+
+
+def audit_effective_fail_on(policy_value: Any, requested: Any) -> str:
+    ordered = ["info", "low", "medium", "high", "critical", "none"]
+    policy_text = str(policy_value or "high").strip().lower()
+    requested_text = str(requested or policy_text).strip().lower()
+    if policy_text not in ordered or requested_text not in ordered:
+        raise ToolError("Audit failure threshold must be info, low, medium, high, critical, or none.")
+    floor_index = min(ordered.index("high"), ordered.index(policy_text))
+    return ordered[min(floor_index, ordered.index(requested_text))]
+
+
+def audit_effective_required_domains(
+    profile_definition: dict[str, Any], audit_policy: dict[str, Any]
+) -> list[str]:
+    configured = [
+        "correctness" if str(item) == "reliability" else str(item)
+        for item in audit_policy.get("requiredDomains", [])
+    ]
+    required = set(profile_definition["requiredDomains"]) | set(configured)
+    return [domain for domain in audit_core.DOMAINS if domain in required]
+
+
+def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
+    binding = resolve_project_binding(args.get("project_path"))
+    project_path = Path(binding["projectPath"]).resolve()
+    policy, _ = audit_public_policy(project_path)
+    audit_policy = policy.get("audit", {})
+    profile = str(args.get("profile") or audit_policy.get("defaultProfile") or "standard").strip().lower()
+    try:
+        profile_definition = audit_core.get_profile(profile)
+    except audit_core.AuditError as exc:
+        raise ToolError(str(exc)) from exc
+    base_ref = str(args.get("base_ref") or "").strip() or None
+    if binding["evidenceMode"] == "git":
+        if base_ref is not None:
+            resolved_base = resolve_base_ref(project_path, base_ref)
+            base_ref = str(resolved_base.get("baseCommit") or "").strip() or None
+        elif profile != "release":
+            discovered_base = resolve_base_ref(project_path)
+            base_ref = str(discovered_base.get("baseCommit") or "").strip() or None
+    fail_on = audit_effective_fail_on(audit_policy.get("failOnSeverity"), args.get("fail_on"))
+    required_domains = audit_effective_required_domains(profile_definition, audit_policy)
+    if profile == "quick" and args.get("adapter_approvals"):
+        raise ToolError("Quick audits prohibit repository-controlled adapter execution.")
+    scope_mode, requested_scope, effective_scope = audit_effective_scope(
+        project_path,
+        binding["evidenceMode"],
+        profile,
+        args.get("scope"),
+        base_ref,
+    )
+    limits = profile_definition["limits"]
+    try:
+        inventory = audit_core.inventory_repository(
+            project_path,
+            effective_scope,
+            max_files=int(limits["maxFiles"]),
+            max_bytes=int(limits["maxBytes"]),
+            max_seconds=float(limits["maxSeconds"]),
+        )
+        subject = audit_subject_for_binding(
+            project_path,
+            binding["evidenceMode"],
+            base_ref,
+            inventory,
+        )
+        control_digest = audit_core.controls_digest()
+        subject_digest = audit_json_digest(
+            {
+                "projectPath": subject["projectPath"],
+                "evidenceMode": subject["evidenceMode"],
+                "gitHead": subject.get("gitHead"),
+                "baseCommit": subject.get("baseCommit"),
+                "projectFingerprint": subject["projectFingerprint"],
+                "policyDigest": subject["policyDigest"],
+                "controlDigest": control_digest,
+                "scopeManifestDigest": inventory["scopeManifestDigest"],
+                "profile": profile,
+                "failOn": fail_on,
+                "toolVersion": SERVER_VERSION,
+            }
+        )
+        adapter_plans = audit_adapter_plans(inventory, subject, control_digest, project_path)
+        adapter_results = audit_run_approved_adapters(
+            [] if profile == "quick" else args.get("adapter_approvals"),
+            adapter_plans,
+            project_path,
+            binding["evidenceMode"],
+            base_ref,
+            inventory,
+            int(args.get("adapter_timeout_sec") or 120),
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(str(exc)) from exc
+
+    if binding["evidenceMode"] == "git":
+        security = tool_security_audit(
+            {
+                "project_path": str(project_path),
+                "base_ref": base_ref or "",
+                "max_files": min(int(limits["maxFiles"]), 100_000),
+                "max_file_bytes": 2_000_000,
+            }
+        )
+        review = tool_review({"project_path": str(project_path), "base_ref": base_ref or ""})
+    else:
+        security = audit_artifact_secret_scan(project_path, inventory)
+        review = None
+
+    deterministic_evidence = audit_deterministic_evidence(
+        subject_digest,
+        inventory,
+        security,
+        review,
+        profile,
+        subject,
+    )
+    adapter_inventory = [
+        {
+            "adapterId": plan["adapterId"],
+            "capability": plan["capability"],
+            "adapterVersion": plan["adapterVersion"],
+            "available": bool(plan.get("availability", {}).get("available")),
+        }
+        for plan in adapter_plans
+    ]
+    expires_at = (
+        _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    token_payload = {
+        "kind": "audit-session",
+        "schemaVersion": "jstack.audit.session.v1",
+        "expiresAt": expires_at,
+        "projectPath": str(project_path),
+        "evidenceMode": binding["evidenceMode"],
+        "gitHead": subject.get("gitHead"),
+        "baseRef": subject.get("baseRef"),
+        "baseCommit": subject.get("baseCommit"),
+        "projectFingerprint": subject["projectFingerprint"],
+        "policyDigest": subject["policyDigest"],
+        "controlDigest": control_digest,
+        "subjectDigest": subject_digest,
+        "scopeMode": scope_mode,
+        "requestedScope": requested_scope,
+        "scopeManifestDigest": inventory["scopeManifestDigest"],
+        "profile": profile,
+        "failOn": fail_on,
+        "requiredDomains": required_domains,
+        "requiredEvidence": profile_definition["requiredEvidence"],
+        "adapterRequirements": profile_definition["adapterRequirements"],
+        "adapterInventory": adapter_inventory,
+        "adapterResults": adapter_results,
+        "releaseRangeDigest": audit_release_range_digest(project_path, base_ref)
+        if profile == "release" and binding["evidenceMode"] == "git"
+        else None,
+        "releaseScopeCovered": profile == "release"
+        and binding["evidenceMode"] == "git"
+        and scope_mode == "repository"
+        and requested_scope == ["."]
+        and inventory.get("complete") is True,
+        "toolVersion": SERVER_VERSION,
+    }
+    audit_session_token = issue_receipt(token_payload)
+    return {
+        "schemaVersion": "jstack.audit.session-response.v1",
+        "projectBinding": binding,
+        "profile": profile,
+        "failOn": fail_on,
+        "subject": subject,
+        "subjectDigest": subject_digest,
+        "controlDigest": control_digest,
+        "requestedScope": requested_scope,
+        "scopeMode": scope_mode,
+        "inventory": audit_inventory_summary(inventory),
+        "coverageContract": {
+            "requiredDomains": required_domains,
+            "requiredEvidence": profile_definition["requiredEvidence"],
+            "adapterRequirements": profile_definition["adapterRequirements"],
+            "limits": profile_definition["limits"],
+            "repositoryExecutionAllowed": profile != "quick",
+        },
+        "deterministicEvidence": deterministic_evidence,
+        "adapterPlans": adapter_plans,
+        "adapterResults": adapter_results,
+        "securityEvidence": {
+            key: security.get(key)
+            for key in (
+                "complete",
+                "passed",
+                "findingCount",
+                "scannedFiles",
+                "scanErrors",
+                "evidenceReceipt",
+                "note",
+            )
+        },
+        "reviewEvidence": {
+            "diffCheck": review.get("diffCheck"),
+            "changedFiles": review.get("changedFiles"),
+        }
+        if review
+        else None,
+        "auditSessionToken": audit_session_token,
+        "expiresAt": expires_at,
+        "limitations": binding["limitations"]
+        + [
+            "The deterministic MCP validates evidence structure and completeness; semantic finding truth remains a reasoned audit judgment.",
+            "Curated local execution hardening is not an OS sandbox; use a container or VM for untrusted repositories.",
+            "Offline adapter flags do not create an OS network firewall; use a container or VM when enforced network isolation is required.",
+        ],
+    }
+
+
+def audit_rebuild_inventory(
+    project_path: Path,
+    token_payload: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    mode = str(token_payload["evidenceMode"])
+    profile = str(token_payload["profile"])
+    base_ref = str(token_payload.get("baseCommit") or "").strip() or None
+    scope_mode = str(token_payload["scopeMode"])
+    if scope_mode == "changed":
+        requested = None
+    elif scope_mode == "repository":
+        requested = ["."]
+    else:
+        requested = token_payload.get("requestedScope")
+    _, _, effective_scope = audit_effective_scope(
+        project_path,
+        mode,
+        profile,
+        requested,
+        base_ref,
+    )
+    profile_definition = audit_core.get_profile(profile)
+    limits = profile_definition["limits"]
+    inventory = audit_core.inventory_repository(
+        project_path,
+        effective_scope,
+        max_files=int(limits["maxFiles"]),
+        max_bytes=int(limits["maxBytes"]),
+        max_seconds=float(limits["maxSeconds"]),
+    )
+    subject = audit_subject_for_binding(project_path, mode, base_ref, inventory)
+    return inventory, subject
+
+
+def audit_assert_session_subject(
+    token_payload: dict[str, Any],
+    binding: dict[str, Any],
+    inventory: dict[str, Any],
+    subject: dict[str, Any],
+) -> None:
+    checks = {
+        "projectPath": token_payload.get("projectPath") == binding["projectPath"],
+        "evidenceMode": token_payload.get("evidenceMode") == binding["evidenceMode"],
+        "gitHead": token_payload.get("gitHead") == subject.get("gitHead"),
+        "baseCommit": token_payload.get("baseCommit") == subject.get("baseCommit"),
+        "projectFingerprint": token_payload.get("projectFingerprint") == subject.get("projectFingerprint"),
+        "policyDigest": token_payload.get("policyDigest") == subject.get("policyDigest"),
+        "controlDigest": token_payload.get("controlDigest") == audit_core.controls_digest(),
+        "scopeManifestDigest": token_payload.get("scopeManifestDigest") == inventory.get("scopeManifestDigest"),
+        "toolVersion": token_payload.get("toolVersion") == SERVER_VERSION,
+    }
+    if token_payload.get("profile") == "release" and binding["evidenceMode"] == "git":
+        current_range_digest = audit_release_range_digest(
+            Path(binding["projectPath"]),
+            str(token_payload.get("baseCommit") or "").strip() or None,
+        )
+        checks["releaseRangeDigest"] = (
+            token_payload.get("releaseRangeDigest") == current_range_digest
+        )
+        checks["releaseScopeCovered"] = token_payload.get("releaseScopeCovered") is True
+    if not all(checks.values()):
+        failed = ", ".join(key for key, value in checks.items() if not value)
+        raise ToolError(f"Audit session evidence is stale; restart the audit. Changed bindings: {failed}.")
+
+
+def audit_qa_evidence(
+    project_path: Path,
+    subject: dict[str, Any],
+    subject_digest: str,
+    receipts: Any,
+) -> dict[str, Any]:
+    if receipts is None:
+        receipts = []
+    if not isinstance(receipts, list) or not all(isinstance(item, str) for item in receipts):
+        raise ToolError("qa_receipts must be an array of receipt strings.")
+    commands = discover_test_commands(project_path)
+    state = project_state(project_path)
+    valid_by_key: dict[str, dict[str, Any]] = {}
+    for receipt in receipts:
+        verification = verify_receipt(
+            receipt,
+            "qa",
+            state,
+            expected_subject=subject,
+        )
+        payload = verification.get("payload") or {}
+        if verification["valid"] and payload.get("commandKey"):
+            valid_by_key[str(payload["commandKey"])] = payload
+    missing = []
+    for command in commands:
+        payload = valid_by_key.get(command["key"])
+        if not payload or payload.get("commandFingerprint") != command["commandFingerprint"]:
+            missing.append(command["key"])
+    complete = bool(commands) and not missing
+    return {
+        "id": "jstack-current-qa-receipts",
+        "type": "current-qa-receipt",
+        "status": "complete" if complete else "incomplete",
+        "subjectFingerprint": subject_digest,
+        "summary": "Current passing receipts cover every discovered QA command."
+        if complete
+        else "Current QA receipt coverage is missing or stale for: "
+        + (", ".join(missing) if missing else "all commands (none discovered)"),
+    }
+
+
+def audit_merge_evidence(
+    caller_evidence: Any,
+    deterministic: list[dict[str, Any]],
+    subject_digest: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(caller_evidence, list):
+        raise ToolError("evidence must be an array.")
+    if len(caller_evidence) > 1000:
+        raise ToolError("Audit evidence exceeds the 1000-record safety limit.")
+    reserved = {item["id"] for item in deterministic}
+    merged = [dict(item) for item in deterministic]
+    seen = set(reserved)
+    for raw in caller_evidence:
+        if not isinstance(raw, dict):
+            raise ToolError("Each audit evidence record must be an object.")
+        item = dict(raw)
+        evidence_id = str(item.get("id") or "").strip()
+        if not evidence_id or evidence_id in seen:
+            raise ToolError("Audit evidence identifiers must be non-empty and unique.")
+        seen.add(evidence_id)
+        if item.get("subjectFingerprint") != subject_digest:
+            item["status"] = "stale"
+            item["summary"] = "Evidence subject does not match the current audit session."
+            item["subjectFingerprint"] = subject_digest
+        merged.append(item)
+    return merged
+
+
+def audit_bind_domain_coverage(
+    domain_coverage: Any,
+    evidence: list[dict[str, Any]],
+    subject_digest: str,
+) -> Any:
+    evidence_by_id = {str(item.get("id")): item for item in evidence}
+    if isinstance(domain_coverage, dict):
+        items = []
+        for domain, value in domain_coverage.items():
+            if isinstance(value, str):
+                items.append({"domain": domain, "status": value})
+            elif isinstance(value, dict):
+                items.append({"domain": domain, **value})
+            else:
+                raise ToolError("domain_coverage values must be strings or objects.")
+    elif isinstance(domain_coverage, list):
+        items = [dict(item) if isinstance(item, dict) else item for item in domain_coverage]
+    else:
+        raise ToolError("domain_coverage must be an object or array.")
+    if len(items) > len(audit_core.DOMAINS):
+        raise ToolError("domain_coverage exceeds the supported audit domain count.")
+    normalized = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            raise ToolError("Each domain coverage entry must be an object.")
+        item = dict(raw)
+        ids = item.get("evidenceIds", [])
+        if not isinstance(ids, list) or not all(isinstance(value, str) for value in ids):
+            raise ToolError("domain coverage evidenceIds must be an array of strings.")
+        if item.get("status") in {"complete", "not-applicable"}:
+            referenced = [evidence_by_id.get(value) for value in ids]
+            exact = bool(ids) and all(
+                record
+                and record.get("status") == "complete"
+                and record.get("subjectFingerprint") == subject_digest
+                for record in referenced
+            )
+            if not exact:
+                item["status"] = "incomplete"
+                item["reason"] = "Coverage lacks complete evidence bound to this audit subject."
+        normalized.append(item)
+    return normalized
+
+
+def audit_secret_candidates(
+    security: dict[str, Any],
+    subject_digest: str,
+) -> list[dict[str, Any]]:
+    candidates = []
+    for finding in security.get("findings", []):
+        path = str(finding.get("file") or "<release-range>")
+        line = max(1, int(finding.get("line") or 1))
+        pattern = str(finding.get("pattern") or "credential-pattern")
+        candidates.append(
+            {
+                "schemaVersion": "jstack.audit.finding.v1",
+                "ruleId": "security.secret-pattern",
+                "domain": "security",
+                "title": "Credential-like value detected",
+                "severity": "high",
+                "confidence": "high",
+                "priority": "P0",
+                "verificationState": "tool-confirmed",
+                "status": "open",
+                "location": {"path": path, "startLine": line, "endLine": line},
+                "scope": [path],
+                "claim": f"The bounded secret scanner detected the {pattern} pattern without retaining its value.",
+                "evidence": [
+                    {
+                        "type": "secret-scan",
+                        "status": "complete",
+                        "summary": f"Pattern {pattern} detected at the reported location; raw value redacted.",
+                        "subjectFingerprint": subject_digest,
+                        "reproducible": True,
+                    }
+                ],
+                "failurePath": ["Credential-like material is present in the audited tree or release range."],
+                "preconditions": ["An actor, build, log, or published artifact can read the affected source history."],
+                "impact": "Credential exposure may permit unauthorized access and requires immediate validation and revocation.",
+                "likelihood": "Exposure depends on whether the detected value is live and who can access the repository or artifact.",
+                "standards": ["NIST SSDF PW.4", "OWASP ASVS 5.0 V14"],
+                "remediation": "Remove the value, revoke or rotate it, replace it with runtime secret injection, and inspect repository history.",
+                "verificationPlan": "Repeat the complete current-tree and release-range secret scan after remediation and confirm revocation independently.",
+                "residualRisk": "Heuristic matching can produce false positives and cannot prove whether a credential was used before revocation.",
+            }
+        )
+    return candidates
+
+
+def audit_validate_finding_locations(
+    project_path: Path,
+    inventory: dict[str, Any],
+    findings: list[dict[str, Any]],
+) -> None:
+    files = {str(item["path"]): item for item in inventory.get("files", [])}
+    for finding in findings:
+        location = finding["location"]
+        relative = str(location["path"])
+        if relative == "<release-range>":
+            continue
+        manifest_item = files.get(relative)
+        if not manifest_item:
+            raise ToolError(f"Audit finding path is outside the bound inventory: {relative}")
+        try:
+            content = audit_core.read_repository_file(
+                project_path,
+                relative,
+                max_bytes=max(1, int(manifest_item["size"])),
+                max_seconds=30,
+            )
+        except audit_core.AuditError as exc:
+            raise ToolError(f"Audit finding path could not be validated safely: {relative}") from exc
+        if (
+            len(content) != manifest_item["size"]
+            or hashlib.sha256(content).hexdigest() != manifest_item["sha256"]
+        ):
+            raise ToolError(f"Audit finding source changed during range validation: {relative}")
+        newline_count = content.count(b"\n")
+        ends_with_newline = content.endswith(b"\n")
+        line_count = max(1, newline_count if ends_with_newline else newline_count + 1)
+        if int(location["endLine"]) > line_count:
+            raise ToolError(
+                f"Audit finding range exceeds {relative}'s {line_count} source lines."
+            )
+
+
+def audit_add_coverage_gap(
+    coverage: dict[str, Any],
+    kind: str,
+    key: str,
+    status: str,
+    detail: str,
+) -> None:
+    gap = {"kind": kind, "key": key, "status": status, "detail": detail}
+    if gap not in coverage["gaps"]:
+        coverage["gaps"].append(gap)
+        coverage["gaps"].sort(key=lambda item: (item["kind"], item["key"], item["status"], item["detail"]))
+    coverage["complete"] = False
+
+
+def audit_render_outputs(
+    result: dict[str, Any], evidence_mode: str, requested_formats: list[str]
+) -> dict[str, Any]:
+    findings = result["findings"]
+    gaps = result["coverage"]["gaps"]
+    status = result["status"].upper()
+    executive = (
+        f"{status}: {result['findingCounts']['blocking']} blocking finding(s), "
+        f"{len(gaps)} coverage gap(s), and {result['findingCounts']['suppressed']} accepted-risk suppression(s)."
+    )
+    lines = [
+        "# JStack Audit Report",
+        "",
+        f"- Profile: `{result['profile']}`",
+        f"- Status: `{result['status']}`",
+        f"- Evidence mode: `{evidence_mode}`",
+        f"- Failure threshold: `{result['failOn']}`",
+        f"- Required coverage complete: `{str(result['coverage']['complete']).lower()}`",
+        "",
+        "## Findings",
+    ]
+    if not findings:
+        lines.append("None.")
+    for finding in findings:
+        location = finding["location"]
+        lines.extend(
+            [
+                "",
+                f"### {finding['findingId']}: {finding['title']}",
+                f"`{finding['severity']}` | `{finding['confidence']}` confidence | `{finding['priority']}` | `{finding['verificationState']}`",
+                f"Location: `{location['path']}:{location['startLine']}`",
+                "",
+                finding["claim"],
+                "",
+                f"Remediation: {finding['remediation']['recommendedChange']}",
+            ]
+        )
+    lines.extend(["", "## Coverage Gaps"])
+    if not gaps:
+        lines.append("None.")
+    else:
+        lines.extend(f"- {item['kind']} `{item['key']}`: {item['detail']}" for item in gaps)
+    residual_risk = [item["detail"] for item in gaps]
+    residual_risk.extend(
+        finding["residualRisk"]
+        for finding in findings
+        if finding["verificationState"] == "unverified-hypothesis"
+    )
+    if evidence_mode == "artifact-only":
+        residual_risk.append("Artifact-only evidence is advisory and cannot provide Git-bound release certification.")
+    release_decision = (
+        "go"
+        if result["profile"] == "release" and evidence_mode == "git" and result["status"] == "pass"
+        else "no-go"
+        if result["profile"] == "release"
+        else "not-applicable"
+    )
+    rendered: dict[str, Any] = {
+        "executiveSummary": executive,
+        "residualRisk": sorted(set(residual_risk)),
+        "releaseDecision": release_decision,
+    }
+    if "markdown" in requested_formats:
+        rendered["engineeringReport"] = "\n".join(lines)
+        rendered["coverageMatrix"] = result["coverage"]["domains"]
+    if "sarif" in requested_formats:
+        rendered["sarif"] = audit_core.to_sarif(result)
+    return rendered
+
+
+def tool_audit_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    audit_reject_secret_values(
+        {
+            key: args.get(key)
+            for key in ("domain_coverage", "evidence", "findings", "suppressions", "errors")
+        },
+        "Audit finalization input",
+    )
+    audit_enforce_json_limit(
+        {
+            key: args.get(key)
+            for key in (
+                "domain_coverage",
+                "evidence",
+                "findings",
+                "suppressions",
+                "qa_receipts",
+                "errors",
+            )
+        },
+        "Audit finalization input",
+        AUDIT_MAX_STRUCTURED_INPUT_BYTES,
+    )
+    token = str(args.get("audit_session_token") or "").strip()
+    token_payload = verify_signed_session_token(token, "audit-session")
+    binding = resolve_project_binding(args.get("project_path"))
+    project_path = Path(binding["projectPath"]).resolve()
+    try:
+        inventory, subject = audit_rebuild_inventory(project_path, token_payload)
+        audit_assert_session_subject(token_payload, binding, inventory, subject)
+    except audit_core.AuditError as exc:
+        raise ToolError(str(exc)) from exc
+
+    profile = str(token_payload["profile"])
+    subject_digest = str(token_payload["subjectDigest"])
+    evaluated_at = now_iso()
+    if binding["evidenceMode"] == "git":
+        security = tool_security_audit(
+            {
+                "project_path": str(project_path),
+                "base_ref": str(token_payload.get("baseCommit") or ""),
+                "max_files": min(int(inventory["limits"]["maxFiles"]), 100_000),
+                "max_file_bytes": 2_000_000,
+            }
+        )
+        review = tool_review(
+            {
+                "project_path": str(project_path),
+                "base_ref": str(token_payload.get("baseCommit") or ""),
+            }
+        )
+    else:
+        security = audit_artifact_secret_scan(project_path, inventory)
+        review = None
+    deterministic = audit_deterministic_evidence(
+        subject_digest,
+        inventory,
+        security,
+        review,
+        profile,
+        subject,
+    )
+    if profile == "release" and binding["evidenceMode"] == "git":
+        deterministic.append(
+            audit_qa_evidence(project_path, subject, subject_digest, args.get("qa_receipts"))
+        )
+    evidence = audit_merge_evidence(args.get("evidence"), deterministic, subject_digest)
+    domains = audit_bind_domain_coverage(args.get("domain_coverage"), evidence, subject_digest)
+    try:
+        coverage = audit_core.evaluate_coverage(
+            profile,
+            domains,
+            evidence,
+            token_payload.get("adapterResults", []),
+            token_payload.get("requiredDomains", []),
+        )
+        if binding["evidenceMode"] == "artifact-only":
+            audit_add_coverage_gap(
+                coverage,
+                "subject",
+                "artifact-only",
+                "unsupported",
+                "Artifact-only evidence cannot produce a formal Git-bound audit pass or release decision.",
+            )
+        if profile == "release" and token_payload.get("releaseScopeCovered") is not True:
+            audit_add_coverage_gap(
+                coverage,
+                "subject",
+                "release-scope",
+                "incomplete",
+                "Release profile requires complete repository scope bound to the exact release range.",
+            )
+        raw_findings = args.get("findings")
+        if not isinstance(raw_findings, list):
+            raise ToolError("findings must be an array.")
+        if len(raw_findings) > 500:
+            raise ToolError("Audit findings exceed the 500-finding safety limit.")
+        normalized_findings = audit_core.normalize_findings(
+            [*raw_findings, *audit_secret_candidates(security, subject_digest)],
+            subject_digest,
+        )
+        audit_validate_finding_locations(project_path, inventory, normalized_findings)
+        result = audit_core.finalize_audit(
+            profile,
+            coverage,
+            normalized_findings,
+            evaluated_at,
+            fail_on=str(token_payload["failOn"]),
+            suppressions=args.get("suppressions") or [],
+            errors=args.get("errors") or [],
+        )
+        final_inventory, final_subject = audit_rebuild_inventory(project_path, token_payload)
+    except audit_core.AuditError as exc:
+        raise ToolError(str(exc)) from exc
+    stale_after_review = (
+        final_inventory.get("scopeManifestDigest") != inventory.get("scopeManifestDigest")
+        or final_subject.get("projectFingerprint") != subject.get("projectFingerprint")
+        or final_subject.get("policyDigest") != subject.get("policyDigest")
+    )
+    if stale_after_review:
+        audit_add_coverage_gap(
+            coverage,
+            "subject",
+            "state-change",
+            "stale",
+            "Repository or policy state changed during audit finalization.",
+        )
+        result = audit_core.finalize_audit(
+            profile,
+            coverage,
+            normalized_findings,
+            evaluated_at,
+            fail_on=str(token_payload["failOn"]),
+            suppressions=args.get("suppressions") or [],
+            errors=args.get("errors") or [],
+        )
+
+    requested_formats = args.get("formats") or ["json", "markdown", "sarif"]
+    if (
+        not isinstance(requested_formats, list)
+        or not requested_formats
+        or any(item not in {"json", "markdown", "sarif"} for item in requested_formats)
+    ):
+        raise ToolError("formats must contain json, markdown, and/or sarif.")
+    outputs = audit_render_outputs(result, binding["evidenceMode"], requested_formats)
+    audit_enforce_json_limit(
+        outputs,
+        "Audit rendered output",
+        AUDIT_MAX_STRUCTURED_OUTPUT_BYTES,
+    )
+    receipt = None
+    active_suppressions = sorted(
+        [
+            {
+                "fingerprint": finding["fingerprint"],
+                "expiresAt": finding["suppression"]["expiresAt"],
+            }
+            for finding in result["findings"]
+            if finding.get("status") == "suppressed"
+            and isinstance(finding.get("suppression"), dict)
+            and finding["suppression"].get("expiresAt")
+        ],
+        key=lambda item: (item["expiresAt"], item["fingerprint"]),
+    )
+    if binding["evidenceMode"] == "git":
+        expires_at = (
+            _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+        ).replace(microsecond=0).isoformat()
+        receipt = issue_receipt(
+            {
+                "kind": "audit",
+                "schemaVersion": "jstack.audit.receipt.v1",
+                "expiresAt": expires_at,
+                "projectPath": subject["gitRoot"],
+                "gitHead": subject["gitHead"],
+                "baseRef": subject.get("baseRef"),
+                "baseCommit": subject.get("baseCommit"),
+                "projectFingerprint": subject["projectFingerprint"],
+                "policyDigest": subject["policyDigest"],
+                "controlDigest": token_payload["controlDigest"],
+                "toolVersion": SERVER_VERSION,
+                "adapterVersions": token_payload.get("adapterInventory", []),
+                "profile": profile,
+                "scope": token_payload.get("requestedScope"),
+                "scopeMode": token_payload.get("scopeMode"),
+                "releaseScopeCovered": token_payload.get("releaseScopeCovered") is True,
+                "releaseRangeDigest": token_payload.get("releaseRangeDigest"),
+                "requiredDomains": token_payload.get("requiredDomains"),
+                "scopeManifestDigest": inventory["scopeManifestDigest"],
+                "coverageDigest": audit_json_digest(result["coverage"]),
+                "findingDigest": audit_json_digest(result["findings"]),
+                "resultStatus": result["status"],
+                "failureThreshold": result["failOn"],
+                "findingCounts": result["findingCounts"],
+                "evaluatedAt": evaluated_at,
+                "activeSuppressions": active_suppressions,
+                "complete": result["coverage"]["complete"] is True
+                and result["status"] in {"pass", "fail"},
+                "passed": result["status"] == "pass",
+            }
+        )
+    release_certification_available = (
+        binding["evidenceMode"] == "git"
+        and profile == "release"
+        and token_payload.get("releaseScopeCovered") is True
+        and result["status"] == "pass"
+        and result["coverage"]["complete"] is True
+    )
+    response: dict[str, Any] = {
+        "schemaVersion": "jstack.audit.finalization.v1",
+        "executiveSummary": outputs["executiveSummary"],
+        "residualRisk": outputs["residualRisk"],
+        "releaseDecision": outputs["releaseDecision"],
+        "requestedFormats": sorted(set(requested_formats)),
+        "auditReceipt": receipt,
+        "gitBoundReceiptAvailable": receipt is not None,
+        "releaseCertificationAvailable": release_certification_available,
+        "receiptMeaning": "Attests deterministic scope, coverage, finding/result digests, and state binding; it does not prove semantic finding truth.",
+    }
+    if "json" in requested_formats:
+        response["result"] = result
+    if "markdown" in requested_formats:
+        response["engineeringReport"] = outputs["engineeringReport"]
+        response["coverageMatrix"] = outputs["coverageMatrix"]
+    if "sarif" in requested_formats:
+        response["sarif"] = outputs["sarif"]
+    audit_enforce_json_limit(
+        response,
+        "Audit finalization response",
+        AUDIT_MAX_STRUCTURED_OUTPUT_BYTES,
+    )
+    return response
+
+
 def tool_qa(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
     commands = discover_test_commands(project_path)
@@ -3418,8 +5273,8 @@ def tool_qa(args: dict[str, Any]) -> dict[str, Any]:
     state_before = {key: subject_before[key] for key in ("gitRoot", "gitHead", "projectFingerprint", "clean", "untrackedFiles")}
     run = bool(args.get("run") or False)
     command_key = str(args.get("command_key") or "").strip()
-    result: dict[str, Any] | None = None
-    receipt: str | None = None
+    result: Optional[dict[str, Any]] = None
+    receipt: Optional[str] = None
     mutation_detected = False
     if run:
         if args.get("execution_approved") is not True:
@@ -3657,7 +5512,7 @@ def tool_preflight(args: dict[str, Any]) -> dict[str, Any]:
     if health["dirtyFileCount"] and not goal:
         warnings.append("Working tree has changes and no task goal was provided for risk classification.")
 
-    security: dict[str, Any] | None = None
+    security: Optional[dict[str, Any]] = None
     if run_secret_scan:
         security = tool_security_audit(
             {
@@ -3766,13 +5621,62 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     security_receipt = str(args.get("security_receipt") or "").strip()
     if not security_receipt and preflight.get("securitySummary"):
         security_receipt = str(preflight["securitySummary"].get("evidenceReceipt") or "")
-    verified_security: dict[str, Any] | None = None
+    verified_security: Optional[dict[str, Any]] = None
     if security_receipt:
         verified_security = verify_receipt(security_receipt, "security", subject, expected_subject=subject)
         if not verified_security["valid"]:
             blockers.append("Security evidence receipt is not a current, complete, clean result for this commit and project state.")
     else:
         blockers.append("Release readiness requires a current security evidence receipt.")
+
+    audit_policy = load_enterprise_policy(project_path).get("audit", {})
+    audit_receipt = str(args.get("audit_receipt") or "").strip()
+    verified_audit: Optional[dict[str, Any]] = None
+    if audit_receipt:
+        verified_audit = verify_receipt(
+            audit_receipt,
+            "audit",
+            subject,
+            expected_subject=subject,
+            require_passed=False,
+        )
+        audit_payload = verified_audit.get("payload") or {}
+        active_suppressions = audit_payload.get("activeSuppressions") or []
+        suppressions_current = isinstance(active_suppressions, list)
+        if suppressions_current:
+            now_utc = _dt.datetime.now(_dt.timezone.utc)
+            for suppression in active_suppressions:
+                try:
+                    expiry = _dt.datetime.fromisoformat(
+                        str(suppression["expiresAt"]).replace("Z", "+00:00")
+                    )
+                    if expiry.tzinfo is None or expiry.astimezone(_dt.timezone.utc) <= now_utc:
+                        raise ValueError("expired suppression")
+                except (KeyError, TypeError, ValueError):
+                    suppressions_current = False
+                    break
+        expected_release_range_digest = audit_release_range_digest(
+            project_path,
+            str(subject.get("baseCommit") or "").strip() or None,
+        )
+        audit_passes_release = (
+            verified_audit["valid"]
+            and audit_payload.get("passed") is True
+            and audit_payload.get("complete") is True
+            and audit_payload.get("resultStatus") == "pass"
+            and audit_payload.get("profile") == str(audit_policy.get("releaseProfile") or "release")
+            and audit_payload.get("scopeMode") == "repository"
+            and audit_payload.get("scope") == ["."]
+            and audit_payload.get("releaseScopeCovered") is True
+            and audit_payload.get("releaseRangeDigest") == expected_release_range_digest
+            and suppressions_current
+        )
+        if audit_policy.get("releaseRequiresAuditReceipt") and not audit_passes_release:
+            blockers.append("Release policy requires a current complete passing release-profile audit receipt.")
+        elif not audit_passes_release:
+            warnings.append("An optional audit receipt was supplied but is not a current complete passing release-profile result.")
+    elif audit_policy.get("releaseRequiresAuditReceipt"):
+        blockers.append("Release policy requires a current complete passing release-profile audit receipt.")
 
     if not explicit_release_requested:
         blockers.append("Release readiness requires explicit user approval for this release check.")
@@ -3810,6 +5714,10 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "verifiedReceipts": verified_qa,
         },
         "securityEvidence": verified_security,
+        "auditEvidence": {
+            "required": bool(audit_policy.get("releaseRequiresAuditReceipt")),
+            "verification": verified_audit,
+        },
         "preflight": preflight,
         "shipCheck": ship,
         "releaseStandard": [
@@ -3853,7 +5761,7 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
         raise ToolError("evidence must be an object when provided.")
     strict = bool(args.get("strict", True))
     report_path_raw = str(args.get("report_path") or evidence.get("report_path") or "").strip()
-    report_metrics: dict[str, Any] | None = None
+    report_metrics: Optional[dict[str, Any]] = None
     warnings: list[str] = []
     blockers: list[str] = []
     if report_path_raw:
@@ -3959,7 +5867,12 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
 TOOLS: dict[str, dict[str, Any]] = {
     "gstack_mastery_status": {
         "description": "Show the current JStack learner stage, advancement evidence, and next deliberate-practice drill.",
-        "inputSchema": {"type": "object", "properties": {}},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "track": {"type": "string", "enum": ["engineering", "audit"], "default": "engineering"}
+            },
+        },
         "handler": tool_mastery_status,
         "readOnlyHint": True,
     },
@@ -3967,7 +5880,10 @@ TOOLS: dict[str, dict[str, Any]] = {
         "description": "Initialize the local JStack mastery profile at Stage 0 without overwriting an existing profile.",
         "inputSchema": {
             "type": "object",
-            "properties": {"learner_name": {"type": "string", "default": "Jay"}},
+            "properties": {
+                "learner_name": {"type": "string", "default": "Jay"},
+                "track": {"type": "string", "enum": ["engineering", "audit"], "default": "engineering"},
+            },
         },
         "handler": tool_mastery_start,
         "readOnlyHint": False,
@@ -3979,6 +5895,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "required": ["project_path", "stage", "drill_id", "assistance_level", "assessor", "assessor_citations", "assessment", "artifacts"],
             "properties": {
                 "project_path": {"type": "string"},
+                "track": {"type": "string", "enum": ["engineering", "audit"], "default": "engineering"},
                 "stage": {"type": "integer", "minimum": 0, "maximum": 9},
                 "drill_id": {"type": "string"},
                 "assistance_level": {"type": "string", "enum": ["observed", "guided", "checklist", "independent", "independent_teach"]},
@@ -3998,9 +5915,17 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "artifacts": {"type": "object", "description": "Map each stage requiredArtifact name to a project-relative file or directory."},
                 "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
                 "security_receipt": {"type": "string"},
+                "audit_receipt": {"type": "string"},
                 "hard_gate_failures": {"type": "array", "items": {"type": "string"}, "default": []},
                 "blind_capstone": {"type": "boolean", "default": False},
-                "capstone_results": {"type": "object"}
+                "assessor_attestation": {
+                    "type": "object",
+                    "description": "Audit Stage 9 only: assessor-signed attestation bound to the exact attempt digest and a distinct unseen challenge subject. A caller boolean cannot establish blindness.",
+                },
+                "capstone_results": {
+                    "type": "object",
+                    "description": "Engineering Stage 9 aggregate results only. Audit Stage 9 derives metrics from the required evaluation-results.json benchmark evaluation and rejects this field."
+                }
             }
         },
         "handler": tool_mastery_record,
@@ -4176,6 +6101,78 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": tool_security_audit,
         "readOnlyHint": True,
     },
+    "gstack_audit": {
+        "description": "Start a read-only evidence-bound audit session, collect bounded deterministic evidence, discover curated offline adapters, and optionally run only exactly approved adapter subjects.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_path": {"type": "string"},
+                "profile": {
+                    "type": "string",
+                    "enum": ["quick", "standard", "deep", "release"],
+                },
+                "scope": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Repository-relative POSIX paths. Omit for the profile default.",
+                },
+                "base_ref": {"type": "string"},
+                "fail_on": {
+                    "type": "string",
+                    "enum": ["info", "low", "medium", "high", "critical", "none"],
+                },
+                "adapter_approvals": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Exact approval objects copied from applicable adapter plan subjects. Omit for discovery only.",
+                },
+                "adapter_timeout_sec": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 300,
+                    "default": 120,
+                },
+            },
+        },
+        "handler": tool_audit,
+        "readOnlyHint": False,
+    },
+    "gstack_audit_finalize": {
+        "description": "Validate a signed audit session, exact subject coverage, structured findings, source ranges, suppressions, and result semantics; emit JSON, Markdown, SARIF, and an eligible Git-bound audit receipt.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "audit_session_token",
+                "domain_coverage",
+                "evidence",
+                "findings",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "audit_session_token": {"type": "string"},
+                "domain_coverage": {
+                    "description": "Object or array containing exact audit-domain coverage entries."
+                },
+                "evidence": {"type": "array", "items": {"type": "object"}},
+                "findings": {"type": "array", "items": {"type": "object"}},
+                "suppressions": {"type": "array", "items": {"type": "object"}},
+                "qa_receipts": {"type": "array", "items": {"type": "string"}},
+                "errors": {"type": "array", "items": {"type": "string"}},
+                "formats": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["json", "markdown", "sarif"]},
+                },
+                "evaluated_at": {
+                    "type": "string",
+                    "description": "Deprecated compatibility field. Suppression expiry is always evaluated against server time.",
+                },
+            },
+        },
+        "handler": tool_audit_finalize,
+        "readOnlyHint": True,
+    },
     "gstack_qa": {
         "description": "Discover test/build commands. Execution requires explicit trust approval bound to the exact git revision and project fingerprint.",
         "inputSchema": {
@@ -4253,6 +6250,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "run_secret_scan": {"type": "boolean", "default": True},
                 "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
                 "security_receipt": {"type": "string"},
+                "audit_receipt": {"type": "string"},
             },
         },
         "handler": tool_release_readiness,
@@ -4308,13 +6306,24 @@ def tool_definitions() -> list[dict[str, Any]]:
 
 
 def mcp_result(data: Any) -> dict[str, Any]:
+    text_payload = data
+    if isinstance(data, dict) and data.get("schemaVersion") == "jstack.audit.finalization.v1":
+        text_payload = {
+            "schemaVersion": data["schemaVersion"],
+            "executiveSummary": data.get("executiveSummary"),
+            "releaseDecision": data.get("releaseDecision"),
+            "requestedFormats": data.get("requestedFormats"),
+            "gitBoundReceiptAvailable": data.get("gitBoundReceiptAvailable"),
+            "releaseCertificationAvailable": data.get("releaseCertificationAvailable"),
+            "detail": "Requested audit artifacts are available in structuredContent.",
+        }
     return {
-        "content": [{"type": "text", "text": json_text(data)}],
+        "content": [{"type": "text", "text": json_text(text_payload)}],
         "structuredContent": data,
     }
 
 
-def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
+def handle_request(message: dict[str, Any]) -> Optional[dict[str, Any]]:
     global _MCP_INITIALIZED
     method = message.get("method")
     request_id = message.get("id")
@@ -4354,7 +6363,8 @@ def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
             return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": tool_definitions()}}
         if method == "tools/call":
             name = params.get("name")
-            arguments = params.get("arguments") or {}
+            raw_arguments = params.get("arguments", {})
+            arguments = {} if raw_arguments is None else raw_arguments
             if name not in TOOLS:
                 raise ToolError(f"Unknown tool: {name}")
             if not isinstance(arguments, dict):
@@ -4390,7 +6400,7 @@ def handle_request(message: dict[str, Any]) -> dict[str, Any] | None:
         }
 
 
-def read_message() -> dict[str, Any] | None:
+def read_message() -> Optional[dict[str, Any]]:
     while True:
         line = sys.stdin.buffer.readline(10_000_001)
         if not line:
