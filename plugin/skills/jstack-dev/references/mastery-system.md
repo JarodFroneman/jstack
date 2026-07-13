@@ -7,9 +7,14 @@ system measures demonstrated behavior, not confidence, prompt fluency, or task
 difficulty. Raw rubric score measures the work; assistance separately caps the
 demonstrated level and advancement eligibility.
 
-The canonical machine-readable curriculum is
-`mastery/curriculum.v1.json`. The local profile is stored privately and
-atomically under `~/.jstack/mastery/profile.json`.
+The canonical engineering curriculum is `mastery/curriculum.v1.json`; the
+separate audit curriculum is `mastery/audit-curriculum.v1.json`. The local
+profile is stored privately and atomically under
+`~/.jstack/mastery/profile.json` using `jstack.mastery.profile.v2`.
+
+The profile has independent `engineering` and `audit` tracks. Existing v1 data
+migrates atomically into `tracks.engineering`. Engineering remains the default
+when the optional `track` argument is omitted.
 
 ## Stages
 
@@ -156,7 +161,7 @@ Do not emit role-by-role lectures during normal delivery.
 
 ## Starting Jay
 
-1. Call `jstack_mastery_start` once.
+1. Call `jstack_mastery_start` once, with `track="audit"` only for audit training.
 2. Call `jstack_mastery_status` at the beginning of a training task.
 3. Select a drill from the current learner stage.
 4. Complete real project work through all task-risk gates.

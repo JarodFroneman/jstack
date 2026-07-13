@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "jstack.audit.mastery.curriculum.v1",
+  "track": "audit",
+  "version": 1,
+  "scoring": {
+    "weights": {
+      "correctness": 30,
+      "evidence": 25,
+      "safety": 20,
+      "judgment": 15,
+      "explanation": 10
+    },
+    "assistanceCaps": {
+      "observed": 0,
+      "guided": 1,
+      "checklist": 2,
+      "independent": 3,
+      "independent_teach": 4
+    }
+  },
+  "advancementPolicy": {
+    "stages0To3": "Two consecutive independent attempts scoring at least 80.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
+    "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
+    "hardBlocks": [
+      "fabricated or stale evidence",
+      "secret exposure",
+      "unapproved mutation or execution",
+      "missing mandatory artifacts",
+      "missed seeded P0 finding",
+      "false production-ready claim",
+      "audit pass issued with incomplete required coverage"
+    ]
+  },
+  "stages": [
+    {
+      "stage": 0,
+      "name": "Safe Audit Operator",
+      "outcome": "Safely orient in a repository without mutation, unapproved execution, or secret exposure.",
+      "prerequisites": [],
+      "corePrinciples": ["Scope before scanning", "Least privilege", "Read before running", "Redact sensitive material", "Separate local and production boundaries"],
+      "drills": [{"id": "a0-orientation", "name": "Clean-room audit orientation", "type": "audit"}],
+      "requiredArtifacts": ["orientation.md", "audit-scope.json", "evidence-manifest.json"],
+      "benchmarks": ["Exact root, HEAD, baseline, and dirty state", "Trust and sandbox boundary identified", "Zero secret leakage", "Zero prohibited writes or execution"],
+      "hardGates": ["No mutation", "No unapproved execution", "No credential disclosure"]
+    },
+    {
+      "stage": 1,
+      "name": "Repository Reconnaissance and System Mapping",
+      "outcome": "Map architecture, entry points, data flow, trust boundaries, tests, dependencies, and build paths.",
+      "prerequisites": [0],
+      "corePrinciples": ["Source truth", "Reachability", "Entry points first", "Generated artifacts are drift risks", "Map trust and data boundaries"],
+      "drills": [{"id": "a1-system-map", "name": "Map an unseen repository", "type": "audit"}],
+      "requiredArtifacts": ["system-map.md", "trust-boundaries.md", "coverage-matrix.json"],
+      "benchmarks": ["Critical surfaces classified", "Source truth cited", "Generated artifact drift identified", "No unsupported architectural claim"],
+      "hardGates": ["Coverage matrix complete", "Every material claim cites source evidence"]
+    },
+    {
+      "stage": 2,
+      "name": "Correctness and Reliability Auditor",
+      "outcome": "Find and prove logic, state, error-handling, and reliability defects.",
+      "prerequisites": [1],
+      "corePrinciples": ["Reproduce before claiming", "Define invariants", "Separate symptom from cause", "Analyze failure states", "Retain regression evidence"],
+      "drills": [{"id": "a2-correctness", "name": "Audit seeded correctness defects", "type": "audit"}],
+      "requiredArtifacts": ["correctness-report.json", "reproductions", "invariants.md"],
+      "benchmarks": ["All seeded critical correctness defects", "Reproduction or invariant proof for blockers", "Regression plan", "No speculative high-severity finding"],
+      "hardGates": ["Every blocker is verified", "No fabricated reproduction"]
+    },
+    {
+      "stage": 3,
+      "name": "Security and Threat-Modelling Auditor",
+      "outcome": "Model assets, adversaries, and trust boundaries and identify defensible attack paths.",
+      "prerequisites": [2],
+      "corePrinciples": ["Least privilege", "Deny by default", "Authentication is not authorization", "Validate boundaries", "Review mitigating controls"],
+      "drills": [{"id": "a3-threat-model", "name": "Threat-model and audit an unseen service", "type": "audit"}],
+      "requiredArtifacts": ["threat-model.md", "security-findings.json", "abuse-cases.md"],
+      "benchmarks": ["All seeded critical security findings", "Source, sink, preconditions, impact, and controls", "Applicable versioned standards mapping", "No unsafe live exploitation"],
+      "hardGates": ["Every blocker has a reachable path", "No secret exposure"]
+    },
+    {
+      "stage": 4,
+      "name": "Maintainability and Architecture Auditor",
+      "outcome": "Identify structural risks that materially increase change cost, defect risk, or migration risk.",
+      "prerequisites": [3],
+      "corePrinciples": ["High cohesion", "Explicit contracts", "Controlled dependency direction", "Local reasoning", "Behavior-preserving remediation"],
+      "drills": [
+        {"id": "a4-architecture", "name": "Trace and challenge an architecture finding", "type": "audit"},
+        {"id": "a4-remediation", "name": "Implement and verify a behaviour-preserving architecture remediation", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["architecture-map.md", "maintainability-report.json", "migration-outline.md"],
+      "benchmarks": ["Dependency evidence", "Change-amplification analysis", "No style-only findings", "Behavior-preserving remediation"],
+      "hardGates": ["Compatibility is explicit", "Recommendation cites dependency evidence"]
+    },
+    {
+      "stage": 5,
+      "name": "Performance and Resource-Efficiency Auditor",
+      "outcome": "Identify measurable CPU, memory, I/O, latency, query, or contention problems.",
+      "prerequisites": [4],
+      "corePrinciples": ["Measure before optimizing", "Retain realistic workloads", "Separate asymptotic and constant cost", "Benchmark the critical path", "Prevent regressions"],
+      "drills": [
+        {"id": "a5-performance", "name": "Measure and verify one performance defect", "type": "audit"},
+        {"id": "a5-regression", "name": "Implement a measured performance correction and regression guard", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["benchmark-plan.md", "baseline-results.json", "performance-findings.json"],
+      "benchmarks": ["Reproducible baseline", "Realistic workload", "Evidence-backed finding", "No guessed speedup", "Regression threshold"],
+      "hardGates": ["No percentage claim without measurement", "Retained benchmark inputs and results"]
+    },
+    {
+      "stage": 6,
+      "name": "Supply-Chain, Build and Release-Integrity Auditor",
+      "outcome": "Audit dependencies, lockfiles, CI permissions, provenance, and generated artifacts.",
+      "prerequisites": [5],
+      "corePrinciples": ["Immutable inputs", "Minimal dependencies", "Least-privilege automation", "Traceable provenance", "Complete scanning or no-go"],
+      "drills": [
+        {"id": "a6-supply-chain", "name": "Trace source to packaged artifact", "type": "audit"},
+        {"id": "a6-hardening", "name": "Implement and verify one supply-chain or build-integrity control", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["dependency-inventory.json", "build-trace.md", "supply-chain-report.json"],
+      "benchmarks": ["Dependency and build trace", "Least-privilege CI review", "Provenance or copy-drift detection", "Incomplete advisory coverage produces no-go"],
+      "hardGates": ["No hidden generated drift", "Unavailable mandatory coverage is incomplete"]
+    },
+    {
+      "stage": 7,
+      "name": "Dynamic and Adversarial Verification",
+      "outcome": "Falsify static findings and expose unseen failure modes through bounded testing.",
+      "prerequisites": [6],
+      "corePrinciples": ["Challenge the hypothesis", "Deterministic seeds", "Isolate effects", "Negative tests", "Fault injection"],
+      "drills": [
+        {"id": "a7-adversarial", "name": "Challenge an audit finding set", "type": "audit"},
+        {"id": "a7-harness", "name": "Implement a bounded deterministic adversarial verification harness", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["adversarial-plan.md", "verification-results.json", "false-positive-analysis.md"],
+      "benchmarks": ["Deterministic tests and seeds", "Before and after evidence", "Bounded execution", "Explicit false-positive analysis", "No environmental leakage"],
+      "hardGates": ["Exact execution approval", "No unapproved external effect"]
+    },
+    {
+      "stage": 8,
+      "name": "Enterprise Audit Lead",
+      "outcome": "Triage findings, manage accepted risk, and produce defensible engineering and executive reports.",
+      "prerequisites": [7],
+      "corePrinciples": ["Severity is not priority", "Accepted risk is explicit", "Ownership and expiry are mandatory", "Residual risk is stated", "Verify remediation"],
+      "drills": [
+        {"id": "a8-lead", "name": "Lead a release audit and defend the decision", "type": "audit"},
+        {"id": "a8-controls", "name": "Implement and verify an audit control or reporting improvement", "type": "implementation"}
+      ],
+      "requiredArtifacts": ["audit-report.md", "audit-result.json", "audit.sarif", "risk-register.json"],
+      "benchmarks": ["Stable fingerprints", "Valid SARIF", "Owner/reason/expiry suppressions", "Correct go/no-go", "Verified remediation"],
+      "hardGates": ["Complete audit receipt", "No invalid suppression", "No incomplete pass"]
+    },
+    {
+      "stage": 9,
+      "name": "Principal Auditor and Audit-Agent Engineer",
+      "outcome": "Evaluate the audit system itself and independently lead unseen audits.",
+      "prerequisites": [8],
+      "corePrinciples": ["Audit the auditor", "Deterministic evidence over confidence", "Measure precision and recall", "Calibrate severity", "Independent review"],
+      "drills": [{"id": "a9-blind-audit", "name": "Blind audit of an unseen repository", "type": "audit"}],
+      "requiredArtifacts": ["blind-audit.md", "evaluation-results.json", "calibration-report.md", "operator-runbook.md", "release-dossier.md"],
+      "benchmarks": ["Two assessor-signed blind attempts on distinct challenge subjects at 90 or above", "Every seeded P0", "At least 80 percent of seeded P1 findings", "Exact unsupported coverage classification", "No severity under-ranking or priority miscalibration", "Correct go/no-go", "Precision, recall, and duplicate reporting", "Deterministic repeated results", "Zero fabricated evidence"],
+      "hardGates": ["No false production-ready claim", "Complete release dossier", "Independent assessor approval"]
+    }
+  ]
+}

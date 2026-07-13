@@ -15,11 +15,20 @@ tests, security evidence, release controls, and honest residual-risk reporting.
   specialists.
 - `/jstack-full-team`: all 11 professional roles, dispatched in controlled
   waves.
+- `jstack-audit`: a read-only, evidence-bound audit with quick, standard,
+  deep, and release profiles.
 
-Command choice is authoritative. All three modes use the same enterprise
-quality bar.
+Command choice is authoritative. The three delivery modes share one enterprise
+quality bar. Audit mode is a separate inspection workflow and does not edit
+project code.
 
-## What 0.2 Enforces
+The umbrella or legacy install supports `$jstack-audit`; the dedicated plugin
+uses the namespaced form `$jstack-audit:jstack-audit`. Legacy direct installs
+also expose `/prompts:jstack-audit`. The intended `/jstack-audit` top-level
+palette label is client-dependent and is not claimed until verified after an
+actual install and restart.
+
+## What 0.3 Enforces
 
 - MCP newline-delimited JSON-RPC transport tested by an independent client.
 - Independent runtime mount diagnostics plus explicit Git-backed and
@@ -31,12 +40,16 @@ quality bar.
 - Signed session-local QA and security receipts.
 - Current-tree and release-range secret scanning that fails on incomplete
   coverage.
-- Release denial without an explicit distinct pre-release base, clean commit, all current QA
-  receipts, complete security evidence, external approval reference, rollback,
-  and monitoring.
+- Release denial without an explicit distinct pre-release base, clean commit,
+  all current QA receipts, complete security evidence, external approval
+  reference, rollback, and monitoring.
 - Actual coordination-packet, role, permission, and write-scope validation.
 - A ten-stage mastery curriculum with artifacts, assistance caps, repeated
-  independent attempts, and blind capstones.
+  independent attempts, and assessor-signed blind capstones.
+- Deterministic audit sessions and finalization bound to repository state,
+  policy, controls, scope, coverage, and stable findings.
+- A separate ten-stage audit mastery track with atomic migration of existing
+  engineering profiles.
 
 ## Trust Boundary
 
@@ -48,19 +61,26 @@ Run untrusted projects in a container or VM.
 Receipts prevent accidental or caller-side alteration during one MCP session.
 They do not protect against compromise of the same user account.
 
+Audit receipts attest the collected scope, validated structure, coverage, and
+result calculation. They do not prove that model-authored semantic findings are
+true. The existing bounded secret scanner and its security receipt retain their
+original meaning.
+
 Non-Git orchestration directories can use JStack planning in `artifact-only`
-mode. That mode requires direct hashes, tests, backups, immutable runtime
-identity, rollback, monitoring, and smoke evidence, but it cannot issue
-commit-bound receipts or a JStack release-readiness result.
+mode. Formal operator evidence still requires direct hashes, tests, backups,
+immutable runtime identity, rollback, monitoring, and smoke evidence, but it
+cannot issue commit-bound receipts or a JStack release-readiness result.
 
 ## Layout
 
 - `mcp/jstack/jstack_mcp_server.py`: canonical MCP server.
+- `mcp/jstack/audit/`: deterministic audit controls, evidence, findings, and
+  output renderers.
 - `prompts/`: canonical slash-command prompts.
-- `skills/jstack-dev/`: canonical workflow skill and references.
-- `mastery/curriculum.v1.json`: canonical training curriculum.
+- `skills/jstack-dev/` and `skills/jstack-audit/`: canonical workflow skills.
+- `mastery/`: engineering and audit training curricula.
 - `plugin/`: generated umbrella plugin with portable Node/Python launcher.
-- `plugins/`: three top-level alias plugins.
+- `plugins/`: four dedicated command plugins.
 - `scripts/sync_artifacts.py`: generated-artifact and version enforcement.
 - `scripts/install.py`: staged legacy direct installer.
 - `tests/`: unit, transport, adversarial, release, mastery, and install tests.
@@ -76,6 +96,7 @@ Primary tools use the `jstack_*` prefix:
 - teams: `team_plan`, `dispatch_check`
 - evidence: `qa`, `security_audit`, `ship_check`,
   `release_readiness`
+- audit: `audit`, `audit_finalize`
 - continuity: `context_save`, `context_restore`
 - specialist review: `quant_backtest_review`
 - learning: `mastery_start`, `mastery_status`, `mastery_record`
@@ -98,18 +119,22 @@ CI runs these checks on macOS, Linux, and Windows with Python 3.9 and 3.12.
 
 ### Codex Plugins
 
-Register the three directories under `plugins/` in a personal marketplace,
+Register the four directories under `plugins/` in a personal marketplace,
 then install:
 
 ~~~text
 codex plugin add j-stack-dev@personal
 codex plugin add jstack-subagents@personal
 codex plugin add jstack-full-team@personal
+codex plugin add jstack-audit@personal
 ~~~
 
 The umbrella `plugin/` is an alternative all-in-one distribution. Do not
-install it alongside the three dedicated command plugins or the command palette
+install it alongside the four dedicated command plugins or the command palette
 will contain duplicates.
+
+Dedicated command plugins are skill-only surfaces and require the shared
+`jstack` MCP installation. The umbrella plugin bundles that MCP itself.
 
 Restart Codex or open a new task after plugin/MCP changes.
 
@@ -119,13 +144,14 @@ Restart Codex or open a new task after plugin/MCP changes.
 python scripts/install.py
 ~~~
 
-This installs prompts, the umbrella skill, MCP server, curriculum, and MCP
-configuration under `~/.codex` using staged directory replacement and config
-backups.
+This installs prompts, both canonical skills, the MCP server, curricula, and MCP
+configuration under `~/.codex` using a transaction-wide staged replacement. A
+failure restores every affected target; the previous config is also retained as
+a backup after a successful install.
 
 ## Mastery
 
-Start at Stage 0:
+Start the engineering track at Stage 0:
 
 1. Call `jstack_mastery_start`.
 2. Use `jstack_mastery_status` to select the next drill.
@@ -136,6 +162,10 @@ Start at Stage 0:
 Read [the mastery system](docs/mastery-system.md) for stages, scoring,
 advancement, and capstones. The profile is a local deliberate-practice record,
 not an accredited credential.
+
+Use `track="audit"` with the same mastery tools for the audit curriculum. See
+[the audit system](docs/audit-system.md) and
+[audit mastery](docs/audit-mastery-system.md).
 
 ## Governance
 

@@ -5,13 +5,17 @@
 Canonical sources live in:
 
 - `mcp/jstack/jstack_mcp_server.py`
+- `mcp/jstack/audit/`
+- `mcp/jstack/schemas/`
 - `prompts/`
-- `skills/jstack-dev/`
-- `mastery/curriculum.v1.json`
+- `skills/jstack-dev/` and `skills/jstack-audit/`
+- `mastery/curriculum.v1.json` and `mastery/audit-curriculum.v1.json`
 - `mcp/jstack/templates/`
 
-`scripts/sync_artifacts.py` generates and verifies plugin copies. CI rejects
-drift, BOMs, malformed JSON, and version mismatch.
+`scripts/sync_artifacts.py` generates and verifies plugin copies. It operates
+only on Git-tracked and explicitly declared files, compares exact generated
+tree inventories, and rejects drift, stale generated files, BOMs, malformed
+JSON, and version mismatch.
 
 ## Control Plane
 
@@ -22,6 +26,7 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - team planning and coordination validation
 - QA command discovery and explicitly approved execution
 - current-tree and release-range secret scanning
+- deterministic audit collection and evidence-bound finalization
 - commit-bound HMAC evidence receipts
 - release readiness evaluation
 - local context and mastery records
@@ -29,6 +34,18 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 The MCP never spawns platform subagents or performs a deployment. Codex's
 platform tools perform real agent dispatch. Project-specific release tools
 perform real production mutation only after separate authorization.
+
+## Audit Protocol
+
+`jstack_audit` creates a state-bound coverage contract and signed audit session.
+`jstack_audit_finalize` validates repository-relative evidence, coverage,
+findings, suppressions, and current state before deriving a result and, for Git
+projects, issuing an audit receipt. The deterministic MCP validates evidence; it
+does not claim to perform semantic model reasoning.
+
+The audit command uses a two-pass agent boundary: candidate generation followed
+by challenge and verification. Artifact-only audits are advisory and cannot
+issue a Git-bound receipt or a formal release-ready result.
 
 ## Project Binding
 
@@ -39,7 +56,8 @@ any existing directory and classify it as:
 - `git`: the canonical repository root is the evidence subject.
 - `artifact-only`: planning can describe direct operational evidence, but all
   Git-bound policy, receipt, context, mastery, quant, and release tools remain
-  unavailable.
+  unavailable. Audit start/finalization may produce an advisory incomplete
+  report, but never a Git-bound receipt or release certification.
 
 This prevents a valid MCP mount from being misreported as unavailable while
 preserving the commit-bound release trust model.
@@ -49,6 +67,13 @@ preserving the commit-bound release trust model.
 A receipt binds repository root, an explicit distinct pre-release base where applicable, HEAD,
 workspace fingerprint, policy digest, tool version, check definition, outcome,
 and server session. Any mismatch denies readiness.
+
+Audit sessions additionally bind controls, profile, scope, required domains,
+adapter inventory, and a deterministic manifest of inspected inputs. Audit
+receipts bind coverage and finding digests, server evaluation time, and active
+suppression expiries. Release-profile receipts bind complete repository scope
+and the release-range digest. The audit release gate is opt-in; QA and security
+receipt compatibility is unchanged.
 
 QA discovery is not evidence. A complete clean scan is evidence only for the
 heuristics it actually ran. Missing, stale, failed, timed-out, truncated, or
@@ -64,3 +89,9 @@ The Python QA runner is not an operating-system sandbox. It closes stdin,
 scrubs inherited variables, isolates HOME, avoids a shell, caps output/time, and
 kills its process group. Untrusted project execution still requires a
 container, VM, or host sandbox.
+
+The same boundary applies to approved audit adapters. Static audit collection
+does not execute repository code or perform network work. Adapter offline flags
+are advisory process configuration; they do not remove host filesystem or
+network privileges. Quick therefore rejects all adapter execution, and
+untrusted verification requires an externally enforced read-only sandbox.

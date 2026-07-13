@@ -1,0 +1,403 @@
+{
+  "schemaVersion": "jstack.audit.benchmark-fixture-set.v1",
+  "corpusId": "jstack.audit.synthetic.v1",
+  "safety": {
+    "execution": "prohibited",
+    "network": "prohibited",
+    "realCredentials": "prohibited",
+    "representation": "inert-virtual-filesystem"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "FX-CRITICAL-AUTHZ",
+      "title": "Cross-tenant export authorization",
+      "language": "python",
+      "categories": ["critical-defect", "security"],
+      "summary": "A synthetic export handler trusts a tenant identifier without binding it to the caller.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/export.py",
+          "contentLines": [
+            "from typing import Dict",
+            "",
+            "SYNTHETIC_EXPORTS: Dict[str, str] = {\"tenant-a\": \"alpha\", \"tenant-b\": \"bravo\"}",
+            "",
+            "def export_for(caller_tenant: str, requested_tenant: str) -> str:",
+            "    if not caller_tenant:",
+            "        raise ValueError(\"caller tenant required\")",
+            "    # Defect: requested_tenant is not compared with caller_tenant.",
+            "    return SYNTHETIC_EXPORTS[requested_tenant]",
+            ""
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "tests/contract.txt",
+          "contentLines": [
+            "A caller may export only its own synthetic tenant record.",
+            "No authentication material is present in this fixture."
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-DUPLICATE-SOURCES",
+      "title": "Lost update reported by two sources",
+      "language": "python",
+      "categories": ["duplicate-sources", "high-defect", "correctness"],
+      "summary": "One non-atomic update defect is independently visible in source and a retained synthetic report.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/cache.py",
+          "contentLines": [
+            "from typing import Dict",
+            "",
+            "COUNTS: Dict[str, int] = {}",
+            "",
+            "def increment(key: str) -> int:",
+            "    current = COUNTS.get(key, 0)",
+            "    # Defect: another worker can update between this read and write.",
+            "    COUNTS[key] = current + 1",
+            "    return COUNTS[key]"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "reports/static.json",
+          "contentLines": [
+            "{",
+            "  \"schemaVersion\": \"synthetic.static-report.v1\",",
+            "  \"findingCode\": \"non-atomic-read-modify-write\"",
+            "}"
+          ]
+        }
+      ],
+      "retainedEvidence": [
+        {
+          "evidenceId": "EVID-DUP-STATIC-01",
+          "type": "static-report",
+          "status": "complete",
+          "subjectDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-UNREACHABLE-LOOKALIKE",
+      "title": "Unreachable vulnerable-looking branch",
+      "language": "python",
+      "categories": ["plausible-false-positive", "unreachable-code", "security"],
+      "summary": "A dangerous-looking legacy helper is behind a constant-false build gate and has no call sites.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/legacy_preview.py",
+          "contentLines": [
+            "LEGACY_PREVIEW_ENABLED = False",
+            "",
+            "def preview_name(raw_name: str) -> str:",
+            "    if LEGACY_PREVIEW_ENABLED:",
+            "        return \"unsafe-preview:\" + raw_name",
+            "    return \"preview-disabled\""
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "reports/callgraph.txt",
+          "contentLines": [
+            "entrypoints: src/main.py:run",
+            "reachable preview_name callsites: 0",
+            "LEGACY_PREVIEW_ENABLED assignments: constant false"
+          ]
+        }
+      ],
+      "retainedEvidence": [
+        {
+          "evidenceId": "EVID-CALLGRAPH-01",
+          "type": "callgraph",
+          "status": "complete",
+          "subjectDigest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-MITIGATED-SECURITY",
+      "title": "Mitigated redirect path",
+      "language": "python",
+      "categories": ["plausible-false-positive", "mitigated-security", "security"],
+      "summary": "A redirect parameter is constrained to a fixed allowlist before use.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/redirects.py",
+          "contentLines": [
+            "ALLOWED_DESTINATIONS = {\"home\": \"/home\", \"billing\": \"/billing\"}",
+            "",
+            "def redirect_target(requested: str) -> str:",
+            "    return ALLOWED_DESTINATIONS.get(requested, \"/home\")"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "tests/redirect_contract.txt",
+          "contentLines": [
+            "unknown values resolve to /home",
+            "absolute and scheme-relative destinations are absent from the allowlist"
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-UNMEASURED-PERFORMANCE",
+      "title": "Unmeasured bounded performance concern",
+      "language": "python",
+      "categories": ["plausible-false-positive", "unmeasured-performance", "performance"],
+      "summary": "A nested loop looks costly, but the public contract bounds each input to twelve items and no benchmark exists.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/badges.py",
+          "contentLines": [
+            "MAX_BADGES = 12",
+            "",
+            "def common_badges(left: list, right: list) -> list:",
+            "    if len(left) > MAX_BADGES or len(right) > MAX_BADGES:",
+            "        raise ValueError(\"badge limit exceeded\")",
+            "    return [badge for badge in left if badge in right]"
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-MEASURED-PERFORMANCE",
+      "title": "Measured quadratic deduplication",
+      "language": "python",
+      "categories": ["high-defect", "measured-performance", "performance"],
+      "summary": "A production-sized synthetic workload retains deterministic measurements showing quadratic growth.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/dedupe.py",
+          "contentLines": [
+            "def unique_rows(rows: list) -> list:",
+            "    unique = []",
+            "    for row in rows:",
+            "        # Defect: list membership rescans every retained row.",
+            "        if row not in unique:",
+            "            unique.append(row)",
+            "    return unique"
+          ]
+        }
+      ],
+      "retainedEvidence": [
+        {
+          "evidenceId": "EVID-PERF-QUADRATIC-01",
+          "type": "benchmark",
+          "status": "complete",
+          "subjectDigest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "inputDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "network": "disabled",
+          "warmups": 3,
+          "samples": [
+            {"rows": 1000, "milliseconds": [10, 10, 11, 10, 9]},
+            {"rows": 2000, "milliseconds": [39, 40, 41, 40, 40]},
+            {"rows": 4000, "milliseconds": [159, 160, 161, 160, 160]}
+          ]
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-GENERATED-DRIFT",
+      "title": "Generated policy copy drift",
+      "language": "json",
+      "categories": ["generated-copy-drift", "high-defect", "supply-chain"],
+      "summary": "The reviewed source policy blocks release, while the packaged generated copy disables the gate.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/policy.json",
+          "contentLines": [
+            "{\"schemaVersion\":\"synthetic.policy.v1\",\"requiresApproval\":true}"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "generated/policy.json",
+          "contentLines": [
+            "{\"schemaVersion\":\"synthetic.policy.v1\",\"requiresApproval\":false}"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "build/trace.txt",
+          "contentLines": [
+            "package input: generated/policy.json",
+            "source digest and generated digest differ"
+          ]
+        }
+      ],
+      "retainedEvidence": [
+        {
+          "evidenceId": "EVID-BUILD-TRACE-01",
+          "type": "build-trace",
+          "status": "complete",
+          "subjectDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        }
+      ]
+    },
+    {
+      "fixtureId": "FX-PATH-TRAVERSAL",
+      "title": "Synthetic archive path traversal",
+      "language": "python",
+      "categories": ["critical-defect", "malicious-path", "path-traversal", "security"],
+      "summary": "An inert malicious sample path escapes the intended synthetic archive root.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/archive.py",
+          "contentLines": [
+            "from pathlib import Path",
+            "",
+            "ARCHIVE_ROOT = Path(\"/synthetic/archive\")",
+            "",
+            "def destination(user_path: str) -> Path:",
+            "    # Defect: no normalized containment check is performed.",
+            "    return ARCHIVE_ROOT / user_path"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "samples/paths.json",
+          "contentLines": [
+            "{\"benign\":\"tenant-a/report.txt\",\"malicious\":\"../tenant-b/report.txt\"}"
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-SYMLINK-ESCAPE",
+      "title": "Virtual symlink containment escape",
+      "language": "python",
+      "categories": ["high-defect", "security", "symlink"],
+      "summary": "A lexical prefix check is followed by a read through a virtual symlink that targets outside the root.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/publisher.py",
+          "contentLines": [
+            "from pathlib import Path",
+            "",
+            "PUBLIC_ROOT = Path(\"/synthetic/public\")",
+            "",
+            "def read_public(relative: str) -> str:",
+            "    candidate = PUBLIC_ROOT / relative",
+            "    if not str(candidate).startswith(str(PUBLIC_ROOT)):",
+            "        raise ValueError(\"outside public root\")",
+            "    # Defect: the lexical check does not reject symlink nodes.",
+            "    return candidate.read_text(encoding=\"utf-8\")"
+          ]
+        },
+        {
+          "nodeType": "symlink",
+          "path": "public/latest.txt",
+          "target": "../../synthetic-outside/readonly.txt"
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-EXPIRED-RISK",
+      "title": "Expired accepted-risk record",
+      "language": "json",
+      "categories": ["expired-risk", "high-defect", "operations"],
+      "summary": "A high-severity synthetic defect remains open after its fixed accepted-risk expiry date.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "risk/accepted.json",
+          "contentLines": [
+            "{",
+            "  \"schemaVersion\": \"synthetic.accepted-risk.v1\",",
+            "  \"riskId\": \"RISK-SYNTHETIC-001\",",
+            "  \"findingFingerprint\": \"sha256:6666666666666666666666666666666666666666666666666666666666666666\",",
+            "  \"owner\": \"synthetic-owner\",",
+            "  \"expiresOn\": \"2026-06-30\"",
+            "}"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "evaluation/context.json",
+          "contentLines": [
+            "{\"evaluationDate\":\"2026-07-13\",\"openSeverity\":\"high\"}"
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-UNSUPPORTED-LANGUAGE",
+      "title": "Unsupported language coverage",
+      "language": "cobol",
+      "categories": ["coverage-gap", "unsupported-language"],
+      "summary": "A benign COBOL module has no supported analyzer in the synthetic audit environment.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/HELLO.CBL",
+          "contentLines": [
+            "       IDENTIFICATION DIVISION.",
+            "       PROGRAM-ID. SYNTHETIC-HELLO.",
+            "       PROCEDURE DIVISION.",
+            "           DISPLAY 'SYNTHETIC'.",
+            "           STOP RUN."
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "coverage/status.json",
+          "contentLines": [
+            "{\"language\":\"cobol\",\"adapterStatus\":\"unsupported\"}"
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    },
+    {
+      "fixtureId": "FX-CLEAN-CONTROL",
+      "title": "Clean deterministic control",
+      "language": "python",
+      "categories": ["clean-control", "correctness"],
+      "summary": "A small total function and its bounded contract contain no seeded defect.",
+      "virtualFilesystem": [
+        {
+          "nodeType": "file",
+          "path": "src/clamp.py",
+          "contentLines": [
+            "def clamp(value: int, lower: int, upper: int) -> int:",
+            "    if lower > upper:",
+            "        raise ValueError(\"invalid bounds\")",
+            "    return min(max(value, lower), upper)"
+          ]
+        },
+        {
+          "nodeType": "file",
+          "path": "tests/clamp_contract.txt",
+          "contentLines": [
+            "values below lower return lower",
+            "values above upper return upper",
+            "values inside bounds are unchanged",
+            "inverted bounds are rejected"
+          ]
+        }
+      ],
+      "retainedEvidence": []
+    }
+  ],
+  "contentDigest": "sha256:903e95248f4293031e4245aa248e53ff6d4e826119a0f514d93f9ff3580fb5de"
+}

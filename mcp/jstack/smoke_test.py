@@ -56,6 +56,8 @@ def main() -> int:
         "jstack_dispatch_check",
         "jstack_qa",
         "jstack_security_audit",
+        "jstack_audit",
+        "jstack_audit_finalize",
         "jstack_release_readiness",
         "jstack_mastery_status",
     }

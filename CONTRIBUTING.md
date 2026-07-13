@@ -17,11 +17,16 @@ python mcp/jstack/smoke_test.py
 ~~~
 
 Edit canonical files under `mcp/jstack/`, `prompts/`,
-`skills/jstack-dev/`, and `mastery/`. Do not hand-edit their generated
+`skills/jstack-dev/`, `skills/jstack-audit/`, and `mastery/`. Do not hand-edit their generated
 copies under `plugin/`.
 
 Changes to transport, policy floors, command execution, receipts, dispatch,
 installers, or release readiness require adversarial regression tests.
+
+Audit changes must preserve deterministic output, read-only operation, stable
+finding fingerprints, fail-closed incomplete coverage, and the existing secret
+scanner contract. Add focused fixtures under `tests/fixtures/audit/`; never put
+real credentials or live exploit targets in a fixture.
 
 ## Pull Requests
 

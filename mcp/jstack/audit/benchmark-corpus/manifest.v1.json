@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "jstack.audit.benchmark-manifest.v1",
+  "corpusId": "jstack.audit.synthetic.v1",
+  "corpusVersion": "1.0.0",
+  "description": "Frozen, inert synthetic fixtures for deterministic JStack audit scoring. Results apply only to supplied structured submissions over this corpus.",
+  "digestAlgorithm": "sha256-canonical-json-v1",
+  "fixtureSchemaVersion": "jstack.audit.benchmark-fixture-set.v1",
+  "fixtureSet": {
+    "path": "fixtures.v1.json",
+    "contentDigest": "sha256:903e95248f4293031e4245aa248e53ff6d4e826119a0f514d93f9ff3580fb5de"
+  },
+  "answerKey": {
+    "path": "answer-key.v1.json",
+    "schemaVersion": "jstack.audit.benchmark-answer-key.v1",
+    "contentDigest": "sha256:c78568bb35ed10bc69b85654810a4965395671b1cc6671cba6bdf876ab2e2dcb"
+  },
+  "fixtures": [
+    {
+      "fixtureId": "FX-CRITICAL-AUTHZ",
+      "required": true,
+      "language": "python",
+      "categories": ["critical-defect", "security"],
+      "contentDigest": "sha256:12906b1d2a02134b98107aaac84a1939a39beb78784a84d2491a3b84d2c2ccff"
+    },
+    {
+      "fixtureId": "FX-DUPLICATE-SOURCES",
+      "required": true,
+      "language": "python",
+      "categories": ["duplicate-sources", "high-defect", "correctness"],
+      "contentDigest": "sha256:4d325e66b6f69558c3c605bdd242f9bfe95d7b9d9f700278e144dce75fae4186"
+    },
+    {
+      "fixtureId": "FX-UNREACHABLE-LOOKALIKE",
+      "required": true,
+      "language": "python",
+      "categories": ["plausible-false-positive", "unreachable-code", "security"],
+      "contentDigest": "sha256:2b5835c79fef2b20fc21247a7aedc1e7be1203c8027c9300f27f9134ebb7176c"
+    },
+    {
+      "fixtureId": "FX-MITIGATED-SECURITY",
+      "required": true,
+      "language": "python",
+      "categories": ["plausible-false-positive", "mitigated-security", "security"],
+      "contentDigest": "sha256:725896611a13fd18b6a54f1d44df53cc5215e9ebed0aea5c9b33425e6f2c5af0"
+    },
+    {
+      "fixtureId": "FX-UNMEASURED-PERFORMANCE",
+      "required": true,
+      "language": "python",
+      "categories": ["plausible-false-positive", "unmeasured-performance", "performance"],
+      "contentDigest": "sha256:c87928eb42423a7ab977b9fc1672492d32aaad6d9c07f2f516978a4e1d19d96f"
+    },
+    {
+      "fixtureId": "FX-MEASURED-PERFORMANCE",
+      "required": true,
+      "language": "python",
+      "categories": ["high-defect", "measured-performance", "performance"],
+      "contentDigest": "sha256:81bfd83020f66b8c977a1539cc87967aba5660271c95e55ddfd6c39a4810ae33"
+    },
+    {
+      "fixtureId": "FX-GENERATED-DRIFT",
+      "required": true,
+      "language": "json",
+      "categories": ["generated-copy-drift", "high-defect", "supply-chain"],
+      "contentDigest": "sha256:598271f3a37dc149413a5f12a3a0e602ff4bbc4747ea3e977b81d832d355ddd7"
+    },
+    {
+      "fixtureId": "FX-PATH-TRAVERSAL",
+      "required": true,
+      "language": "python",
+      "categories": ["critical-defect", "malicious-path", "path-traversal", "security"],
+      "contentDigest": "sha256:a377dfaf24187e916628cbdcc3fc75561ded004bba35ce64daaa57175fa67510"
+    },
+    {
+      "fixtureId": "FX-SYMLINK-ESCAPE",
+      "required": true,
+      "language": "python",
+      "categories": ["high-defect", "security", "symlink"],
+      "contentDigest": "sha256:360b513e06fafa9f65b01c10bebc3554f3fc007668c499877124594f72348967"
+    },
+    {
+      "fixtureId": "FX-EXPIRED-RISK",
+      "required": true,
+      "language": "json",
+      "categories": ["expired-risk", "high-defect", "operations"],
+      "contentDigest": "sha256:3cf5b7fc52e20a147497aed6b67c64842eda9cbb2bfc781a34a66e491474f4cb"
+    },
+    {
+      "fixtureId": "FX-UNSUPPORTED-LANGUAGE",
+      "required": true,
+      "language": "cobol",
+      "categories": ["coverage-gap", "unsupported-language"],
+      "contentDigest": "sha256:90a8c336a3c917bb29ee6be473121addd9cd96b6b5f2d3e183b0751531d73d45"
+    },
+    {
+      "fixtureId": "FX-CLEAN-CONTROL",
+      "required": true,
+      "language": "python",
+      "categories": ["clean-control", "correctness"],
+      "contentDigest": "sha256:85fe867e2701e962ca5601c07394123a842ca41227697c505868b903ca2bc86e"
+    }
+  ],
+  "contentDigest": "sha256:f549cfd1082f3e4668092be85186d5704546365c3d6d1c81ded67dec2a7ed134"
+}

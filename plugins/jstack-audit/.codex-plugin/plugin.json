@@ -1,0 +1,39 @@
+{
+  "name": "jstack-audit",
+  "version": "0.3.0",
+  "description": "Top-level JStack command for evidence-bound read-only repository audits.",
+  "author": {
+    "name": "Jarod Froneman",
+    "url": "https://github.com/JarodFroneman"
+  },
+  "homepage": "https://github.com/JarodFroneman/jstack",
+  "repository": "https://github.com/JarodFroneman/jstack",
+  "license": "MIT",
+  "keywords": [
+    "jstack",
+    "codex",
+    "audit",
+    "security",
+    "quality"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "JStack Audit",
+    "shortDescription": "Evidence-bound read-only repository audits",
+    "longDescription": "Top-level Codex workflow for bounded repository audits across correctness, security, architecture, maintainability, performance, supply chain, tests, compatibility, data integrity, and operations. It keeps findings evidence-bound and never edits audited code.",
+    "developerName": "Jarod Froneman",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Run a read-only evidence-bound JStack audit of this repository."
+    ],
+    "websiteURL": "https://github.com/JarodFroneman/jstack",
+    "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",
+    "termsOfServiceURL": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
+    "brandColor": "#1F6FEB",
+    "screenshots": []
+  }
+}

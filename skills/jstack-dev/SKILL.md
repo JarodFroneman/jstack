@@ -22,6 +22,9 @@ The invoked command is the sole staffing authority:
   right-sized team, normally two or three specialists.
 - `/jstack-full-team`: `full-team`. Account for all 11 roles and dispatch in
   controlled waves when concurrency would create noise.
+- `jstack-audit`: a separate read-only audit workflow. Use the
+  `jstack-audit` skill; do not edit audited code or reinterpret the command as
+  an implementation request.
 
 Do not silently reinterpret one command as another. Staffing changes
 coordination coverage, never the quality bar.
@@ -177,9 +180,10 @@ Learning modes:
   evidence only.
 
 Use `jstack_mastery_start`, `jstack_mastery_status`, and
-`jstack_mastery_record`. Learner stage is demonstrated ability; task domain is
-the risk of the current work. Never promote a learner because a task contains an
-advanced keyword.
+`jstack_mastery_record`. The optional `track` is `engineering` by default;
+`jstack-audit` uses `track="audit"`. Learner stage is demonstrated ability;
+task domain is the risk of the current work. Never promote a learner because a
+task contains an advanced keyword.
 
 When task risk exceeds learner stage, keep delivery under the full expert gate
 while isolating assessment to the learner's current drill. For Stage 0, complete
