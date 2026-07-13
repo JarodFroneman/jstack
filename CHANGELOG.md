@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.3.0 - Unreleased
+## 0.3.1 - 2026-07-13
+
+- Kept the umbrella plugin's default prompts within Codex's three-prompt
+  manifest limit while retaining all four workflows in its description and
+  dedicated plugin surfaces.
+
+## 0.3.0 - 2026-07-13
 
 - Added the read-only `/jstack-audit` workflow with quick, standard, deep, and
   release profiles.

@@ -1,6 +1,6 @@
 {
   "name": "jstack",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Universal JStack development and read-only audit commands, workflow skills, and MCP evidence tools for Codex.",
   "author": {
     "name": "Jarod Froneman",
@@ -33,8 +33,7 @@
     ],
     "defaultPrompt": [
       "Use /j-stack-dev to run the single-lead workflow.",
-      "Use /jstack-subagents for the right specialist team.",
-      "Use /jstack-full-team for the full 11-role team.",
+      "Use /jstack-subagents for a specialist team or /jstack-full-team for all 11 roles.",
       "Use /jstack-audit for a read-only evidence-bound repository audit."
     ],
     "websiteURL": "https://github.com/JarodFroneman/jstack",
