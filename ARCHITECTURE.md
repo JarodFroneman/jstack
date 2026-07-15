@@ -28,6 +28,7 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - QA command discovery and explicitly approved execution
 - current-tree and release-range secret scanning
 - deterministic audit collection and evidence-bound finalization
+- semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
 - commit-bound HMAC evidence receipts
@@ -45,6 +46,12 @@ contract and convergence layer around one explicit delivery mode. It stores
 private state outside the repository, binds contracts to the starting commit
 and policy, derives changed paths from Git, validates current receipts, and
 returns a bounded decision after each iteration.
+
+Before state creation, the goal-readiness tool builds a source-attributed,
+domain-aware context, returns at most three prioritized questions per round,
+and requires exact-digest confirmation for ambiguity or elevated risk. Start
+and material revision require a short-lived receipt bound to that semantic
+contract and the current Git/policy subject.
 
 Write loops require a clean start and an exclusive repository lease. L3 also
 requires a linked worktree, low risk, bounded paths, and QA, security, audit,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import hmac
@@ -92,6 +93,71 @@ def low_write_contract(repo: Path) -> dict:
     }
 
 
+def complete_goal_context(
+    *,
+    domain_tags: list[str] | None = None,
+    domain_requirements: list[str] | None = None,
+) -> dict:
+    return {
+        "domain_statement": "Software delivery for the loop protocol test fixture.",
+        "domain_tags": domain_tags or ["software"],
+        "stakeholders": ["Repository maintainers"],
+        "current_state": "The fixture does not yet satisfy the contracted outcome.",
+        "desired_outcome": "The contracted evidence proves the requested outcome.",
+        "constraints": ["Limit work to the declared repository scope."],
+        "non_goals_confirmed_empty": True,
+        "assumptions": [],
+        "context_sources": [
+            {
+                "kind": "repository",
+                "reference": "README.md",
+                "summary": "Defines the bounded test fixture.",
+            }
+        ],
+        "domain_requirements": domain_requirements or [],
+        "open_questions": [],
+        "inferred_fields": [],
+    }
+
+
+def assess_ready_contract(contract: dict, *, loop_id: str | None = None) -> tuple[dict, dict]:
+    value = copy.deepcopy(contract)
+    value.setdefault("goal_context", complete_goal_context())
+    value.pop("goal_readiness_receipt", None)
+    if loop_id:
+        value["loop_id"] = loop_id
+    readiness = server.tool_loop_goal_readiness(value)
+    if readiness["status"] == "needs_confirmation":
+        value["confirmed_readiness_digest"] = readiness["readinessDigest"]
+        value["confirmation_reference"] = (
+            "Test operator confirmed the exact goal-readiness digest."
+        )
+        readiness = server.tool_loop_goal_readiness(value)
+        value.pop("confirmed_readiness_digest")
+        value.pop("confirmation_reference")
+    if readiness.get("ready") is not True:
+        raise server.ToolError(
+            "Goal readiness needs context: " + ", ".join(readiness.get("gaps", []))
+        )
+    return value, readiness
+
+
+def ready_contract(contract: dict) -> dict:
+    value, readiness = assess_ready_contract(contract)
+    value.pop("loop_id", None)
+    value["goal_readiness_receipt"] = readiness["goalReadinessReceipt"]
+    return value
+
+
+def start_loop(contract: dict) -> dict:
+    return server.tool_loop_start(ready_contract(contract))
+
+
+def revision_readiness_receipt(loop_id: str, contract: dict) -> str:
+    _, readiness = assess_ready_contract(contract, loop_id=loop_id)
+    return readiness["goalReadinessReceipt"]
+
+
 def security_write_contract(repo: Path) -> dict:
     value = low_write_contract(repo)
     value["risk_tier"] = "medium"
@@ -155,7 +221,7 @@ class LoopProtocolTests(unittest.TestCase):
             git(repo, "add", ".")
             git(repo, "commit", "-m", "add ambiguous path")
             with self.assertRaisesRegex(server.ToolError, "literal backslash"):
-                server.tool_loop_start(low_write_contract(repo))
+                start_loop(low_write_contract(repo))
 
     def test_scope_globs_are_segment_aware_and_recursive_only_with_double_star(self) -> None:
         contract = {
@@ -193,7 +259,7 @@ class LoopProtocolTests(unittest.TestCase):
                         contract = low_write_contract(repo)
                         contract["allowed_paths"] = [unsafe]
                         with self.assertRaises(server.ToolError):
-                            server.tool_loop_start(contract)
+                            start_loop(contract)
 
     def test_core_qa_evaluator_requires_positive_pass_evidence(self) -> None:
         contract = {
@@ -216,17 +282,251 @@ class LoopProtocolTests(unittest.TestCase):
         )
         self.assertFalse(evaluated[0]["satisfied"])
 
+    def test_goal_readiness_returns_bounded_questions_for_a_vague_partial_goal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            result = server.tool_loop_goal_readiness(
+                {
+                    "project_path": str(repo),
+                    "goal": "Make this dashboard enterprise-ready.",
+                }
+            )
+
+            self.assertEqual("needs_context", result["status"])
+            self.assertFalse(result["ready"])
+            self.assertFalse(result["receiptIssued"])
+            self.assertLessEqual(len(result["questions"]), 3)
+            self.assertIn("goal_context.current_state", result["gaps"])
+            self.assertIn("acceptance_criteria", result["gaps"])
+
+    def test_goal_readiness_requires_exact_confirmation_for_ambiguity_and_risk(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            contract = security_write_contract(repo)
+            contract["goal_context"] = complete_goal_context()
+            contract["goal_context"]["inferred_fields"] = ["desired_outcome"]
+
+            first = server.tool_loop_goal_readiness(contract)
+            self.assertEqual("needs_confirmation", first["status"])
+            self.assertTrue(first["confirmationRequired"])
+            self.assertFalse(first["receiptIssued"])
+            self.assertIn("medium", " ".join(first["confirmationReasons"]))
+
+            stale = {
+                **contract,
+                "confirmed_readiness_digest": "0" * 64,
+                "confirmation_reference": "Confirmed test contract.",
+            }
+            with self.assertRaisesRegex(server.ToolError, "stale"):
+                server.tool_loop_goal_readiness(stale)
+
+            confirmed = {
+                **contract,
+                "confirmed_readiness_digest": first["readinessDigest"],
+                "confirmation_reference": "Confirmed test contract MSG-1.",
+            }
+            ready = server.tool_loop_goal_readiness(confirmed)
+            self.assertTrue(ready["ready"])
+            self.assertTrue(ready["receiptIssued"])
+            self.assertTrue(ready["goalReadinessReceipt"])
+            self.assertTrue(ready["receiptExpiresAt"])
+
+    def test_loop_start_requires_a_current_contract_bound_readiness_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            contract = low_write_contract(repo)
+            contract["goal_context"] = complete_goal_context()
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                with self.assertRaisesRegex(server.ToolError, "goal_readiness_receipt"):
+                    server.tool_loop_start(contract)
+
+                prepared = ready_contract(contract)
+                prepared["goal"] = "Create a different verified result artifact."
+                with self.assertRaisesRegex(server.ToolError, "exact loop contract"):
+                    server.tool_loop_start(prepared)
+
+    def test_goal_context_and_readiness_are_persisted_in_public_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            contract = low_write_contract(repo)
+            contract["token_budget"] = 2500
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                started = start_loop(contract)
+                status = server.tool_loop_status(
+                    {"project_path": str(repo), "loop_id": started["loopId"]}
+                )
+                self.assertEqual(
+                    loop_protocol.GOAL_CONTEXT_SCHEMA,
+                    status["goalContext"]["schemaVersion"],
+                )
+                self.assertEqual(
+                    loop_protocol.GOAL_READINESS_SCHEMA,
+                    status["goalReadiness"]["schemaVersion"],
+                )
+                self.assertEqual([], status["nonGoals"])
+                self.assertIn("git-push", status["blockedActions"])
+                self.assertEqual(2500, status["tokenBudget"])
+                server.tool_loop_stop(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": started["loopId"],
+                        "reason": "Readiness persistence verified.",
+                    }
+                )
+
+    def test_material_revision_requires_readiness_but_resume_only_revision_does_not(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            contract = low_write_contract(repo)
+            contract["token_budget"] = 2500
+            revised_goal = "Create and verify the revised result artifact."
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                started = start_loop(contract)
+                with self.assertRaisesRegex(server.ToolError, "goal-readiness receipt"):
+                    server.tool_loop_revise(
+                        {
+                            "project_path": str(repo),
+                            "loop_id": started["loopId"],
+                            "goal": revised_goal,
+                            "revision_approval_reference": "Approved revision MSG-2.",
+                        }
+                    )
+
+                receipt = revision_readiness_receipt(
+                    started["loopId"],
+                    {**contract, "goal": revised_goal, "token_budget": 5000},
+                )
+                revised = server.tool_loop_revise(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": started["loopId"],
+                        "goal": revised_goal,
+                        "token_budget": 5000,
+                        "goal_readiness_receipt": receipt,
+                        "revision_approval_reference": "Approved revision MSG-2.",
+                    }
+                )
+                self.assertEqual(5000, revised["tokenBudget"])
+                readiness_digest = revised["goalReadiness"]["readinessDigest"]
+                resumed = server.tool_loop_revise(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": started["loopId"],
+                        "revision_approval_reference": "Approved one bounded retry MSG-3.",
+                    }
+                )
+                self.assertEqual(
+                    readiness_digest, resumed["goalReadiness"]["readinessDigest"]
+                )
+                server.tool_loop_stop(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": started["loopId"],
+                        "reason": "Revision readiness verified.",
+                    }
+                )
+
+    def test_sensitive_domain_questions_adapt_and_require_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            contract = low_write_contract(repo)
+            contract["goal_context"] = complete_goal_context(
+                domain_tags=["data-financial"]
+            )
+            needs_context = server.tool_loop_goal_readiness(contract)
+            self.assertIn(
+                "goal_context.domain_requirements", needs_context["gaps"]
+            )
+            self.assertTrue(
+                any(
+                    "authoritative data sources" in item["question"]
+                    for item in needs_context["questions"]
+                )
+            )
+
+            contract["goal_context"]["domain_requirements"] = [
+                "Use repository-defined calculations and fail on any unexplained variance."
+            ]
+            confirmation = server.tool_loop_goal_readiness(contract)
+            self.assertEqual("needs_confirmation", confirmation["status"])
+            self.assertIn(
+                "data-financial", " ".join(confirmation["confirmationReasons"])
+            )
+
+    def test_repository_context_sources_reject_traversal_and_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            outside = base / "outside.txt"
+            outside.write_text("outside\n", encoding="utf-8")
+            contract = low_write_contract(repo)
+            context = complete_goal_context()
+            context["context_sources"][0]["reference"] = "../outside.txt"
+            contract["goal_context"] = context
+            with self.assertRaisesRegex(server.ToolError, "unsafe repository path"):
+                server.tool_loop_goal_readiness(contract)
+
+            (repo / "source-link").symlink_to("README.md")
+            git(repo, "add", "source-link")
+            git(repo, "commit", "-m", "add source symlink")
+            context = complete_goal_context()
+            context["context_sources"][0]["reference"] = "source-link"
+            contract["goal_context"] = context
+            with self.assertRaisesRegex(server.ToolError, "symlink"):
+                server.tool_loop_goal_readiness(contract)
+
+            source_dir = repo / "context"
+            source_dir.mkdir()
+            (source_dir / "goal.md").write_text("goal context\n", encoding="utf-8")
+            (repo / "context-link").symlink_to("context")
+            git(repo, "add", "context", "context-link")
+            git(repo, "commit", "-m", "add nested source symlink")
+            context = complete_goal_context()
+            context["context_sources"][0]["reference"] = "context-link/goal.md"
+            contract["goal_context"] = context
+            with self.assertRaisesRegex(server.ToolError, "traverse a symlink"):
+                server.tool_loop_goal_readiness(contract)
+
+    def test_goal_context_rejects_contradictory_empty_confirmations(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            contract = low_write_contract(repo)
+            context = complete_goal_context()
+            context["constraints_confirmed_empty"] = True
+            contract["goal_context"] = context
+            with self.assertRaisesRegex(server.ToolError, "constraints_confirmed_empty"):
+                server.tool_loop_goal_readiness(contract)
+
+            context = complete_goal_context()
+            contract["goal_context"] = context
+            contract["non_goals"] = ["Do not modify release automation."]
+            with self.assertRaisesRegex(server.ToolError, "non_goals_confirmed_empty"):
+                server.tool_loop_goal_readiness(contract)
+
+            contract.pop("non_goals")
+            context = complete_goal_context()
+            context["open_questions"] = [
+                {"id": "owner", "question": "Who owns final approval?"}
+            ]
+            contract["goal_context"] = context
+            with self.assertRaisesRegex(server.ToolError, "blocking must be explicitly"):
+                server.tool_loop_goal_readiness(contract)
+
     def test_start_rejects_repository_drift_during_contract_collection(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
             repo = make_repo(base)
+            prepared = ready_contract(low_write_contract(repo))
             first = server.evidence_subject(repo)
             second = {**first, "projectFingerprint": "f" * 64}
             with mock.patch.object(
                 server, "evidence_subject", side_effect=[first, second]
             ):
                 with self.assertRaisesRegex(server.ToolError, "changed while"):
-                    server.tool_loop_start(low_write_contract(repo))
+                    server.tool_loop_start(prepared)
 
     def test_branch_rewrite_cannot_silently_change_the_loop_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -236,7 +536,7 @@ class LoopProtocolTests(unittest.TestCase):
             git(repo, "add", "baseline.txt")
             git(repo, "commit", "-m", "second")
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 git(repo, "checkout", "--detach", "HEAD~1")
                 with self.assertRaisesRegex(server.ToolError, "exact Git merge base"):
                     server.tool_loop_checkpoint(
@@ -259,7 +559,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 git(repo, "update-index", "--assume-unchanged", "README.md")
                 stopped = server.tool_loop_checkpoint(
                     {
@@ -281,7 +581,7 @@ class LoopProtocolTests(unittest.TestCase):
             contract["goal"] = f'Configure {secret_field}="{synthetic}".'
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
                 with self.assertRaises(server.ToolError) as raised:
-                    server.tool_loop_start(contract)
+                    start_loop(contract)
             self.assertIn("secret-like", str(raised.exception))
             self.assertNotIn(synthetic, str(raised.exception))
 
@@ -306,7 +606,7 @@ class LoopProtocolTests(unittest.TestCase):
                 ],
             }
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(contract)
+                started = start_loop(contract)
                 unchanged = server.tool_loop_checkpoint(
                     {
                         "project_path": str(repo),
@@ -331,7 +631,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 (repo / "result.txt").write_text("recoverable\n", encoding="utf-8")
                 protocol = sys.modules[server.loop_core.LoopService.__module__]
                 real_atomic_json = protocol._atomic_json
@@ -367,7 +667,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 self.assertEqual("single-lead", started["executionMode"])
                 self.assertEqual("L2", started["autonomyLevel"])
                 self.assertTrue(started["nativeGoalContract"]["createGoalRequired"])
@@ -429,9 +729,9 @@ class LoopProtocolTests(unittest.TestCase):
             repo = make_repo(base)
             home = base / "home"
             with mock.patch.object(server.Path, "home", return_value=home):
-                first = server.tool_loop_start(low_write_contract(repo))
+                first = start_loop(low_write_contract(repo))
                 with self.assertRaisesRegex(server.ToolError, "already owns"):
-                    server.tool_loop_start(low_write_contract(repo))
+                    start_loop(low_write_contract(repo))
 
                 (repo / "README.md").write_text("outside scope\n", encoding="utf-8")
                 stopped = server.tool_loop_checkpoint(
@@ -446,7 +746,7 @@ class LoopProtocolTests(unittest.TestCase):
                 self.assertEqual(["README.md"], stopped["scopeViolations"])
 
                 git(repo, "restore", "README.md")
-                second = server.tool_loop_start(low_write_contract(repo))
+                second = start_loop(low_write_contract(repo))
                 self.assertNotEqual(first["loopId"], second["loopId"])
                 released = server.tool_loop_stop(
                     {
@@ -483,7 +783,7 @@ class LoopProtocolTests(unittest.TestCase):
                 ],
             }
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(contract)
+                started = start_loop(contract)
                 common = {
                     "project_path": str(repo),
                     "loop_id": started["loopId"],
@@ -525,11 +825,16 @@ class LoopProtocolTests(unittest.TestCase):
                 )
                 self.assertEqual("ready_to_finalize", ready["decision"])
 
+                revised_goal = "Obtain approval for the revised review outcome."
+                readiness_receipt = revision_readiness_receipt(
+                    started["loopId"], {**contract, "goal": revised_goal}
+                )
                 server.tool_loop_revise(
                     {
                         "project_path": str(repo),
                         "loop_id": started["loopId"],
-                        "goal": "Obtain approval for the revised review outcome.",
+                        "goal": revised_goal,
+                        "goal_readiness_receipt": readiness_receipt,
                         "revision_approval_reference": "Owner approved contract revision LOOP-44",
                     }
                 )
@@ -549,7 +854,7 @@ class LoopProtocolTests(unittest.TestCase):
             contract = low_write_contract(repo)
             contract["limits"] = {"max_repeated_failure": 2}
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(contract)
+                started = start_loop(contract)
                 checkpoint = {
                     "project_path": str(repo),
                     "loop_id": started["loopId"],
@@ -591,7 +896,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 (repo / "result.txt").write_text("ready but blocked\n", encoding="utf-8")
                 blocked = server.tool_loop_checkpoint(
                     {
@@ -625,7 +930,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 with mock.patch.object(server, "SERVER_VERSION", "0.4.1-test"):
                     paused = server.tool_loop_checkpoint(
                         {
@@ -662,7 +967,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(security_write_contract(repo))
+                started = start_loop(security_write_contract(repo))
                 (repo / "result.txt").write_text("first\n", encoding="utf-8")
                 security = server.tool_security_audit(
                     {
@@ -715,7 +1020,7 @@ class LoopProtocolTests(unittest.TestCase):
                 ],
             }
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(contract)
+                started = start_loop(contract)
                 events_path = Path(started["statePath"]) / "events.jsonl"
                 event = json.loads(events_path.read_text(encoding="utf-8"))
                 event["eventType"] = "tampered"
@@ -733,7 +1038,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 snapshot_path = Path(started["statePath"]) / "snapshot.json"
                 snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
                 snapshot["status"] = "succeeded"
@@ -751,7 +1056,7 @@ class LoopProtocolTests(unittest.TestCase):
             base = Path(temp)
             repo = make_repo(base)
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
-                started = server.tool_loop_start(low_write_contract(repo))
+                started = start_loop(low_write_contract(repo))
                 history_path = Path(started["statePath"]) / "contracts" / "0001.json"
                 history = json.loads(history_path.read_text(encoding="utf-8"))
                 history["goal"] = "Tampered historical goal."
@@ -787,15 +1092,15 @@ class LoopProtocolTests(unittest.TestCase):
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
                 broad_contract = {**contract, "allowed_paths": ["**/*.py"]}
                 with self.assertRaisesRegex(server.ToolError, "literal repository entry"):
-                    server.tool_loop_start(broad_contract)
+                    start_loop(broad_contract)
 
                 with self.assertRaisesRegex(server.ToolError, "Git worktree"):
-                    server.tool_loop_start(contract)
+                    start_loop(contract)
 
                 worktree = base / "linked"
                 git(repo, "worktree", "add", "-b", "loop-worktree", str(worktree))
                 linked_contract = {**contract, "project_path": str(worktree)}
-                started = server.tool_loop_start(linked_contract)
+                started = start_loop(linked_contract)
                 self.assertTrue(started["worktreeAttestation"]["isLinkedWorktree"])
                 server.tool_loop_stop(
                     {
@@ -817,7 +1122,7 @@ class LoopProtocolTests(unittest.TestCase):
                     ],
                 }
                 with self.assertRaisesRegex(server.ToolError, "mode_approval_reference"):
-                    server.tool_loop_start(team_contract)
+                    start_loop(team_contract)
 
 
 class LoopMasteryMigrationTests(unittest.TestCase):

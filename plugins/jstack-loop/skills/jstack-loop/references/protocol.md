@@ -31,6 +31,48 @@ Path globs are segment-aware. `src/*` matches one level under `src`, while
 rejected for L3. Literal backslash and control-character Git filenames are not
 representable and fail closed instead of being normalized.
 
+## Goal Readiness Gate
+
+`jstack_loop_goal_readiness` is mandatory before start and before every
+material contract revision. It accepts partial intake so the agent can inspect
+first and ask only for facts it cannot establish safely. It returns the full
+gap list and at most three targeted blocking questions per round.
+
+The candidate `goal_context` records:
+
+- domain statement and one or more supported domain tags;
+- affected stakeholders, current state, and observable desired outcome;
+- constraints, non-goals, assumptions, and unresolved questions;
+- repository, user, runtime, or external context sources;
+- niche-specific correctness and failure requirements; and
+- every material field inferred by the agent rather than stated directly.
+
+Repository sources must be existing regular files inside the Git root. Path
+traversal and symlink references fail closed. Product/UI, security/compliance,
+financial/data, production/operations, research/content, and unknown domains
+require explicit niche requirements instead of generic software assumptions.
+
+The gate requires exact-digest user confirmation when the contract contains
+material inference, assumptions, non-blocking unknowns, medium-or-higher risk,
+L3 autonomy, broad outcome language, or a confirmation-sensitive domain. The
+agent must present the returned preview, reasons, and `readinessDigest`; it may
+submit `confirmed_readiness_digest` and `confirmation_reference` only after a
+real user confirmation. A model-authored confirmation reference is invalid
+process even if it passes schema validation.
+
+A successful assessment issues a short-lived, session-local receipt bound to
+the semantic contract input, context digest, Git HEAD and fingerprint, policy,
+tool version, and, for a revision, loop ID plus prior contract digest. The
+receipt authorizes only loop start or that exact revision. It does not approve
+implementation, protected files, push, deployment, or release.
+
+Material changes to the goal, criteria, execution mode, autonomy, risk, paths,
+blocked actions, limits, token budget, or goal context require a new assessment
+and receipt. Named human-criterion updates and explicit retry/resume approvals
+may carry the existing readiness decision when the semantic contract is
+unchanged. Pre-0.4.1 loop state remains readable; its first material revision
+must supply a complete context and current readiness receipt.
+
 ## Acceptance Criteria
 
 Use stable IDs and observable verifiers:
@@ -82,9 +124,10 @@ The default contract stops for review after:
 - an observed project-fingerprint oscillation;
 - any policy, protected-path, or scope violation.
 
-Changing the goal, criteria, staffing, autonomy, scope, or limits creates a new
-contract revision and invalidates prior completion state. Never disguise a
-revision as another iteration.
+Changing the goal, criteria, staffing, autonomy, risk, scope, limits, token
+budget, or goal context requires fresh readiness, creates a new contract
+revision, and invalidates prior completion state. Never disguise a revision as
+another iteration.
 
 `needs_approval` is a protocol pause: checkpoint and finalization calls are
 rejected until an approved revision is recorded. A named human approval update

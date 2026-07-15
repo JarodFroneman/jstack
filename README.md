@@ -60,6 +60,9 @@ actual install and restart.
   engineering profiles.
 - Versioned loop contracts with explicit goals, non-goals, execution modes,
   autonomy levels, risk tiers, acceptance criteria, scopes, and limits.
+- A mandatory domain-aware goal-readiness gate with source-attributed context,
+  at most three targeted questions per round, exact-digest confirmation, and
+  Git-bound start/revision receipts.
 - Private atomic loop state, versioned contract revisions, snapshot-bound
   hash-chained events, and one active write lease per Git checkout.
 - Current QA, security, audit, deterministic review, artifact, and approval
@@ -201,7 +204,9 @@ Use `track="audit"` with the same mastery tools for the audit curriculum. See
 Use `track="loop"` for goal-contract, convergence, orchestration, autonomy,
 and loop-platform training. See [the loop system](docs/loop-system.md),
 [loop mastery](docs/loop-mastery-system.md), and
-[ADR 0002](docs/adr/0002-jstack-loop-protocol.md).
+[ADR 0002](docs/adr/0002-jstack-loop-protocol.md). The semantic intake and
+confirmation boundary is specified in
+[ADR 0003](docs/adr/0003-goal-readiness-gate.md).
 
 ## Governance
 

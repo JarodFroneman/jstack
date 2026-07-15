@@ -38,7 +38,7 @@ import loop as loop_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.4.0"
+SERVER_VERSION = "0.4.1"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -48,6 +48,7 @@ MAX_FINGERPRINT_FILES = 100_000
 AUDIT_MAX_STRUCTURED_INPUT_BYTES = 2_000_000
 AUDIT_MAX_STRUCTURED_OUTPUT_BYTES = 5_000_000
 RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
+GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS = 30 * 60
 LOOP_MAX_QA_RECEIPTS = 50
 LOOP_MAX_AUDIT_RECEIPTS = 20
 LOOP_MAX_RECEIPT_CHARS = 100_000
@@ -73,6 +74,7 @@ GIT_REQUIRED_TOOLS = [
     "jstack_ship_check",
     "jstack_release_readiness",
     "jstack_quant_backtest_review",
+    "jstack_loop_goal_readiness",
     "jstack_loop_start",
     "jstack_loop_status",
     "jstack_loop_checkpoint",
@@ -6130,7 +6132,12 @@ def _receipt_digest(receipt: str) -> str:
 
 
 def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
-    receipt_fields = {"qa_receipts", "security_receipt", "audit_receipts"}
+    receipt_fields = {
+        "qa_receipts",
+        "security_receipt",
+        "audit_receipts",
+        "goal_readiness_receipt",
+    }
 
     def visit(value: Any, field: str) -> None:
         if field in receipt_fields:
@@ -6370,10 +6377,114 @@ def _loop_iteration_evidence(
     }
 
 
+def _verified_goal_readiness_attestation(
+    receipt: Any, subject: dict[str, Any]
+) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > LOOP_MAX_RECEIPT_CHARS:
+        raise ToolError(
+            "A bounded goal_readiness_receipt returned by jstack_loop_goal_readiness is required."
+        )
+    verification = verify_receipt(
+        receipt,
+        "goal-readiness",
+        subject,
+        expected_subject=subject,
+    )
+    payload = verification["payload"]
+    if (
+        not verification["valid"]
+        or payload.get("schemaVersion") != loop_core.GOAL_READINESS_RECEIPT_SCHEMA
+    ):
+        raise ToolError(
+            "The goal-readiness receipt is stale, malformed, from another session, or bound to a different project state."
+        )
+    return {**payload, "receiptDigest": _receipt_digest(receipt)}
+
+
+def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    subject, policy, worktree = stable_loop_contract_context(project_path)
+    service = _loop_service(project_path)
+    loop_id = str(args.get("loop_id") or "").strip() or None
+    prior_contract_digest = None
+    if loop_id:
+        status = _loop_call(lambda: service.status(loop_id))
+        if status["status"] in {"succeeded", "stopped"}:
+            raise ToolError("Terminal loops cannot receive a revised goal-readiness receipt.")
+        prior_contract_digest = status["contractDigest"]
+    assessment = _loop_call(
+        lambda: loop_core.assess_goal_readiness(
+            args,
+            project_root=str(project_path),
+            subject=subject,
+            worktree=worktree["isLinkedWorktree"],
+            policy_source=policy.get("_sourcePath"),
+            policy_digest=subject["policyDigest"],
+            loop_id=loop_id,
+            prior_contract_digest=prior_contract_digest,
+        )
+    )
+    assessment.pop("_contract", None)
+    if assessment.get("ready") is not True:
+        assessment["receiptIssued"] = False
+        return assessment
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed during goal-readiness assessment. Re-run the intake against one stable state."
+        )
+    expires_at = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    confirmation_reference = str(assessment.get("confirmationReference") or "")
+    receipt = issue_receipt(
+        {
+            "kind": "goal-readiness",
+            "schemaVersion": loop_core.GOAL_READINESS_RECEIPT_SCHEMA,
+            "expiresAt": expires_at,
+            "projectPath": subject_after["gitRoot"],
+            "gitHead": subject_after["gitHead"],
+            "projectFingerprint": subject_after["projectFingerprint"],
+            "baseRef": subject_after.get("baseRef"),
+            "baseCommit": subject_after.get("baseCommit"),
+            "policyDigest": subject_after["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "loopId": loop_id,
+            "priorContractDigest": prior_contract_digest,
+            "readinessDigest": assessment["readinessDigest"],
+            "contractInputDigest": assessment["contractInputDigest"],
+            "contextDigest": assessment["contextDigest"],
+            "confirmationRequired": assessment["confirmationRequired"],
+            "confirmationReferenceDigest": (
+                hashlib.sha256(confirmation_reference.encode("utf-8")).hexdigest()
+                if confirmation_reference
+                else None
+            ),
+            "passed": True,
+        }
+    )
+    assessment["goalReadinessReceipt"] = receipt
+    assessment["receiptExpiresAt"] = expires_at
+    assessment["receiptIssued"] = True
+    assessment["receiptMeaning"] = (
+        "Session-local proof that the exact goal context and contract were readiness-checked "
+        "against the current project state; it does not authorize implementation, push, deployment, or release."
+    )
+    return assessment
+
+
 def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
     _reject_loop_secret_inputs(args)
     project_path = require_project_path(args.get("project_path"))
     subject, policy, worktree = stable_loop_contract_context(project_path)
+    readiness_attestation = _verified_goal_readiness_attestation(
+        args.get("goal_readiness_receipt"), subject
+    )
     service = _loop_service(project_path)
     result = _loop_call(
         lambda: service.start(
@@ -6382,6 +6493,7 @@ def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
             worktree=worktree["isLinkedWorktree"],
             policy_source=policy.get("_sourcePath"),
             policy_digest=subject["policyDigest"],
+            readiness_attestation=readiness_attestation,
         )
     )
     result["worktreeAttestation"] = worktree
@@ -6447,6 +6559,11 @@ def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
     _reject_loop_secret_inputs(args)
     project_path = require_project_path(args.get("project_path"))
     subject, policy, worktree = stable_loop_contract_context(project_path)
+    readiness_attestation = None
+    if args.get("goal_readiness_receipt") is not None:
+        readiness_attestation = _verified_goal_readiness_attestation(
+            args.get("goal_readiness_receipt"), subject
+        )
     service = _loop_service(project_path)
     return _loop_call(
         lambda: service.revise(
@@ -6456,6 +6573,7 @@ def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
             worktree=worktree["isLinkedWorktree"],
             policy_source=policy.get("_sourcePath"),
             policy_digest=subject["policyDigest"],
+            readiness_attestation=readiness_attestation,
         )
     )
 
@@ -6578,6 +6696,83 @@ LOOP_LIMITS_SCHEMA: dict[str, Any] = {
     },
 }
 
+LOOP_GOAL_CONTEXT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "domain_statement": {"type": "string", "maxLength": 1000},
+        "domain_tags": {
+            "type": "array",
+            "maxItems": len(loop_core.GOAL_DOMAIN_TAGS),
+            "items": {
+                "type": "string",
+                "enum": sorted(loop_core.GOAL_DOMAIN_TAGS),
+            },
+        },
+        "stakeholders": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {"type": "string", "maxLength": 500},
+        },
+        "current_state": {"type": "string", "maxLength": 3000},
+        "desired_outcome": {"type": "string", "maxLength": 3000},
+        "constraints": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {"type": "string", "maxLength": 500},
+        },
+        "constraints_confirmed_empty": {"type": "boolean"},
+        "non_goals_confirmed_empty": {"type": "boolean"},
+        "assumptions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {"type": "string", "maxLength": 500},
+        },
+        "context_sources": {
+            "type": "array",
+            "maxItems": loop_core.MAX_CONTEXT_SOURCES,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["repository", "user", "external", "runtime"],
+                    },
+                    "reference": {"type": "string", "maxLength": 1000},
+                    "summary": {"type": "string", "maxLength": 1000},
+                },
+            },
+        },
+        "domain_requirements": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {"type": "string", "maxLength": 500},
+        },
+        "open_questions": {
+            "type": "array",
+            "maxItems": loop_core.MAX_OPEN_QUESTIONS,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "string", "maxLength": 64},
+                    "question": {"type": "string", "maxLength": 1000},
+                    "blocking": {"type": "boolean"},
+                },
+            },
+        },
+        "inferred_fields": {
+            "type": "array",
+            "maxItems": len(loop_core.GOAL_INFERRED_FIELDS),
+            "items": {
+                "type": "string",
+                "enum": sorted(loop_core.GOAL_INFERRED_FIELDS),
+            },
+        },
+    },
+}
+
 LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
     "qa_receipts": {
         "type": "array",
@@ -6594,6 +6789,45 @@ LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
 
 
 TOOLS: dict[str, dict[str, Any]] = {
+    "gstack_loop_goal_readiness": {
+        "description": "Assess a partial or complete JStack loop goal contract, return at most three targeted context questions, require exact-digest confirmation when ambiguity or risk warrants it, and issue a session-local readiness receipt for the current Git state.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_path": {"type": "string"},
+                "loop_id": {"type": "string"},
+                "goal": {"type": "string"},
+                "execution_mode": {
+                    "type": "string",
+                    "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "autonomy_level": {
+                    "type": "string",
+                    "enum": ["L0", "L1", "L2", "L3"],
+                },
+                "risk_tier": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high", "critical"],
+                },
+                "acceptance_criteria": LOOP_CRITERIA_SCHEMA,
+                "non_goals": {"type": "array", "items": {"type": "string"}},
+                "allowed_paths": {"type": "array", "items": {"type": "string"}},
+                "blocked_actions": {"type": "array", "items": {"type": "string"}},
+                "limits": LOOP_LIMITS_SCHEMA,
+                "token_budget": {"type": "integer", "minimum": 1},
+                "goal_context": LOOP_GOAL_CONTEXT_SCHEMA,
+                "mode_approval_reference": {"type": "string"},
+                "autonomy_approval_reference": {"type": "string"},
+                "risk_approval_reference": {"type": "string"},
+                "protected_path_approval": {"type": "string"},
+                "confirmed_readiness_digest": {"type": "string", "maxLength": 64},
+                "confirmation_reference": {"type": "string", "maxLength": 500},
+            },
+        },
+        "handler": tool_loop_goal_readiness,
+        "readOnlyHint": True,
+    },
     "gstack_loop_start": {
         "description": "Create a versioned, Git-bound JStack loop contract with bounded autonomy, explicit execution mode, acceptance evidence, path scope, and circuit breakers. Codex Goal mode remains the continuation engine.",
         "inputSchema": {
@@ -6606,6 +6840,8 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "risk_tier",
                 "acceptance_criteria",
                 "allowed_paths",
+                "goal_context",
+                "goal_readiness_receipt",
             ],
             "properties": {
                 "project_path": {"type": "string"},
@@ -6628,6 +6864,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "blocked_actions": {"type": "array", "items": {"type": "string"}},
                 "limits": LOOP_LIMITS_SCHEMA,
                 "token_budget": {"type": "integer", "minimum": 1},
+                "goal_context": LOOP_GOAL_CONTEXT_SCHEMA,
+                "goal_readiness_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                },
                 "mode_approval_reference": {"type": "string"},
                 "autonomy_approval_reference": {"type": "string"},
                 "risk_approval_reference": {"type": "string"},
@@ -6695,6 +6936,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "allowed_paths": {"type": "array", "items": {"type": "string"}},
                 "blocked_actions": {"type": "array", "items": {"type": "string"}},
                 "limits": LOOP_LIMITS_SCHEMA,
+                "token_budget": {"type": "integer", "minimum": 1},
+                "goal_context": LOOP_GOAL_CONTEXT_SCHEMA,
+                "goal_readiness_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                },
                 "mode_approval_reference": {"type": "string"},
                 "autonomy_approval_reference": {"type": "string"},
                 "risk_approval_reference": {"type": "string"},
