@@ -1,6 +1,6 @@
 {
   "name": "jstack-loop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Top-level JStack command for bounded, durable, evidence-verified goal loops.",
   "author": {
     "name": "Jarod Froneman",

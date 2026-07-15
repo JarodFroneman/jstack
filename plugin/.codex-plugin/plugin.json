@@ -1,6 +1,6 @@
 {
   "name": "jstack",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Universal JStack delivery, bounded goal-loop, read-only audit, mastery, and MCP evidence workflows for Codex.",
   "author": {
     "name": "Jarod Froneman",

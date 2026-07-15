@@ -66,6 +66,13 @@ ancestry, segment-aware path identity, and hidden-index checks prevent Git state
 from silently broadening scope. L3 is limited to explicitly approved low-risk
 work in a linked Git worktree.
 
+Goal-readiness receipts are HMAC-signed, short-lived, and server-session local.
+They bind the normalized semantic contract and context to the current Git
+fingerprint, policy, tool version, and revision base. Repository context sources
+must remain inside the Git root and cannot be symlinks. The receipt prevents a
+caller from silently changing the assessed target; it does not prove user
+statements, external sources, or model inferences are true.
+
 Loop mastery Stage 9 uses a separate assessor HMAC key from
 `JSTACK_LOOP_ASSESSOR_HMAC_KEY`. Keep it outside the repository. It signs the
 exact capstone evaluation, artifact set, Git state, rubric, and unseen

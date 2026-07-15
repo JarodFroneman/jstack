@@ -26,6 +26,9 @@ LOOP_CONTRACT_SCHEMA = "jstack.loop.contract.v1"
 LOOP_SNAPSHOT_SCHEMA = "jstack.loop.snapshot.v1"
 LOOP_EVENT_SCHEMA = "jstack.loop.event.v1"
 LOOP_STATUS_SCHEMA = "jstack.loop.status.v1"
+GOAL_CONTEXT_SCHEMA = "jstack.loop.goal-context.v1"
+GOAL_READINESS_SCHEMA = "jstack.loop.goal-readiness.v1"
+GOAL_READINESS_RECEIPT_SCHEMA = "jstack.loop.goal-readiness-receipt.v1"
 
 EXECUTION_MODES = ("single-lead", "smart-subagents", "full-team")
 AUTONOMY_LEVELS = ("L0", "L1", "L2", "L3")
@@ -43,6 +46,9 @@ MAX_SUMMARY_CHARS = 4000
 MAX_CRITERIA = 50
 MAX_SCOPE_PATTERNS = 100
 MAX_APPROVALS = 50
+MAX_CONTEXT_SOURCES = 20
+MAX_OPEN_QUESTIONS = 20
+MAX_READINESS_QUESTIONS = 3
 LOCK_STALE_SECONDS = 30
 
 DEFAULT_BLOCKED_ACTIONS = (
@@ -66,6 +72,63 @@ DEFAULT_LIMITS = {
 
 _LOOP_ID = re.compile(r"^loop-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$")
 _CRITERION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_VAGUE_GOAL = re.compile(
+    r"\b(?:enterprise[- ]ready|production[- ]ready|make it better|make it work|"
+    r"fix it|finish it|complete it|do everything|improve|optimi[sz]e)\b",
+    re.IGNORECASE,
+)
+
+GOAL_DOMAIN_TAGS = {
+    "software",
+    "architecture",
+    "product-ui",
+    "security-compliance",
+    "data-financial",
+    "production-operations",
+    "research-content",
+    "other",
+}
+GOAL_INFERRED_FIELDS = {
+    "goal",
+    "domain_statement",
+    "domain_tags",
+    "stakeholders",
+    "current_state",
+    "desired_outcome",
+    "constraints",
+    "non_goals",
+    "acceptance_criteria",
+    "allowed_paths",
+    "execution_mode",
+    "autonomy_level",
+    "risk_tier",
+}
+DOMAIN_REQUIREMENT_TAGS = {
+    "product-ui",
+    "security-compliance",
+    "data-financial",
+    "production-operations",
+    "research-content",
+    "other",
+}
+CONFIRMATION_DOMAIN_TAGS = {
+    "security-compliance",
+    "data-financial",
+    "production-operations",
+}
+GOAL_READINESS_MATERIAL_FIELDS = {
+    "goal",
+    "nonGoals",
+    "executionMode",
+    "autonomyLevel",
+    "riskTier",
+    "acceptanceCriteria",
+    "allowedPaths",
+    "blockedActions",
+    "limits",
+    "tokenBudget",
+    "goalContext",
+}
 
 
 class LoopError(Exception):
@@ -312,6 +375,725 @@ def _normalize_approvals(value: Any, field: str = "approval_updates") -> dict[st
     return result
 
 
+def _optional_bool(value: Any, field: str) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise LoopError(f"{field} must be a boolean.")
+    return value
+
+
+def _normalize_context_sources(value: Any, project_root: Path) -> list[dict[str, str]]:
+    if not isinstance(value, list) or not value:
+        raise LoopError("goal_context.context_sources must contain at least one source.")
+    if len(value) > MAX_CONTEXT_SOURCES:
+        raise LoopError(
+            f"goal_context.context_sources exceeds the {MAX_CONTEXT_SOURCES}-source limit."
+        )
+    sources: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict):
+            raise LoopError(f"goal_context.context_sources[{index}] must be an object.")
+        unknown = sorted(set(raw) - {"kind", "reference", "summary"})
+        if unknown:
+            raise LoopError(
+                f"goal_context.context_sources[{index}] contains unsupported fields: "
+                + ", ".join(unknown)
+            )
+        kind = str(raw.get("kind") or "").strip().lower()
+        if kind not in {"repository", "user", "external", "runtime"}:
+            raise LoopError(
+                f"goal_context.context_sources[{index}].kind must be repository, user, external, or runtime."
+            )
+        reference = _text(
+            raw.get("reference"),
+            f"goal_context.context_sources[{index}].reference",
+            maximum=1000,
+        )
+        summary = _text(
+            raw.get("summary"),
+            f"goal_context.context_sources[{index}].summary",
+            maximum=1000,
+        )
+        if kind == "repository":
+            reference = _normalize_relative_path(
+                reference,
+                f"goal_context.context_sources[{index}].reference",
+                allow_glob=False,
+            )
+            cursor = project_root
+            for part in Path(reference).parts:
+                cursor = cursor / part
+                if cursor.is_symlink():
+                    raise LoopError(
+                        f"goal_context.context_sources[{index}] must not traverse a symlink."
+                    )
+            candidate = project_root / reference
+            resolved = candidate.resolve(strict=False)
+            try:
+                resolved.relative_to(project_root)
+            except ValueError as exc:
+                raise LoopError(
+                    f"goal_context.context_sources[{index}] escapes the repository root."
+                ) from exc
+            if not resolved.is_file():
+                raise LoopError(
+                    f"goal_context.context_sources[{index}] repository file does not exist."
+                )
+        key = (kind, reference)
+        if key not in seen:
+            seen.add(key)
+            sources.append({"kind": kind, "reference": reference, "summary": summary})
+    return sources
+
+
+def _normalize_open_questions(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise LoopError("goal_context.open_questions must be an array.")
+    if len(value) > MAX_OPEN_QUESTIONS:
+        raise LoopError(
+            f"goal_context.open_questions exceeds the {MAX_OPEN_QUESTIONS}-question limit."
+        )
+    questions: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict):
+            raise LoopError(f"goal_context.open_questions[{index}] must be an object.")
+        unknown = sorted(set(raw) - {"id", "question", "blocking"})
+        if unknown:
+            raise LoopError(
+                f"goal_context.open_questions[{index}] contains unsupported fields: "
+                + ", ".join(unknown)
+            )
+        question_id = _text(
+            raw.get("id"), f"goal_context.open_questions[{index}].id", maximum=64
+        )
+        if not _CRITERION_ID.fullmatch(question_id):
+            raise LoopError(
+                f"goal_context.open_questions[{index}].id must use letters, numbers, dots, underscores, or hyphens."
+            )
+        if question_id in seen:
+            raise LoopError(f"Duplicate goal-context question id: {question_id}")
+        seen.add(question_id)
+        if "blocking" not in raw:
+            raise LoopError(
+                f"goal_context.open_questions[{index}].blocking must be explicitly set."
+            )
+        questions.append(
+            {
+                "id": question_id,
+                "question": _text(
+                    raw.get("question"),
+                    f"goal_context.open_questions[{index}].question",
+                    maximum=1000,
+                ),
+                "blocking": _optional_bool(
+                    raw.get("blocking"),
+                    f"goal_context.open_questions[{index}].blocking",
+                ),
+            }
+        )
+    return questions
+
+
+def _normalize_goal_context(
+    value: Any, project_root: Path, *, required: bool = False
+) -> Optional[dict[str, Any]]:
+    if value is None and not required:
+        return None
+    if not isinstance(value, dict):
+        raise LoopError("goal_context must be an object.")
+    allowed = {
+        "domain_statement",
+        "domain_tags",
+        "stakeholders",
+        "current_state",
+        "desired_outcome",
+        "constraints",
+        "constraints_confirmed_empty",
+        "non_goals_confirmed_empty",
+        "assumptions",
+        "context_sources",
+        "domain_requirements",
+        "open_questions",
+        "inferred_fields",
+    }
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise LoopError("goal_context contains unsupported fields: " + ", ".join(unknown))
+
+    domain_tags = [
+        item.lower()
+        for item in _string_list(
+            value.get("domain_tags"),
+            "goal_context.domain_tags",
+            maximum_items=len(GOAL_DOMAIN_TAGS),
+            item_maximum=100,
+            required=True,
+        )
+    ]
+    unsupported_tags = sorted(set(domain_tags) - GOAL_DOMAIN_TAGS)
+    if unsupported_tags:
+        raise LoopError(
+            "goal_context.domain_tags contains unsupported values: "
+            + ", ".join(unsupported_tags)
+        )
+    constraints = _string_list(
+        value.get("constraints"), "goal_context.constraints", maximum_items=50
+    )
+    constraints_confirmed_empty = _optional_bool(
+        value.get("constraints_confirmed_empty"),
+        "goal_context.constraints_confirmed_empty",
+    )
+    if constraints and constraints_confirmed_empty:
+        raise LoopError(
+            "goal_context.constraints_confirmed_empty cannot be true when constraints are listed."
+        )
+    if not constraints and not constraints_confirmed_empty:
+        raise LoopError(
+            "goal_context must list constraints or explicitly set constraints_confirmed_empty=true."
+        )
+    domain_requirements = _string_list(
+        value.get("domain_requirements"),
+        "goal_context.domain_requirements",
+        maximum_items=50,
+    )
+    if set(domain_tags) & DOMAIN_REQUIREMENT_TAGS and not domain_requirements:
+        raise LoopError(
+            "The selected domain tags require at least one niche-specific domain requirement."
+        )
+    inferred_fields = [
+        item.lower()
+        for item in _string_list(
+            value.get("inferred_fields"),
+            "goal_context.inferred_fields",
+            maximum_items=len(GOAL_INFERRED_FIELDS),
+            item_maximum=100,
+        )
+    ]
+    unsupported_inferences = sorted(set(inferred_fields) - GOAL_INFERRED_FIELDS)
+    if unsupported_inferences:
+        raise LoopError(
+            "goal_context.inferred_fields contains unsupported values: "
+            + ", ".join(unsupported_inferences)
+        )
+    return {
+        "schemaVersion": GOAL_CONTEXT_SCHEMA,
+        "domainStatement": _text(
+            value.get("domain_statement"),
+            "goal_context.domain_statement",
+            maximum=1000,
+        ),
+        "domainTags": domain_tags,
+        "stakeholders": _string_list(
+            value.get("stakeholders"),
+            "goal_context.stakeholders",
+            maximum_items=50,
+            required=True,
+        ),
+        "currentState": _text(
+            value.get("current_state"), "goal_context.current_state", maximum=3000
+        ),
+        "desiredOutcome": _text(
+            value.get("desired_outcome"),
+            "goal_context.desired_outcome",
+            maximum=3000,
+        ),
+        "constraints": constraints,
+        "constraintsConfirmedEmpty": constraints_confirmed_empty,
+        "nonGoalsConfirmedEmpty": _optional_bool(
+            value.get("non_goals_confirmed_empty"),
+            "goal_context.non_goals_confirmed_empty",
+        ),
+        "assumptions": _string_list(
+            value.get("assumptions"),
+            "goal_context.assumptions",
+            maximum_items=50,
+        ),
+        "contextSources": _normalize_context_sources(
+            value.get("context_sources"), project_root
+        ),
+        "domainRequirements": domain_requirements,
+        "openQuestions": _normalize_open_questions(value.get("open_questions")),
+        "inferredFields": inferred_fields,
+    }
+
+
+def _goal_context_as_input(value: Any) -> Any:
+    if value is None or not isinstance(value, dict):
+        return value
+    if value.get("schemaVersion") != GOAL_CONTEXT_SCHEMA:
+        return value
+    return {
+        "domain_statement": value.get("domainStatement"),
+        "domain_tags": value.get("domainTags"),
+        "stakeholders": value.get("stakeholders"),
+        "current_state": value.get("currentState"),
+        "desired_outcome": value.get("desiredOutcome"),
+        "constraints": value.get("constraints"),
+        "constraints_confirmed_empty": value.get("constraintsConfirmedEmpty"),
+        "non_goals_confirmed_empty": value.get("nonGoalsConfirmedEmpty"),
+        "assumptions": value.get("assumptions"),
+        "context_sources": value.get("contextSources"),
+        "domain_requirements": value.get("domainRequirements"),
+        "open_questions": value.get("openQuestions"),
+        "inferred_fields": value.get("inferredFields"),
+    }
+
+
+def _goal_readiness_missing_fields(args: dict[str, Any]) -> list[str]:
+    missing: list[str] = []
+
+    def missing_text(field: str) -> None:
+        if not isinstance(args.get(field), str) or not str(args.get(field)).strip():
+            missing.append(field)
+
+    for field in ("goal", "execution_mode", "autonomy_level", "risk_tier"):
+        missing_text(field)
+    if not isinstance(args.get("acceptance_criteria"), list) or not args.get(
+        "acceptance_criteria"
+    ):
+        missing.append("acceptance_criteria")
+    autonomy = str(args.get("autonomy_level") or "").strip().upper()
+    if autonomy in WRITE_AUTONOMY and (
+        not isinstance(args.get("allowed_paths"), list) or not args.get("allowed_paths")
+    ):
+        missing.append("allowed_paths")
+    mode = str(args.get("execution_mode") or "").strip()
+    risk = str(args.get("risk_tier") or "").strip().lower()
+    if mode and mode != "single-lead" and not str(
+        args.get("mode_approval_reference") or ""
+    ).strip():
+        missing.append("mode_approval_reference")
+    if autonomy == "L3" and not str(args.get("autonomy_approval_reference") or "").strip():
+        missing.append("autonomy_approval_reference")
+    if autonomy == "L2" and risk in {"high", "critical"} and not str(
+        args.get("risk_approval_reference") or ""
+    ).strip():
+        missing.append("risk_approval_reference")
+
+    context = args.get("goal_context")
+    if not isinstance(context, dict):
+        missing.extend(
+            [
+                "goal_context.domain_statement",
+                "goal_context.domain_tags",
+                "goal_context.stakeholders",
+                "goal_context.current_state",
+                "goal_context.desired_outcome",
+                "goal_context.constraints",
+                "goal_context.context_sources",
+            ]
+        )
+        if not isinstance(args.get("non_goals"), list) or not args.get("non_goals"):
+            missing.append("non_goals")
+        return list(dict.fromkeys(missing))
+
+    for field in ("domain_statement", "current_state", "desired_outcome"):
+        if not isinstance(context.get(field), str) or not str(context.get(field)).strip():
+            missing.append(f"goal_context.{field}")
+    for field in ("domain_tags", "stakeholders", "context_sources"):
+        if not isinstance(context.get(field), list) or not context.get(field):
+            missing.append(f"goal_context.{field}")
+    constraints = context.get("constraints")
+    if (not isinstance(constraints, list) or not constraints) and context.get(
+        "constraints_confirmed_empty"
+    ) is not True:
+        missing.append("goal_context.constraints")
+    non_goals = args.get("non_goals")
+    if (not isinstance(non_goals, list) or not non_goals) and context.get(
+        "non_goals_confirmed_empty"
+    ) is not True:
+        missing.append("non_goals")
+    tags = {
+        str(item).strip().lower()
+        for item in context.get("domain_tags", [])
+        if isinstance(item, str)
+    }
+    if tags & DOMAIN_REQUIREMENT_TAGS and (
+        not isinstance(context.get("domain_requirements"), list)
+        or not context.get("domain_requirements")
+    ):
+        missing.append("goal_context.domain_requirements")
+    questions = context.get("open_questions")
+    if isinstance(questions, list):
+        for raw in questions:
+            if isinstance(raw, dict) and raw.get("blocking") is True:
+                question_id = str(raw.get("id") or "unresolved").strip()
+                missing.append(f"goal_context.open_questions.{question_id}")
+    return list(dict.fromkeys(missing))
+
+
+def _domain_question(tags: set[str]) -> str:
+    if "production-operations" in tags:
+        return (
+            "Which target environment, rollout boundary, rollback signal, monitoring evidence, "
+            "and human authority govern this goal?"
+        )
+    if "security-compliance" in tags:
+        return (
+            "Which protected assets, trust boundaries, threat cases, and compliance obligations "
+            "must the goal preserve?"
+        )
+    if "data-financial" in tags:
+        return (
+            "Which authoritative data sources, calculation definitions, time horizons, and error "
+            "tolerances determine correctness?"
+        )
+    if "product-ui" in tags:
+        return (
+            "Which users and workflow are affected, and what observable behavior demonstrates a "
+            "successful product outcome?"
+        )
+    if "research-content" in tags:
+        return (
+            "Who is the audience, which source standard applies, and what evidence makes the "
+            "deliverable trustworthy?"
+        )
+    return "Which niche-specific rules, terminology, and failure conditions must this goal satisfy?"
+
+
+def _goal_readiness_questions(
+    gaps: list[str], raw_context: Any
+) -> list[dict[str, Any]]:
+    questions: list[dict[str, Any]] = []
+    context = raw_context if isinstance(raw_context, dict) else {}
+    open_questions = context.get("open_questions")
+    if isinstance(open_questions, list):
+        for raw in open_questions:
+            if (
+                isinstance(raw, dict)
+                and raw.get("blocking") is True
+                and isinstance(raw.get("question"), str)
+                and raw["question"].strip()
+            ):
+                questions.append(
+                    {
+                        "id": f"open.{str(raw.get('id') or 'unresolved').strip()}",
+                        "category": "blocking-unknown",
+                        "priority": "blocking",
+                        "question": raw["question"].strip(),
+                        "resolves": [
+                            f"goal_context.open_questions.{str(raw.get('id') or 'unresolved').strip()}"
+                        ],
+                    }
+                )
+
+    classification = {
+        "execution_mode",
+        "autonomy_level",
+        "risk_tier",
+        "mode_approval_reference",
+        "autonomy_approval_reference",
+        "risk_approval_reference",
+    }
+    classification_gaps = [item for item in gaps if item in classification]
+    if classification_gaps:
+        questions.append(
+            {
+                "id": "contract.classification",
+                "category": "authority-and-risk",
+                "priority": "blocking",
+                "question": (
+                    "Which JStack execution mode, autonomy level, and risk tier are authorized, "
+                    "and what explicit approval supports any elevated mode or risk?"
+                ),
+                "resolves": classification_gaps,
+            }
+        )
+
+    outcome_fields = {
+        "goal",
+        "goal_context.domain_statement",
+        "goal_context.domain_tags",
+        "goal_context.stakeholders",
+        "goal_context.current_state",
+        "goal_context.desired_outcome",
+    }
+    outcome_gaps = [item for item in gaps if item in outcome_fields]
+    if outcome_gaps:
+        questions.append(
+            {
+                "id": "contract.outcome",
+                "category": "outcome",
+                "priority": "blocking",
+                "question": (
+                    "What domain and stakeholders does this affect, what is true now, and what "
+                    "observable end state must be true when the goal is complete?"
+                ),
+                "resolves": outcome_gaps,
+            }
+        )
+
+    boundary_fields = {"non_goals", "allowed_paths", "goal_context.constraints"}
+    boundary_gaps = [item for item in gaps if item in boundary_fields]
+    if boundary_gaps:
+        questions.append(
+            {
+                "id": "contract.boundaries",
+                "category": "scope-and-constraints",
+                "priority": "blocking",
+                "question": (
+                    "What is explicitly out of scope, which repository paths may change, and which "
+                    "compatibility, time, policy, or operational constraints must be preserved?"
+                ),
+                "resolves": boundary_gaps,
+            }
+        )
+
+    evidence_fields = {
+        "acceptance_criteria",
+        "goal_context.context_sources",
+        "goal_context.domain_requirements",
+    }
+    evidence_gaps = [item for item in gaps if item in evidence_fields]
+    if evidence_gaps:
+        tags = {
+            str(item).strip().lower()
+            for item in context.get("domain_tags", [])
+            if isinstance(item, str)
+        }
+        question = (
+            _domain_question(tags)
+            if "goal_context.domain_requirements" in evidence_gaps
+            else (
+                "Which authoritative context sources and machine-verifiable acceptance evidence "
+                "prove this exact goal has succeeded?"
+            )
+        )
+        questions.append(
+            {
+                "id": "contract.evidence",
+                "category": "domain-and-evidence",
+                "priority": "blocking",
+                "question": question,
+                "resolves": evidence_gaps,
+            }
+        )
+    return questions[:MAX_READINESS_QUESTIONS]
+
+
+def goal_readiness_contract_payload(contract: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "goal": contract["goal"],
+        "nonGoals": contract["nonGoals"],
+        "executionMode": contract["executionMode"],
+        "autonomyLevel": contract["autonomyLevel"],
+        "riskTier": contract["riskTier"],
+        "acceptanceCriteria": contract["acceptanceCriteria"],
+        "allowedPaths": contract["allowedPaths"],
+        "blockedActions": contract["blockedActions"],
+        "requireChange": contract["requireChange"],
+        "limits": contract["limits"],
+        "tokenBudget": contract.get("tokenBudget"),
+        "goalContext": contract.get("goalContext"),
+    }
+
+
+def goal_readiness_contract_digest(contract: dict[str, Any]) -> str:
+    return _digest(goal_readiness_contract_payload(contract))
+
+
+def _goal_contract_preview(contract: dict[str, Any]) -> dict[str, Any]:
+    context = contract["goalContext"]
+    return {
+        "goal": contract["goal"],
+        "domain": context["domainStatement"],
+        "domainTags": context["domainTags"],
+        "stakeholders": context["stakeholders"],
+        "desiredOutcome": context["desiredOutcome"],
+        "executionMode": contract["executionMode"],
+        "autonomyLevel": contract["autonomyLevel"],
+        "riskTier": contract["riskTier"],
+        "acceptanceCriterionIds": [item["id"] for item in contract["acceptanceCriteria"]],
+        "allowedPaths": contract["allowedPaths"],
+        "nonGoals": contract["nonGoals"],
+        "limits": contract["limits"],
+    }
+
+
+def assess_goal_readiness(
+    args: dict[str, Any],
+    *,
+    project_root: str,
+    subject: dict[str, Any],
+    worktree: bool,
+    policy_source: Optional[str],
+    policy_digest: str,
+    loop_id: Optional[str] = None,
+    prior_contract_digest: Optional[str] = None,
+) -> dict[str, Any]:
+    gaps = _goal_readiness_missing_fields(args)
+    if gaps:
+        return {
+            "schemaVersion": GOAL_READINESS_SCHEMA,
+            "status": "needs_context",
+            "ready": False,
+            "gaps": gaps,
+            "questions": _goal_readiness_questions(gaps, args.get("goal_context")),
+            "confirmationRequired": False,
+            "readinessDigest": None,
+        }
+
+    contract = _normalize_contract_input(
+        args,
+        project_root=project_root,
+        subject=subject,
+        worktree=worktree,
+        policy_source=policy_source,
+        policy_digest=policy_digest,
+        require_clean_start=loop_id is None,
+    )
+    context = contract["goalContext"]
+    if context is None:
+        raise LoopError("A normalized goal context is required for readiness assessment.")
+    reasons: list[str] = []
+    ambiguity_score = 0
+    if _VAGUE_GOAL.search(contract["goal"]) and len(contract["goal"].split()) <= 20:
+        reasons.append("The goal contains broad outcome language that required interpretation.")
+        ambiguity_score += 2
+    if context["inferredFields"]:
+        reasons.append(
+            "Material contract fields were inferred: " + ", ".join(context["inferredFields"])
+        )
+        ambiguity_score += min(10, len(context["inferredFields"]) * 2)
+    if context["assumptions"]:
+        reasons.append("The contract depends on explicit assumptions.")
+        ambiguity_score += min(5, len(context["assumptions"]))
+    nonblocking_questions = [
+        item for item in context["openQuestions"] if not item["blocking"]
+    ]
+    if nonblocking_questions:
+        reasons.append("The contract retains non-blocking open questions.")
+        ambiguity_score += min(5, len(nonblocking_questions))
+    if contract["riskTier"] in {"medium", "high", "critical"}:
+        reasons.append(f"The contracted risk tier is {contract['riskTier']}.")
+    sensitive_tags = sorted(set(context["domainTags"]) & CONFIRMATION_DOMAIN_TAGS)
+    if sensitive_tags:
+        reasons.append(
+            "The goal affects confirmation-sensitive domains: " + ", ".join(sensitive_tags)
+        )
+    if contract["autonomyLevel"] == "L3":
+        reasons.append("The goal requests L3 autonomy.")
+    reasons = list(dict.fromkeys(reasons))
+    confirmation_required = bool(reasons)
+    contract_input_digest = goal_readiness_contract_digest(contract)
+    context_digest = _digest(context)
+    readiness_digest = _digest(
+        {
+            "schemaVersion": GOAL_READINESS_SCHEMA,
+            "contractInputDigest": contract_input_digest,
+            "contextDigest": context_digest,
+            "projectPath": subject["gitRoot"],
+            "gitHead": subject["gitHead"],
+            "projectFingerprint": subject["projectFingerprint"],
+            "policyDigest": subject["policyDigest"],
+            "toolVersion": subject["toolVersion"],
+            "loopId": loop_id,
+            "priorContractDigest": prior_contract_digest,
+            "confirmationReasons": reasons,
+        }
+    )
+    confirmed_digest = str(args.get("confirmed_readiness_digest") or "").strip()
+    confirmation_reference = str(args.get("confirmation_reference") or "").strip()
+    if confirmed_digest and confirmed_digest != readiness_digest:
+        raise LoopError(
+            "confirmed_readiness_digest is stale or does not match the current goal contract."
+        )
+    if confirmation_reference:
+        _text(
+            confirmation_reference,
+            "confirmation_reference",
+            maximum=500,
+        )
+    if bool(confirmed_digest) != bool(confirmation_reference):
+        raise LoopError(
+            "confirmed_readiness_digest and confirmation_reference must be supplied together."
+        )
+    preview = _goal_contract_preview(contract)
+    if confirmation_required and not confirmed_digest:
+        return {
+            "schemaVersion": GOAL_READINESS_SCHEMA,
+            "status": "needs_confirmation",
+            "ready": False,
+            "gaps": [],
+            "questions": [
+                {
+                    "id": "contract.confirmation",
+                    "category": "goal-contract-confirmation",
+                    "priority": "blocking",
+                    "question": (
+                        "Please confirm the exact goal, context, scope, evidence, staffing, autonomy, "
+                        "risk, and limits represented by this readiness digest."
+                    ),
+                    "resolves": ["goal_contract_confirmation"],
+                }
+            ],
+            "confirmationRequired": True,
+            "confirmationReasons": reasons,
+            "ambiguityScore": ambiguity_score,
+            "readinessDigest": readiness_digest,
+            "contractInputDigest": contract_input_digest,
+            "contextDigest": context_digest,
+            "contractPreview": preview,
+        }
+    return {
+        "schemaVersion": GOAL_READINESS_SCHEMA,
+        "status": "ready",
+        "ready": True,
+        "gaps": [],
+        "questions": [],
+        "confirmationRequired": confirmation_required,
+        "confirmationReasons": reasons,
+        "confirmationReference": confirmation_reference or None,
+        "ambiguityScore": ambiguity_score,
+        "readinessDigest": readiness_digest,
+        "contractInputDigest": contract_input_digest,
+        "contextDigest": context_digest,
+        "contractPreview": preview,
+        "_contract": contract,
+    }
+
+
+def bind_goal_readiness(
+    contract: dict[str, Any],
+    attestation: Any,
+    *,
+    loop_id: Optional[str],
+    prior_contract_digest: Optional[str],
+) -> dict[str, Any]:
+    if not isinstance(attestation, dict):
+        raise LoopError(
+            "A current goal-readiness receipt is required before starting or materially revising a loop."
+        )
+    checks = {
+        "kind": attestation.get("kind") == "goal-readiness",
+        "schema": attestation.get("schemaVersion") == GOAL_READINESS_RECEIPT_SCHEMA,
+        "passed": attestation.get("passed") is True,
+        "contract": attestation.get("contractInputDigest")
+        == goal_readiness_contract_digest(contract),
+        "loop": attestation.get("loopId") == loop_id,
+        "prior": attestation.get("priorContractDigest") == prior_contract_digest,
+    }
+    if not all(checks.values()):
+        raise LoopError(
+            "The goal-readiness receipt is stale or does not match this exact loop contract."
+        )
+    return {
+        "schemaVersion": GOAL_READINESS_SCHEMA,
+        "readinessDigest": attestation.get("readinessDigest"),
+        "contractInputDigest": attestation.get("contractInputDigest"),
+        "contextDigest": attestation.get("contextDigest"),
+        "confirmationRequired": attestation.get("confirmationRequired") is True,
+        "confirmationReferenceDigest": attestation.get("confirmationReferenceDigest"),
+        "receiptDigest": attestation.get("receiptDigest"),
+        "assessedAt": attestation.get("issuedAt"),
+    }
+
+
 def _criterion_composition_checks(
     criteria: list[dict[str, Any]], autonomy: str, risk: str
 ) -> None:
@@ -353,6 +1135,9 @@ def _normalize_contract_input(
     require_clean_start: bool = True,
 ) -> dict[str, Any]:
     goal = _text(args.get("goal"), "goal", maximum=MAX_GOAL_CHARS)
+    goal_context = _normalize_goal_context(
+        args.get("goal_context"), Path(project_root), required=False
+    )
     execution_mode = str(args.get("execution_mode") or "").strip()
     autonomy = str(args.get("autonomy_level") or "").strip().upper()
     risk = str(args.get("risk_tier") or "").strip().lower()
@@ -366,6 +1151,14 @@ def _normalize_contract_input(
     criteria = _normalize_criteria(args.get("acceptance_criteria"))
     _criterion_composition_checks(criteria, autonomy, risk)
     non_goals = _string_list(args.get("non_goals"), "non_goals", maximum_items=50)
+    if (
+        goal_context is not None
+        and non_goals
+        and goal_context["nonGoalsConfirmedEmpty"]
+    ):
+        raise LoopError(
+            "goal_context.non_goals_confirmed_empty cannot be true when non_goals are listed."
+        )
     allowed_paths_raw = _string_list(
         args.get("allowed_paths"),
         "allowed_paths",
@@ -445,6 +1238,7 @@ def _normalize_contract_input(
         "requireChange": autonomy in WRITE_AUTONOMY,
         "limits": _normalize_limits(args.get("limits")),
         "tokenBudget": token_budget,
+        "goalContext": goal_context,
         "approvals": {
             "mode": mode_approval or None,
             "autonomy": autonomy_approval or None,
@@ -922,6 +1716,7 @@ class LoopService:
         worktree: bool,
         policy_source: Optional[str],
         policy_digest: str,
+        readiness_attestation: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
         contract = _normalize_contract_input(
             args,
@@ -931,6 +1726,12 @@ class LoopService:
             policy_source=policy_source,
             policy_digest=policy_digest,
             require_clean_start=True,
+        )
+        contract["goalReadiness"] = bind_goal_readiness(
+            contract,
+            readiness_attestation,
+            loop_id=None,
+            prior_contract_digest=None,
         )
         with _DirectoryLock(self.lock_path):
             if contract["autonomyLevel"] in WRITE_AUTONOMY:
@@ -956,6 +1757,7 @@ class LoopService:
                     "executionMode": contract["executionMode"],
                     "autonomyLevel": contract["autonomyLevel"],
                     "riskTier": contract["riskTier"],
+                    "goalReadinessDigest": contract["goalReadiness"]["readinessDigest"],
                 },
             )
             snapshot = {
@@ -1004,9 +1806,12 @@ class LoopService:
             "status": snapshot["status"],
             "decision": snapshot["decision"],
             "goal": contract["goal"],
+            "nonGoals": contract["nonGoals"],
             "executionMode": contract["executionMode"],
             "autonomyLevel": contract["autonomyLevel"],
             "riskTier": contract["riskTier"],
+            "goalContext": contract.get("goalContext"),
+            "goalReadiness": contract.get("goalReadiness"),
             "contractRevision": contract["revision"],
             "contractDigest": snapshot["contractDigest"],
             "baselineCommit": contract["project"]["baselineCommit"],
@@ -1015,6 +1820,8 @@ class LoopService:
             "contractToolVersion": contract["policy"].get("toolVersion"),
             "acceptanceCriteria": contract["acceptanceCriteria"],
             "allowedPaths": contract["allowedPaths"],
+            "blockedActions": contract["blockedActions"],
+            "tokenBudget": contract.get("tokenBudget"),
             "iteration": snapshot["iteration"],
             "currentFingerprint": snapshot.get("currentFingerprint"),
             "limits": contract["limits"],
@@ -1326,6 +2133,7 @@ class LoopService:
         worktree: bool,
         policy_source: Optional[str],
         policy_digest: str,
+        readiness_attestation: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
         with _DirectoryLock(self.lock_path):
             loop_dir, old, snapshot, events = self._load(loop_id)
@@ -1351,7 +2159,10 @@ class LoopService:
                     "max_elapsed_minutes": old["limits"]["maxElapsedMinutes"],
                     "max_changed_files": old["limits"]["maxChangedFiles"],
                 },
-                "token_budget": old.get("tokenBudget"),
+                "token_budget": args.get("token_budget", old.get("tokenBudget")),
+                "goal_context": args.get(
+                    "goal_context", _goal_context_as_input(old.get("goalContext"))
+                ),
                 "mode_approval_reference": args.get("mode_approval_reference") or old["approvals"].get("mode"),
                 "autonomy_approval_reference": args.get("autonomy_approval_reference") or old["approvals"].get("autonomy"),
                 "risk_approval_reference": args.get("risk_approval_reference") or old["approvals"].get("risk"),
@@ -1390,11 +2201,26 @@ class LoopService:
                     "requireChange",
                     "limits",
                     "tokenBudget",
+                    "goalContext",
                     "approvals",
                     "policy",
                 )
-                if new[field] != old[field]
+                if new[field] != old.get(field)
             ]
+            material_changed = bool(
+                set(changed_fields) & GOAL_READINESS_MATERIAL_FIELDS
+            )
+            if material_changed:
+                new["goalReadiness"] = bind_goal_readiness(
+                    new,
+                    readiness_attestation,
+                    loop_id=loop_id,
+                    prior_contract_digest=snapshot["contractDigest"],
+                )
+            else:
+                new["goalReadiness"] = old.get("goalReadiness")
+            if new.get("goalReadiness") != old.get("goalReadiness"):
+                changed_fields.append("goalReadiness")
             approval_updates = _normalize_approvals(args.get("approval_updates"))
             human_approval_keys = {
                 item["verifier"]["approvalKey"]

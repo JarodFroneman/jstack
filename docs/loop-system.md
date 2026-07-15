@@ -19,14 +19,43 @@ approved contract revision.
 ## Lifecycle
 
 1. Inspect the Git project, policy, risk, and available QA commands.
-2. Define the goal, non-goals, acceptance criteria, allowed paths, blocked
-   actions, autonomy, and convergence limits.
-3. Start durable JStack loop state and create the native Codex goal.
-4. Run one Think -> Plan -> Build -> Review -> Test cycle.
-5. Checkpoint current receipts and derived Git/artifact evidence.
-6. Continue, request approval, stop on policy, or gather final evidence.
-7. Finalize and mark the native goal complete only with a current completion
+2. Build domain-aware goal context covering stakeholders, current and desired
+   states, constraints, non-goals, sources, niche requirements, assumptions,
+   and unresolved or inferred fields.
+3. Define acceptance criteria, allowed paths, blocked actions, autonomy, and
+   convergence limits.
+4. Run the Goal Readiness Gate, resolve its targeted context questions, and
+   obtain exact-digest confirmation when required.
+5. Start durable JStack loop state with the readiness receipt and create the
+   native Codex goal.
+6. Run one Think -> Plan -> Build -> Review -> Test cycle.
+7. Checkpoint current receipts and derived Git/artifact evidence.
+8. Continue, request approval, stop on policy, or gather final evidence.
+9. Finalize and mark the native goal complete only with a current completion
    receipt.
+
+## Goal Readiness
+
+`jstack_loop_goal_readiness` accepts a partial or complete candidate contract.
+It reports every missing field but asks at most three targeted questions per
+round. Codex should answer from inspected repository/runtime evidence first and
+ask the user only for unresolved intent, authority, or domain facts.
+
+Complete context is tailored to the task's niche. Financial/data goals require
+authoritative sources, calculation definitions, horizons, and tolerances;
+security goals require assets, trust boundaries, threats, and obligations;
+production goals require environment, rollout, rollback, monitoring, and human
+authority. Equivalent requirements apply to product, research, and unknown
+domains.
+
+Ambiguity, inference, assumptions, non-blocking unknowns, sensitive domains,
+medium-or-higher risk, and L3 trigger a confirmation round. The user confirms
+the exact returned preview and digest. The resulting receipt is session-local
+and bound to the semantic contract plus current Git and policy state.
+
+Changing a semantic contract field requires a fresh readiness receipt bound to
+the loop ID and prior contract digest. Approval-only and explicit retry/resume
+revisions carry existing readiness when the contracted target is unchanged.
 
 ## Autonomy
 
@@ -64,4 +93,5 @@ Iteration counts do not determine Codex Goal blocked status. Goal mode may mark
 blocked only after the same blocker persists for three consecutive Goal turns.
 
 See [ADR 0002](adr/0002-jstack-loop-protocol.md) for protocol invariants and
+[ADR 0003](adr/0003-goal-readiness-gate.md) for the intake decision. See
 [loop mastery](loop-mastery-system.md) for the training path.

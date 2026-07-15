@@ -1,4 +1,4 @@
 interface:
   display_name: "JStack Loop Engineer"
   short_description: "Bounded goal loops with evidence gates"
-  default_prompt: "Use $jstack-loop to complete this goal through a bounded, evidence-verified JStack loop."
+  default_prompt: "Use $jstack-loop to establish domain-aware goal readiness, then complete this goal through a bounded, evidence-verified JStack loop."

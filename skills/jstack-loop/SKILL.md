@@ -29,19 +29,36 @@ an autonomous agent runtime and never interpret "until done" as unbounded work.
    supervised implementation, or `L3` explicitly approved low-risk work in an
    isolated Git worktree. Default implementation work to `L2`; never infer
    `L3` from phrases such as "keep going."
-5. Define observable acceptance criteria using JStack QA command keys,
+5. Build `goal_context` from repository evidence and the user's words. Record
+   the domain and stakeholders, current and desired states, constraints,
+   non-goals, authoritative context sources, niche-specific requirements,
+   assumptions, unresolved questions, and every material field Codex inferred.
+   Never silently invent an approval, requirement, or definition of success.
+6. Define observable acceptance criteria using JStack QA command keys,
    security receipts, audit receipts, deterministic review, exact artifacts,
    or named human approval references. Define non-goals, allowed paths, blocked
    actions, and iteration/time/change limits. Do not pass arbitrary shell
    commands into the loop contract.
-6. Pass `token_budget` only when the user explicitly supplied a positive
+7. Call `jstack_loop_goal_readiness` with the complete candidate contract:
+   - For `needs_context`, resolve facts from inspected sources first, then ask
+     only the returned blocking questions. The tool returns at most three at a
+     time; preserve its full `gaps` list across rounds.
+   - For `needs_confirmation`, show the contract preview, reasons, and exact
+     readiness digest. Ask the user to confirm that contract. Only after a real
+     confirmation may you resubmit `confirmed_readiness_digest` with a factual
+     `confirmation_reference`; never fabricate the reference.
+   - For `ready`, pass the returned session-local
+     `goal_readiness_receipt` unchanged to `jstack_loop_start`. Reassess if the
+     repository or any semantic contract field changes before start.
+8. Pass `token_budget` only when the user explicitly supplied a positive
    numeric budget.
-7. If native Goal tools are available, call `get_goal` before creating JStack
+9. If native Goal tools are available, call `get_goal` before creating JStack
    state. Reuse an unfinished goal only when it represents the same objective;
    for a different unfinished goal, do not start a loop and ask the user to
    finish or cancel that goal first.
-8. Call `jstack_loop_start`. Use the returned `loopId`, baseline commit, and
-   contract digest for all later work.
+10. Call `jstack_loop_start` only with the assessed `goal_context` and current
+    readiness receipt. Use the returned `loopId`, baseline commit, and contract
+    digest for all later work.
 
 Read [protocol.md](references/protocol.md) when designing criteria, autonomy,
 or a composed team loop.
@@ -77,6 +94,12 @@ ending the turn. If native Goal creation fails after loop start, call
      failure.
 5. Treat iteration, elapsed-time, repeated-failure, no-progress, and
    oscillation breakers as real stops. Do not reset them by cosmetic edits.
+6. Before changing the goal, criteria, delivery mode, autonomy, risk, paths,
+   blocked actions, limits, token budget, or goal context, submit the complete
+   revised candidate and `loop_id` to `jstack_loop_goal_readiness`. Pass its
+   fresh receipt to `jstack_loop_revise`. A human-approval update or explicit
+   retry/resume reference that leaves those fields unchanged carries the prior
+   readiness decision.
 
 ## Complete Or Stop
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.1 - 2026-07-15
+
+- Added mandatory semantic goal readiness before loop start and material
+  contract revision, including structured domain context, source attribution,
+  assumptions, unresolved questions, and explicit inference tracking.
+- Added adaptive intake with the complete gap set and at most three targeted
+  questions per round, including niche requirements for product, security,
+  financial/data, production, research, and unknown domains.
+- Added exact-digest confirmation for ambiguous, inferred, assumption-bearing,
+  sensitive-domain, medium-or-higher-risk, and L3 contracts.
+- Added short-lived session-local readiness receipts bound to the exact semantic
+  contract, Git fingerprint, policy, tool version, loop ID, and prior revision.
+- Persisted additive goal context/readiness metadata while retaining read
+  compatibility with 0.4.0 loop state and approval-only resume revisions.
+- Added adversarial coverage for incomplete intake, stale confirmation,
+  contract-mismatched receipts, material revisions, sensitive-domain questions,
+  and unsafe repository context sources.
+
 ## 0.4.0 - 2026-07-15
 
 - Added `/jstack-loop` as a fifth workflow that composes Codex Goal mode with
