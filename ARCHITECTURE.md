@@ -6,10 +6,11 @@ Canonical sources live in:
 
 - `mcp/jstack/jstack_mcp_server.py`
 - `mcp/jstack/audit/`
+- `mcp/jstack/loop/`
 - `mcp/jstack/schemas/`
 - `prompts/`
-- `skills/jstack-dev/` and `skills/jstack-audit/`
-- `mastery/curriculum.v1.json` and `mastery/audit-curriculum.v1.json`
+- `skills/jstack-dev/`, `skills/jstack-audit/`, and `skills/jstack-loop/`
+- the engineering, audit, and loop curricula under `mastery/`
 - `mcp/jstack/templates/`
 
 `scripts/sync_artifacts.py` generates and verifies plugin copies. It operates
@@ -27,6 +28,8 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - QA command discovery and explicitly approved execution
 - current-tree and release-range secret scanning
 - deterministic audit collection and evidence-bound finalization
+- durable bounded loop contracts, checkpoints, convergence breakers, and
+  evidence-bound finalization
 - commit-bound HMAC evidence receipts
 - release readiness evaluation
 - local context and mastery records
@@ -34,6 +37,25 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 The MCP never spawns platform subagents or performs a deployment. Codex's
 platform tools perform real agent dispatch. Project-specific release tools
 perform real production mutation only after separate authorization.
+
+## Loop Protocol
+
+Codex Goal mode is the continuation engine. The JStack loop protocol is the
+contract and convergence layer around one explicit delivery mode. It stores
+private state outside the repository, binds contracts to the starting commit
+and policy, derives changed paths from Git, validates current receipts, and
+returns a bounded decision after each iteration.
+
+Write loops require a clean start and an exclusive repository lease. L3 also
+requires a linked worktree, low risk, bounded paths, and QA, security, audit,
+and review criteria. Contract revisions reset completion evidence. Completion
+never implies release authorization.
+
+The lease is per resolved Git checkout, so explicitly isolated linked
+worktrees can operate independently. The original commit remains the exact
+merge-base boundary. Contract history, the current snapshot, and every event
+head are mutually digest-bound; a pending transaction journal replays an
+interrupted multi-file commit.
 
 ## Audit Protocol
 
@@ -78,6 +100,11 @@ receipt compatibility is unchanged.
 QA discovery is not evidence. A complete clean scan is evidence only for the
 heuristics it actually ran. Missing, stale, failed, timed-out, truncated, or
 inconclusive evidence never becomes a pass.
+
+Loop completion receipts additionally bind the loop ID, contract digest,
+baseline commit, completion-evidence digest, event-chain head, execution mode,
+autonomy, and risk tier. Durable state survives MCP restarts, but signed
+receipts remain intentionally session-local and must be revalidated.
 
 ## Security Boundary
 

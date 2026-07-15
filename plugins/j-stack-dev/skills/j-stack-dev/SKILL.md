@@ -22,6 +22,9 @@ Default behavior:
    `team_mode="single-lead"` and that resolved mode.
 6. Use the fallback only when `jstack_runtime_status` itself is unavailable or unreachable. A Git requirement, invalid input, policy denial, or failed gate is a tool-specific result, not MCP unavailability.
 7. Respect project `AGENTS.md`, safety rules, branch/deploy rules, and explicit user approvals.
+8. When an active JStack loop supplies a `loopId`, execute only the current
+   single-lead iteration. Let `jstack_loop_checkpoint` and
+   `jstack_loop_finalize` own convergence and terminal status.
 
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.

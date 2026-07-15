@@ -303,6 +303,8 @@ class TransportTests(unittest.TestCase):
         self.assertIn("jstack_mastery_record", names)
         self.assertIn("jstack_audit", names)
         self.assertIn("jstack_audit_finalize", names)
+        self.assertIn("jstack_loop_start", names)
+        self.assertIn("jstack_loop_finalize", names)
         self.assertFalse(any(name.startswith("gstack_") for name in names))
 
         with tempfile.TemporaryDirectory() as temp:
@@ -423,6 +425,8 @@ class TransportTests(unittest.TestCase):
         }
         self.assertIn("jstack_audit", names)
         self.assertIn("jstack_audit_finalize", names)
+        self.assertIn("jstack_loop_start", names)
+        self.assertIn("jstack_loop_finalize", names)
         process.stdin.close()
         process.wait(timeout=5)
         stderr = process.stderr.read()
@@ -1450,6 +1454,7 @@ class MasteryAndInstallTests(unittest.TestCase):
             (codex_home / "prompts").mkdir(parents=True)
             (codex_home / "skills" / "jstack-dev").mkdir(parents=True)
             (codex_home / "skills" / "jstack-audit").mkdir(parents=True)
+            (codex_home / "skills" / "jstack-loop").mkdir(parents=True)
             (codex_home / "mcp" / "jstack").mkdir(parents=True)
             (codex_home / "prompts" / "jstack-audit.md").write_text(
                 "old prompt\n", encoding="utf-8"
@@ -1459,6 +1464,9 @@ class MasteryAndInstallTests(unittest.TestCase):
             )
             (codex_home / "skills" / "jstack-audit" / "SKILL.md").write_text(
                 "old audit skill\n", encoding="utf-8"
+            )
+            (codex_home / "skills" / "jstack-loop" / "SKILL.md").write_text(
+                "old loop skill\n", encoding="utf-8"
             )
             (codex_home / "mcp" / "jstack" / "old.txt").write_text(
                 "old mcp\n", encoding="utf-8"
@@ -1470,6 +1478,7 @@ class MasteryAndInstallTests(unittest.TestCase):
                 "prompt": (codex_home / "prompts" / "jstack-audit.md").read_bytes(),
                 "dev": (codex_home / "skills" / "jstack-dev" / "SKILL.md").read_bytes(),
                 "audit": (codex_home / "skills" / "jstack-audit" / "SKILL.md").read_bytes(),
+                "loop": (codex_home / "skills" / "jstack-loop" / "SKILL.md").read_bytes(),
                 "mcp": (codex_home / "mcp" / "jstack" / "old.txt").read_bytes(),
                 "config": (codex_home / "config.toml").read_bytes(),
             }
@@ -1478,7 +1487,7 @@ class MasteryAndInstallTests(unittest.TestCase):
 
             def fail_late(source: Path, target: Path) -> None:
                 calls["count"] += 1
-                if calls["count"] == 3:
+                if calls["count"] == 4:
                     raise OSError("synthetic transaction failure")
                 real_copytree_replace(source, target)
 
@@ -1499,6 +1508,10 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertEqual(
                 before["audit"],
                 (codex_home / "skills" / "jstack-audit" / "SKILL.md").read_bytes(),
+            )
+            self.assertEqual(
+                before["loop"],
+                (codex_home / "skills" / "jstack-loop" / "SKILL.md").read_bytes(),
             )
             self.assertEqual(
                 before["mcp"], (codex_home / "mcp" / "jstack" / "old.txt").read_bytes()
@@ -1563,13 +1576,14 @@ class MasteryAndInstallTests(unittest.TestCase):
                 audit = server.tool_mastery_status({"track": "audit"})
 
             migrated = json.loads(profile_path.read_text(encoding="utf-8"))
-            self.assertEqual("jstack.mastery.profile.v2", migrated["schemaVersion"])
+            self.assertEqual("jstack.mastery.profile.v3", migrated["schemaVersion"])
             self.assertEqual(2, engineering["currentStage"]["stage"])
             self.assertEqual("engineering", engineering["track"])
             self.assertEqual([0, 1], migrated["tracks"]["engineering"]["completedStages"])
             self.assertEqual(1, len(migrated["tracks"]["engineering"]["attempts"]))
             self.assertEqual(0, audit["currentStage"]["stage"])
             self.assertEqual([], migrated["tracks"]["audit"]["attempts"])
+            self.assertEqual([], migrated["tracks"]["loop"]["attempts"])
 
     def test_audit_mastery_advances_without_mutating_engineering_track(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1825,6 +1839,8 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertEqual(0, sync.returncode, sync.stderr)
         self.assertTrue((ROOT / "plugin" / "commands" / "jstack-audit.md").exists())
         self.assertTrue((ROOT / "plugin" / "skills" / "jstack-audit" / "SKILL.md").exists())
+        self.assertTrue((ROOT / "plugin" / "commands" / "jstack-loop.md").exists())
+        self.assertTrue((ROOT / "plugin" / "skills" / "jstack-loop" / "SKILL.md").exists())
         audit_manifest = json.loads(
             (ROOT / "plugins" / "jstack-audit" / ".codex-plugin" / "plugin.json").read_text(
                 encoding="utf-8"
@@ -1834,6 +1850,16 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertEqual(EXPECTED_VERSION, audit_manifest["version"])
         self.assertTrue(
             (ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit" / "SKILL.md").exists()
+        )
+        loop_manifest = json.loads(
+            (ROOT / "plugins" / "jstack-loop" / ".codex-plugin" / "plugin.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("jstack-loop", loop_manifest["name"])
+        self.assertEqual(EXPECTED_VERSION, loop_manifest["version"])
+        self.assertTrue(
+            (ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop" / "SKILL.md").exists()
         )
         with tempfile.TemporaryDirectory() as temp:
             codex_home = Path(temp) / "codex"
@@ -1854,12 +1880,16 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertTrue((codex_home / "mcp" / "jstack" / "jstack_mcp_server.py").exists())
             self.assertTrue((codex_home / "mcp" / "jstack" / "mastery" / "curriculum.v1.json").exists())
             self.assertTrue((codex_home / "mcp" / "jstack" / "mastery" / "audit-curriculum.v1.json").exists())
+            self.assertTrue((codex_home / "mcp" / "jstack" / "mastery" / "loop-curriculum.v1.json").exists())
+            self.assertTrue((codex_home / "mcp" / "jstack" / "loop" / "protocol.py").exists())
             self.assertTrue((codex_home / "mcp" / "jstack" / "audit" / "controls.v1.json").exists())
             self.assertTrue(
                 (codex_home / "mcp" / "jstack" / "audit" / "benchmark-corpus" / "manifest.v1.json").exists()
             )
             self.assertTrue((codex_home / "prompts" / "jstack-audit.md").exists())
             self.assertTrue((codex_home / "skills" / "jstack-audit" / "SKILL.md").exists())
+            self.assertTrue((codex_home / "prompts" / "jstack-loop.md").exists())
+            self.assertTrue((codex_home / "skills" / "jstack-loop" / "SKILL.md").exists())
             self.assertIn("[mcp_servers.jstack]", (codex_home / "config.toml").read_text())
 
 

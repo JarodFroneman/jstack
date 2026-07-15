@@ -14,7 +14,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-PROMPTS = ("j-stack-dev.md", "jstack-subagents.md", "jstack-full-team.md", "jstack-audit.md")
+PROMPTS = (
+    "j-stack-dev.md",
+    "jstack-subagents.md",
+    "jstack-full-team.md",
+    "jstack-audit.md",
+    "jstack-loop.md",
+)
 
 
 def copytree_replace(source: Path, target: Path) -> None:
@@ -181,6 +187,7 @@ def install(repo_root: Path, codex_home: Path) -> dict[str, Any]:
     skills_root = codex_home / "skills"
     skill_dir = skills_root / "jstack-dev"
     audit_skill_dir = skills_root / "jstack-audit"
+    loop_skill_dir = skills_root / "jstack-loop"
     mcp_root = codex_home / "mcp"
     mcp_dir = mcp_root / "jstack"
     config_path = codex_home / "config.toml"
@@ -193,6 +200,9 @@ def install(repo_root: Path, codex_home: Path) -> dict[str, Any]:
     staged_skill = transaction.stage_tree("jstack-dev-skill", repo_root / "skills" / "jstack-dev")
     staged_audit_skill = transaction.stage_tree(
         "jstack-audit-skill", repo_root / "skills" / "jstack-audit"
+    )
+    staged_loop_skill = transaction.stage_tree(
+        "jstack-loop-skill", repo_root / "skills" / "jstack-loop"
     )
     staged_mcp = transaction.stage_tree("jstack-mcp", repo_root / "mcp" / "jstack")
     staged_mastery = staged_mcp / "mastery"
@@ -208,6 +218,7 @@ def install(repo_root: Path, codex_home: Path) -> dict[str, Any]:
         *(prompts_dir / prompt for prompt in PROMPTS),
         skill_dir,
         audit_skill_dir,
+        loop_skill_dir,
         mcp_dir,
         backup,
         config_path,
@@ -227,6 +238,7 @@ def install(repo_root: Path, codex_home: Path) -> dict[str, Any]:
             atomic_write_text(prompts_dir / prompt, prompt_contents[prompt], mode=0o644)
         copytree_replace(staged_skill, skill_dir)
         copytree_replace(staged_audit_skill, audit_skill_dir)
+        copytree_replace(staged_loop_skill, loop_skill_dir)
         copytree_replace(staged_mcp, mcp_dir)
         atomic_write_text(backup, original)
         atomic_write_text(config_path, updated)
@@ -239,6 +251,7 @@ def install(repo_root: Path, codex_home: Path) -> dict[str, Any]:
         "promptsDir": prompts_dir,
         "skillDir": skill_dir,
         "auditSkillDir": audit_skill_dir,
+        "loopSkillDir": loop_skill_dir,
         "mcpDir": mcp_dir,
         "configPath": config_path,
         "backup": backup,
@@ -259,6 +272,7 @@ def main() -> int:
     prompts_dir = outcome["promptsDir"]
     skill_dir = outcome["skillDir"]
     audit_skill_dir = outcome["auditSkillDir"]
+    loop_skill_dir = outcome["loopSkillDir"]
     mcp_dir = outcome["mcpDir"]
     config_path = outcome["configPath"]
     backup = outcome["backup"]
@@ -270,6 +284,7 @@ def main() -> int:
         print(f"  - {prompts_dir / prompt}")
     print(f"Installed jstack-dev skill to {skill_dir}")
     print(f"Installed jstack-audit skill to {audit_skill_dir}")
+    print(f"Installed jstack-loop skill to {loop_skill_dir}")
     print(f"Installed JStack MCP to {mcp_dir}")
     print(f"Updated Codex config: {config_path}")
     print(f"Backup written: {backup}")

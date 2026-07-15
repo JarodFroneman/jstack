@@ -22,6 +22,8 @@ The invoked command is the sole staffing authority:
   right-sized team, normally two or three specialists.
 - `/jstack-full-team`: `full-team`. Account for all 11 roles and dispatch in
   controlled waves when concurrency would create noise.
+- `/jstack-loop`: use the `jstack-loop` skill. The loop owns persistence and
+  convergence while one explicitly selected delivery mode owns each iteration.
 - `jstack-audit`: a separate read-only audit workflow. Use the
   `jstack-audit` skill; do not edit audited code or reinterpret the command as
   an implementation request.
@@ -32,6 +34,10 @@ coordination coverage, never the quality bar.
 The JStack MCP plans, validates, scans, records, and evaluates evidence. It does
 not spawn platform subagents. Use the platform multi-agent tools for real
 dispatch, waiting, collection, and closure.
+
+When an active loop supplies a `loopId`, execute only the current iteration in
+the contract's fixed delivery mode. Let `jstack_loop_checkpoint` and
+`jstack_loop_finalize` own convergence and terminal status.
 
 ## Start
 

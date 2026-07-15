@@ -20,6 +20,7 @@ FILE_MAP = {
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
     ROOT / "prompts" / "jstack-audit.md": [ROOT / "plugin" / "commands" / "jstack-audit.md"],
+    ROOT / "prompts" / "jstack-loop.md": [ROOT / "plugin" / "commands" / "jstack-loop.md"],
     ROOT / "skills" / "jstack-dev" / "SKILL.md": [ROOT / "plugin" / "skills" / "jstack-dev" / "SKILL.md"],
     ROOT / "mastery" / "curriculum.v1.json": [
         ROOT / "mcp" / "jstack" / "mastery" / "curriculum.v1.json",
@@ -28,6 +29,10 @@ FILE_MAP = {
     ROOT / "mastery" / "audit-curriculum.v1.json": [
         ROOT / "mcp" / "jstack" / "mastery" / "audit-curriculum.v1.json",
         ROOT / "plugin" / "mcp" / "mastery" / "audit-curriculum.v1.json",
+    ],
+    ROOT / "mastery" / "loop-curriculum.v1.json": [
+        ROOT / "mcp" / "jstack" / "mastery" / "loop-curriculum.v1.json",
+        ROOT / "plugin" / "mcp" / "mastery" / "loop-curriculum.v1.json",
     ],
 }
 
@@ -42,6 +47,11 @@ for source in sorted((ROOT / "mcp" / "jstack" / "audit").rglob("*")):
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "audit")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "audit" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "loop").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "loop")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "loop" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "schemas").glob("*.json")):
     FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "schemas" / source.name]
 
@@ -52,6 +62,17 @@ for source in sorted((ROOT / "skills" / "jstack-audit").rglob("*")):
             ROOT / "plugin" / "skills" / "jstack-audit" / relative,
             ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit" / relative,
         ]
+
+for source in sorted((ROOT / "skills" / "jstack-loop").rglob("*")):
+    if source.is_file():
+        relative = source.relative_to(ROOT / "skills" / "jstack-loop")
+        FILE_MAP[source] = [
+            ROOT / "plugin" / "skills" / "jstack-loop" / relative,
+            ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop" / relative,
+        ]
+FILE_MAP[ROOT / "skills" / "jstack-loop" / "references" / "mastery-system.md"].append(
+    ROOT / "docs" / "loop-mastery-system.md"
+)
 
 for source in sorted((ROOT / "mcp" / "jstack" / "templates").glob("*")):
     if source.is_file():
@@ -65,11 +86,17 @@ FILE_MAP[ROOT / "skills" / "jstack-dev" / "references" / "mastery-system.md"].ap
 
 TREE_MIRRORS = (
     (ROOT / "mcp" / "jstack" / "audit", ROOT / "plugin" / "mcp" / "audit"),
+    (ROOT / "mcp" / "jstack" / "loop", ROOT / "plugin" / "mcp" / "loop"),
     (ROOT / "mcp" / "jstack" / "schemas", ROOT / "plugin" / "mcp" / "schemas"),
     (ROOT / "skills" / "jstack-audit", ROOT / "plugin" / "skills" / "jstack-audit"),
     (
         ROOT / "skills" / "jstack-audit",
         ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit",
+    ),
+    (ROOT / "skills" / "jstack-loop", ROOT / "plugin" / "skills" / "jstack-loop"),
+    (
+        ROOT / "skills" / "jstack-loop",
+        ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop",
     ),
 )
 

@@ -34,10 +34,11 @@ _SERVER_DIR = Path(__file__).resolve().parent
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 import audit as audit_core
+import loop as loop_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.3.1"
+SERVER_VERSION = "0.4.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -47,9 +48,14 @@ MAX_FINGERPRINT_FILES = 100_000
 AUDIT_MAX_STRUCTURED_INPUT_BYTES = 2_000_000
 AUDIT_MAX_STRUCTURED_OUTPUT_BYTES = 5_000_000
 RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
+LOOP_MAX_QA_RECEIPTS = 50
+LOOP_MAX_AUDIT_RECEIPTS = 20
+LOOP_MAX_RECEIPT_CHARS = 100_000
 AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 AUDIT_CAPSTONE_ATTESTATION_SCHEMA = "jstack.audit.capstone-attestation.v1"
 AUDIT_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_AUDIT_ASSESSOR_HMAC_KEY"
+LOOP_CAPSTONE_ATTESTATION_SCHEMA = "jstack.loop.capstone-attestation.v1"
+LOOP_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_LOOP_ASSESSOR_HMAC_KEY"
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
@@ -67,6 +73,12 @@ GIT_REQUIRED_TOOLS = [
     "jstack_ship_check",
     "jstack_release_readiness",
     "jstack_quant_backtest_review",
+    "jstack_loop_start",
+    "jstack_loop_status",
+    "jstack_loop_checkpoint",
+    "jstack_loop_revise",
+    "jstack_loop_stop",
+    "jstack_loop_finalize",
 ]
 ARTIFACT_ONLY_RELEASE_BLOCKER = (
     "Git-backed JStack release readiness is unavailable until the authoritative source has a committed git repository."
@@ -134,6 +146,11 @@ def validate_schema_value(value: Any, schema: dict[str, Any], path: str = "argum
             raise InputError(f"{path} must be at least {schema['minimum']}.")
         if "maximum" in schema and value > schema["maximum"]:
             raise InputError(f"{path} must be at most {schema['maximum']}.")
+    if isinstance(value, str):
+        if "minLength" in schema and len(value) < schema["minLength"]:
+            raise InputError(f"{path} must contain at least {schema['minLength']} characters.")
+        if "maxLength" in schema and len(value) > schema["maxLength"]:
+            raise InputError(f"{path} must contain at most {schema['maxLength']} characters.")
     if isinstance(value, dict):
         for field in schema.get("required", []):
             if field not in value:
@@ -147,6 +164,10 @@ def validate_schema_value(value: Any, schema: dict[str, Any], path: str = "argum
             if field in properties:
                 validate_schema_value(child, properties[field], f"{path}.{field}")
     if isinstance(value, list) and isinstance(schema.get("items"), dict):
+        if "minItems" in schema and len(value) < schema["minItems"]:
+            raise InputError(f"{path} must contain at least {schema['minItems']} items.")
+        if "maxItems" in schema and len(value) > schema["maxItems"]:
+            raise InputError(f"{path} must contain at most {schema['maxItems']} items.")
         for index, child in enumerate(value):
             validate_schema_value(child, schema["items"], f"{path}[{index}]")
 
@@ -186,6 +207,27 @@ def require_project_path(path: Optional[str] = None) -> Path:
     if not root:
         raise ToolError(f"JStack Git-backed evidence tools require a git repository: {project_path}")
     return Path(root).resolve()
+
+
+def decode_git_relative_path(raw: bytes, label: str) -> str:
+    try:
+        relative = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ToolError(f"Git returned a {label} path that is not valid UTF-8.") from exc
+    if "\\" in relative or any(
+        ord(character) < 32 or ord(character) == 127 for character in relative
+    ):
+        raise ToolError(
+            f"Git returned a {label} path containing a literal backslash or control character; evidence cannot represent it safely."
+        )
+    parts = relative.split("/")
+    if (
+        not relative
+        or relative.startswith("/")
+        or any(part in {"", ".", ".."} or part.lower() == ".git" for part in parts)
+    ):
+        raise ToolError(f"Git returned an unsafe {label} repository path.")
+    return relative
 
 
 def resolve_project_binding(path: Optional[str] = None) -> dict[str, Any]:
@@ -885,10 +927,7 @@ def git_change_evidence(project_path: Path, base_ref: Optional[str] = None) -> d
             raise ToolError(f"Could not collect {source} git change evidence: {result['stderr']}")
         source_files: list[str] = []
         for raw in result["stdout"].split(b"\0"):
-            try:
-                item = raw.decode("utf-8", errors="strict").replace("\\", "/")
-            except UnicodeDecodeError as exc:
-                raise ToolError("Git returned a changed path that is not valid UTF-8; evidence cannot be represented safely.") from exc
+            item = decode_git_relative_path(raw, "changed") if raw else ""
             if item and item not in seen:
                 seen.add(item)
                 files.append(item)
@@ -994,8 +1033,8 @@ def project_state(project_path: Path) -> dict[str, Any]:
             continue
         try:
             index_meta, path_raw = raw.split(b"\t", 1)
-            relative = path_raw.decode("utf-8", errors="strict").replace("\\", "/")
-        except (ValueError, UnicodeDecodeError) as exc:
+            relative = decode_git_relative_path(path_raw, "tracked index entry")
+        except ValueError as exc:
             raise ToolError("Git returned a tracked index entry that cannot be represented safely.") from exc
         candidate = root / relative
         digest.update(index_meta)
@@ -1046,16 +1085,15 @@ def project_state(project_path: Path) -> dict[str, Any]:
             continue
         tag = chr(raw[0])
         if tag.islower() or tag == "S":
-            try:
-                hidden_index_flags.append(raw[2:].decode("utf-8", errors="strict").replace("\\", "/"))
-            except UnicodeDecodeError as exc:
-                raise ToolError("Git returned an index-flag path that is not valid UTF-8.") from exc
+            hidden_index_flags.append(
+                decode_git_relative_path(raw[2:], "index-flag")
+            )
 
     untracked: list[str] = []
     for raw in untracked_result["stdout"].split(b"\0"):
         if not raw:
             continue
-        relative = raw.decode("utf-8", errors="strict").replace("\\", "/")
+        relative = decode_git_relative_path(raw, "untracked")
         candidate = root / relative
         if candidate.is_symlink():
             raise ToolError(f"Cannot fingerprint symlinked untracked path: {relative}")
@@ -2445,21 +2483,29 @@ def task_anti_slop_checklist(classifications: list[dict[str, Any]]) -> list[str]
     return checklist
 
 
-MASTERY_TRACKS = {"engineering", "audit"}
+MASTERY_TRACKS = {"engineering", "audit", "loop"}
 
 
 def normalize_mastery_track(value: Any = None) -> str:
     track = str(value or "engineering").strip().lower()
     if track not in MASTERY_TRACKS:
-        raise ToolError("track must be engineering or audit.")
+        raise ToolError("track must be engineering, audit, or loop.")
     return track
 
 
 def curriculum_candidates(track: str = "engineering") -> list[Path]:
     track = normalize_mastery_track(track)
     server_dir = Path(__file__).resolve().parent
-    filename = "curriculum.v1.json" if track == "engineering" else "audit-curriculum.v1.json"
-    env_name = "JSTACK_CURRICULUM" if track == "engineering" else "JSTACK_AUDIT_CURRICULUM"
+    filename = {
+        "engineering": "curriculum.v1.json",
+        "audit": "audit-curriculum.v1.json",
+        "loop": "loop-curriculum.v1.json",
+    }[track]
+    env_name = {
+        "engineering": "JSTACK_CURRICULUM",
+        "audit": "JSTACK_AUDIT_CURRICULUM",
+        "loop": "JSTACK_LOOP_CURRICULUM",
+    }[track]
     candidates = [
         Path(os.environ[env_name]).expanduser() if os.environ.get(env_name) else None,
         server_dir / "mastery" / filename,
@@ -2471,11 +2517,11 @@ def curriculum_candidates(track: str = "engineering") -> list[Path]:
 
 def load_mastery_curriculum(track: str = "engineering") -> dict[str, Any]:
     track = normalize_mastery_track(track)
-    expected_schema = (
-        "jstack.mastery.curriculum.v1"
-        if track == "engineering"
-        else "jstack.audit.mastery.curriculum.v1"
-    )
+    expected_schema = {
+        "engineering": "jstack.mastery.curriculum.v1",
+        "audit": "jstack.audit.mastery.curriculum.v1",
+        "loop": "jstack.loop.mastery.curriculum.v1",
+    }[track]
     for path in curriculum_candidates(track):
         if not path.exists():
             continue
@@ -2513,7 +2559,7 @@ def default_mastery_track() -> dict[str, Any]:
 
 def default_mastery_profile() -> dict[str, Any]:
     return {
-        "schemaVersion": "jstack.mastery.profile.v2",
+        "schemaVersion": "jstack.mastery.profile.v3",
         "createdAt": None,
         "updatedAt": None,
         "learnerName": "Jay",
@@ -2521,26 +2567,40 @@ def default_mastery_profile() -> dict[str, Any]:
         "tracks": {
             "engineering": default_mastery_track(),
             "audit": default_mastery_track(),
+            "loop": default_mastery_track(),
         },
     }
 
 
 def migrate_mastery_profile(profile: dict[str, Any]) -> dict[str, Any]:
-    if profile.get("schemaVersion") == "jstack.mastery.profile.v2":
+    schema = profile.get("schemaVersion")
+    if schema == "jstack.mastery.profile.v3":
         return profile
-    if profile.get("schemaVersion") != "jstack.mastery.profile.v1":
-        raise ToolError(f"Unsupported JStack mastery profile schema: {profile.get('schemaVersion')!r}")
+    if schema not in {"jstack.mastery.profile.v1", "jstack.mastery.profile.v2"}:
+        raise ToolError(f"Unsupported JStack mastery profile schema: {schema!r}")
     migrated = default_mastery_profile()
     migrated["createdAt"] = profile.get("createdAt")
     migrated["updatedAt"] = now_iso()
     migrated["learnerName"] = str(profile.get("learnerName") or "Jay")
-    migrated["tracks"]["engineering"] = {
-        "currentStage": int(profile.get("currentStage", 0)),
-        "completedStages": list(profile.get("completedStages") or []),
-        "attempts": list(profile.get("attempts") or []),
-    }
+    if schema == "jstack.mastery.profile.v1":
+        migrated["tracks"]["engineering"] = {
+            "currentStage": int(profile.get("currentStage", 0)),
+            "completedStages": list(profile.get("completedStages") or []),
+            "attempts": list(profile.get("attempts") or []),
+        }
+    else:
+        tracks = profile.get("tracks")
+        if not isinstance(tracks, dict):
+            raise ToolError("Malformed JStack mastery profile v2 tracks.")
+        for track in ("engineering", "audit"):
+            state = tracks.get(track)
+            if not isinstance(state, dict):
+                raise ToolError(f"Malformed JStack mastery profile v2 track: {track}")
+            migrated["tracks"][track] = json.loads(json.dumps(state))
+        active = str(profile.get("activeTrack") or "engineering")
+        migrated["activeTrack"] = active if active in {"engineering", "audit"} else "engineering"
     migrated["migration"] = {
-        "fromSchema": "jstack.mastery.profile.v1",
+        "fromSchema": schema,
         "migratedAt": migrated["updatedAt"],
     }
     return migrated
@@ -2553,10 +2613,13 @@ def load_mastery_profile() -> dict[str, Any]:
     profile = read_json(path)
     if not profile:
         raise ToolError(f"Invalid JStack mastery profile: {path}")
-    if profile.get("schemaVersion") == "jstack.mastery.profile.v1":
+    if profile.get("schemaVersion") in {
+        "jstack.mastery.profile.v1",
+        "jstack.mastery.profile.v2",
+    }:
         profile = migrate_mastery_profile(profile)
         atomic_write_json(path, profile)
-    if profile.get("schemaVersion") != "jstack.mastery.profile.v2":
+    if profile.get("schemaVersion") != "jstack.mastery.profile.v3":
         raise ToolError(f"Invalid JStack mastery profile: {path}")
     tracks = profile.get("tracks")
     if not isinstance(tracks, dict) or set(tracks) != MASTERY_TRACKS:
@@ -2611,7 +2674,7 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
             len(recent) == 2
             and all(item.get("score", 0) >= 90 and item.get("blindCapstone") is True for item in recent)
         )
-        if track == "audit":
+        if track in {"audit", "loop"}:
             challenge_digests = {
                 item.get("capstoneAttestation", {}).get("challengeDigest") for item in recent
             }
@@ -2691,6 +2754,7 @@ def build_task_training(
 def mastery_system() -> dict[str, Any]:
     curriculum = load_mastery_curriculum("engineering")
     audit_curriculum = load_mastery_curriculum("audit")
+    loop_curriculum = load_mastery_curriculum("loop")
     return {
         "standard": "Enterprise professional development: evidence-driven, source-backed, production-safe, and designed to train Jay from operator fundamentals to staff-level execution.",
         "schemaVersion": curriculum["schemaVersion"],
@@ -2710,6 +2774,11 @@ def mastery_system() -> dict[str, Any]:
                 "schemaVersion": audit_curriculum["schemaVersion"],
                 "sourcePath": audit_curriculum["_sourcePath"],
                 "digest": mastery_curriculum_digest(audit_curriculum),
+            },
+            "loop": {
+                "schemaVersion": loop_curriculum["schemaVersion"],
+                "sourcePath": loop_curriculum["_sourcePath"],
+                "digest": mastery_curriculum_digest(loop_curriculum),
             },
         },
     }
@@ -2891,11 +2960,14 @@ def mastery_attempt_evidence_digest(
     )
 
 
-def verify_audit_capstone_attestation(
+def verify_capstone_attestation(
     raw_attestation: Any,
     expected_assessor: str,
     expected_attempt_digest: str,
     expected_evaluation_digest: str,
+    *,
+    expected_schema: str,
+    assessor_key_env: str,
 ) -> dict[str, Any]:
     required = {
         "schemaVersion",
@@ -2914,9 +2986,9 @@ def verify_audit_capstone_attestation(
         return {"valid": False, "reason": "malformed"}
     body = {key: raw_attestation[key] for key in sorted(required - {"signature"})}
     signature = str(raw_attestation.get("signature") or "")
-    key_value = os.environ.get(AUDIT_CAPSTONE_ASSESSOR_KEY_ENV, "")
+    key_value = os.environ.get(assessor_key_env, "")
     checks: dict[str, bool] = {
-        "schema": body.get("schemaVersion") == AUDIT_CAPSTONE_ATTESTATION_SCHEMA,
+        "schema": body.get("schemaVersion") == expected_schema,
         "assessor": body.get("assessorId") == expected_assessor,
         "challengeId": bool(
             re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", str(body.get("challengeId") or ""))
@@ -2979,6 +3051,76 @@ def verify_audit_capstone_attestation(
     }
 
 
+def verify_audit_capstone_attestation(
+    raw_attestation: Any,
+    expected_assessor: str,
+    expected_attempt_digest: str,
+    expected_evaluation_digest: str,
+) -> dict[str, Any]:
+    return verify_capstone_attestation(
+        raw_attestation,
+        expected_assessor,
+        expected_attempt_digest,
+        expected_evaluation_digest,
+        expected_schema=AUDIT_CAPSTONE_ATTESTATION_SCHEMA,
+        assessor_key_env=AUDIT_CAPSTONE_ASSESSOR_KEY_ENV,
+    )
+
+
+def verify_loop_capstone_attestation(
+    raw_attestation: Any,
+    expected_assessor: str,
+    expected_attempt_digest: str,
+    expected_evaluation_digest: str,
+) -> dict[str, Any]:
+    return verify_capstone_attestation(
+        raw_attestation,
+        expected_assessor,
+        expected_attempt_digest,
+        expected_evaluation_digest,
+        expected_schema=LOOP_CAPSTONE_ATTESTATION_SCHEMA,
+        assessor_key_env=LOOP_CAPSTONE_ASSESSOR_KEY_ENV,
+    )
+
+
+def evaluate_loop_capstone(raw: Any) -> dict[str, Any]:
+    required = {
+        "schemaVersion",
+        "p0Total",
+        "p0Found",
+        "p1Total",
+        "p1Found",
+        "continuationDecisionCorrect",
+        "releaseDecisionCorrect",
+        "recoveryVerified",
+        "evidenceComplete",
+    }
+    if not isinstance(raw, dict) or set(raw) != required:
+        raise ToolError(
+            "Loop Stage 9 capstone-evaluation.json has unsupported or missing fields."
+        )
+    if raw.get("schemaVersion") != "jstack.loop.capstone-evaluation.v1":
+        raise ToolError("Loop Stage 9 capstone evaluation schema is unsupported.")
+    metrics: dict[str, Any] = {"schemaVersion": raw["schemaVersion"]}
+    for field in ("p0Total", "p0Found", "p1Total", "p1Found"):
+        value = raw.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ToolError(f"Loop Stage 9 capstone evaluation {field} must be a non-negative integer.")
+        metrics[field] = value
+    if metrics["p0Found"] > metrics["p0Total"] or metrics["p1Found"] > metrics["p1Total"]:
+        raise ToolError("Loop Stage 9 capstone findings found cannot exceed seeded totals.")
+    for field in (
+        "continuationDecisionCorrect",
+        "releaseDecisionCorrect",
+        "recoveryVerified",
+        "evidenceComplete",
+    ):
+        if not isinstance(raw.get(field), bool):
+            raise ToolError(f"Loop Stage 9 capstone evaluation {field} must be a boolean.")
+        metrics[field] = raw[field]
+    return {**metrics, "evaluationDigest": audit_json_digest(metrics)}
+
+
 def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     if not mastery_profile_path().exists():
         raise ToolError("Start the mastery system with jstack_mastery_start before recording an attempt.")
@@ -3031,6 +3173,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         for requirement in stage.get("requiredArtifacts", [])
     }
     benchmark_evaluation = None
+    loop_capstone_evaluation = None
     if track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
             raise ToolError(
@@ -3045,6 +3188,17 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             benchmark_evaluation = audit_core.score_benchmark_evaluation(evaluation)
         except audit_core.AuditError as exc:
             raise ToolError(f"Audit Stage 9 benchmark evaluation is invalid: {exc}") from exc
+    elif track == "loop" and stage_number == 9:
+        if args.get("capstone_results") not in (None, {}):
+            raise ToolError(
+                "Loop Stage 9 does not accept caller-supplied capstone_results; "
+                "metrics come from the hashed capstone-evaluation.json artifact."
+            )
+        evaluation = load_mastery_json_artifact(
+            project_path,
+            artifacts["capstone-evaluation.json"],
+        )
+        loop_capstone_evaluation = evaluate_loop_capstone(evaluation)
 
     state = project_state(project_path)
     capstone_attestation = None
@@ -3067,6 +3221,26 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             assessor,
             attempt_digest,
             str(benchmark_evaluation["evaluationDigest"]),
+        )
+    elif track == "loop" and stage_number == 9:
+        assert loop_capstone_evaluation is not None
+        attempt_digest = mastery_attempt_evidence_digest(
+            track,
+            stage_number,
+            drill_id,
+            assistance,
+            assessor,
+            citations,
+            component_scores,
+            artifacts,
+            state,
+            loop_capstone_evaluation,
+        )
+        capstone_attestation = verify_loop_capstone_attestation(
+            args.get("assessor_attestation"),
+            assessor,
+            attempt_digest,
+            str(loop_capstone_evaluation["evaluationDigest"]),
         )
     hard_blocks = [str(item) for item in (args.get("hard_gate_failures") or []) if str(item).strip()]
     if stage_number == 0:
@@ -3122,11 +3296,29 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 or payload.get("resultStatus") not in {"pass", "fail"}
             ):
                 hard_blocks.append("Audit Stage 8+ receipt is invalid, stale, or incomplete.")
+    elif track == "loop" and stage_number >= 8:
+        audit_receipt = str(args.get("audit_receipt") or "").strip()
+        if not audit_receipt:
+            hard_blocks.append("Loop Stage 8+ attempt requires a current passing audit receipt.")
+        else:
+            audit_verification = verify_receipt(
+                audit_receipt,
+                "audit",
+                state,
+                require_passed=True,
+            )
+            payload = audit_verification.get("payload") or {}
+            if (
+                not audit_verification["valid"]
+                or payload.get("complete") is not True
+                or payload.get("resultStatus") != "pass"
+            ):
+                hard_blocks.append("Loop Stage 8+ audit receipt is invalid, stale, incomplete, or not passing.")
     blind_capstone = (
         capstone_attestation is not None
         and capstone_attestation.get("valid") is True
         and capstone_attestation.get("blind") is True
-        if track == "audit" and stage_number == 9
+        if track in {"audit", "loop"} and stage_number == 9
         else bool(args.get("blind_capstone") or False)
     )
     if stage_number == 9:
@@ -3163,6 +3355,25 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 hard_blocks.append("Audit Stage 9 capstone requires deterministic repeated results.")
             for code in benchmark_evaluation["failureCodes"]:
                 hard_blocks.append(f"Audit Stage 9 benchmark gate failed: {code}.")
+        elif track == "loop":
+            assert loop_capstone_evaluation is not None
+            metrics = loop_capstone_evaluation
+            if capstone_attestation is None or capstone_attestation.get("valid") is not True:
+                hard_blocks.append(
+                    "Loop Stage 9 requires a current independently signed assessor attestation bound to the exact attempt and unseen challenge subject."
+                )
+            if not blind_capstone or metrics["p0Total"] <= 0 or metrics["p0Found"] != metrics["p0Total"]:
+                hard_blocks.append("Loop Stage 9 capstone must be blind and catch every seeded P0 finding.")
+            if metrics["p1Total"] <= 0 or metrics["p1Found"] / metrics["p1Total"] < 0.8:
+                hard_blocks.append("Loop Stage 9 capstone must catch at least 80 percent of seeded P1 findings.")
+            if metrics["continuationDecisionCorrect"] is not True:
+                hard_blocks.append("Loop Stage 9 capstone requires the correct continuation decision.")
+            if metrics["releaseDecisionCorrect"] is not True:
+                hard_blocks.append("Loop Stage 9 capstone requires the correct release go/no-go decision.")
+            if metrics["recoveryVerified"] is not True:
+                hard_blocks.append("Loop Stage 9 capstone requires independently verified recovery.")
+            if metrics["evidenceComplete"] is not True:
+                hard_blocks.append("Loop Stage 9 capstone requires a complete evidence dossier.")
         else:
             capstone = args.get("capstone_results") or {}
             p0_total = int(capstone.get("p0_total") or 0)
@@ -3203,6 +3414,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,
+        "loopCapstoneEvaluation": loop_capstone_evaluation,
         "capstoneAttestation": capstone_attestation,
         "hardGateFailures": list(dict.fromkeys(hard_blocks)),
         "blindCapstone": blind_capstone,
@@ -4030,9 +4242,9 @@ def audit_git_inventory_paths(project_path: Path) -> list[str]:
         if not raw:
             continue
         try:
-            relative = raw.decode("utf-8", errors="strict").replace("\\", "/")
+            relative = decode_git_relative_path(raw, "audit")
             relative = audit_core.normalize_repo_path(relative, "git audit path")
-        except (UnicodeDecodeError, audit_core.AuditError) as exc:
+        except audit_core.AuditError as exc:
             raise ToolError("Git returned an audit path that cannot be represented safely.") from exc
         candidate = project_path / relative
         if candidate.is_file() or candidate.is_symlink():
@@ -5864,13 +6076,676 @@ def tool_quant_backtest_review(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _loop_service(project_path: Path) -> loop_core.LoopService:
+    return loop_core.LoopService(Path.home(), project_path)
+
+
+def _loop_call(operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return operation()
+    except loop_core.LoopError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def git_worktree_attestation(project_path: Path) -> dict[str, Any]:
+    git_dir_result = run_complete(["git", "rev-parse", "--git-dir"], project_path, timeout=8)
+    common_dir_result = run_complete(["git", "rev-parse", "--git-common-dir"], project_path, timeout=8)
+    if not git_dir_result["ok"] or not common_dir_result["ok"]:
+        raise ToolError("Could not attest the Git worktree layout for loop autonomy.")
+
+    def resolved(raw: str) -> Path:
+        candidate = Path(raw.strip())
+        if not candidate.is_absolute():
+            candidate = project_path / candidate
+        return candidate.resolve()
+
+    git_dir = resolved(_git_text(git_dir_result))
+    common_dir = resolved(_git_text(common_dir_result))
+    return {
+        "isLinkedWorktree": git_dir != common_dir,
+        "gitDirDigest": hashlib.sha256(str(git_dir).encode("utf-8")).hexdigest(),
+        "commonDirDigest": hashlib.sha256(str(common_dir).encode("utf-8")).hexdigest(),
+    }
+
+
+def stable_loop_contract_context(
+    project_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    subject_before = evidence_subject(project_path)
+    policy = load_enterprise_policy(project_path)
+    worktree = git_worktree_attestation(project_path)
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed while the loop contract context was being collected. Re-run against one stable Git state."
+        )
+    return subject_after, policy, worktree
+
+
+def _receipt_digest(receipt: str) -> str:
+    return hashlib.sha256(receipt.encode("utf-8")).hexdigest()
+
+
+def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
+    receipt_fields = {"qa_receipts", "security_receipt", "audit_receipts"}
+
+    def visit(value: Any, field: str) -> None:
+        if field in receipt_fields:
+            return
+        if isinstance(value, str):
+            if audit_core.contains_secret_like(value):
+                raise ToolError(
+                    "Loop input contains a secret-like value. Remove it, use only a redacted external reference, and revoke it first if it was exposed."
+                )
+            return
+        if isinstance(value, dict):
+            for key, child in value.items():
+                visit(child, str(key))
+        elif isinstance(value, list):
+            for child in value:
+                visit(child, field)
+
+    visit(args, "arguments")
+
+
+def _loop_receipt_evidence(
+    args: dict[str, Any], subject: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    evidence: dict[str, Any] = {"qa": [], "audit": []}
+    invalid: list[dict[str, Any]] = []
+
+    qa_receipts = args.get("qa_receipts") or []
+    if not isinstance(qa_receipts, list) or not all(isinstance(item, str) for item in qa_receipts):
+        raise ToolError("qa_receipts must be an array of receipts returned by jstack_qa.")
+    if len(qa_receipts) > LOOP_MAX_QA_RECEIPTS or any(
+        len(item) > LOOP_MAX_RECEIPT_CHARS for item in qa_receipts
+    ):
+        raise ToolError("qa_receipts exceeds the bounded loop evidence limits.")
+    seen_qa: set[str] = set()
+    for receipt in qa_receipts:
+        digest = _receipt_digest(receipt)
+        if digest in seen_qa:
+            continue
+        seen_qa.add(digest)
+        try:
+            verification = verify_receipt(receipt, "qa", subject, expected_subject=subject)
+        except ToolError:
+            invalid.append({"kind": "qa", "receiptDigest": digest, "reason": "malformed-or-wrong-session"})
+            continue
+        if not verification["valid"]:
+            invalid.append(
+                {
+                    "kind": "qa",
+                    "receiptDigest": digest,
+                    "checks": verification["checks"],
+                }
+            )
+            continue
+        payload = verification["payload"]
+        evidence["qa"].append(
+            {
+                "type": "qa-receipt",
+                "commandKey": payload.get("commandKey"),
+                "commandFingerprint": payload.get("commandFingerprint"),
+                "receiptDigest": digest,
+                "passed": True,
+            }
+        )
+
+    security_receipt = str(args.get("security_receipt") or "").strip()
+    if len(security_receipt) > LOOP_MAX_RECEIPT_CHARS:
+        raise ToolError("security_receipt exceeds the bounded loop evidence limit.")
+    if security_receipt:
+        digest = _receipt_digest(security_receipt)
+        try:
+            verification = verify_receipt(
+                security_receipt, "security", subject, expected_subject=subject
+            )
+        except ToolError:
+            invalid.append(
+                {"kind": "security", "receiptDigest": digest, "reason": "malformed-or-wrong-session"}
+            )
+        else:
+            if verification["valid"]:
+                payload = verification["payload"]
+                evidence["security"] = {
+                    "type": "security-receipt",
+                    "receiptDigest": digest,
+                    "findingCount": payload.get("findingCount"),
+                    "complete": payload.get("complete") is True,
+                    "passed": True,
+                }
+            else:
+                invalid.append(
+                    {
+                        "kind": "security",
+                        "receiptDigest": digest,
+                        "checks": verification["checks"],
+                    }
+                )
+
+    audit_receipts = args.get("audit_receipts") or []
+    if not isinstance(audit_receipts, list) or not all(isinstance(item, str) for item in audit_receipts):
+        raise ToolError("audit_receipts must be an array of receipts returned by jstack_audit_finalize.")
+    if len(audit_receipts) > LOOP_MAX_AUDIT_RECEIPTS or any(
+        len(item) > LOOP_MAX_RECEIPT_CHARS for item in audit_receipts
+    ):
+        raise ToolError("audit_receipts exceeds the bounded loop evidence limits.")
+    seen_audit: set[str] = set()
+    for receipt in audit_receipts:
+        digest = _receipt_digest(receipt)
+        if digest in seen_audit:
+            continue
+        seen_audit.add(digest)
+        try:
+            verification = verify_receipt(receipt, "audit", subject, expected_subject=subject)
+        except ToolError:
+            invalid.append({"kind": "audit", "receiptDigest": digest, "reason": "malformed-or-wrong-session"})
+            continue
+        if not verification["valid"]:
+            invalid.append(
+                {
+                    "kind": "audit",
+                    "receiptDigest": digest,
+                    "checks": verification["checks"],
+                }
+            )
+            continue
+        payload = verification["payload"]
+        evidence["audit"].append(
+            {
+                "type": "audit-receipt",
+                "profile": payload.get("profile"),
+                "receiptDigest": digest,
+                "coverageDigest": payload.get("coverageDigest"),
+                "findingDigest": payload.get("findingDigest"),
+                "complete": payload.get("complete") is True,
+                "passed": True,
+            }
+        )
+    return evidence, invalid
+
+
+def _loop_artifact_evidence(
+    project_path: Path, acceptance_criteria: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    artifacts: list[dict[str, Any]] = []
+    invalid: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    total_bytes = 0
+    total_limit = 100_000_000
+    per_file_limit = 25_000_000
+    deadline = time.monotonic() + 30
+    for criterion in acceptance_criteria:
+        verifier = criterion.get("verifier") or {}
+        if verifier.get("type") != "artifact":
+            continue
+        relative = str(verifier.get("path") or "")
+        if relative in seen:
+            continue
+        seen.add(relative)
+        remaining_bytes = total_limit - total_bytes
+        remaining_seconds = int(deadline - time.monotonic())
+        if remaining_bytes <= 0 or remaining_seconds <= 0:
+            artifacts.append({"type": "artifact", "path": relative, "exists": False})
+            invalid.append({"kind": "artifact", "path": relative, "reason": "aggregate-limit"})
+            continue
+        try:
+            size, digest = audit_core.digest_repository_file(
+                project_path,
+                relative,
+                max_bytes=min(per_file_limit, remaining_bytes),
+                max_seconds=max(1, remaining_seconds),
+            )
+        except audit_core.AuditError:
+            artifacts.append({"type": "artifact", "path": relative, "exists": False})
+            invalid.append({"kind": "artifact", "path": relative, "reason": "missing-or-unsafe"})
+        else:
+            total_bytes += size
+            artifacts.append(
+                {
+                    "type": "artifact",
+                    "path": relative,
+                    "exists": True,
+                    "size": size,
+                    "sha256": digest,
+                }
+            )
+    return artifacts, invalid
+
+
+def _loop_iteration_evidence(
+    project_path: Path,
+    loop_status: dict[str, Any],
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    baseline = str(loop_status["baselineCommit"])
+    subject = evidence_subject(project_path, baseline)
+    change_evidence = git_change_evidence(project_path, baseline)
+    if (
+        subject.get("baseCommit") != baseline
+        or change_evidence.get("baseCommit") != baseline
+    ):
+        raise ToolError(
+            "The loop baseline is no longer the exact Git merge base of HEAD. Stop this loop and start a new contract after the branch, reset, or rebase is resolved."
+        )
+    changed_files = change_evidence["files"]
+    policy = load_enterprise_policy(project_path)
+    protected_patterns = [str(item) for item in policy.get("protectedPaths", [])]
+    protected_files = [
+        path for path in changed_files if path_matches_patterns(path, protected_patterns)
+    ]
+    evidence, invalid = _loop_receipt_evidence(args, subject)
+    review = tool_review({"project_path": str(project_path), "base_ref": baseline})
+    evidence["review"] = {
+        "type": "deterministic-review",
+        "passed": review["diffCheck"]["returncode"] == 0
+        and review.get("changeEvidence", {}).get("complete") is True,
+        "diffCheckReturncode": review["diffCheck"]["returncode"],
+        "changedFileCount": len(changed_files),
+        "changeEvidenceComplete": review.get("changeEvidence", {}).get("complete") is True,
+    }
+    artifacts, artifact_invalid = _loop_artifact_evidence(
+        project_path, loop_status["acceptanceCriteria"]
+    )
+    evidence["artifacts"] = artifacts
+    evidence["invalid"] = [*invalid, *artifact_invalid]
+    subject_after = evidence_subject(project_path, baseline)
+    if any(
+        subject_after[field] != subject[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed while loop evidence was being collected. Re-run the checkpoint against one stable state."
+        )
+    return {
+        "subject": subject_after,
+        "policy": policy,
+        "changedFiles": changed_files,
+        "protectedFiles": protected_files,
+        "evidence": evidence,
+    }
+
+
+def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    subject, policy, worktree = stable_loop_contract_context(project_path)
+    service = _loop_service(project_path)
+    result = _loop_call(
+        lambda: service.start(
+            args,
+            subject=subject,
+            worktree=worktree["isLinkedWorktree"],
+            policy_source=policy.get("_sourcePath"),
+            policy_digest=subject["policyDigest"],
+        )
+    )
+    result["worktreeAttestation"] = worktree
+    result["nativeGoalContract"] = {
+        "createGoalRequired": True,
+        "objective": result["goal"],
+        "tokenBudget": args.get("token_budget"),
+        "completionRule": "Call update_goal complete only after jstack_loop_finalize returns a current passed completionReceipt.",
+        "blockedRule": "Call update_goal blocked only after the same blocker repeats for three consecutive Codex Goal turns.",
+    }
+    return result
+
+
+def tool_loop_status(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    service = _loop_service(project_path)
+    result = _loop_call(lambda: service.status(str(args.get("loop_id") or "") or None))
+    subject = evidence_subject(project_path, result["baselineCommit"])
+    result["projectState"] = {
+        "gitHead": subject["gitHead"],
+        "projectFingerprint": subject["projectFingerprint"],
+        "clean": subject["clean"],
+        "policyDigest": subject["policyDigest"],
+        "toolVersion": subject["toolVersion"],
+    }
+    result["snapshotMatchesCurrentProject"] = (
+        result.get("currentFingerprint") == subject["projectFingerprint"]
+    )
+    result["baselineAncestryValid"] = (
+        subject.get("baseCommit") == result["baselineCommit"]
+    )
+    result["policyMatchesContract"] = result["policyDigest"] == subject["policyDigest"]
+    result["toolVersionMatchesContract"] = (
+        result["contractToolVersion"] == subject["toolVersion"]
+    )
+    return result
+
+
+def tool_loop_checkpoint(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    service = _loop_service(project_path)
+    loop_id = str(args.get("loop_id") or "")
+    status = _loop_call(lambda: service.status(loop_id))
+    context = _loop_iteration_evidence(project_path, status, args)
+    return _loop_call(
+        lambda: service.checkpoint(
+            loop_id,
+            expected_contract_digest=status["contractDigest"],
+            subject=context["subject"],
+            policy_digest=context["subject"]["policyDigest"],
+            changed_files=context["changedFiles"],
+            protected_files=context["protectedFiles"],
+            evidence=context["evidence"],
+            summary=str(args.get("iteration_summary") or ""),
+            failure_signature=args.get("failure_signature"),
+            blocker=args.get("blocker"),
+        )
+    )
+
+
+def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    subject, policy, worktree = stable_loop_contract_context(project_path)
+    service = _loop_service(project_path)
+    return _loop_call(
+        lambda: service.revise(
+            str(args.get("loop_id") or ""),
+            args,
+            subject=subject,
+            worktree=worktree["isLinkedWorktree"],
+            policy_source=policy.get("_sourcePath"),
+            policy_digest=subject["policyDigest"],
+        )
+    )
+
+
+def tool_loop_stop(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    service = _loop_service(project_path)
+    return _loop_call(
+        lambda: service.stop(
+            str(args.get("loop_id") or ""),
+            str(args.get("reason") or ""),
+        )
+    )
+
+
+def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    service = _loop_service(project_path)
+    loop_id = str(args.get("loop_id") or "")
+    status = _loop_call(lambda: service.status(loop_id))
+    context = _loop_iteration_evidence(project_path, status, args)
+    result = _loop_call(
+        lambda: service.finalize(
+            loop_id,
+            expected_contract_digest=status["contractDigest"],
+            subject=context["subject"],
+            policy_digest=context["subject"]["policyDigest"],
+            changed_files=context["changedFiles"],
+            protected_files=context["protectedFiles"],
+            evidence=context["evidence"],
+            summary=str(args.get("completion_summary") or ""),
+        )
+    )
+    receipt_subject = evidence_subject(project_path, status["baselineCommit"])
+    if any(
+        receipt_subject[field] != context["subject"][field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed after loop finalization. No completion receipt was issued; restore the finalized state and revalidate it."
+        )
+    expires_at = (
+        _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    receipt = issue_receipt(
+        {
+            "kind": "loop",
+            "schemaVersion": "jstack.loop.receipt.v1",
+            "expiresAt": expires_at,
+            "projectPath": receipt_subject["gitRoot"],
+            "gitHead": receipt_subject["gitHead"],
+            "projectFingerprint": receipt_subject["projectFingerprint"],
+            "baseRef": receipt_subject["baseRef"],
+            "baseCommit": receipt_subject["baseCommit"],
+            "policyDigest": receipt_subject["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "loopId": loop_id,
+            "contractDigest": result["contractDigest"],
+            "completionEvidenceDigest": result["completionEvidenceDigest"],
+            "latestEventHash": result["latestEventHash"],
+            "executionMode": result["executionMode"],
+            "autonomyLevel": result["autonomyLevel"],
+            "riskTier": result["riskTier"],
+            "passed": True,
+        }
+    )
+    result["completionReceipt"] = receipt
+    result["receiptMeaning"] = (
+        "Session-local proof that the current Git state satisfied the versioned loop contract; "
+        "it does not authorize push, deployment, release, or any blocked action."
+    )
+    return result
+
+
+LOOP_VERIFIER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["type"],
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": ["qa", "security", "audit", "review", "artifact", "human"],
+        },
+        "commandKey": {"type": "string"},
+        "profile": {
+            "type": "string",
+            "enum": ["quick", "standard", "deep", "release"],
+        },
+        "path": {"type": "string"},
+        "sha256": {"type": "string"},
+        "approvalKey": {"type": "string"},
+    },
+}
+
+LOOP_CRITERIA_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["id", "description", "verifier"],
+        "properties": {
+            "id": {"type": "string"},
+            "description": {"type": "string"},
+            "verifier": LOOP_VERIFIER_SCHEMA,
+        },
+    },
+}
+
+LOOP_LIMITS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "max_iterations": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_no_progress": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_repeated_failure": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_elapsed_minutes": {"type": "integer", "minimum": 5, "maximum": 1440},
+        "max_changed_files": {"type": "integer", "minimum": 1, "maximum": 1000},
+    },
+}
+
+LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
+    "qa_receipts": {
+        "type": "array",
+        "maxItems": LOOP_MAX_QA_RECEIPTS,
+        "items": {"type": "string", "maxLength": LOOP_MAX_RECEIPT_CHARS},
+    },
+    "security_receipt": {"type": "string", "maxLength": LOOP_MAX_RECEIPT_CHARS},
+    "audit_receipts": {
+        "type": "array",
+        "maxItems": LOOP_MAX_AUDIT_RECEIPTS,
+        "items": {"type": "string", "maxLength": LOOP_MAX_RECEIPT_CHARS},
+    },
+}
+
+
 TOOLS: dict[str, dict[str, Any]] = {
+    "gstack_loop_start": {
+        "description": "Create a versioned, Git-bound JStack loop contract with bounded autonomy, explicit execution mode, acceptance evidence, path scope, and circuit breakers. Codex Goal mode remains the continuation engine.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "goal",
+                "execution_mode",
+                "autonomy_level",
+                "risk_tier",
+                "acceptance_criteria",
+                "allowed_paths",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "goal": {"type": "string"},
+                "execution_mode": {
+                    "type": "string",
+                    "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "autonomy_level": {
+                    "type": "string",
+                    "enum": ["L0", "L1", "L2", "L3"],
+                },
+                "risk_tier": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high", "critical"],
+                },
+                "acceptance_criteria": LOOP_CRITERIA_SCHEMA,
+                "non_goals": {"type": "array", "items": {"type": "string"}},
+                "allowed_paths": {"type": "array", "items": {"type": "string"}},
+                "blocked_actions": {"type": "array", "items": {"type": "string"}},
+                "limits": LOOP_LIMITS_SCHEMA,
+                "token_budget": {"type": "integer", "minimum": 1},
+                "mode_approval_reference": {"type": "string"},
+                "autonomy_approval_reference": {"type": "string"},
+                "risk_approval_reference": {"type": "string"},
+                "protected_path_approval": {"type": "string"},
+            },
+        },
+        "handler": tool_loop_start,
+        "readOnlyHint": False,
+    },
+    "gstack_loop_status": {
+        "description": "Validate and report a durable JStack loop contract, hash-chained state, convergence status, circuit breaker, current Git binding, and remaining criteria. Omit loop_id to discover the active or latest loop for the repository.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_path": {"type": "string"},
+                "loop_id": {"type": "string"},
+            },
+        },
+        "handler": tool_loop_status,
+        "readOnlyHint": True,
+    },
+    "gstack_loop_checkpoint": {
+        "description": "Record one bounded loop iteration, revalidate current JStack evidence, enforce scope and policy, detect stagnation/repeated failures/oscillation, and return continue, finalize, approval, or stop guidance.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["loop_id", "iteration_summary"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "loop_id": {"type": "string"},
+                "iteration_summary": {"type": "string"},
+                "failure_signature": {"type": "string"},
+                "blocker": {"type": "string"},
+                **LOOP_EVIDENCE_PROPERTIES,
+            },
+        },
+        "handler": tool_loop_checkpoint,
+        "readOnlyHint": False,
+    },
+    "gstack_loop_revise": {
+        "description": "Create an approved new revision of an active loop contract, invalidate stale completion evidence, add named approval references, and resume from a circuit-breaker stop.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["loop_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "loop_id": {"type": "string"},
+                "goal": {"type": "string"},
+                "execution_mode": {
+                    "type": "string",
+                    "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "autonomy_level": {
+                    "type": "string",
+                    "enum": ["L0", "L1", "L2", "L3"],
+                },
+                "risk_tier": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high", "critical"],
+                },
+                "acceptance_criteria": LOOP_CRITERIA_SCHEMA,
+                "non_goals": {"type": "array", "items": {"type": "string"}},
+                "allowed_paths": {"type": "array", "items": {"type": "string"}},
+                "blocked_actions": {"type": "array", "items": {"type": "string"}},
+                "limits": LOOP_LIMITS_SCHEMA,
+                "mode_approval_reference": {"type": "string"},
+                "autonomy_approval_reference": {"type": "string"},
+                "risk_approval_reference": {"type": "string"},
+                "protected_path_approval": {"type": "string"},
+                "revision_approval_reference": {"type": "string"},
+                "approval_updates": {
+                    "type": "object",
+                    "description": "Map human acceptance approval keys to explicit external references.",
+                },
+            },
+        },
+        "handler": tool_loop_revise,
+        "readOnlyHint": False,
+    },
+    "gstack_loop_stop": {
+        "description": "Stop an active JStack loop, append the reason to its durable event chain, and release its repository write lease.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["loop_id", "reason"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "loop_id": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+        },
+        "handler": tool_loop_stop,
+        "readOnlyHint": False,
+    },
+    "gstack_loop_finalize": {
+        "description": "Revalidate every loop criterion against the current Git state and issue a session-local completion receipt. This never authorizes push, deployment, or release.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["loop_id", "completion_summary"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "loop_id": {"type": "string"},
+                "completion_summary": {"type": "string"},
+                **LOOP_EVIDENCE_PROPERTIES,
+            },
+        },
+        "handler": tool_loop_finalize,
+        "readOnlyHint": False,
+    },
     "gstack_mastery_status": {
         "description": "Show the current JStack learner stage, advancement evidence, and next deliberate-practice drill.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "track": {"type": "string", "enum": ["engineering", "audit"], "default": "engineering"}
+                "track": {"type": "string", "enum": ["engineering", "audit", "loop"], "default": "engineering"}
             },
         },
         "handler": tool_mastery_status,
@@ -5882,7 +6757,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "learner_name": {"type": "string", "default": "Jay"},
-                "track": {"type": "string", "enum": ["engineering", "audit"], "default": "engineering"},
+                "track": {"type": "string", "enum": ["engineering", "audit", "loop"], "default": "engineering"},
             },
         },
         "handler": tool_mastery_start,
@@ -5895,7 +6770,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "required": ["project_path", "stage", "drill_id", "assistance_level", "assessor", "assessor_citations", "assessment", "artifacts"],
             "properties": {
                 "project_path": {"type": "string"},
-                "track": {"type": "string", "enum": ["engineering", "audit"], "default": "engineering"},
+                "track": {"type": "string", "enum": ["engineering", "audit", "loop"], "default": "engineering"},
                 "stage": {"type": "integer", "minimum": 0, "maximum": 9},
                 "drill_id": {"type": "string"},
                 "assistance_level": {"type": "string", "enum": ["observed", "guided", "checklist", "independent", "independent_teach"]},
@@ -5917,14 +6792,18 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "security_receipt": {"type": "string"},
                 "audit_receipt": {"type": "string"},
                 "hard_gate_failures": {"type": "array", "items": {"type": "string"}, "default": []},
-                "blind_capstone": {"type": "boolean", "default": False},
+                "blind_capstone": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Engineering Stage 9 compatibility field. Audit and loop Stage 9 require a signed assessor attestation.",
+                },
                 "assessor_attestation": {
                     "type": "object",
-                    "description": "Audit Stage 9 only: assessor-signed attestation bound to the exact attempt digest and a distinct unseen challenge subject. A caller boolean cannot establish blindness.",
+                    "description": "Audit or loop Stage 9 assessor-signed attestation bound to the exact attempt digest and a distinct unseen challenge subject. A caller boolean cannot establish blindness.",
                 },
                 "capstone_results": {
                     "type": "object",
-                    "description": "Engineering Stage 9 aggregate results only. Audit Stage 9 derives metrics from the required evaluation-results.json benchmark evaluation and rejects this field."
+                    "description": "Engineering Stage 9 aggregate results only. Audit and loop Stage 9 derive metrics from required hashed evaluation artifacts and reject this field."
                 }
             }
         },

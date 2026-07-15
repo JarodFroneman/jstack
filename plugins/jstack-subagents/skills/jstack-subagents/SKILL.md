@@ -52,6 +52,10 @@ The Lead may implement. If a specialist edits implementation, it must be the
 Builder with an explicit disjoint scope. If more than three specialists are
 required, stop and recommend `/jstack-full-team`.
 
+When an active JStack loop supplies a `loopId`, keep
+`team_mode="smart-subagents"` fixed for that contract and execute only the
+current iteration. The loop checkpoint owns convergence and terminal status.
+
 No two editing agents may own the same file or module. If scope cannot be split
 cleanly, use one Builder. The Lead Engineer resolves conflicts using evidence,
 reproduction, project rules, and safety gates.

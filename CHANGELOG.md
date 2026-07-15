@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.0 - 2026-07-15
+
+- Added `/jstack-loop` as a fifth workflow that composes Codex Goal mode with
+  an explicitly selected JStack single-lead, specialist-team, or full-team
+  execution mode.
+- Added six fail-closed loop MCP tools for start, status, checkpoint, contract
+  revision, stop, and evidence-bound finalization.
+- Added versioned Git-bound contracts, clean-start write controls, linked
+  worktree attestation for L3, one active write lease, private atomic state,
+  validated revision history, snapshot-bound SHA-256 hash-chained events, and
+  interruption recovery.
+- Added current QA, security, audit, deterministic review, artifact, and named
+  approval criteria plus path, policy, protected-file, change-count, and
+  no-op completion controls.
+- Added iteration, elapsed-time, no-progress, repeated-failure, and oscillation
+  circuit breakers without weakening Codex Goal complete/blocked semantics.
+- Added the dedicated and umbrella loop skill/plugin surfaces, legacy installer
+  support, architecture and operator documentation, and generated-artifact
+  parity.
+- Added a ten-stage loop-engineering mastery curriculum and atomic mastery
+  profile v1/v2 to v3 migration while preserving engineering and audit state.
+- Added signed Stage 9 loop capstone attestations, exact baseline ancestry,
+  segment-aware scope globs, circuit-breaker resume approvals, hidden-index and
+  unsafe Git path rejection, and policy/tool-version drift gates.
+- Adapted loop/goal separation and staged-learning concepts from the Cobus
+  Greyling reference repositories without adding an upstream runtime or copied
+  source dependency.
+
 ## 0.3.1 - 2026-07-13
 
 - Kept the umbrella plugin's default prompts within Codex's three-prompt

@@ -60,6 +60,12 @@ def main() -> int:
         "jstack_audit_finalize",
         "jstack_release_readiness",
         "jstack_mastery_status",
+        "jstack_loop_start",
+        "jstack_loop_status",
+        "jstack_loop_checkpoint",
+        "jstack_loop_revise",
+        "jstack_loop_stop",
+        "jstack_loop_finalize",
     }
     missing = required - names
     if missing:

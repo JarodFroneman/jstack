@@ -71,3 +71,7 @@ Full-team wave pattern:
 If multi-agent tools are unavailable, state `No subagents deployed:` with the
 concrete reason. Retain `team_mode="full-team"` in planning and apply its
 evidence rubric while one Lead performs the work.
+
+When an active JStack loop supplies a `loopId`, keep `team_mode="full-team"`
+fixed for that contract and execute only the current wave-bounded iteration.
+The loop checkpoint owns convergence and terminal status.

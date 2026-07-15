@@ -48,3 +48,29 @@ server time and rechecked when release readiness consumes the receipt.
 
 The original `jstack_security_audit` remains a bounded heuristic credential
 scan. A broad audit result never replaces its security receipt.
+
+## Loop Safety
+
+Loop state is stored under `~/.jstack/loops/` with private directories and
+atomic files. Contract revisions, the current snapshot, and events are SHA-256
+bound, and one write-capable loop holds the local Git-checkout lease. These
+controls detect accidental or caller-side state alteration; they are not
+protection from a compromised operating-system account or a distributed lock
+across machines. Separately linked worktrees have independent leases.
+
+The loop MCP tools execute no arbitrary caller commands. QA and approved audit
+adapters retain their existing trust boundaries. Scope violations, policy
+changes, unapproved protected paths, stale receipts, repeated failures,
+stagnation, and oscillation fail closed or require approval. Exact baseline
+ancestry, segment-aware path identity, and hidden-index checks prevent Git state
+from silently broadening scope. L3 is limited to explicitly approved low-risk
+work in a linked Git worktree.
+
+Loop mastery Stage 9 uses a separate assessor HMAC key from
+`JSTACK_LOOP_ASSESSOR_HMAC_KEY`. Keep it outside the repository. It signs the
+exact capstone evaluation, artifact set, Git state, rubric, and unseen
+challenge; it is not a runtime authorization credential.
+
+A loop completion receipt is not permission to commit, push, deploy, release,
+read secrets, weaken policy, or perform destructive Git operations. Those
+actions continue to require their existing project and user approvals.

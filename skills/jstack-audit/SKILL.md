@@ -5,6 +5,10 @@ description: Run evidence-bound, read-only JStack code audits across correctness
 
 # JStack Audit
 
+When an active JStack loop requests audit evidence, remain read-only and return
+only the audit result and receipt. Never adopt the loop's editing role or
+declare the native goal complete.
+
 Audit the declared subject without changing application code, configuration,
 Git state, installed tools, or production. Treat the MCP as a deterministic
 evidence and validation layer; semantic code review remains the Audit Lead's

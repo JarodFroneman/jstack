@@ -15,20 +15,28 @@ tests, security evidence, release controls, and honest residual-risk reporting.
   specialists.
 - `/jstack-full-team`: all 11 professional roles, dispatched in controlled
   waves.
-- `jstack-audit`: a read-only, evidence-bound audit with quick, standard,
+- `/jstack-loop`: a bounded, durable goal loop composed with one explicitly
+  selected delivery mode.
+- `/jstack-audit`: a read-only, evidence-bound audit with quick, standard,
   deep, and release profiles.
 
 Command choice is authoritative. The three delivery modes share one enterprise
-quality bar. Audit mode is a separate inspection workflow and does not edit
-project code.
+quality bar. Loop mode owns persistence and convergence while the selected
+delivery mode owns execution. Audit mode is a separate inspection workflow and
+does not edit project code.
 
-The umbrella or legacy install supports `$jstack-audit`; the dedicated plugin
-uses the namespaced form `$jstack-audit:jstack-audit`. Legacy direct installs
-also expose `/prompts:jstack-audit`. The intended `/jstack-audit` top-level
-palette label is client-dependent and is not claimed until verified after an
+Invoke `/jstack-loop <goal>` for the default single-lead loop. State
+`use JStack Subagents` or `use JStack Full Team` in the same request when that
+staffing is explicitly intended; commands are never silently nested or
+escalated.
+
+The umbrella or legacy install supports `$jstack-audit` and `$jstack-loop`;
+dedicated plugins use `$jstack-audit:jstack-audit` and
+`$jstack-loop:jstack-loop`. Legacy direct installs also expose prompt forms.
+Top-level palette labels are client-dependent and should be verified after an
 actual install and restart.
 
-## What 0.3 Enforces
+## What 0.4 Enforces
 
 - MCP newline-delimited JSON-RPC transport tested by an independent client.
 - Independent runtime mount diagnostics plus explicit Git-backed and
@@ -50,6 +58,18 @@ actual install and restart.
   policy, controls, scope, coverage, and stable findings.
 - A separate ten-stage audit mastery track with atomic migration of existing
   engineering profiles.
+- Versioned loop contracts with explicit goals, non-goals, execution modes,
+  autonomy levels, risk tiers, acceptance criteria, scopes, and limits.
+- Private atomic loop state, versioned contract revisions, snapshot-bound
+  hash-chained events, and one active write lease per Git checkout.
+- Current QA, security, audit, deterministic review, artifact, and approval
+  evidence before loop completion.
+- Circuit breakers for policy/scope violations, iteration and elapsed limits,
+  repeated failures, stagnation, changed-file growth, and oscillation.
+- Native Codex Goal composition without claiming that the MCP can prompt or
+  spawn itself, plus exact complete/blocked terminal semantics.
+- A third ten-stage loop-engineering mastery track and atomic profile v1/v2 to
+  v3 migration, with independently signed blind capstones at Stage 9.
 
 ## Trust Boundary
 
@@ -60,6 +80,11 @@ Run untrusted projects in a container or VM.
 
 Receipts prevent accidental or caller-side alteration during one MCP session.
 They do not protect against compromise of the same user account.
+
+Loop state under `~/.jstack/loops/` is private local control-plane data, not a
+sandbox or distributed lock. A loop completion receipt proves the current Git
+state satisfied its contract in one MCP session; it never authorizes commit,
+push, deployment, release, or a protected action.
 
 Audit receipts attest the collected scope, validated structure, coverage, and
 result calculation. They do not prove that model-authored semantic findings are
@@ -76,11 +101,14 @@ cannot issue commit-bound receipts or a JStack release-readiness result.
 - `mcp/jstack/jstack_mcp_server.py`: canonical MCP server.
 - `mcp/jstack/audit/`: deterministic audit controls, evidence, findings, and
   output renderers.
+- `mcp/jstack/loop/`: bounded contracts, private durable state, event chains,
+  leases, convergence breakers, and terminal transitions.
 - `prompts/`: canonical slash-command prompts.
-- `skills/jstack-dev/` and `skills/jstack-audit/`: canonical workflow skills.
-- `mastery/`: engineering and audit training curricula.
+- `skills/jstack-dev/`, `skills/jstack-audit/`, and `skills/jstack-loop/`:
+  canonical workflow skills.
+- `mastery/`: engineering, audit, and loop training curricula.
 - `plugin/`: generated umbrella plugin with portable Node/Python launcher.
-- `plugins/`: four dedicated command plugins.
+- `plugins/`: five dedicated command plugins.
 - `scripts/sync_artifacts.py`: generated-artifact and version enforcement.
 - `scripts/install.py`: staged legacy direct installer.
 - `tests/`: unit, transport, adversarial, release, mastery, and install tests.
@@ -97,6 +125,8 @@ Primary tools use the `jstack_*` prefix:
 - evidence: `qa`, `security_audit`, `ship_check`,
   `release_readiness`
 - audit: `audit`, `audit_finalize`
+- loop: `loop_start`, `loop_status`, `loop_checkpoint`, `loop_revise`,
+  `loop_stop`, `loop_finalize`
 - continuity: `context_save`, `context_restore`
 - specialist review: `quant_backtest_review`
 - learning: `mastery_start`, `mastery_status`, `mastery_record`
@@ -119,7 +149,7 @@ CI runs these checks on macOS, Linux, and Windows with Python 3.9 and 3.12.
 
 ### Codex Plugins
 
-Register the four directories under `plugins/` in a personal marketplace,
+Register the five directories under `plugins/` in a personal marketplace,
 then install:
 
 ~~~text
@@ -127,10 +157,11 @@ codex plugin add j-stack-dev@personal
 codex plugin add jstack-subagents@personal
 codex plugin add jstack-full-team@personal
 codex plugin add jstack-audit@personal
+codex plugin add jstack-loop@personal
 ~~~
 
 The umbrella `plugin/` is an alternative all-in-one distribution. Do not
-install it alongside the four dedicated command plugins or the command palette
+install it alongside the five dedicated command plugins or the command palette
 will contain duplicates.
 
 Dedicated command plugins are skill-only surfaces and require the shared
@@ -144,7 +175,7 @@ Restart Codex or open a new task after plugin/MCP changes.
 python scripts/install.py
 ~~~
 
-This installs prompts, both canonical skills, the MCP server, curricula, and MCP
+This installs prompts, all three canonical skills, the MCP server, curricula, and MCP
 configuration under `~/.codex` using a transaction-wide staged replacement. A
 failure restores every affected target; the previous config is also retained as
 a backup after a successful install.
@@ -166,6 +197,11 @@ not an accredited credential.
 Use `track="audit"` with the same mastery tools for the audit curriculum. See
 [the audit system](docs/audit-system.md) and
 [audit mastery](docs/audit-mastery-system.md).
+
+Use `track="loop"` for goal-contract, convergence, orchestration, autonomy,
+and loop-platform training. See [the loop system](docs/loop-system.md),
+[loop mastery](docs/loop-mastery-system.md), and
+[ADR 0002](docs/adr/0002-jstack-loop-protocol.md).
 
 ## Governance
 

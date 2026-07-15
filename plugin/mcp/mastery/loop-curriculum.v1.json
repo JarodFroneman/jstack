@@ -1,0 +1,183 @@
+{
+  "schemaVersion": "jstack.loop.mastery.curriculum.v1",
+  "track": "loop",
+  "version": 1,
+  "title": "JStack Loop Engineering Mastery",
+  "purpose": "Train operators to design, verify, secure, and evolve bounded goal loops from first principles to production-grade orchestration.",
+  "scoring": {
+    "weights": {
+      "correctness": 30,
+      "evidence": 25,
+      "safety": 20,
+      "judgment": 15,
+      "explanation": 10
+    },
+    "levels": {
+      "0": "Observed",
+      "1": "Guided",
+      "2": "Competent",
+      "3": "Independent",
+      "4": "Expert"
+    },
+    "assistanceCaps": {
+      "observed": 0,
+      "guided": 1,
+      "checklist": 2,
+      "independent": 3,
+      "independent_teach": 4
+    }
+  },
+  "advancementPolicy": {
+    "stages0To3": "Two consecutive independent attempts scoring at least 80.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
+    "stage9": "Two independently attested blind capstones on distinct challenge subjects, each scoring at least 90 with correct continuation and go/no-go decisions and every seeded P0 finding identified.",
+    "hardBlocks": [
+      "unbounded continuation",
+      "fabricated, stale, or caller-asserted completion evidence",
+      "silent execution-mode or autonomy escalation",
+      "scope, secret, policy, approval, or release bypass",
+      "false complete or false blocked claim"
+    ]
+  },
+  "stages": [
+    {
+      "stage": 0,
+      "name": "Loop Observer",
+      "outcome": "Distinguish a prompt, workflow, native goal, bounded loop, checkpoint, completion, and stop condition.",
+      "prerequisites": [],
+      "corePrinciples": ["A loop is a controlled state machine", "Continuation is not verification", "Every loop needs a terminal condition", "Permissions remain in force"],
+      "drills": [
+        {"id": "l0-anatomy", "name": "Map one loop from request to terminal state", "type": "audit"}
+      ],
+      "requiredArtifacts": ["loop-anatomy.md", "boundary-map.json"],
+      "benchmarks": ["Identify owner, state, evidence, limits, approvals, and terminal outcomes", "Distinguish JStack state from Codex Goal mode", "Expose no secrets"],
+      "hardGates": ["No implementation or configuration mutation", "No claim that until-done means unbounded"]
+    },
+    {
+      "stage": 1,
+      "name": "Goal Contract Designer",
+      "outcome": "Translate an ambiguous request into measurable acceptance criteria, non-goals, scope, risk, and stop conditions.",
+      "prerequisites": [0],
+      "corePrinciples": ["Observable outcomes", "Non-goals prevent drift", "Scope is explicit", "Risk selects evidence", "Changing the target is a revision"],
+      "drills": [
+        {"id": "l1-contract", "name": "Design a bounded goal contract", "type": "implementation"},
+        {"id": "l1-criteria-audit", "name": "Reject subjective or gameable criteria", "type": "audit"}
+      ],
+      "requiredArtifacts": ["goal-contract.json", "criteria-review.md"],
+      "benchmarks": ["Every criterion has a named verifier", "Non-goals and blocked actions are explicit", "Limits are proportional to risk"],
+      "hardGates": ["No subjective completion-only criterion", "No implicit L3 or team approval"]
+    },
+    {
+      "stage": 2,
+      "name": "Minimum Viable Loop Builder",
+      "outcome": "Run a low-risk bounded loop through start, one evidence-producing iteration, finalization, and stop handling.",
+      "prerequisites": [1],
+      "corePrinciples": ["One meaningful iteration at a time", "Current evidence only", "Smallest coherent change", "Terminal states are explicit"],
+      "drills": [
+        {"id": "l2-happy-path", "name": "Complete a low-risk artifact loop", "type": "implementation"},
+        {"id": "l2-stop-path", "name": "Exercise user stop and unmet criteria", "type": "audit"}
+      ],
+      "requiredArtifacts": ["loop-contract.json", "event-summary.md", "verification.json"],
+      "benchmarks": ["Completion is receipt-bound", "Unmet criteria fail closed", "Stop releases the write lease"],
+      "hardGates": ["Current passing QA receipt", "No false complete state"]
+    },
+    {
+      "stage": 3,
+      "name": "State And Recovery Engineer",
+      "outcome": "Preserve durable state integrity, exclusive ownership, idempotent recovery, and resumable checkpoints across process restarts.",
+      "prerequisites": [2],
+      "corePrinciples": ["Atomic state", "Hash-chained history", "One writer", "Resume from evidence", "Corruption fails closed"],
+      "drills": [
+        {"id": "l3-recovery", "name": "Recover an interrupted loop", "type": "implementation"},
+        {"id": "l3-tamper", "name": "Detect event, snapshot, and lease tampering", "type": "audit"}
+      ],
+      "requiredArtifacts": ["recovery-runbook.md", "tamper-results.json", "state-invariants.md"],
+      "benchmarks": ["Restart preserves valid progress", "Tampering cannot be silently accepted", "Stale and active leases are distinguished"],
+      "hardGates": ["Atomic recovery evidence", "No second write loop"]
+    },
+    {
+      "stage": 4,
+      "name": "Verification Engineer",
+      "outcome": "Design evidence contracts that separate maker activity from current, independent, reproducible verification.",
+      "prerequisites": [3],
+      "corePrinciples": ["Maker and checker are distinct roles", "Evidence is state-bound", "Tests prove specific claims", "Human judgment is named", "Stale receipts are invalid"],
+      "drills": [
+        {"id": "l4-evidence-contract", "name": "Implement a multi-verifier acceptance contract", "type": "implementation"},
+        {"id": "l4-evidence-attack", "name": "Attack stale, malformed, and incomplete evidence", "type": "audit"}
+      ],
+      "requiredArtifacts": ["evidence-contract.json", "verification-matrix.md", "adversarial-results.json"],
+      "benchmarks": ["QA, security, audit, review, artifact, and approval meanings are explicit", "Every receipt is current and project-bound", "Caller claims cannot pass a criterion"],
+      "hardGates": ["All stale evidence rejected", "No unverifiable completion"]
+    },
+    {
+      "stage": 5,
+      "name": "Convergence Engineer",
+      "outcome": "Diagnose and stop stagnation, repeated failure, oscillation, budget overrun, and cosmetic progress.",
+      "prerequisites": [4],
+      "corePrinciples": ["Progress is observable", "Repeated failures need a new hypothesis", "Oscillation is a stop signal", "Budgets bound search", "Circuit breakers invite judgment"],
+      "drills": [
+        {"id": "l5-breaker-implementation", "name": "Implement and calibrate convergence breakers", "type": "implementation"},
+        {"id": "l5-breaker-audit", "name": "Find breaker bypasses and false progress", "type": "audit"}
+      ],
+      "requiredArtifacts": ["convergence-model.md", "breaker-tests.json", "decision-log.md"],
+      "benchmarks": ["Every breaker has a deterministic trigger", "Cosmetic churn cannot reset all limits", "Approval and policy stops remain distinct"],
+      "hardGates": ["No infinite retry path", "No budget exhaustion reported as success"]
+    },
+    {
+      "stage": 6,
+      "name": "Orchestration Engineer",
+      "outcome": "Compose one loop contract with single-lead, specialist-team, and full-team execution without changing its quality bar.",
+      "prerequisites": [5],
+      "corePrinciples": ["The loop owns convergence", "The selected workflow owns execution", "Mode is authoritative", "Lead accountability persists", "Audit remains read-only"],
+      "drills": [
+        {"id": "l6-mode-composition", "name": "Implement a mode-composition matrix", "type": "implementation"},
+        {"id": "l6-dispatch-audit", "name": "Audit silent escalation and ownership overlap", "type": "audit"}
+      ],
+      "requiredArtifacts": ["composition-matrix.md", "coordination-packets.json", "mode-test-results.json"],
+      "benchmarks": ["Single-lead never spawns agents", "Team modes require explicit references", "Criteria remain stable across modes"],
+      "hardGates": ["No silent staffing change", "No overlapping writer ownership", "All package and QA checks pass"]
+    },
+    {
+      "stage": 7,
+      "name": "Autonomy Security Engineer",
+      "outcome": "Threat-model and enforce scope, worktree, secrets, approvals, tools, protected paths, and release boundaries for autonomous loops.",
+      "prerequisites": [6],
+      "corePrinciples": ["Least privilege", "L3 is earned and explicit", "Worktrees isolate writes", "Protected actions remain blocked", "Complete scan or no-go"],
+      "drills": [
+        {"id": "l7-autonomy-controls", "name": "Implement a bounded L3 control set", "type": "implementation"},
+        {"id": "l7-threat-model", "name": "Attack scope, secrets, approvals, and release boundaries", "type": "audit"}
+      ],
+      "requiredArtifacts": ["threat-model.md", "autonomy-policy.json", "security-results.json"],
+      "benchmarks": ["L3 rejects non-worktree and non-low-risk starts", "Protected changes need references", "Completion cannot authorize release"],
+      "hardGates": ["Current complete security receipt", "All seeded critical autonomy bypasses blocked"]
+    },
+    {
+      "stage": 8,
+      "name": "Loop Platform Architect",
+      "outcome": "Evolve loop schemas, persistence, migrations, observability, and rollback while preserving compatibility and trust semantics.",
+      "prerequisites": [7],
+      "corePrinciples": ["Version every durable contract", "Migrations preserve evidence", "One canonical source", "Observability serves decisions", "Rollback is rehearsed"],
+      "drills": [
+        {"id": "l8-protocol-evolution", "name": "Implement a compatible protocol evolution", "type": "implementation"},
+        {"id": "l8-migration-audit", "name": "Audit migration, packaging, and rollback evidence", "type": "audit"}
+      ],
+      "requiredArtifacts": ["architecture-decision.md", "migration-plan.md", "compatibility-results.json", "rollback-runbook.md"],
+      "benchmarks": ["Old state migrates atomically", "Generated artifacts stay synchronized", "Cross-platform install and rollback pass"],
+      "hardGates": ["No evidence loss", "No untested compatibility claim", "Current QA, security, and passing audit receipts"]
+    },
+    {
+      "stage": 9,
+      "name": "Principal Loop Engineer",
+      "outcome": "Design, operate, audit, and defend a production-grade loop system on unseen goals while making correct continuation and go/no-go decisions.",
+      "prerequisites": [8],
+      "corePrinciples": ["Reduce uncertainty", "Bound autonomy", "Verify before declaring", "Stop honestly", "Teach transferable judgment", "Own operations"],
+      "drills": [
+        {"id": "l9-blind-loop", "name": "Operate an unseen loop-engineering capstone", "type": "implementation"},
+        {"id": "l9-red-team", "name": "Blindly audit an unseen loop implementation", "type": "audit"}
+      ],
+      "requiredArtifacts": ["capstone-contract.json", "capstone-evaluation.json", "event-dossier.md", "adversarial-report.md", "operator-runbook.md", "release-decision.md"],
+      "benchmarks": ["Two blind capstones score at least 90", "All seeded P0 and at least 80 percent of P1 defects are found", "Continuation and release decisions are correct", "Another operator can recover the system"],
+      "hardGates": ["No false complete, blocked, or production-ready claim", "Complete evidence dossier and hashed evaluation", "Current passing audit receipt", "Independent signed assessor approval"]
+    }
+  ]
+}
