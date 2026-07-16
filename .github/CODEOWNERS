@@ -1,0 +1,11 @@
+# Default ownership
+* @JarodFroneman
+
+# Release, policy, security, and distribution boundaries
+/.github/ @JarodFroneman
+/SECURITY.md @JarodFroneman
+/jstack.enterprise.json @JarodFroneman
+/scripts/ @JarodFroneman
+/mcp/jstack/ @JarodFroneman
+/plugin/ @JarodFroneman
+/plugins/ @JarodFroneman

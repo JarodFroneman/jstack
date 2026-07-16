@@ -1,0 +1,94 @@
+name: Bug report
+description: Report a reproducible defect in JStack.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve JStack. Do not include credentials, private source code, personal data, or unredacted logs. Report vulnerabilities through SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: JStack version
+      description: Release tag and installed plugin cachebuster, if applicable.
+      placeholder: v0.5.0 / 0.5.0+codex.YYYYMMDDHHMMSS
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Codex surface
+      options:
+        - Codex Desktop
+        - Codex CLI
+        - Direct MCP JSON-RPC client
+        - Installer or packaging workflow
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, Git version, and relevant runtime details.
+      placeholder: macOS 15, Python 3.12, Git 2.49
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: JStack operating mode
+      options:
+        - Single Lead Engineer
+        - Specialist Team
+        - Full Team
+        - Audit
+        - Goal Loop or Program
+        - MCP or installer only
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Defect summary
+      description: What failed, and why is it a defect rather than expected fail-closed behavior?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest sanitized sequence that reproduces the issue.
+      placeholder: |
+        1. Start from...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Include relevant errors, receipts, hashes, or screenshots with secrets and private data removed.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I reproduced this on the latest release or explained why I cannot.
+          required: true
+        - label: I ran the MCP smoke test where applicable.
+          required: true
+        - label: I removed secrets, private code, and personal information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

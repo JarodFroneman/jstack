@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">JStack - Evidence-driven engineering control plane for Codex</title>
+  <desc id="desc">A dark professional banner showing the JStack identity and its program, delivery, and evidence layers.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111B"/>
+      <stop offset="0.58" stop-color="#08131E"/>
+      <stop offset="1" stop-color="#071019"/>
+    </linearGradient>
+    <radialGradient id="cyanGlow" cx="0" cy="0" r="1" gradientTransform="translate(1044 120) rotate(126) scale(440 520)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="emeraldGlow" cx="0" cy="0" r="1" gradientTransform="translate(838 596) rotate(-36) scale(520 360)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#34D399" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="accentSoft" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#60A5FA" stop-opacity="0.2"/>
+      <stop offset="0.55" stop-color="#22D3EE" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#34D399" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#10202F" stop-opacity="0.96"/>
+      <stop offset="1" stop-color="#0B1824" stop-opacity="0.96"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#C7D2FE" stroke-opacity="0.035"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000A12" flood-opacity="0.46"/>
+    </filter>
+    <filter id="markGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="11" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" rx="24" fill="url(#background)"/>
+  <rect width="1280" height="640" rx="24" fill="url(#cyanGlow)"/>
+  <rect width="1280" height="640" rx="24" fill="url(#emeraldGlow)"/>
+  <rect width="1280" height="640" rx="24" fill="url(#grid)"/>
+  <rect x="1" y="1" width="1278" height="638" rx="23" fill="none" stroke="#E2E8F0" stroke-opacity="0.1"/>
+
+  <g transform="translate(72 62)">
+    <path d="M16 5H70V56C70 84 51 101 24 101C12 101 4 98 0 94L12 76C16 80 21 82 27 82C39 82 47 74 47 58V26H16Z" fill="none" stroke="#60A5FA" stroke-opacity="0.25" stroke-width="6" transform="translate(-8 8)"/>
+    <path d="M16 5H70V56C70 84 51 101 24 101C12 101 4 98 0 94L12 76C16 80 21 82 27 82C39 82 47 74 47 58V26H16Z" fill="none" stroke="#22D3EE" stroke-opacity="0.45" stroke-width="6" transform="translate(-4 4)"/>
+    <path d="M16 5H70V56C70 84 51 101 24 101C12 101 4 98 0 94L12 76C16 80 21 82 27 82C39 82 47 74 47 58V26H16Z" fill="url(#accent)" filter="url(#markGlow)"/>
+  </g>
+
+  <g font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="166" y="124" fill="#F8FAFC" font-size="36" font-weight="750">JSTACK</text>
+    <text x="72" y="216" fill="#F8FAFC" font-size="52" font-weight="720">Evidence-driven</text>
+    <text x="72" y="276" fill="#F8FAFC" font-size="52" font-weight="720">engineering control</text>
+    <text x="72" y="336" fill="#F8FAFC" font-size="52" font-weight="720">plane for Codex.</text>
+    <text x="74" y="378" fill="#94A3B8" font-size="19" font-weight="450">Bounded autonomy. Verifiable delivery. Human authority.</text>
+
+    <g transform="translate(72 412)">
+      <rect width="144" height="34" rx="6" fill="#0F2130" stroke="#38BDF8" stroke-opacity="0.35"/>
+      <circle cx="18" cy="17" r="5" fill="#34D399"/>
+      <text x="32" y="23" fill="#DDFCF2" font-size="14" font-weight="650">OPEN SOURCE</text>
+      <rect x="156" width="94" height="34" rx="6" fill="#0F2130" stroke="#94A3B8" stroke-opacity="0.22"/>
+      <text x="181" y="23" fill="#CBD5E1" font-size="14" font-weight="650">MIT</text>
+      <rect x="262" width="162" height="34" rx="6" fill="#0F2130" stroke="#94A3B8" stroke-opacity="0.22"/>
+      <text x="283" y="23" fill="#CBD5E1" font-size="14" font-weight="650">Python 3.9+</text>
+    </g>
+
+    <g transform="translate(74 510)">
+      <text y="0" fill="#64748B" font-size="12" font-weight="700">PLAN</text>
+      <text x="112" y="0" fill="#64748B" font-size="12" font-weight="700">BUILD</text>
+      <text x="234" y="0" fill="#64748B" font-size="12" font-weight="700">VERIFY</text>
+      <text x="370" y="0" fill="#64748B" font-size="12" font-weight="700">RELEASE</text>
+      <line x1="4" y1="28" x2="408" y2="28" stroke="#1E3547" stroke-width="2"/>
+      <line x1="4" y1="28" x2="408" y2="28" stroke="url(#accent)" stroke-width="2"/>
+      <circle cx="4" cy="28" r="6" fill="#60A5FA"/>
+      <circle cx="130" cy="28" r="6" fill="#38BDF8"/>
+      <circle cx="266" cy="28" r="6" fill="#22D3EE"/>
+      <circle cx="408" cy="28" r="6" fill="#34D399"/>
+      <text y="62" fill="#64748B" font-size="13">Single lead  |  Specialist team  |  Full team  |  Audit  |  Goal loop</text>
+    </g>
+  </g>
+
+  <g transform="translate(740 70)" filter="url(#shadow)" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect x="0" y="0" width="468" height="500" rx="12" fill="#08141F" stroke="#E2E8F0" stroke-opacity="0.11"/>
+    <rect x="0" y="0" width="468" height="46" rx="12" fill="#0C1A27"/>
+    <path d="M0 46H468" stroke="#E2E8F0" stroke-opacity="0.08"/>
+    <circle cx="22" cy="23" r="4" fill="#FB7185" fill-opacity="0.78"/>
+    <circle cx="38" cy="23" r="4" fill="#FBBF24" fill-opacity="0.78"/>
+    <circle cx="54" cy="23" r="4" fill="#34D399" fill-opacity="0.78"/>
+    <text x="338" y="29" fill="#64748B" font-size="11" font-weight="650">CONTROL PLANE</text>
+
+    <g transform="translate(24 70)">
+      <rect width="420" height="116" rx="8" fill="url(#card)" stroke="#38BDF8" stroke-opacity="0.22"/>
+      <rect width="4" height="116" rx="2" fill="#38BDF8"/>
+      <text x="22" y="29" fill="#7DD3FC" font-size="12" font-weight="750">PROGRAM</text>
+      <text x="22" y="52" fill="#F1F5F9" font-size="16" font-weight="650">Project-defined phase graph</text>
+      <g transform="translate(22 72)">
+        <rect width="62" height="24" rx="5" fill="#0A2737" stroke="#38BDF8" stroke-opacity="0.35"/>
+        <text x="18" y="17" fill="#BAE6FD" font-size="10" font-weight="650">INTAKE</text>
+        <path d="M70 12H96" stroke="#334E62"/>
+        <path d="M91 8L96 12L91 16" fill="none" stroke="#334E62"/>
+        <rect x="104" width="62" height="24" rx="5" fill="#0B2B31" stroke="#2DD4BF" stroke-opacity="0.35"/>
+        <text x="122" y="17" fill="#99F6E4" font-size="10" font-weight="650">BUILD</text>
+        <path d="M174 12H200" stroke="#334E62"/>
+        <path d="M195 8L200 12L195 16" fill="none" stroke="#334E62"/>
+        <rect x="208" width="62" height="24" rx="5" fill="#102A2B" stroke="#34D399" stroke-opacity="0.35"/>
+        <text x="222" y="17" fill="#A7F3D0" font-size="10" font-weight="650">VERIFY</text>
+        <path d="M278 12H304" stroke="#334E62"/>
+        <path d="M299 8L304 12L299 16" fill="none" stroke="#334E62"/>
+        <rect x="312" width="70" height="24" rx="5" fill="#102A27" stroke="#34D399" stroke-opacity="0.5"/>
+        <text x="329" y="17" fill="#A7F3D0" font-size="10" font-weight="650">ACCEPT</text>
+      </g>
+    </g>
+
+    <g transform="translate(24 202)">
+      <rect width="420" height="116" rx="8" fill="url(#card)" stroke="#22D3EE" stroke-opacity="0.2"/>
+      <rect width="4" height="116" rx="2" fill="#22D3EE"/>
+      <text x="22" y="29" fill="#67E8F9" font-size="12" font-weight="750">DELIVERY</text>
+      <text x="22" y="52" fill="#F1F5F9" font-size="16" font-weight="650">Right-sized engineering modes</text>
+      <g transform="translate(22 70)">
+        <rect width="110" height="28" rx="5" fill="#0C2230" stroke="#64748B" stroke-opacity="0.32"/>
+        <circle cx="16" cy="14" r="4" fill="#60A5FA"/>
+        <text x="29" y="19" fill="#CBD5E1" font-size="11" font-weight="650">SINGLE LEAD</text>
+        <rect x="122" width="118" height="28" rx="5" fill="#0C2230" stroke="#64748B" stroke-opacity="0.32"/>
+        <circle cx="138" cy="14" r="4" fill="#22D3EE"/>
+        <text x="151" y="19" fill="#CBD5E1" font-size="11" font-weight="650">SPECIALISTS</text>
+        <rect x="252" width="104" height="28" rx="5" fill="#0C2230" stroke="#64748B" stroke-opacity="0.32"/>
+        <circle cx="268" cy="14" r="4" fill="#34D399"/>
+        <text x="281" y="19" fill="#CBD5E1" font-size="11" font-weight="650">FULL TEAM</text>
+      </g>
+    </g>
+
+    <g transform="translate(24 334)">
+      <rect width="420" height="140" rx="8" fill="url(#card)" stroke="#34D399" stroke-opacity="0.22"/>
+      <rect width="4" height="140" rx="2" fill="#34D399"/>
+      <text x="22" y="29" fill="#6EE7B7" font-size="12" font-weight="750">EVIDENCE</text>
+      <text x="22" y="52" fill="#F1F5F9" font-size="16" font-weight="650">Fail-closed completion gates</text>
+      <g transform="translate(22 70)" fill="#CBD5E1" font-size="11" font-weight="600">
+        <circle cx="7" cy="7" r="7" fill="#12392F" stroke="#34D399" stroke-opacity="0.5"/>
+        <path d="M3.5 7L6 9.5L10.5 4.5" fill="none" stroke="#6EE7B7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="22" y="11">QA receipts</text>
+        <circle cx="137" cy="7" r="7" fill="#12392F" stroke="#34D399" stroke-opacity="0.5"/>
+        <path d="M133.5 7L136 9.5L140.5 4.5" fill="none" stroke="#6EE7B7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="152" y="11">Security coverage</text>
+        <circle cx="7" cy="38" r="7" fill="#12392F" stroke="#34D399" stroke-opacity="0.5"/>
+        <path d="M3.5 38L6 40.5L10.5 35.5" fill="none" stroke="#6EE7B7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="22" y="42">Human gates</text>
+        <circle cx="137" cy="38" r="7" fill="#12392F" stroke="#34D399" stroke-opacity="0.5"/>
+        <path d="M133.5 38L136 40.5L140.5 35.5" fill="none" stroke="#6EE7B7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="152" y="42">Release readiness</text>
+      </g>
+    </g>
+  </g>
+
+  <rect x="0" y="626" width="1280" height="14" fill="url(#accentSoft)"/>
+</svg>

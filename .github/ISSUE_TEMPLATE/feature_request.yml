@@ -1,0 +1,69 @@
+name: Feature request
+description: Propose a focused JStack capability or protocol improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Strong proposals begin with an operator problem, an explicit outcome, and evidence that the change belongs in JStack rather than an application-specific workflow.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Operator problem
+      description: What recurring engineering problem cannot be handled safely or efficiently today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior and acceptance criteria, not only an implementation idea.
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Primary control layer
+      options:
+        - Skills or command experience
+        - Project binding or policy
+        - Delivery or team coordination
+        - QA, security, audit, or release evidence
+        - Goal loop
+        - Program orchestration
+        - Mastery system
+        - Packaging, installation, or compatibility
+        - Documentation or developer experience
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed scope
+      description: Include non-goals, trust-boundary implications, and compatibility constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Supporting evidence
+      description: Link relevant examples, failures, benchmarks, standards, or prior discussion.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Explain why configuration, documentation, or an application-specific skill is insufficient.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: The proposal is domain-agnostic or clearly explains why it belongs in JStack core.
+          required: true
+        - label: The proposal preserves explicit human authority for protected actions.
+          required: true
+        - label: I searched existing issues and release notes for related work.
+          required: true
