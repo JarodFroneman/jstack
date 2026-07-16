@@ -21,11 +21,12 @@ tests, security evidence, release controls, and honest residual-risk reporting.
   deep, and release profiles.
 
 Command choice is authoritative. The three delivery modes share one enterprise
-quality bar. Loop mode owns persistence and convergence while the selected
-delivery mode owns execution. Audit mode is a separate inspection workflow and
-does not edit project code.
+quality bar. Loop mode owns one bounded convergence contract or a
+project-derived Program -> Phase DAG while the selected per-phase delivery mode
+owns execution. Audit mode is a separate inspection workflow and does not edit
+project code.
 
-Invoke `/jstack-loop <goal>` for the default single-lead loop. State
+Invoke `/jstack-loop <goal>` for the default single-lead loop or program. State
 `use JStack Subagents` or `use JStack Full Team` in the same request when that
 staffing is explicitly intended; commands are never silently nested or
 escalated.
@@ -36,7 +37,7 @@ dedicated plugins use `$jstack-audit:jstack-audit` and
 Top-level palette labels are client-dependent and should be verified after an
 actual install and restart.
 
-## What 0.4 Enforces
+## What 0.5 Enforces
 
 - MCP newline-delimited JSON-RPC transport tested by an independent client.
 - Independent runtime mount diagnostics plus explicit Git-backed and
@@ -71,6 +72,15 @@ actual install and restart.
   repeated failures, stagnation, changed-file growth, and oscillation.
 - Native Codex Goal composition without claiming that the MCP can prompt or
   spawn itself, plus exact complete/blocked terminal semantics.
+- A phase-count-agnostic Program -> Phase DAG above bounded child loops for
+  independently verified deliverables, dependencies, and long intervention
+  waits.
+- Exact child contract/proof binding, output hashing, transitive invalidation,
+  conservative linked-worktree parallelism, and final integrated evidence.
+- Signed role/quorum human gates, freshness-bound external artifact evidence,
+  pause-aware active clocks, and explicit lease reacquisition after approval.
+- Transactional idempotency for every program mutation and private
+  snapshot-bound program state outside the repository.
 - A third ten-stage loop-engineering mastery track and atomic profile v1/v2 to
   v3 migration, with independently signed blind capstones at Stage 9.
 
@@ -89,6 +99,11 @@ sandbox or distributed lock. A loop completion receipt proves the current Git
 state satisfied its contract in one MCP session; it never authorizes commit,
 push, deployment, release, or a protected action.
 
+Program state under `~/.jstack/programs/` has the same local-account trust
+boundary. Signed-local human gates prove possession of a configured shared key,
+not enterprise identity or non-repudiation. Program completion never grants
+release authority.
+
 Audit receipts attest the collected scope, validated structure, coverage, and
 result calculation. They do not prove that model-authored semantic findings are
 true. The existing bounded secret scanner and its security receipt retain their
@@ -106,6 +121,8 @@ cannot issue commit-bound receipts or a JStack release-readiness result.
   output renderers.
 - `mcp/jstack/loop/`: bounded contracts, private durable state, event chains,
   leases, convergence breakers, and terminal transitions.
+- `mcp/jstack/program/`: generic phase DAGs, child proofs, intervention gates,
+  active-time accounting, revisions, and finalization.
 - `prompts/`: canonical slash-command prompts.
 - `skills/jstack-dev/`, `skills/jstack-audit/`, and `skills/jstack-loop/`:
   canonical workflow skills.
@@ -130,6 +147,11 @@ Primary tools use the `jstack_*` prefix:
 - audit: `audit`, `audit_finalize`
 - loop: `loop_start`, `loop_status`, `loop_checkpoint`, `loop_revise`,
   `loop_stop`, `loop_finalize`
+- program: `program_goal_readiness`, `program_start`, `program_status`,
+  `program_next`, `program_phase_bind`, `program_phase_complete`,
+  `program_gate_challenge`, `program_gate_resolve`,
+  `program_evidence_register`, `program_pause`, `program_resume`,
+  `program_revise`, `program_cancel`, `program_finalize`
 - continuity: `context_save`, `context_restore`
 - specialist review: `quant_backtest_review`
 - learning: `mastery_start`, `mastery_status`, `mastery_record`
@@ -207,6 +229,9 @@ and loop-platform training. See [the loop system](docs/loop-system.md),
 [ADR 0002](docs/adr/0002-jstack-loop-protocol.md). The semantic intake and
 confirmation boundary is specified in
 [ADR 0003](docs/adr/0003-goal-readiness-gate.md).
+Multi-phase operation is documented in [the program system](docs/program-system.md),
+[ADR 0004](docs/adr/0004-program-orchestration-protocol.md), and the
+[0.5 migration guide](docs/migration-0.5.md).
 
 ## Governance
 

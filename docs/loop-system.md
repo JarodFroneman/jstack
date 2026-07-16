@@ -1,8 +1,12 @@
 # JStack Loop Engineer
 
-`/jstack-loop` keeps a JStack task moving through bounded, evidence-producing
-iterations until the contracted goal succeeds or a real stop condition is
-reached.
+`/jstack-loop` selects the smallest honest orchestration level: one bounded,
+evidence-producing loop for one acceptance boundary, or a project-derived
+Program -> Phase DAG for independently verified phases and intervention waits.
+There is no built-in phase count or domain roadmap.
+
+See [the program system](program-system.md) when the goal needs dependencies,
+phase-specific JStack teams, human/external gates, or final integration proof.
 
 ## Composition
 
@@ -15,6 +19,10 @@ The loop does not replace the existing commands:
 
 The execution mode is fixed in the contract. Widening the team requires an
 approved contract revision.
+
+For a program, execution mode is fixed per phase in the exact confirmed DAG.
+Mixed modes require explicit confirmation; project size never authorizes an
+implicit escalation.
 
 ## Lifecycle
 
@@ -92,6 +100,11 @@ violation is terminal.
 Iteration counts do not determine Codex Goal blocked status. Goal mode may mark
 blocked only after the same blocker persists for three consecutive Goal turns.
 
+An approval wait now pauses active elapsed time and releases a write-capable
+loop's checkout lease. An approved resume revision must reacquire it; this can
+fail when another child loop currently owns that checkout.
+
 See [ADR 0002](adr/0002-jstack-loop-protocol.md) for protocol invariants and
 [ADR 0003](adr/0003-goal-readiness-gate.md) for the intake decision. See
-[loop mastery](loop-mastery-system.md) for the training path.
+[ADR 0004](adr/0004-program-orchestration-protocol.md) for multi-phase
+orchestration and [loop mastery](loop-mastery-system.md) for the training path.

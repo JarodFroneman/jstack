@@ -2,8 +2,8 @@ schemaVersion: jstack.enterprise.v1
 standard: enterprise
 
 # This YAML template is intentionally simple so the local MCP can parse it
-# without third-party dependencies. Use the JSON template for nested release,
-# security, audit, and quant policy.
+# without third-party dependencies. Use the JSON template for the complete
+# release, security, audit, program, and quant policy surface.
 requiredChecks:
   - project_instructions_read
   - git_status_reviewed
@@ -28,3 +28,11 @@ protectedPaths:
   - .github/workflows/**
   - infra/**
   - migrations/**
+
+program:
+  maxPhases: 100
+  maxParallelPhases: 4
+  maxActiveMinutes: 525600
+  requireSignedApprovals: true
+  requireCurrentEvidence: true
+  requireFinalAudit: true

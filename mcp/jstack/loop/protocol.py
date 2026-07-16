@@ -1677,7 +1677,7 @@ class LoopService:
         except LoopError:
             raise LoopError("Loop active lease cannot be reconciled; inspect local state before continuing.")
         if (
-            snapshot.get("status") in TERMINAL_STATUSES
+            snapshot.get("status") != "active"
             or contract.get("autonomyLevel") not in WRITE_AUTONOMY
         ):
             (self.root / "active.json").unlink(missing_ok=True)
@@ -1707,6 +1707,46 @@ class LoopService:
         value = _read_json(path, "active lease")
         if value.get("loopId") == loop_id:
             path.unlink()
+
+    @staticmethod
+    def _active_elapsed_seconds(snapshot: dict[str, Any]) -> int:
+        if "activeElapsedSeconds" not in snapshot:
+            end = snapshot.get("pausedAt") or snapshot.get("updatedAt") or _now_iso()
+            return max(
+                0,
+                int(
+                    (
+                        _parse_time(end, "activeEnd")
+                        - _parse_time(snapshot["startedAt"], "startedAt")
+                    ).total_seconds()
+                ),
+            )
+        elapsed = int(snapshot.get("activeElapsedSeconds", 0))
+        active_since = snapshot.get("activeSince")
+        if active_since:
+            elapsed += max(
+                0,
+                int(
+                    (
+                        _now()
+                        - _parse_time(active_since, "activeSince")
+                    ).total_seconds()
+                ),
+            )
+        return elapsed
+
+    @classmethod
+    def _pause_active_clock(cls, snapshot: dict[str, Any], occurred_at: str) -> None:
+        snapshot["activeElapsedSeconds"] = cls._active_elapsed_seconds(snapshot)
+        snapshot["activeSince"] = None
+        snapshot["pausedAt"] = occurred_at
+
+    @classmethod
+    def _resume_active_clock(cls, snapshot: dict[str, Any], occurred_at: str) -> None:
+        if "activeElapsedSeconds" not in snapshot:
+            snapshot["activeElapsedSeconds"] = cls._active_elapsed_seconds(snapshot)
+        snapshot["activeSince"] = occurred_at
+        snapshot["pausedAt"] = None
 
     def start(
         self,
@@ -1769,6 +1809,9 @@ class LoopService:
                 "contractRevision": 1,
                 "startedAt": contract["createdAt"],
                 "updatedAt": event["occurredAt"],
+                "activeElapsedSeconds": 0,
+                "activeSince": contract["createdAt"],
+                "pausedAt": None,
                 "iteration": 0,
                 "noProgressCount": 0,
                 "failureRepeatCount": 0,
@@ -1800,6 +1843,7 @@ class LoopService:
 
     def _public(self, contract: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
         satisfied = [item["id"] for item in snapshot.get("criteria", []) if item.get("satisfied")]
+        active_elapsed_seconds = self._active_elapsed_seconds(snapshot)
         return {
             "schemaVersion": LOOP_STATUS_SCHEMA,
             "loopId": snapshot["loopId"],
@@ -1823,6 +1867,9 @@ class LoopService:
             "blockedActions": contract["blockedActions"],
             "tokenBudget": contract.get("tokenBudget"),
             "iteration": snapshot["iteration"],
+            "activeElapsedSeconds": active_elapsed_seconds,
+            "activeElapsedMinutes": active_elapsed_seconds // 60,
+            "pausedAt": snapshot.get("pausedAt"),
             "currentFingerprint": snapshot.get("currentFingerprint"),
             "limits": contract["limits"],
             "criteria": snapshot["criteria"],
@@ -2003,9 +2050,7 @@ class LoopService:
                 blocker_count = 0
 
             iteration = int(snapshot.get("iteration", 0)) + 1
-            elapsed_minutes = int(
-                max(0, (_now() - _parse_time(snapshot["startedAt"], "startedAt")).total_seconds()) // 60
-            )
+            elapsed_minutes = self._active_elapsed_seconds(snapshot) // 60
             limits = contract["limits"]
             circuit: Optional[dict[str, Any]] = None
             context_reasons: list[str] = []
@@ -2104,9 +2149,11 @@ class LoopService:
                     "circuitBreaker": circuit,
                 }
             )
+            if status == "needs_approval":
+                self._pause_active_clock(snapshot, event["occurredAt"])
             self._prepare_snapshot(snapshot, event)
             self._commit_state(loop_dir, contract, snapshot, events)
-            if status == "stopped":
+            if status in {"needs_approval", "stopped"}:
                 self._release_active(loop_id)
             result = self._public(contract, snapshot)
             result.update(
@@ -2307,6 +2354,7 @@ class LoopService:
                     "fingerprintHistory": [subject["projectFingerprint"]],
                 }
             )
+            self._resume_active_clock(snapshot, event["occurredAt"])
             self._prepare_snapshot(snapshot, event)
             try:
                 self._commit_state(loop_dir, new, snapshot, events)
@@ -2342,6 +2390,7 @@ class LoopService:
                     "circuitBreaker": {"reason": "user_stop", "detail": reason},
                 }
             )
+            self._pause_active_clock(snapshot, event["occurredAt"])
             self._prepare_snapshot(snapshot, event)
             self._commit_state(loop_dir, contract, snapshot, events)
             self._release_active(loop_id)
@@ -2416,6 +2465,7 @@ class LoopService:
                         "currentFingerprint": subject["projectFingerprint"],
                     }
                 )
+                self._pause_active_clock(snapshot, event["occurredAt"])
                 self._prepare_snapshot(snapshot, event)
                 self._commit_state(loop_dir, contract, snapshot, events)
                 result = self._public(contract, snapshot)
@@ -2473,6 +2523,7 @@ class LoopService:
                     "circuitBreaker": None,
                 }
             )
+            self._pause_active_clock(snapshot, event["occurredAt"])
             self._prepare_snapshot(snapshot, event)
             self._commit_state(loop_dir, contract, snapshot, events)
             self._release_active(loop_id)
@@ -2486,3 +2537,35 @@ class LoopService:
                 }
             )
             return result
+
+    def completion_attestation(self, loop_id: str) -> dict[str, Any]:
+        """Return durable proof derived from validated loop state, not a session token."""
+        with _DirectoryLock(self.lock_path):
+            _, contract, snapshot, events = self._load(loop_id)
+            if snapshot.get("status") != "succeeded":
+                raise LoopError("Loop has no durable successful completion attestation.")
+            evidence_digest = snapshot.get("completionEvidenceDigest")
+            fingerprint = snapshot.get("currentFingerprint")
+            if not isinstance(evidence_digest, str) or not isinstance(fingerprint, str):
+                raise LoopError("Loop completion state is incomplete.")
+            completion_events = [
+                event for event in events if event.get("eventType") == "loop-succeeded"
+            ]
+            if len(completion_events) != 1:
+                raise LoopError("Loop completion event history is malformed.")
+            return {
+                "schemaVersion": "jstack.loop.completion-attestation.v1",
+                "loopId": loop_id,
+                "projectPath": str(self.project_root),
+                "contractDigest": snapshot["contractDigest"],
+                "contractRevision": contract["revision"],
+                "baselineCommit": contract["project"]["baselineCommit"],
+                "projectFingerprint": fingerprint,
+                "completionEvidenceDigest": evidence_digest,
+                "completedAt": completion_events[0]["occurredAt"],
+                "latestEventHash": snapshot["latestEventHash"],
+                "executionMode": contract["executionMode"],
+                "autonomyLevel": contract["autonomyLevel"],
+                "riskTier": contract["riskTier"],
+                "passed": True,
+            }

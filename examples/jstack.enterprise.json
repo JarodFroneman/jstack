@@ -56,6 +56,17 @@
       "production"
     ]
   },
+  "program": {
+    "maxPhases": 100,
+    "maxParallelPhases": 4,
+    "maxActiveMinutes": 525600,
+    "requireSignedApprovals": true,
+    "requireCurrentEvidence": true,
+    "requireFinalAudit": true,
+    "allowedIdentityProviders": [
+      "signed-local"
+    ]
+  },
   "quant": {
     "minimumHistoryQualityPercent": 99.0,
     "requiresParameterFreeze": true,

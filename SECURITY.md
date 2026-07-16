@@ -81,3 +81,38 @@ challenge; it is not a runtime authorization credential.
 A loop completion receipt is not permission to commit, push, deploy, release,
 read secrets, weaken policy, or perform destructive Git operations. Those
 actions continue to require their existing project and user approvals.
+
+## Program Safety
+
+Program state is stored under `~/.jstack/programs/` with the same private,
+atomic, hash-bound persistence model as loop state. A program coordinates
+bounded child loops but executes no caller-defined command and grants no new
+filesystem, subagent, deployment, or release authority.
+
+Every mutating program call requires a durable idempotency key. Exact retries
+return current state; reuse for another action or payload fails closed. The
+event chain, contract history, snapshot, operation records, and pending
+transaction are mutually bound. One non-terminal program owns a repository's
+orchestration slot.
+
+Parallel phases require explicit declarations, linked worktrees from the same
+Git common directory, disjoint top-level scopes, and policy capacity. This is a
+conservative conflict check, not proof that changes are semantically mergeable.
+
+Human gates use the `signed-local` provider in 0.5. Identity configuration
+contains role and key-environment bindings; keys must remain outside Git and
+MCP arguments. The operator signer validates and signs an exact challenge
+outside Codex. HMAC proves possession of the shared local key, not enterprise
+SSO, non-repudiation, physical presence, or safety from compromise of the same
+OS account. Codex must not run the signer for the approver.
+
+External evidence and phase outputs are bounded regular files, confined to the
+project or `~/.jstack/evidence`, hashed without following the final symlink
+where supported, and freshness checked. JStack stores metadata and hashes, not
+the authoritative artifact. Stale, changed, missing, oversized, timed-out, or
+contract-mismatched evidence cannot satisfy a gate.
+
+Program completion revalidates durable child attestations, output hashes,
+baseline ancestry, policy, tool version, final gates, and current final
+evidence. A program receipt has the same non-authorization boundary as a loop
+receipt.

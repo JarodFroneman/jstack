@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/program-status.v1.schema.json",
+  "title": "JStack Program Status v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "programId",
+    "status",
+    "decision",
+    "goal",
+    "owner",
+    "blockedActions",
+    "contractRevision",
+    "contractDigest",
+    "baselineCommit",
+    "baselineFingerprint",
+    "commonDirDigest",
+    "policyDigest",
+    "contractToolVersion",
+    "limits",
+    "activeElapsedSeconds",
+    "activeBudgetExceeded",
+    "clockState",
+    "manualPause",
+    "phases",
+    "readyPhaseIds",
+    "runningPhaseIds",
+    "finalAcceptanceCriteria",
+    "finalGates",
+    "allPhasesComplete",
+    "finalGatesSatisfied",
+    "latestEventHash",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.program.status.v1"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "status": {
+      "enum": [
+        "running",
+        "waiting_human",
+        "waiting_external",
+        "paused",
+        "blocked",
+        "validating",
+        "completed",
+        "cancelled"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "schedule",
+        "wait_human",
+        "wait_external",
+        "paused",
+        "needs_revision",
+        "finalize",
+        "complete",
+        "cancelled"
+      ]
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "stakeholders": {
+      "type": "array"
+    },
+    "nonGoals": {
+      "type": "array"
+    },
+    "blockedActions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 53,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "contractRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "contractDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "baselineCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "baselineFingerprint": {
+      "$ref": "#/$defs/sha256"
+    },
+    "commonDirDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "policyDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "contractToolVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "programReadiness": {
+      "type": "object"
+    },
+    "limits": {
+      "$ref": "program-contract.v1.schema.json#/$defs/limits"
+    },
+    "activeElapsedSeconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "activeElapsedMinutes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "activeBudgetExceeded": {
+      "type": "boolean"
+    },
+    "clockState": {
+      "enum": [
+        "running",
+        "paused"
+      ]
+    },
+    "manualPause": {
+      "type": "boolean"
+    },
+    "pauseReason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/phaseStatus"
+      }
+    },
+    "readyPhaseIds": {
+      "$ref": "#/$defs/phaseIds"
+    },
+    "runningPhaseIds": {
+      "$ref": "#/$defs/phaseIds"
+    },
+    "finalAcceptanceCriteria": {
+      "$ref": "program-contract.v1.schema.json#/$defs/criteria"
+    },
+    "finalGates": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "$ref": "#/$defs/gateStatus"
+      }
+    },
+    "allPhasesComplete": {
+      "type": "boolean"
+    },
+    "finalGatesSatisfied": {
+      "type": "boolean"
+    },
+    "completionProof": {
+      "oneOf": [
+        {
+          "$ref": "program-evidence.v1.schema.json#/$defs/programCompletionProof"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "statePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "latestEventHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "phaseIds": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "gateStatus": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "when",
+        "status",
+        "satisfied"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "type": {
+          "enum": [
+            "human",
+            "external"
+          ]
+        },
+        "when": {
+          "enum": [
+            "before_phase",
+            "after_phase",
+            "final"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "satisfied",
+            "stale",
+            "rejected"
+          ]
+        },
+        "satisfied": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "phaseStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "goal",
+        "status",
+        "dependsOn",
+        "executionMode",
+        "autonomyLevel",
+        "riskTier",
+        "allowedPaths",
+        "blockedActions",
+        "acceptanceCriteria",
+        "outputs",
+        "parallelSafe",
+        "worktreeRequired",
+        "phaseDigest",
+        "child",
+        "completionProof",
+        "outputDigests",
+        "invalidatedReason",
+        "gates"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "type": "string"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "running",
+            "completed",
+            "stale",
+            "blocked",
+            "blocked_by_dependency",
+            "waiting_human",
+            "waiting_external"
+          ]
+        },
+        "dependsOn": {
+          "$ref": "#/$defs/phaseIds"
+        },
+        "executionMode": {
+          "enum": [
+            "single-lead",
+            "smart-subagents",
+            "full-team"
+          ]
+        },
+        "autonomyLevel": {
+          "enum": [
+            "L0",
+            "L1",
+            "L2",
+            "L3"
+          ]
+        },
+        "riskTier": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "allowedPaths": {
+          "type": "array"
+        },
+        "blockedActions": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "acceptanceCriteria": {
+          "$ref": "program-contract.v1.schema.json#/$defs/criteria"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "program-contract.v1.schema.json#/$defs/output"
+          }
+        },
+        "parallelSafe": {
+          "type": "boolean"
+        },
+        "worktreeRequired": {
+          "type": "boolean"
+        },
+        "phaseDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "child": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "completionProof": {
+          "oneOf": [
+            {
+              "$ref": "program-evidence.v1.schema.json#/$defs/phaseCompletionProof"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputDigests": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "invalidatedReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gates": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/gateStatus"
+          }
+        }
+      }
+    }
+  }
+}

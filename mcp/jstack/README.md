@@ -19,6 +19,8 @@ evidence, release readiness, and mastery progression.
   HOME are hardening, not an OS sandbox.
 - Context and mastery records are atomically written under `~/.jstack` with
   private file permissions.
+- Program state is stored privately under `~/.jstack/programs`; the live
+  manifest never mounts into the project repository.
 - `jstack_runtime_status`, `jstack_detect_project`, and `jstack_plan` can
   classify an existing non-Git directory as `artifact-only`. Every
   Git-bound receipt, policy, and release tool still requires a valid Git
@@ -52,8 +54,14 @@ secret scan, environment-specific approval reference, rollback, and monitoring.
 
 The server exposes `jstack_*` tools for runtime status, project detection,
 planning, team validation, policy/preflight, health/review, QA, security,
-audit, context, release, quant review, and mastery. Legacy `gstack_*` aliases remain
-for compatibility; upstream gstack itself is optional.
+audit, bounded loops, multi-phase programs, context, release, quant review, and
+mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
+itself is optional.
+
+Program tools add project-derived phase DAGs, exact child-loop proofs,
+signed-local human gates, external artifact evidence, pause-aware active-time
+budgets, revisions, idempotent mutations, and final integrated acceptance.
+They do not hardcode a phase count or domain roadmap.
 
 Use `tools/list` after MCP initialization for the authoritative schemas.
 
@@ -71,6 +79,11 @@ installs retain the previous Codex config backup and write the
 `mcp_servers.jstack` entry using the current Python interpreter.
 
 Restart Codex or open a new task after installation.
+
+Human program gates additionally require a private identity configuration and
+environment-held approver keys. Use the included
+`templates/jstack.program-identities.json`; named operators sign exact
+challenges with `sign_program_approval.py` outside Codex.
 
 ## Verify
 

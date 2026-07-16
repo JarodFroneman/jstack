@@ -1,0 +1,517 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/program-contract.v1.schema.json",
+  "title": "JStack Program Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "programId",
+    "revision",
+    "createdAt",
+    "goal",
+    "owner",
+    "stakeholders",
+    "nonGoals",
+    "phases",
+    "topologicalOrder",
+    "finalAcceptanceCriteria",
+    "finalGates",
+    "limits",
+    "blockedActions",
+    "project",
+    "policy",
+    "programReadiness"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.program.contract.v1"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "createdAt": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "revisedAt": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "revisionApprovalReferenceDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "stakeholders": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "nonGoals": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+    "topologicalOrder": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "finalAcceptanceCriteria": {
+      "$ref": "#/$defs/criteria"
+    },
+    "finalGates": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "$ref": "program-gate.v1.schema.json"
+      }
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    },
+    "blockedActions": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 53,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
+    "programReadiness": {
+      "$ref": "#/$defs/readiness"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verifier": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "commandKey"
+          ],
+          "properties": {
+            "type": {
+              "const": "qa"
+            },
+            "commandKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "security"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "profile"
+          ],
+          "properties": {
+            "type": {
+              "const": "audit"
+            },
+            "profile": {
+              "enum": [
+                "quick",
+                "standard",
+                "deep",
+                "release"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "review"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "path"
+          ],
+          "properties": {
+            "type": {
+              "const": "artifact"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      ]
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "description",
+        "verifier"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "verifier": {
+          "$ref": "#/$defs/verifier"
+        }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/criterion"
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "goal",
+        "dependsOn",
+        "executionMode",
+        "autonomyLevel",
+        "riskTier",
+        "allowedPaths",
+        "blockedActions",
+        "acceptanceCriteria",
+        "gates",
+        "outputs",
+        "parallelSafe",
+        "worktreeRequired",
+        "order"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "dependsOn": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "executionMode": {
+          "enum": [
+            "single-lead",
+            "smart-subagents",
+            "full-team"
+          ]
+        },
+        "autonomyLevel": {
+          "enum": [
+            "L0",
+            "L1",
+            "L2",
+            "L3"
+          ]
+        },
+        "riskTier": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "allowedPaths": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "blockedActions": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "acceptanceCriteria": {
+          "$ref": "#/$defs/criteria"
+        },
+        "gates": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "program-gate.v1.schema.json"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/output"
+          }
+        },
+        "parallelSafe": {
+          "type": "boolean"
+        },
+        "worktreeRequired": {
+          "type": "boolean"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxPhases",
+        "maxParallelPhases",
+        "maxActiveMinutes"
+      ],
+      "properties": {
+        "maxPhases": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maxParallelPhases": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "maxActiveMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 525600
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gitRoot",
+        "baselineCommit",
+        "baselineFingerprint",
+        "commonDirDigest"
+      ],
+      "properties": {
+        "gitRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "baselineCommit": {
+          "$ref": "#/$defs/gitCommit"
+        },
+        "baselineFingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "commonDirDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "digest",
+        "toolVersion",
+        "program"
+      ],
+      "properties": {
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "toolVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "program": {
+          "type": "object"
+        }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "readinessDigest",
+        "contractInputDigest",
+        "confirmationRequired",
+        "confirmationReferenceDigest",
+        "receiptDigest",
+        "assessedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.program.goal-readiness.v1"
+        },
+        "readinessDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contractInputDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "confirmationRequired": {
+          "type": "boolean"
+        },
+        "confirmationReferenceDigest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "receiptDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "assessedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    }
+  }
+}
