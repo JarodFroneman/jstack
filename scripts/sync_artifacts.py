@@ -16,6 +16,9 @@ FILE_MAP = {
     ROOT / "mcp" / "jstack" / "jstack_mcp_server.py": [
         ROOT / "plugin" / "mcp" / "jstack_mcp_server.py",
     ],
+    ROOT / "mcp" / "jstack" / "sign_program_approval.py": [
+        ROOT / "plugin" / "mcp" / "sign_program_approval.py",
+    ],
     ROOT / "prompts" / "j-stack-dev.md": [ROOT / "plugin" / "commands" / "j-stack-dev.md"],
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
@@ -52,6 +55,11 @@ for source in sorted((ROOT / "mcp" / "jstack" / "loop").rglob("*")):
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "loop")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "loop" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "program").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "program")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "program" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "schemas").glob("*.json")):
     FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "schemas" / source.name]
 
@@ -87,6 +95,7 @@ FILE_MAP[ROOT / "skills" / "jstack-dev" / "references" / "mastery-system.md"].ap
 TREE_MIRRORS = (
     (ROOT / "mcp" / "jstack" / "audit", ROOT / "plugin" / "mcp" / "audit"),
     (ROOT / "mcp" / "jstack" / "loop", ROOT / "plugin" / "mcp" / "loop"),
+    (ROOT / "mcp" / "jstack" / "program", ROOT / "plugin" / "mcp" / "program"),
     (ROOT / "mcp" / "jstack" / "schemas", ROOT / "plugin" / "mcp" / "schemas"),
     (ROOT / "skills" / "jstack-audit", ROOT / "plugin" / "skills" / "jstack-audit"),
     (

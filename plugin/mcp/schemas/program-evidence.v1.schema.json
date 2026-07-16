@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/program-evidence.v1.schema.json",
+  "title": "JStack Program Evidence v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/approvalAttestation"
+    },
+    {
+      "$ref": "#/$defs/externalEvidence"
+    },
+    {
+      "$ref": "#/$defs/phaseCompletionProof"
+    },
+    {
+      "$ref": "#/$defs/programCompletionProof"
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "programId": {
+      "type": "string",
+      "pattern": "^program-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "approvalAttestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "programId",
+        "gateId",
+        "contractDigest",
+        "gateDigest",
+        "approverId",
+        "roles",
+        "decision",
+        "referenceDigest",
+        "issuedAt",
+        "expiresAt",
+        "nonce",
+        "attestationDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.program.approval-attestation.v1"
+        },
+        "programId": {
+          "$ref": "#/$defs/programId"
+        },
+        "gateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "contractDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gateDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "approverId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "referenceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "issuedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "attestationDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "externalEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "programId",
+        "gateId",
+        "contractDigest",
+        "gateDigest",
+        "kind",
+        "sha256",
+        "size",
+        "sourcePathDigest",
+        "sourceReference",
+        "collectedAt",
+        "validUntil",
+        "recordDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.program.external-evidence.v1"
+        },
+        "programId": {
+          "$ref": "#/$defs/programId"
+        },
+        "gateId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "contractDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gateDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "$ref": "#/$defs/identifier"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000
+        },
+        "sourcePathDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceReference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "collectedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "validUntil": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "recordDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "phaseCompletionProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "programId",
+        "phaseId",
+        "phaseDigest",
+        "loopId",
+        "projectPath",
+        "contractDigest",
+        "loopCompletionEvidenceDigest",
+        "loopLatestEventHash",
+        "loopReceiptDigest",
+        "completedAt",
+        "passed"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.program.phase-completion-proof.v1"
+        },
+        "programId": {
+          "$ref": "#/$defs/programId"
+        },
+        "phaseId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "phaseDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "loopId": {
+          "type": "string",
+          "pattern": "^loop-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+        },
+        "projectPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contractDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "loopCompletionEvidenceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "loopLatestEventHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "loopReceiptDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "completedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    },
+    "programCompletionProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "programId",
+        "contractDigest",
+        "projectFingerprint",
+        "evidenceDigest",
+        "phaseProofDigests",
+        "completedAt",
+        "passed"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.program.completion-proof.v1"
+        },
+        "programId": {
+          "$ref": "#/$defs/programId"
+        },
+        "contractDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "projectFingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidenceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "phaseProofDigests": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 100,
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "completedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "passed": {
+          "const": true
+        }
+      }
+    }
+  }
+}

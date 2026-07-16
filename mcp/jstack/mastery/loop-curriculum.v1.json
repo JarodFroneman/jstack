@@ -3,7 +3,7 @@
   "track": "loop",
   "version": 1,
   "title": "JStack Loop Engineering Mastery",
-  "purpose": "Train operators to design, verify, secure, and evolve bounded goal loops from first principles to production-grade orchestration.",
+  "purpose": "Train operators to design, verify, secure, and evolve bounded goal loops and project-derived multi-phase programs from first principles to production-grade orchestration.",
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -36,7 +36,9 @@
       "fabricated, stale, or caller-asserted completion evidence",
       "silent execution-mode or autonomy escalation",
       "scope, secret, policy, approval, or release bypass",
-      "false complete or false blocked claim"
+      "false complete or false blocked claim",
+      "hardcoded or unjustified phase roadmap",
+      "fabricated human approval or external evidence"
     ]
   },
   "stages": [
@@ -125,55 +127,57 @@
     },
     {
       "stage": 6,
-      "name": "Orchestration Engineer",
-      "outcome": "Compose one loop contract with single-lead, specialist-team, and full-team execution without changing its quality bar.",
+      "name": "Program Orchestration Engineer",
+      "outcome": "Compose bounded loops into a project-derived Program -> Phase DAG with explicit teams, dependencies, intervention gates, and final acceptance.",
       "prerequisites": [5],
-      "corePrinciples": ["The loop owns convergence", "The selected workflow owns execution", "Mode is authoritative", "Lead accountability persists", "Audit remains read-only"],
+      "corePrinciples": ["The program owns dependency proof", "Each loop owns phase convergence", "The selected workflow owns execution", "Phase count follows the project", "Lead accountability persists", "Audit remains read-only"],
       "drills": [
-        {"id": "l6-mode-composition", "name": "Implement a mode-composition matrix", "type": "implementation"},
-        {"id": "l6-dispatch-audit", "name": "Audit silent escalation and ownership overlap", "type": "audit"}
+        {"id": "l6-program-dag", "name": "Implement a variable-size Program -> Phase DAG", "type": "implementation"},
+        {"id": "l6-mode-composition", "name": "Compose approved JStack modes per phase", "type": "implementation"},
+        {"id": "l6-dispatch-audit", "name": "Audit dependency, escalation, and ownership defects", "type": "audit"}
       ],
-      "requiredArtifacts": ["composition-matrix.md", "coordination-packets.json", "mode-test-results.json"],
-      "benchmarks": ["Single-lead never spawns agents", "Team modes require explicit references", "Criteria remain stable across modes"],
-      "hardGates": ["No silent staffing change", "No overlapping writer ownership", "All package and QA checks pass"]
+      "requiredArtifacts": ["program-contract.json", "dependency-rationale.md", "composition-matrix.md", "coordination-packets.json", "mode-test-results.json"],
+      "benchmarks": ["Programs of different sizes use the same engine", "Cycles and unjustified dependencies are rejected", "Single-lead never spawns agents", "Team modes require explicit references", "Criteria remain stable across modes"],
+      "hardGates": ["No fixed phase-count assumption", "No silent staffing change", "No overlapping writer ownership", "All child proof and package checks pass"]
     },
     {
       "stage": 7,
       "name": "Autonomy Security Engineer",
-      "outcome": "Threat-model and enforce scope, worktree, secrets, approvals, tools, protected paths, and release boundaries for autonomous loops.",
+      "outcome": "Threat-model and enforce scope, worktree, identity, evidence, approvals, tools, protected paths, and release boundaries across loops and programs.",
       "prerequisites": [6],
-      "corePrinciples": ["Least privilege", "L3 is earned and explicit", "Worktrees isolate writes", "Protected actions remain blocked", "Complete scan or no-go"],
+      "corePrinciples": ["Least privilege", "L3 is earned and explicit", "Worktrees isolate writes", "Humans sign their own decisions", "External evidence is fresh and hashed", "Protected actions remain blocked", "Complete scan or no-go"],
       "drills": [
         {"id": "l7-autonomy-controls", "name": "Implement a bounded L3 control set", "type": "implementation"},
-        {"id": "l7-threat-model", "name": "Attack scope, secrets, approvals, and release boundaries", "type": "audit"}
+        {"id": "l7-gate-controls", "name": "Implement human quorum and external evidence gates", "type": "implementation"},
+        {"id": "l7-threat-model", "name": "Attack scope, identities, evidence, approvals, and release boundaries", "type": "audit"}
       ],
-      "requiredArtifacts": ["threat-model.md", "autonomy-policy.json", "security-results.json"],
-      "benchmarks": ["L3 rejects non-worktree and non-low-risk starts", "Protected changes need references", "Completion cannot authorize release"],
+      "requiredArtifacts": ["threat-model.md", "autonomy-policy.json", "identity-boundary.md", "evidence-registry-results.json", "security-results.json"],
+      "benchmarks": ["L3 rejects non-worktree and non-low-risk starts", "Forged, stale, or wrong-role gates fail", "Changed evidence invalidates dependants", "Completion cannot authorize release"],
       "hardGates": ["Current complete security receipt", "All seeded critical autonomy bypasses blocked"]
     },
     {
       "stage": 8,
       "name": "Loop Platform Architect",
-      "outcome": "Evolve loop schemas, persistence, migrations, observability, and rollback while preserving compatibility and trust semantics.",
+      "outcome": "Evolve loop and program schemas, persistence, migrations, observability, idempotency, and rollback while preserving compatibility and trust semantics.",
       "prerequisites": [7],
-      "corePrinciples": ["Version every durable contract", "Migrations preserve evidence", "One canonical source", "Observability serves decisions", "Rollback is rehearsed"],
+      "corePrinciples": ["Version every durable contract", "Migrations preserve evidence", "Retries are idempotent", "One canonical source", "Observability serves decisions", "Rollback is rehearsed"],
       "drills": [
         {"id": "l8-protocol-evolution", "name": "Implement a compatible protocol evolution", "type": "implementation"},
         {"id": "l8-migration-audit", "name": "Audit migration, packaging, and rollback evidence", "type": "audit"}
       ],
       "requiredArtifacts": ["architecture-decision.md", "migration-plan.md", "compatibility-results.json", "rollback-runbook.md"],
-      "benchmarks": ["Old state migrates atomically", "Generated artifacts stay synchronized", "Cross-platform install and rollback pass"],
+      "benchmarks": ["Old state migrates atomically", "Interrupted program writes recover", "Operation-key collisions fail closed", "Generated artifacts stay synchronized", "Cross-platform install and rollback pass"],
       "hardGates": ["No evidence loss", "No untested compatibility claim", "Current QA, security, and passing audit receipts"]
     },
     {
       "stage": 9,
       "name": "Principal Loop Engineer",
-      "outcome": "Design, operate, audit, and defend a production-grade loop system on unseen goals while making correct continuation and go/no-go decisions.",
+      "outcome": "Design, operate, audit, and defend production-grade bounded loops and multi-phase programs on unseen goals while making correct continuation and go/no-go decisions.",
       "prerequisites": [8],
       "corePrinciples": ["Reduce uncertainty", "Bound autonomy", "Verify before declaring", "Stop honestly", "Teach transferable judgment", "Own operations"],
       "drills": [
-        {"id": "l9-blind-loop", "name": "Operate an unseen loop-engineering capstone", "type": "implementation"},
-        {"id": "l9-red-team", "name": "Blindly audit an unseen loop implementation", "type": "audit"}
+        {"id": "l9-blind-program", "name": "Operate an unseen multi-phase orchestration capstone", "type": "implementation"},
+        {"id": "l9-red-team", "name": "Blindly audit an unseen loop and program implementation", "type": "audit"}
       ],
       "requiredArtifacts": ["capstone-contract.json", "capstone-evaluation.json", "event-dossier.md", "adversarial-report.md", "operator-runbook.md", "release-decision.md"],
       "benchmarks": ["Two blind capstones score at least 90", "All seeded P0 and at least 80 percent of P1 defects are found", "Continuation and release decisions are correct", "Another operator can recover the system"],

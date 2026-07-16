@@ -1,7 +1,7 @@
 {
   "name": "jstack",
-  "version": "0.4.1",
-  "description": "Universal JStack delivery, bounded goal-loop, read-only audit, mastery, and MCP evidence workflows for Codex.",
+  "version": "0.5.0",
+  "description": "Universal JStack delivery, bounded loop, multi-phase program, read-only audit, mastery, and MCP evidence workflows for Codex.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"
@@ -24,8 +24,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "JStack",
-    "shortDescription": "Enterprise delivery, goal loops, and audits for Codex",
-    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, bounded evidence-verified goal loops, and read-only repository audits. It includes MCP quality gates for planning, durable loop state, review, QA, security, audit finalization, release readiness, and mastery.",
+    "shortDescription": "Enterprise delivery, goal programs, and audits for Codex",
+    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. Its MCP provides exact readiness, durable loop and program state, human and external gates, child proofs, review, QA, security, audit finalization, release readiness, and mastery.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [
@@ -36,7 +36,7 @@
     "defaultPrompt": [
       "Use /j-stack-dev to run the single-lead workflow.",
       "Use /jstack-subagents for a specialist team or /jstack-full-team for all 11 roles.",
-      "Use /jstack-loop for bounded verified goal completion or /jstack-audit for read-only inspection."
+      "Use /jstack-loop for bounded or multi-phase verified goal completion, or /jstack-audit for read-only inspection."
     ],
     "websiteURL": "https://github.com/JarodFroneman/jstack",
     "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",

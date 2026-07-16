@@ -7,6 +7,7 @@ Canonical sources live in:
 - `mcp/jstack/jstack_mcp_server.py`
 - `mcp/jstack/audit/`
 - `mcp/jstack/loop/`
+- `mcp/jstack/program/`
 - `mcp/jstack/schemas/`
 - `prompts/`
 - `skills/jstack-dev/`, `skills/jstack-audit/`, and `skills/jstack-loop/`
@@ -31,6 +32,8 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
+- durable Program -> Phase DAGs, intervention gates, child proofs, and final
+  integration acceptance
 - commit-bound HMAC evidence receipts
 - release readiness evaluation
 - local context and mastery records
@@ -63,6 +66,31 @@ worktrees can operate independently. The original commit remains the exact
 merge-base boundary. Contract history, the current snapshot, and every event
 head are mutually digest-bound; a pending transaction journal replays an
 interrupted multi-file commit.
+
+Approval-paused loops release their write lease and suspend active elapsed
+time. An approved resume revision must reacquire the lease before mutation.
+
+## Program Protocol
+
+The program protocol composes bounded loops into a project-derived dependency
+graph. It accepts no fixed roadmap: phase count, dependencies, staffing, gates,
+and outputs are exact confirmed contract data subject to enterprise ceilings.
+
+Each phase binds one active child loop with an exact matching goal, execution
+mode, autonomy, risk, path scope, and acceptance contract. Completion requires
+both a current session receipt and validated durable child-loop attestation.
+Declared outputs are hashed at phase completion and revalidated before program
+completion.
+
+Human decisions use signed configured identities, role coverage, quorum, and
+freshness. External gates use bounded hashed artifacts and provenance.
+Waiting states pause active program time. Revisions invalidate changed phases
+and all transitive dependants while preserving unaffected current proof.
+
+State-changing program calls use transaction-bound idempotency keys. Program
+contracts, snapshots, events, operation records, and pending transactions live
+under `~/.jstack/programs` and fail closed on integrity drift. The live program
+manifest never mounts into the Git repository.
 
 ## Audit Protocol
 
@@ -113,6 +141,11 @@ baseline commit, completion-evidence digest, event-chain head, execution mode,
 autonomy, and risk tier. Durable state survives MCP restarts, but signed
 receipts remain intentionally session-local and must be revalidated.
 
+Program completion receipts additionally bind the program and contract IDs,
+all phase proof digests, current final evidence, project fingerprint, and
+program event head. Durable child proof is revalidated against its loop event
+chain and current declared output hashes.
+
 ## Security Boundary
 
 Git inspection neutralizes common external diff, prompt, fsmonitor, and global
@@ -129,3 +162,8 @@ does not execute repository code or perform network work. Adapter offline flags
 are advisory process configuration; they do not remove host filesystem or
 network privileges. Quick therefore rejects all adapter execution, and
 untrusted verification requires an externally enforced read-only sandbox.
+
+The signed-local program identity provider uses environment-held HMAC keys.
+It proves shared-key possession and configured role only; it is not SSO or
+non-repudiation. Codex prepares and verifies challenges but must not sign on a
+human approver's behalf.

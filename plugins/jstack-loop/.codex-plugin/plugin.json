@@ -1,7 +1,7 @@
 {
   "name": "jstack-loop",
-  "version": "0.4.1",
-  "description": "Top-level JStack command for bounded, durable, evidence-verified goal loops.",
+  "version": "0.5.0",
+  "description": "Top-level JStack command for bounded loops and durable multi-phase programs.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"
@@ -20,8 +20,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "JStack Loop Engineer",
-    "shortDescription": "Bounded goal loops with evidence gates",
-    "longDescription": "Top-level Codex workflow that composes native Goal mode with JStack single-lead, specialist-team, or full-team execution. It preserves a Git-bound contract, durable hash-chained state, scoped autonomy, convergence breakers, and current evidence before completion.",
+    "shortDescription": "Verified goal loops and multi-phase programs",
+    "longDescription": "Top-level Codex workflow that selects one bounded loop or a project-derived Program -> Phase DAG and composes native Goal mode with explicitly approved JStack single-lead, specialist-team, or full-team execution. It preserves Git-bound contracts, durable hash-chained state, intervention gates, child proofs, scoped autonomy, convergence breakers, and current evidence before completion.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [
@@ -30,7 +30,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Complete this goal through a bounded, evidence-verified JStack loop."
+      "Complete this goal through a verified bounded loop or project-derived multi-phase JStack program."
     ],
     "websiteURL": "https://github.com/JarodFroneman/jstack",
     "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",

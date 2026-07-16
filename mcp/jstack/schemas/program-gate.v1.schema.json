@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/program-gate.v1.schema.json",
+  "title": "JStack Program Gate v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/humanGate"
+    },
+    {
+      "$ref": "#/$defs/externalGate"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "humanGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "when",
+        "description",
+        "maxAgeMinutes",
+        "requiredRoles",
+        "quorum"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "type": {
+          "const": "human"
+        },
+        "when": {
+          "enum": [
+            "before_phase",
+            "after_phase",
+            "final"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "maxAgeMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 525600
+        },
+        "requiredRoles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "quorum": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        }
+      }
+    },
+    "externalGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "when",
+        "description",
+        "maxAgeMinutes",
+        "evidenceKind"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "type": {
+          "const": "external"
+        },
+        "when": {
+          "enum": [
+            "before_phase",
+            "after_phase",
+            "final"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "maxAgeMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 525600
+        },
+        "evidenceKind": {
+          "$ref": "#/$defs/identifier"
+        },
+        "requiredSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

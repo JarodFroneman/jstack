@@ -66,6 +66,20 @@ def main() -> int:
         "jstack_loop_revise",
         "jstack_loop_stop",
         "jstack_loop_finalize",
+        "jstack_program_goal_readiness",
+        "jstack_program_start",
+        "jstack_program_status",
+        "jstack_program_next",
+        "jstack_program_phase_bind",
+        "jstack_program_phase_complete",
+        "jstack_program_gate_challenge",
+        "jstack_program_gate_resolve",
+        "jstack_program_evidence_register",
+        "jstack_program_pause",
+        "jstack_program_resume",
+        "jstack_program_revise",
+        "jstack_program_cancel",
+        "jstack_program_finalize",
     }
     missing = required - names
     if missing:

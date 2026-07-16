@@ -101,50 +101,58 @@ Benchmark: every breaker has a deterministic trigger, cosmetic edits cannot
 reset convergence, and approval waits remain distinct from policy stops and
 success. Produce a convergence model, breaker tests, and decision log.
 
-### Stage 6: Orchestration Engineer
+### Stage 6: Program Orchestration Engineer
 
-Outcome: compose one loop with single-lead, specialist-team, and full-team
-delivery without weakening its contract.
+Outcome: compose bounded loops into a project-derived Program -> Phase DAG with
+explicit dependencies, gates, outputs, final acceptance, and approved delivery
+modes.
 
-Core principles: the loop owns convergence; the selected workflow owns
-execution; staffing is authoritative; Lead accountability persists; audit is
-read-only.
+Core principles: phase count follows the project; the program owns dependency
+proof; each loop owns phase convergence; the selected workflow owns execution;
+staffing is authoritative; audit is read-only.
 
-Benchmark: single-lead never spawns agents, team modes carry explicit approval
-references, writer scopes do not overlap, and acceptance criteria remain stable
-across execution modes. Produce a composition matrix, coordination packets,
-and mode test results.
+Benchmark: variable-size programs use one engine, cycles and unjustified edges
+fail, child contracts match exactly, single-lead never spawns agents, team
+modes carry explicit approval references, writer scopes do not overlap, and
+acceptance remains stable. Produce a program contract, dependency rationale,
+composition matrix, coordination packets, and mode test results.
 
 ### Stage 7: Autonomy Security Engineer
 
-Outcome: threat-model and enforce scope, worktree, secret, approval, tool,
-protected-path, and release boundaries.
+Outcome: threat-model and enforce scope, worktree, secret, signed identity,
+external evidence, approval, tool, protected-path, and release boundaries.
 
 Core principles: least privilege; L3 is earned and explicit; worktrees isolate
-writes; protected actions stay blocked; incomplete security evidence is no-go.
+writes; humans sign their own decisions; external evidence is fresh and
+hashed; protected actions stay blocked; incomplete security evidence is no-go.
 
 Benchmark: all seeded critical bypasses are blocked, L3 rejects non-worktree or
-non-low-risk starts, hidden Git state cannot conceal changes, and completion
-cannot authorize release. Produce a threat model, autonomy policy, and current
-security results.
+non-low-risk starts, forged/stale/wrong-role gates fail, changed evidence
+invalidates dependants, hidden Git state cannot conceal changes, and completion
+cannot authorize release. Produce a threat model, autonomy policy, identity
+boundary, evidence-registry results, and current security results.
 
 ### Stage 8: Loop Platform Architect
 
-Outcome: evolve schemas, persistence, migrations, observability, packaging, and
-rollback without losing compatibility or trust semantics.
+Outcome: evolve loop/program schemas, persistence, migrations, observability,
+idempotency, packaging, and rollback without losing compatibility or trust
+semantics.
 
 Core principles: version durable contracts; preserve evidence in migrations;
-keep one canonical source; observe decisions; rehearse rollback.
+make retries idempotent; keep one canonical source; observe decisions; rehearse
+rollback.
 
-Benchmark: migrations are atomic, generated artifacts remain synchronized,
+Benchmark: migrations are atomic, interrupted program writes recover,
+operation-key collisions fail closed, generated artifacts remain synchronized,
 cross-platform install and rollback pass, and current QA, security, and audit
 receipts support the result. Produce an ADR, migration plan, compatibility
 results, and rollback runbook.
 
 ### Stage 9: Principal Loop Engineer
 
-Outcome: design, operate, audit, and defend production-grade loops on unseen
-goals while making correct continuation, stop, and release decisions.
+Outcome: design, operate, audit, and defend production-grade bounded loops and
+multi-phase programs on unseen goals while making correct continuation, stop,
+intervention, and release decisions.
 
 Core principles: reduce uncertainty; bound autonomy; verify before declaring;
 stop honestly; own operations; teach transferable judgment.

@@ -757,6 +757,58 @@ class LoopProtocolTests(unittest.TestCase):
                 )
                 self.assertEqual("stopped", released["status"])
 
+    def test_approval_wait_releases_write_lease_and_suspends_active_time(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                first = start_loop(low_write_contract(repo))
+                paused = server.tool_loop_checkpoint(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": first["loopId"],
+                        "iteration_summary": "A named operator decision is required.",
+                        "blocker": "Waiting for the accountable owner decision.",
+                    }
+                )
+                self.assertEqual("needs_approval", paused["status"])
+                active_seconds = paused["activeElapsedSeconds"]
+                future = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=10)
+                with mock.patch.object(loop_protocol, "_now", return_value=future):
+                    waiting = server.tool_loop_status(
+                        {
+                            "project_path": str(repo),
+                            "loop_id": first["loopId"],
+                        }
+                    )
+                self.assertEqual(active_seconds, waiting["activeElapsedSeconds"])
+
+                second = start_loop(low_write_contract(repo))
+                server.tool_loop_stop(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": second["loopId"],
+                        "reason": "Release the temporary write lease.",
+                    }
+                )
+                resumed = server.tool_loop_revise(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": first["loopId"],
+                        "revision_approval_reference": (
+                            "Accountable owner approved one bounded retry LOOP-LEASE-1"
+                        ),
+                    }
+                )
+                self.assertEqual("active", resumed["status"])
+                server.tool_loop_stop(
+                    {
+                        "project_path": str(repo),
+                        "loop_id": first["loopId"],
+                        "reason": "Approval-wait lease behavior verified.",
+                    }
+                )
+
     def test_repeated_failure_breaker_and_approved_revision(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)

@@ -35,10 +35,11 @@ if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 import audit as audit_core
 import loop as loop_core
+import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.4.1"
+SERVER_VERSION = "0.5.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -52,6 +53,11 @@ GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS = 30 * 60
 LOOP_MAX_QA_RECEIPTS = 50
 LOOP_MAX_AUDIT_RECEIPTS = 20
 LOOP_MAX_RECEIPT_CHARS = 100_000
+PROGRAM_MAX_RECEIPT_CHARS = 100_000
+PROGRAM_MAX_ARTIFACT_BYTES = 100_000_000
+PROGRAM_ARTIFACT_TIMEOUT_SECONDS = 30
+PROGRAM_IDENTITY_CONFIG_ENV = "JSTACK_PROGRAM_IDENTITY_CONFIG"
+PROGRAM_IDENTITY_CONFIG_SCHEMA = "jstack.program.identity-config.v1"
 AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 AUDIT_CAPSTONE_ATTESTATION_SCHEMA = "jstack.audit.capstone-attestation.v1"
 AUDIT_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_AUDIT_ASSESSOR_HMAC_KEY"
@@ -81,6 +87,20 @@ GIT_REQUIRED_TOOLS = [
     "jstack_loop_revise",
     "jstack_loop_stop",
     "jstack_loop_finalize",
+    "jstack_program_goal_readiness",
+    "jstack_program_start",
+    "jstack_program_status",
+    "jstack_program_next",
+    "jstack_program_phase_bind",
+    "jstack_program_phase_complete",
+    "jstack_program_gate_challenge",
+    "jstack_program_gate_resolve",
+    "jstack_program_evidence_register",
+    "jstack_program_pause",
+    "jstack_program_resume",
+    "jstack_program_revise",
+    "jstack_program_cancel",
+    "jstack_program_finalize",
 ]
 ARTIFACT_ONLY_RELEASE_BLOCKER = (
     "Git-backed JStack release readiness is unavailable until the authoritative source has a committed git repository."
@@ -628,6 +648,15 @@ DEFAULT_ENTERPRISE_POLICY: dict[str, Any] = {
         "requiresOutOfSample": True,
         "requiresCostModel": True,
     },
+    "program": {
+        "maxPhases": 100,
+        "maxParallelPhases": 4,
+        "maxActiveMinutes": 525_600,
+        "requireSignedApprovals": True,
+        "requireCurrentEvidence": True,
+        "requireFinalAudit": True,
+        "allowedIdentityProviders": ["signed-local"],
+    },
 }
 
 
@@ -736,7 +765,7 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
     for field in ("requiredChecks", "protectedPaths"):
         if field in value:
             _string_list(value[field], field)
-    for section in ("release", "security", "audit", "quant"):
+    for section in ("release", "security", "audit", "quant", "program"):
         if section in value and not isinstance(value[section], dict):
             raise ToolError(f"JStack policy field '{section}' must be an object.")
     security = value.get("security") or {}
@@ -767,6 +796,54 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
             raise ToolError("JStack policy quant.minimumHistoryQualityPercent must be numeric.") from exc
         if not 0 <= number <= 100:
             raise ToolError("JStack policy quant.minimumHistoryQualityPercent must be between 0 and 100.")
+    program_policy = value.get("program") or {}
+    allowed_program_fields = {
+        "maxPhases",
+        "maxParallelPhases",
+        "maxActiveMinutes",
+        "requireSignedApprovals",
+        "requireCurrentEvidence",
+        "requireFinalAudit",
+        "allowedIdentityProviders",
+    }
+    unknown_program_fields = sorted(set(program_policy) - allowed_program_fields)
+    if unknown_program_fields:
+        raise ToolError(
+            "JStack policy program contains unsupported fields: "
+            + ", ".join(unknown_program_fields)
+        )
+    for field, maximum in (
+        ("maxPhases", program_core.MAX_PHASES),
+        ("maxParallelPhases", program_core.MAX_PARALLEL_PHASES),
+        ("maxActiveMinutes", program_core.MAX_ACTIVE_MINUTES),
+    ):
+        if field in program_policy:
+            configured = program_policy[field]
+            if (
+                not isinstance(configured, int)
+                or isinstance(configured, bool)
+                or not 1 <= configured <= maximum
+            ):
+                raise ToolError(
+                    "JStack policy program.%s must be an integer from 1 to %d."
+                    % (field, maximum)
+                )
+    for field in (
+        "requireSignedApprovals",
+        "requireCurrentEvidence",
+        "requireFinalAudit",
+    ):
+        if field in program_policy and not isinstance(program_policy[field], bool):
+            raise ToolError("JStack policy program.%s must be boolean." % field)
+    if "allowedIdentityProviders" in program_policy:
+        providers = _string_list(
+            program_policy["allowedIdentityProviders"],
+            "program.allowedIdentityProviders",
+        )
+        if set(providers) - {"signed-local"}:
+            raise ToolError(
+                "JStack v0.5.0 supports only the signed-local program identity provider."
+            )
 
 
 def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str, Any]:
@@ -826,6 +903,22 @@ def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str,
         float(DEFAULT_ENTERPRISE_POLICY["quant"]["minimumHistoryQualityPercent"]),
         float(policy["quant"].get("minimumHistoryQualityPercent", 0)),
     )
+    program_policy = policy.setdefault("program", {})
+    default_program = DEFAULT_ENTERPRISE_POLICY["program"]
+    for field, absolute in (
+        ("maxPhases", program_core.MAX_PHASES),
+        ("maxParallelPhases", program_core.MAX_PARALLEL_PHASES),
+        ("maxActiveMinutes", program_core.MAX_ACTIVE_MINUTES),
+    ):
+        program_policy[field] = min(
+            int(program_policy.get(field, default_program[field])),
+            int(default_program[field]),
+            absolute,
+        )
+    program_policy["requireSignedApprovals"] = True
+    program_policy["requireCurrentEvidence"] = True
+    program_policy["requireFinalAudit"] = True
+    program_policy["allowedIdentityProviders"] = ["signed-local"]
     return policy
 
 
@@ -6137,6 +6230,9 @@ def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
         "security_receipt",
         "audit_receipts",
         "goal_readiness_receipt",
+        "program_readiness_receipt",
+        "loop_completion_receipt",
+        "approval_attestation",
     }
 
     def visit(value: Any, field: str) -> None:
@@ -6650,6 +6746,1021 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _program_service(project_path: Path) -> program_core.ProgramService:
+    return program_core.ProgramService(Path.home(), project_path)
+
+
+def _program_operation_id(args: dict[str, Any]) -> str:
+    value = args.get("operation_id")
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:-]{0,99}", value
+    ):
+        raise ToolError(
+            "A unique operation_id using 1-100 letters, numbers, dots, underscores, colons, or hyphens is required."
+        )
+    return value
+
+
+def _program_call(operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return operation()
+    except program_core.ProgramError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _program_policy_gaps(args: dict[str, Any], policy: dict[str, Any]) -> list[dict[str, str]]:
+    criteria = args.get("final_acceptance_criteria") or []
+    verifiers = [
+        item.get("verifier") or {}
+        for item in criteria
+        if isinstance(item, dict)
+    ]
+    gaps: list[dict[str, str]] = []
+    program_policy = policy.get("program") or {}
+    if program_policy.get("requireFinalAudit") is True and not any(
+        verifier.get("type") == "audit" and verifier.get("profile") == "release"
+        for verifier in verifiers
+    ):
+        gaps.append(
+            {
+                "id": "final-release-audit",
+                "question": "Add a final audit criterion using the release profile so program completion has complete current audit coverage.",
+            }
+        )
+    if program_policy.get("requireCurrentEvidence") is True and not any(
+        verifier.get("type") == "security" for verifier in verifiers
+    ):
+        gaps.append(
+            {
+                "id": "final-security",
+                "question": "Add a final security criterion backed by a current JStack security receipt.",
+            }
+        )
+    if program_policy.get("requireCurrentEvidence") is True and not any(
+        verifier.get("type") == "review" for verifier in verifiers
+    ):
+        gaps.append(
+            {
+                "id": "final-review",
+                "question": "Add a final deterministic review criterion for the complete integrated program delta.",
+            }
+        )
+    return gaps
+
+
+def _verified_program_readiness_attestation(
+    receipt: Any, subject: dict[str, Any]
+) -> dict[str, Any]:
+    if (
+        not isinstance(receipt, str)
+        or not receipt
+        or len(receipt) > PROGRAM_MAX_RECEIPT_CHARS
+    ):
+        raise ToolError(
+            "A bounded program_readiness_receipt returned by jstack_program_goal_readiness is required."
+        )
+    verification = verify_receipt(
+        receipt,
+        "program-goal-readiness",
+        subject,
+        expected_subject=subject,
+    )
+    payload = verification["payload"]
+    if (
+        not verification["valid"]
+        or payload.get("schemaVersion")
+        != program_core.PROGRAM_READINESS_RECEIPT_SCHEMA
+    ):
+        raise ToolError(
+            "The program-readiness receipt is stale, malformed, from another session, or bound to a different project state."
+        )
+    return {**payload, "receiptDigest": _receipt_digest(receipt)}
+
+
+def _program_baseline_ancestry(project_path: Path, baseline: str) -> bool:
+    result = run_complete(
+        ["git", "merge-base", baseline, "HEAD"],
+        project_path,
+        timeout=10,
+    )
+    return result["ok"] and _git_text(result).strip() == baseline
+
+
+def _program_identity_config() -> dict[str, dict[str, Any]]:
+    configured = str(os.environ.get(PROGRAM_IDENTITY_CONFIG_ENV) or "").strip()
+    if not configured:
+        raise ToolError(
+            "%s must point to a private signed-local identity configuration before human program gates can be resolved."
+            % PROGRAM_IDENTITY_CONFIG_ENV
+        )
+    path = Path(configured).expanduser()
+    if path.is_symlink() or not path.is_file():
+        raise ToolError("Program identity configuration is missing or unsafe.")
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1_000_000:
+        raise ToolError("Program identity configuration must be a regular file no larger than 1 MB.")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ToolError("Program identity configuration is malformed.") from exc
+    if (
+        not isinstance(value, dict)
+        or value.get("schemaVersion") != PROGRAM_IDENTITY_CONFIG_SCHEMA
+        or not isinstance(value.get("identities"), dict)
+        or not 1 <= len(value["identities"]) <= 100
+    ):
+        raise ToolError("Program identity configuration schema is invalid.")
+    result: dict[str, dict[str, Any]] = {}
+    for identity, raw in value["identities"].items():
+        if not isinstance(identity, str) or not re.fullmatch(
+            r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", identity
+        ):
+            raise ToolError("Program identity IDs must use lowercase hyphen-case.")
+        if not isinstance(raw, dict):
+            raise ToolError("Program identity records must be objects.")
+        roles = raw.get("roles")
+        key_env = raw.get("hmacKeyEnv")
+        if (
+            not isinstance(roles, list)
+            or not roles
+            or len(roles) > 20
+            or not all(
+                isinstance(role, str)
+                and re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", role)
+                for role in roles
+            )
+            or not isinstance(key_env, str)
+            or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,100}", key_env)
+        ):
+            raise ToolError("Program identity roles or key environment binding is invalid.")
+        key = str(os.environ.get(key_env) or "").encode("utf-8")
+        if len(key) < 32:
+            raise ToolError(
+                "Program identity %s requires at least 32 bytes in %s."
+                % (identity, key_env)
+            )
+        result[identity] = {
+            "roles": sorted(set(roles)),
+            "key": key,
+            "keyEnv": key_env,
+        }
+    return result
+
+
+def _program_gate_challenge(
+    project_path: Path,
+    program_id: str,
+    gate_id: str,
+    approver_id: str,
+    decision: str,
+    reference: str,
+    valid_for_minutes: Optional[int],
+) -> dict[str, Any]:
+    service = _program_service(project_path)
+    context = _program_call(lambda: service.gate_context(program_id, gate_id))
+    gate = context["gate"]
+    if gate["type"] != "human":
+        raise ToolError("Only human program gates use signed approval challenges.")
+    identities = _program_identity_config()
+    identity = identities.get(approver_id)
+    if identity is None:
+        raise ToolError("Unknown or disabled signed-local program identity.")
+    if not set(identity["roles"]) & set(gate["requiredRoles"]):
+        raise ToolError("The selected identity does not hold a role required by this gate.")
+    if decision not in {"approved", "rejected"}:
+        raise ToolError("Program gate decision must be approved or rejected.")
+    reference = str(reference or "").strip()
+    if not reference or len(reference) > 500:
+        raise ToolError("A bounded external approval reference is required.")
+    if audit_core.contains_secret_like(reference):
+        raise ToolError("Approval references must not contain secret-like values.")
+    requested = int(valid_for_minutes or min(60, int(gate["maxAgeMinutes"])))
+    if not 1 <= requested <= int(gate["maxAgeMinutes"]):
+        raise ToolError(
+            "valid_for_minutes must be within the gate maximum of %d."
+            % gate["maxAgeMinutes"]
+        )
+    issued = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
+    expires = issued + _dt.timedelta(minutes=requested)
+    payload = {
+        "schemaVersion": program_core.APPROVAL_ATTESTATION_SCHEMA,
+        "programId": program_id,
+        "gateId": gate_id,
+        "contractDigest": context["contractDigest"],
+        "gateDigest": context["gateDigest"],
+        "approverId": approver_id,
+        "decision": decision,
+        "referenceDigest": hashlib.sha256(reference.encode("utf-8")).hexdigest(),
+        "issuedAt": issued.isoformat(),
+        "expiresAt": expires.isoformat(),
+        "nonce": secrets.token_hex(16),
+    }
+    encoded = _b64encode(_canonical_program_payload(payload))
+    return {
+        "schemaVersion": "jstack.program.approval-challenge.v1",
+        "challenge": payload,
+        "encodedPayload": encoded,
+        "signatureAlgorithm": "HMAC-SHA256",
+        "keyEnvironment": identity["keyEnv"],
+        "requiredRoles": gate["requiredRoles"],
+        "identityRoles": identity["roles"],
+        "signingRule": (
+            "The named human approver signs encodedPayload with the private key in keyEnvironment; "
+            "Codex must not create or claim the approval."
+        ),
+    }
+
+
+def _canonical_program_payload(value: dict[str, Any]) -> bytes:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+
+def _verify_program_approval_token(
+    token: str,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(token, str) or not token or len(token) > PROGRAM_MAX_RECEIPT_CHARS:
+        raise ToolError("approval_attestation must be a bounded signed token.")
+    try:
+        encoded, supplied_signature = token.split(".", 1)
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("payload")
+        approver_id = str(payload.get("approverId") or "")
+        identities = _program_identity_config()
+        identity = identities[approver_id]
+        expected_signature = _b64encode(
+            hmac.new(identity["key"], encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature")
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("timezone")
+    except Exception as exc:
+        raise ToolError(
+            "Program approval attestation is malformed, unsigned, expired, or not issued by a configured identity."
+        ) from exc
+    gate = context["gate"]
+    now = _dt.datetime.now(_dt.timezone.utc)
+    checks = {
+        "schema": payload.get("schemaVersion")
+        == program_core.APPROVAL_ATTESTATION_SCHEMA,
+        "program": payload.get("programId") == context["programId"],
+        "gate": payload.get("gateId") == gate["id"],
+        "contract": payload.get("contractDigest") == context["contractDigest"],
+        "gateDigest": payload.get("gateDigest") == context["gateDigest"],
+        "decision": payload.get("decision") in {"approved", "rejected"},
+        "reference": isinstance(payload.get("referenceDigest"), str)
+        and bool(re.fullmatch(r"[0-9a-f]{64}", payload["referenceDigest"])),
+        "nonce": isinstance(payload.get("nonce"), str)
+        and bool(re.fullmatch(r"[0-9a-f]{32}", payload["nonce"])),
+        "fresh": issued <= now < expires,
+        "bounded": 0
+        < (expires - issued).total_seconds()
+        <= int(gate["maxAgeMinutes"]) * 60,
+        "role": bool(set(identity["roles"]) & set(gate["requiredRoles"])),
+    }
+    if not all(checks.values()):
+        raise ToolError("Program approval attestation does not match the current gate contract.")
+    return {
+        **payload,
+        "roles": identity["roles"],
+        "attestationDigest": hashlib.sha256(token.encode("utf-8")).hexdigest(),
+    }
+
+
+def _program_artifact_path(
+    project_path: Path, raw_path: str
+) -> tuple[Path, str, Path]:
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = project_path / candidate
+    if candidate.is_symlink():
+        raise ToolError("Program evidence artifacts may not be symlinks.")
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise ToolError("Program evidence artifact is missing or inaccessible.") from exc
+    allowed_roots = [
+        project_path.resolve(),
+        (Path.home() / ".jstack" / "evidence").resolve(strict=False),
+    ]
+    selected_root = None
+    relative = None
+    for root in allowed_roots:
+        try:
+            candidate_relative = resolved.relative_to(root)
+        except ValueError:
+            continue
+        if candidate_relative.parts:
+            selected_root = root
+            relative = candidate_relative.as_posix()
+            break
+    if selected_root is None or relative is None:
+        raise ToolError(
+            "External evidence must be inside the Git project or ~/.jstack/evidence."
+        )
+    metadata = resolved.stat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > PROGRAM_MAX_ARTIFACT_BYTES:
+        raise ToolError("Program evidence must be a regular file no larger than 100 MB.")
+    return selected_root, relative, resolved
+
+
+def _program_file_digest(
+    root: Path,
+    relative_path: str,
+    *,
+    maximum: int,
+) -> tuple[int, str]:
+    try:
+        return audit_core.digest_repository_file(
+            root,
+            relative_path,
+            max_bytes=maximum,
+            max_seconds=PROGRAM_ARTIFACT_TIMEOUT_SECONDS,
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(
+            "Program evidence artifact could not be opened with stable file identity."
+        ) from exc
+
+
+def _program_phase_output_digests(
+    child_project: Path,
+    outputs: list[dict[str, Any]],
+) -> dict[str, str]:
+    result: dict[str, str] = {}
+    total = 0
+    for output in outputs:
+        remaining = PROGRAM_MAX_ARTIFACT_BYTES - total
+        if remaining <= 0:
+            raise ToolError("Program phase outputs exceed the aggregate 100 MB boundary.")
+        try:
+            size, digest = audit_core.digest_repository_file(
+                child_project,
+                output["path"],
+                max_bytes=min(25_000_000, remaining),
+                max_seconds=PROGRAM_ARTIFACT_TIMEOUT_SECONDS,
+            )
+        except audit_core.AuditError as exc:
+            raise ToolError(
+                "Program phase output is missing or unsafe: %s" % output["path"]
+            ) from exc
+        total += size
+        result[output["id"]] = digest
+    return result
+
+
+def _program_child_integrity(
+    status: dict[str, Any],
+    *,
+    verify_outputs: bool,
+) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    for phase in status.get("phases", []):
+        proof = phase.get("completionProof")
+        child = phase.get("child")
+        if not isinstance(proof, dict):
+            continue
+        checks: dict[str, bool] = {}
+        error = None
+        try:
+            if not isinstance(child, dict):
+                raise ToolError("missing child binding")
+            child_project = require_project_path(child.get("projectPath"))
+            worktree = git_worktree_attestation(child_project)
+            attestation = _loop_call(
+                lambda: _loop_service(child_project).completion_attestation(
+                    str(child.get("loopId") or "")
+                )
+            )
+            checks = {
+                "commonRepository": worktree["commonDirDigest"]
+                == status["commonDirDigest"],
+                "loopId": attestation.get("loopId") == proof.get("loopId"),
+                "projectPath": attestation.get("projectPath")
+                == proof.get("projectPath"),
+                "contractDigest": attestation.get("contractDigest")
+                == proof.get("contractDigest"),
+                "completionEvidence": attestation.get("completionEvidenceDigest")
+                == proof.get("loopCompletionEvidenceDigest"),
+                "eventHead": attestation.get("latestEventHash")
+                == proof.get("loopLatestEventHash"),
+                "passed": attestation.get("passed") is True,
+            }
+            if verify_outputs:
+                current_outputs = _program_phase_output_digests(
+                    child_project, phase.get("outputs") or []
+                )
+                checks["outputs"] = current_outputs == phase.get("outputDigests", {})
+        except (ToolError, OSError) as exc:
+            error = str(exc)
+            checks["load"] = False
+        results.append(
+            {
+                "phaseId": phase["id"],
+                "valid": bool(checks) and all(checks.values()),
+                "checks": checks,
+                "error": error,
+            }
+        )
+    return {
+        "valid": all(item["valid"] for item in results),
+        "phases": results,
+        "outputsVerified": verify_outputs,
+    }
+
+
+def _program_status_integrity(
+    project_path: Path,
+    status: dict[str, Any],
+    *,
+    verify_outputs: bool = False,
+) -> dict[str, Any]:
+    subject = evidence_subject(project_path)
+    worktree = git_worktree_attestation(project_path)
+    child_integrity = _program_child_integrity(
+        status, verify_outputs=verify_outputs
+    )
+    context_checks = {
+        "policy": status["policyDigest"] == subject["policyDigest"],
+        "toolVersion": status["contractToolVersion"] == subject["toolVersion"],
+        "commonRepository": status["commonDirDigest"]
+        == worktree["commonDirDigest"],
+        "baselineAncestry": _program_baseline_ancestry(
+            project_path, status["baselineCommit"]
+        ),
+    }
+    passed = all(context_checks.values()) and child_integrity["valid"]
+    status["integrity"] = {
+        "valid": passed,
+        "contextChecks": context_checks,
+        "childProofs": child_integrity,
+        "currentProject": {
+            "gitHead": subject["gitHead"],
+            "projectFingerprint": subject["projectFingerprint"],
+            "policyDigest": subject["policyDigest"],
+            "toolVersion": subject["toolVersion"],
+        },
+    }
+    if not passed and status["status"] not in {"completed", "cancelled"}:
+        status["status"] = "blocked"
+        status["decision"] = "needs_revision"
+        status["readyPhaseIds"] = []
+    status["completionRevalidatable"] = passed
+    return status
+
+
+def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    subject, policy, worktree = stable_loop_contract_context(project_path)
+    policy_gaps = _program_policy_gaps(args, policy)
+    if policy_gaps:
+        return {
+            "schemaVersion": program_core.PROGRAM_READINESS_SCHEMA,
+            "status": "needs_context",
+            "ready": False,
+            "gaps": [item["id"] for item in policy_gaps],
+            "questions": [
+                {"id": item["id"], "question": item["question"], "blocking": True}
+                for item in policy_gaps[:3]
+            ],
+            "receiptIssued": False,
+        }
+    service = _program_service(project_path)
+    program_id = str(args.get("program_id") or "").strip() or None
+    prior_contract_digest = None
+    if program_id:
+        status = _program_call(lambda: service.status(program_id))
+        if status["status"] in {"completed", "cancelled"}:
+            raise ToolError("Terminal programs cannot receive a revised readiness receipt.")
+        prior_contract_digest = status["contractDigest"]
+    assessment = _program_call(
+        lambda: program_core.assess_program_readiness(
+            args,
+            project_root=str(project_path),
+            subject=subject,
+            policy_source=policy.get("_sourcePath"),
+            policy_digest=subject["policyDigest"],
+            common_dir_digest=worktree["commonDirDigest"],
+            program_policy=policy.get("program"),
+            program_id=program_id,
+            prior_contract_digest=prior_contract_digest,
+        )
+    )
+    assessment.pop("_contract", None)
+    if assessment.get("ready") is not True:
+        assessment["receiptIssued"] = False
+        return assessment
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed during program-readiness assessment. Re-run against one stable state."
+        )
+    expires_at = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    confirmation_reference = str(assessment.get("confirmationReference") or "")
+    receipt = issue_receipt(
+        {
+            "kind": "program-goal-readiness",
+            "schemaVersion": program_core.PROGRAM_READINESS_RECEIPT_SCHEMA,
+            "expiresAt": expires_at,
+            "projectPath": subject_after["gitRoot"],
+            "gitHead": subject_after["gitHead"],
+            "projectFingerprint": subject_after["projectFingerprint"],
+            "baseRef": subject_after.get("baseRef"),
+            "baseCommit": subject_after.get("baseCommit"),
+            "policyDigest": subject_after["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "programId": program_id,
+            "priorContractDigest": prior_contract_digest,
+            "readinessDigest": assessment["readinessDigest"],
+            "contractInputDigest": assessment["contractInputDigest"],
+            "confirmationRequired": assessment["confirmationRequired"],
+            "confirmationReferenceDigest": (
+                hashlib.sha256(confirmation_reference.encode("utf-8")).hexdigest()
+                if confirmation_reference
+                else None
+            ),
+            "passed": True,
+        }
+    )
+    assessment.update(
+        {
+            "programReadinessReceipt": receipt,
+            "receiptExpiresAt": expires_at,
+            "receiptIssued": True,
+            "receiptMeaning": (
+                "Session-local proof that the exact program DAG and acceptance boundary were readiness-checked; "
+                "it does not approve implementation, release, deployment, or a human gate."
+            ),
+        }
+    )
+    return assessment
+
+
+def tool_program_start(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    subject, policy, worktree = stable_loop_contract_context(project_path)
+    if subject.get("clean") is not True:
+        raise ToolError("Program orchestration must start from a clean Git worktree.")
+    policy_gaps = _program_policy_gaps(args, policy)
+    if policy_gaps:
+        raise ToolError(
+            "Program contract does not satisfy policy: "
+            + ", ".join(item["id"] for item in policy_gaps)
+        )
+    attestation = _verified_program_readiness_attestation(
+        args.get("program_readiness_receipt"), subject
+    )
+    service = _program_service(project_path)
+    result = _program_call(
+        lambda: service.start(
+            args,
+            subject=subject,
+            policy_source=policy.get("_sourcePath"),
+            policy_digest=subject["policyDigest"],
+            common_dir_digest=worktree["commonDirDigest"],
+            program_policy=policy.get("program"),
+            readiness_attestation=attestation,
+            operation_id=operation_id,
+        )
+    )
+    result = _program_status_integrity(project_path, result)
+    result["nativeGoalContract"] = {
+        "createGoalRequired": True,
+        "objective": result["goal"],
+        "completionRule": (
+            "Complete the native goal only after jstack_program_finalize returns a current passed completionReceipt."
+        ),
+        "blockedRule": (
+            "Human or external waiting states are durable pauses, not native Goal blocked status."
+        ),
+    }
+    return result
+
+
+def tool_program_status(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    service = _program_service(project_path)
+    result = _program_call(
+        lambda: service.status(str(args.get("program_id") or "") or None)
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_next(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    service = _program_service(project_path)
+    result = _program_call(
+        lambda: service.next(str(args.get("program_id") or ""))
+    )
+    result = _program_status_integrity(project_path, result)
+    if result["status"] != "running":
+        result["scheduledPhaseIds"] = []
+    return result
+
+
+def tool_program_phase_bind(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    child_project = require_project_path(
+        args.get("child_project_path") or args.get("project_path")
+    )
+    program_id = str(args.get("program_id") or "")
+    phase_id = str(args.get("phase_id") or "")
+    loop_id = str(args.get("loop_id") or "")
+    parent_status = tool_program_status(
+        {"project_path": str(project_path), "program_id": program_id}
+    )
+    if parent_status["status"] != "running":
+        raise ToolError("Program integrity or lifecycle state does not allow phase binding.")
+    child_status = _loop_call(lambda: _loop_service(child_project).status(loop_id))
+    if child_status["status"] != "active":
+        raise ToolError("Only an active bounded child loop can be bound to a program phase.")
+    worktree = git_worktree_attestation(child_project)
+    child = {
+        "loopId": loop_id,
+        "projectPath": str(child_project),
+        "contractDigest": child_status["contractDigest"],
+        "baselineCommit": child_status["baselineCommit"],
+        "commonDirDigest": worktree["commonDirDigest"],
+        "isLinkedWorktree": worktree["isLinkedWorktree"],
+        "goal": child_status["goal"],
+        "executionMode": child_status["executionMode"],
+        "autonomyLevel": child_status["autonomyLevel"],
+        "riskTier": child_status["riskTier"],
+        "allowedPaths": child_status["allowedPaths"],
+        "blockedActions": child_status["blockedActions"],
+        "acceptanceCriteria": child_status["acceptanceCriteria"],
+    }
+    result = _program_call(
+        lambda: _program_service(project_path).bind_phase(
+            program_id, phase_id, child, operation_id=operation_id
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_phase_complete(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    phase_id = str(args.get("phase_id") or "")
+    status = _program_call(lambda: _program_service(project_path).status(program_id))
+    phase = next((item for item in status["phases"] if item["id"] == phase_id), None)
+    if phase is None or not isinstance(phase.get("child"), dict):
+        raise ToolError("Program phase has no bound child loop.")
+    child = phase["child"]
+    child_project = require_project_path(child["projectPath"])
+    subject = evidence_subject(child_project, child["baselineCommit"])
+    receipt = args.get("loop_completion_receipt")
+    if not isinstance(receipt, str) or len(receipt) > PROGRAM_MAX_RECEIPT_CHARS:
+        raise ToolError("A bounded current child loop completion receipt is required.")
+    verification = verify_receipt(
+        receipt,
+        "loop",
+        subject,
+        expected_subject=subject,
+    )
+    durable = _loop_call(
+        lambda: _loop_service(child_project).completion_attestation(child["loopId"])
+    )
+    payload = verification["payload"]
+    if (
+        not verification["valid"]
+        or payload.get("loopId") != child["loopId"]
+        or payload.get("contractDigest") != child["contractDigest"]
+        or payload.get("completionEvidenceDigest")
+        != durable["completionEvidenceDigest"]
+        or payload.get("latestEventHash") != durable["latestEventHash"]
+    ):
+        raise ToolError("Child loop completion receipt and durable loop state do not match.")
+    output_digests = _program_phase_output_digests(
+        child_project, phase.get("outputs") or []
+    )
+    proof = {
+        "schemaVersion": program_core.PHASE_COMPLETION_PROOF_SCHEMA,
+        "programId": program_id,
+        "phaseId": phase_id,
+        "phaseDigest": phase["phaseDigest"],
+        "loopId": child["loopId"],
+        "projectPath": str(child_project),
+        "contractDigest": child["contractDigest"],
+        "loopCompletionEvidenceDigest": durable["completionEvidenceDigest"],
+        "loopLatestEventHash": durable["latestEventHash"],
+        "loopReceiptDigest": _receipt_digest(receipt),
+        "completedAt": durable["completedAt"],
+        "passed": True,
+    }
+    result = _program_call(
+        lambda: _program_service(project_path).complete_phase(
+            program_id,
+            phase_id,
+            proof,
+            output_digests,
+            operation_id=operation_id,
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_gate_challenge(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    project_path = require_project_path(args.get("project_path"))
+    return _program_gate_challenge(
+        project_path,
+        str(args.get("program_id") or ""),
+        str(args.get("gate_id") or ""),
+        str(args.get("approver_id") or ""),
+        str(args.get("decision") or ""),
+        str(args.get("approval_reference") or ""),
+        args.get("valid_for_minutes"),
+    )
+
+
+def tool_program_gate_resolve(args: dict[str, Any]) -> dict[str, Any]:
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    gate_id = str(args.get("gate_id") or "")
+    service = _program_service(project_path)
+    context = _program_call(lambda: service.gate_context(program_id, gate_id))
+    approval = _verify_program_approval_token(
+        str(args.get("approval_attestation") or ""), context
+    )
+    result = _program_call(
+        lambda: service.resolve_gate(
+            program_id, gate_id, approval, operation_id=operation_id
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    gate_id = str(args.get("gate_id") or "")
+    source_reference = str(args.get("source_reference") or "").strip()
+    if not source_reference or len(source_reference) > 500:
+        raise ToolError("A bounded source_reference is required.")
+    if audit_core.contains_secret_like(source_reference):
+        raise ToolError("External evidence references must not contain secret-like values.")
+    service = _program_service(project_path)
+    context = _program_call(lambda: service.gate_context(program_id, gate_id))
+    gate = context["gate"]
+    if gate["type"] != "external":
+        raise ToolError("Human gates require signed identity attestations.")
+    artifact_root, artifact_relative, artifact = _program_artifact_path(
+        project_path, str(args.get("artifact_path") or "")
+    )
+    size, digest = _program_file_digest(
+        artifact_root,
+        artifact_relative,
+        maximum=PROGRAM_MAX_ARTIFACT_BYTES,
+    )
+    collected = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
+    evidence = {
+        "schemaVersion": program_core.EXTERNAL_EVIDENCE_SCHEMA,
+        "programId": program_id,
+        "gateId": gate_id,
+        "contractDigest": context["contractDigest"],
+        "gateDigest": context["gateDigest"],
+        "kind": gate["evidenceKind"],
+        "sha256": digest,
+        "size": size,
+        "sourcePathDigest": hashlib.sha256(str(artifact).encode("utf-8")).hexdigest(),
+        "sourceReference": source_reference,
+        "collectedAt": collected.isoformat(),
+        "validUntil": (
+            collected + _dt.timedelta(minutes=int(gate["maxAgeMinutes"]))
+        ).isoformat(),
+    }
+    evidence["recordDigest"] = hashlib.sha256(
+        _canonical_program_payload(evidence)
+    ).hexdigest()
+    result = _program_call(
+        lambda: service.register_evidence(
+            program_id, gate_id, evidence, operation_id=operation_id
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def _program_running_child_ids(status: dict[str, Any]) -> list[str]:
+    active: list[str] = []
+    for phase in status.get("phases", []):
+        child = phase.get("child")
+        if not isinstance(child, dict) or phase.get("completionProof"):
+            continue
+        child_project = require_project_path(child["projectPath"])
+        child_status = _loop_call(
+            lambda: _loop_service(child_project).status(child["loopId"])
+        )
+        if child_status["status"] == "active":
+            active.append(child["loopId"])
+    return active
+
+
+def tool_program_pause(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    status = _program_call(lambda: _program_service(project_path).status(program_id))
+    active_children = _program_running_child_ids(status)
+    if active_children:
+        raise ToolError(
+            "Pause each active child loop at a checkpoint before pausing the program: "
+            + ", ".join(active_children)
+        )
+    result = _program_call(
+        lambda: _program_service(project_path).pause(
+            program_id,
+            str(args.get("reason") or ""),
+            operation_id=operation_id,
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_resume(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    status = tool_program_status(
+        {"project_path": str(project_path), "program_id": program_id}
+    )
+    if status["integrity"]["valid"] is not True:
+        raise ToolError("Program context drift requires an approved program revision, not resume.")
+    result = _program_call(
+        lambda: _program_service(project_path).resume(
+            program_id,
+            str(args.get("approval_reference") or ""),
+            operation_id=operation_id,
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_revise(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    subject, policy, worktree = stable_loop_contract_context(project_path)
+    policy_gaps = _program_policy_gaps(args, policy)
+    if policy_gaps:
+        raise ToolError(
+            "Revised program contract does not satisfy policy: "
+            + ", ".join(item["id"] for item in policy_gaps)
+        )
+    attestation = _verified_program_readiness_attestation(
+        args.get("program_readiness_receipt"), subject
+    )
+    result = _program_call(
+        lambda: _program_service(project_path).revise(
+            str(args.get("program_id") or ""),
+            args,
+            subject=subject,
+            policy_source=policy.get("_sourcePath"),
+            policy_digest=subject["policyDigest"],
+            common_dir_digest=worktree["commonDirDigest"],
+            program_policy=policy.get("program"),
+            readiness_attestation=attestation,
+            revision_approval_reference=str(
+                args.get("revision_approval_reference") or ""
+            ),
+            operation_id=operation_id,
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_cancel(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    status = _program_call(lambda: _program_service(project_path).status(program_id))
+    active_children = _program_running_child_ids(status)
+    if active_children:
+        raise ToolError(
+            "Stop or finalize active child loops before cancelling the program: "
+            + ", ".join(active_children)
+        )
+    result = _program_call(
+        lambda: _program_service(project_path).cancel(
+            program_id,
+            str(args.get("reason") or ""),
+            operation_id=operation_id,
+        )
+    )
+    return _program_status_integrity(project_path, result)
+
+
+def tool_program_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
+    operation_id = _program_operation_id(args)
+    project_path = require_project_path(args.get("project_path"))
+    program_id = str(args.get("program_id") or "")
+    service = _program_service(project_path)
+    status = _program_call(lambda: service.status(program_id))
+    status = _program_status_integrity(project_path, status, verify_outputs=True)
+    if status["integrity"]["valid"] is not True:
+        raise ToolError("Program child proofs, outputs, policy, tool, or baseline integrity are not current.")
+    if status["status"] not in {"validating", "completed"}:
+        raise ToolError("Program is not ready for final acceptance.")
+    pseudo_loop = {
+        "baselineCommit": status["baselineCommit"],
+        "acceptanceCriteria": status["finalAcceptanceCriteria"],
+    }
+    context = _loop_iteration_evidence(project_path, pseudo_loop, args)
+    criteria = loop_core.LoopService._evaluate_criteria(
+        {"acceptanceCriteria": status["finalAcceptanceCriteria"]},
+        {"completionApprovals": {}},
+        context["evidence"],
+    )
+    remaining = [item["id"] for item in criteria if not item["satisfied"]]
+    if remaining:
+        raise ToolError(
+            "Program final acceptance criteria are not satisfied: "
+            + ", ".join(remaining)
+        )
+    evidence_digest = hashlib.sha256(
+        _canonical_program_payload(context["evidence"])
+    ).hexdigest()
+    result = _program_call(
+        lambda: service.finalize(
+            program_id,
+            expected_contract_digest=status["contractDigest"],
+            final_criteria=criteria,
+            evidence_digest=evidence_digest,
+            project_fingerprint=context["subject"]["projectFingerprint"],
+            summary=str(args.get("completion_summary") or ""),
+            operation_id=operation_id,
+        )
+    )
+    receipt_subject = evidence_subject(project_path, status["baselineCommit"])
+    if any(
+        receipt_subject[field] != context["subject"][field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed after program finalization. No completion receipt was issued."
+        )
+    expires_at = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    proof = result.get("completionProof") or {}
+    receipt = issue_receipt(
+        {
+            "kind": "program",
+            "schemaVersion": "jstack.program.receipt.v1",
+            "expiresAt": expires_at,
+            "projectPath": receipt_subject["gitRoot"],
+            "gitHead": receipt_subject["gitHead"],
+            "projectFingerprint": receipt_subject["projectFingerprint"],
+            "baseRef": receipt_subject["baseRef"],
+            "baseCommit": receipt_subject["baseCommit"],
+            "policyDigest": receipt_subject["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "programId": program_id,
+            "contractDigest": status["contractDigest"],
+            "completionEvidenceDigest": proof.get("evidenceDigest"),
+            "latestEventHash": result["latestEventHash"],
+            "phaseProofDigests": proof.get("phaseProofDigests"),
+            "passed": True,
+        }
+    )
+    result["completionReceipt"] = receipt
+    result["receiptMeaning"] = (
+        "Session-local proof that every program phase, final gate, child proof, output, and final acceptance criterion was current. "
+        "It does not authorize commit, push, deployment, or release."
+    )
+    return _program_status_integrity(project_path, result, verify_outputs=True)
+
+
 LOOP_VERIFIER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -6787,8 +7898,502 @@ LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
     },
 }
 
+PROGRAM_VERIFIER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["type"],
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": ["qa", "security", "audit", "review", "artifact"],
+        },
+        "commandKey": {"type": "string", "maxLength": 200},
+        "profile": {
+            "type": "string",
+            "enum": ["quick", "standard", "deep", "release"],
+        },
+        "path": {"type": "string", "maxLength": 500},
+        "sha256": {"type": "string", "maxLength": 64},
+    },
+}
+
+PROGRAM_CRITERIA_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "minItems": 1,
+    "maxItems": program_core.MAX_CRITERIA,
+    "items": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["id", "description", "verifier"],
+        "properties": {
+            "id": {"type": "string", "maxLength": 64},
+            "description": {"type": "string", "maxLength": 1000},
+            "verifier": PROGRAM_VERIFIER_SCHEMA,
+        },
+    },
+}
+
+PROGRAM_GATE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["id", "type", "description"],
+    "properties": {
+        "id": {"type": "string", "maxLength": 64},
+        "type": {"type": "string", "enum": ["human", "external"]},
+        "when": {
+            "type": "string",
+            "enum": ["before_phase", "after_phase", "final"],
+        },
+        "description": {"type": "string", "maxLength": 1000},
+        "required_roles": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {"type": "string", "maxLength": 100},
+        },
+        "quorum": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_age_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": program_core.MAX_ACTIVE_MINUTES,
+        },
+        "evidence_kind": {"type": "string", "maxLength": 64},
+        "required_sha256": {"type": "string", "maxLength": 64},
+    },
+}
+
+PROGRAM_PHASE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "id",
+        "title",
+        "goal",
+        "acceptance_criteria",
+    ],
+    "properties": {
+        "id": {"type": "string", "maxLength": 64},
+        "title": {"type": "string", "maxLength": 200},
+        "goal": {"type": "string", "maxLength": 4000},
+        "depends_on": {
+            "type": "array",
+            "maxItems": program_core.MAX_PHASES,
+            "items": {"type": "string", "maxLength": 64},
+        },
+        "execution_mode": {
+            "type": "string",
+            "enum": ["single-lead", "smart-subagents", "full-team"],
+        },
+        "autonomy_level": {
+            "type": "string",
+            "enum": ["L0", "L1", "L2", "L3"],
+        },
+        "risk_tier": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+        },
+        "allowed_paths": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {"type": "string", "maxLength": 500},
+        },
+        "blocked_actions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {"type": "string", "maxLength": 500},
+        },
+        "acceptance_criteria": PROGRAM_CRITERIA_SCHEMA,
+        "gates": {
+            "type": "array",
+            "maxItems": program_core.MAX_GATES_PER_PHASE,
+            "items": PROGRAM_GATE_SCHEMA,
+        },
+        "outputs": {
+            "type": "array",
+            "maxItems": program_core.MAX_OUTPUTS_PER_PHASE,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "path"],
+                "properties": {
+                    "id": {"type": "string", "maxLength": 64},
+                    "path": {"type": "string", "maxLength": 500},
+                },
+            },
+        },
+        "parallel_safe": {"type": "boolean"},
+        "worktree_required": {"type": "boolean"},
+    },
+}
+
+PROGRAM_LIMITS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "max_phases": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": program_core.MAX_PHASES,
+        },
+        "max_parallel_phases": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": program_core.MAX_PARALLEL_PHASES,
+        },
+        "max_active_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": program_core.MAX_ACTIVE_MINUTES,
+        },
+    },
+}
+
+PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
+    "project_path": {"type": "string"},
+    "program_id": {"type": "string", "maxLength": 100},
+    "operation_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$",
+    },
+    "goal": {"type": "string", "maxLength": 4000},
+    "owner": {"type": "string", "maxLength": 200},
+    "stakeholders": {
+        "type": "array",
+        "maxItems": 50,
+        "items": {"type": "string", "maxLength": 200},
+    },
+    "non_goals": {
+        "type": "array",
+        "maxItems": 50,
+        "items": {"type": "string", "maxLength": 500},
+    },
+    "phases": {
+        "type": "array",
+        "maxItems": program_core.MAX_PHASES,
+        "items": PROGRAM_PHASE_SCHEMA,
+    },
+    "final_acceptance_criteria": PROGRAM_CRITERIA_SCHEMA,
+    "final_gates": {
+        "type": "array",
+        "maxItems": program_core.MAX_GATES,
+        "items": PROGRAM_GATE_SCHEMA,
+    },
+    "limits": PROGRAM_LIMITS_SCHEMA,
+    "blocked_actions": {
+        "type": "array",
+        "maxItems": 50,
+        "items": {"type": "string", "maxLength": 500},
+    },
+    "confirmed_readiness_digest": {"type": "string", "maxLength": 64},
+    "confirmation_reference": {"type": "string", "maxLength": 500},
+    "program_readiness_receipt": {
+        "type": "string",
+        "maxLength": PROGRAM_MAX_RECEIPT_CHARS,
+    },
+    "revision_approval_reference": {"type": "string", "maxLength": 500},
+}
+
 
 TOOLS: dict[str, dict[str, Any]] = {
+    "gstack_program_goal_readiness": {
+        "description": "Assess a multi-phase JStack program contract, validate its dependency DAG and policy-required final gates, ask at most three blocking questions, require exact-digest confirmation, and issue a current readiness receipt.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": PROGRAM_CONTRACT_PROPERTIES,
+        },
+        "handler": tool_program_goal_readiness,
+        "readOnlyHint": True,
+    },
+    "gstack_program_start": {
+        "description": "Create a durable Git-bound Program -> Phase contract above bounded JStack child loops. The program schedules and verifies work but never edits code or authorizes release itself.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "goal",
+                "owner",
+                "stakeholders",
+                "phases",
+                "final_acceptance_criteria",
+                "program_readiness_receipt",
+                "operation_id",
+            ],
+            "properties": PROGRAM_CONTRACT_PROPERTIES,
+        },
+        "handler": tool_program_start,
+        "readOnlyHint": False,
+    },
+    "gstack_program_status": {
+        "description": "Validate and report durable program state, DAG progress, gates, active-time budget, child completion proofs, policy/tool context, and the next lifecycle decision.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+            },
+        },
+        "handler": tool_program_status,
+        "readOnlyHint": True,
+    },
+    "gstack_program_next": {
+        "description": "Return the next bounded phase set allowed by dependencies, concurrency limits, isolated-worktree declarations, and conservative path-scope conflict checks.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["program_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+            },
+        },
+        "handler": tool_program_next,
+        "readOnlyHint": True,
+    },
+    "gstack_program_phase_bind": {
+        "description": "Bind one safe-scheduler-selected program phase to an exact active JStack child-loop contract in the same Git repository, with inherited blocked actions and linked-worktree enforcement where required.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["program_id", "phase_id", "loop_id", "operation_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "phase_id": {"type": "string", "maxLength": 64},
+                "loop_id": {"type": "string", "maxLength": 100},
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+                "child_project_path": {"type": "string"},
+            },
+        },
+        "handler": tool_program_phase_bind,
+        "readOnlyHint": False,
+    },
+    "gstack_program_phase_complete": {
+        "description": "Verify a current child-loop completion receipt against durable event-chain state, hash declared phase outputs, and advance only that exact program phase.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "program_id",
+                "phase_id",
+                "loop_completion_receipt",
+                "operation_id",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "phase_id": {"type": "string", "maxLength": 64},
+                "loop_completion_receipt": {
+                    "type": "string",
+                    "maxLength": PROGRAM_MAX_RECEIPT_CHARS,
+                },
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+            },
+        },
+        "handler": tool_program_phase_complete,
+        "readOnlyHint": False,
+    },
+    "gstack_program_gate_challenge": {
+        "description": "Create an exact contract-bound challenge for a configured signed-local human approver. This does not approve the gate; the named person must sign it outside Codex.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "program_id",
+                "gate_id",
+                "approver_id",
+                "decision",
+                "approval_reference",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "gate_id": {"type": "string", "maxLength": 64},
+                "approver_id": {"type": "string", "maxLength": 64},
+                "decision": {
+                    "type": "string",
+                    "enum": ["approved", "rejected"],
+                },
+                "approval_reference": {"type": "string", "maxLength": 500},
+                "valid_for_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": program_core.MAX_ACTIVE_MINUTES,
+                },
+            },
+        },
+        "handler": tool_program_gate_challenge,
+        "readOnlyHint": True,
+    },
+    "gstack_program_gate_resolve": {
+        "description": "Verify a signed-local identity token against the current program, gate, role, quorum, decision, and expiry, then record only its digest-bound approval metadata.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "program_id",
+                "gate_id",
+                "approval_attestation",
+                "operation_id",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "gate_id": {"type": "string", "maxLength": 64},
+                "approval_attestation": {
+                    "type": "string",
+                    "maxLength": PROGRAM_MAX_RECEIPT_CHARS,
+                },
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+            },
+        },
+        "handler": tool_program_gate_resolve,
+        "readOnlyHint": False,
+    },
+    "gstack_program_evidence_register": {
+        "description": "Hash and register a bounded external artifact for an exact evidence gate, with provenance, freshness, and downstream invalidation on replacement.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "program_id",
+                "gate_id",
+                "artifact_path",
+                "source_reference",
+                "operation_id",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "gate_id": {"type": "string", "maxLength": 64},
+                "artifact_path": {"type": "string"},
+                "source_reference": {"type": "string", "maxLength": 500},
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+            },
+        },
+        "handler": tool_program_evidence_register,
+        "readOnlyHint": False,
+    },
+    "gstack_program_pause": {
+        "description": "Pause a program without consuming active-time budget after every active child loop has reached a safe checkpoint and released its write lease.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["program_id", "reason", "operation_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "reason": {"type": "string", "maxLength": 1000},
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+            },
+        },
+        "handler": tool_program_pause,
+        "readOnlyHint": False,
+    },
+    "gstack_program_resume": {
+        "description": "Resume a manually paused program only after policy, tool, repository, baseline, and durable child-proof context are revalidated.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["program_id", "approval_reference", "operation_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "approval_reference": {"type": "string", "maxLength": 500},
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+            },
+        },
+        "handler": tool_program_resume,
+        "readOnlyHint": False,
+    },
+    "gstack_program_revise": {
+        "description": "Create an exact-digest approved program contract revision, preserve unaffected phase proof, invalidate changed phases plus transitive dependants, and clear gate records bound to the prior digest.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "program_id",
+                "goal",
+                "owner",
+                "stakeholders",
+                "phases",
+                "final_acceptance_criteria",
+                "program_readiness_receipt",
+                "revision_approval_reference",
+                "operation_id",
+            ],
+            "properties": PROGRAM_CONTRACT_PROPERTIES,
+        },
+        "handler": tool_program_revise,
+        "readOnlyHint": False,
+    },
+    "gstack_program_cancel": {
+        "description": "Cancel a durable program after all active child loops are stopped or finalized, preserving its auditable state and releasing the orchestration slot.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["program_id", "reason", "operation_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "reason": {"type": "string", "maxLength": 1000},
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+            },
+        },
+        "handler": tool_program_cancel,
+        "readOnlyHint": False,
+    },
+    "gstack_program_finalize": {
+        "description": "Revalidate every child proof and output plus current final QA, security, release-audit, review, artifact, and gate evidence before issuing a session-local program completion receipt.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["program_id", "completion_summary", "operation_id"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "program_id": {"type": "string", "maxLength": 100},
+                "completion_summary": {"type": "string", "maxLength": 4000},
+                "operation_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                },
+                **LOOP_EVIDENCE_PROPERTIES,
+            },
+        },
+        "handler": tool_program_finalize,
+        "readOnlyHint": False,
+    },
     "gstack_loop_goal_readiness": {
         "description": "Assess a partial or complete JStack loop goal contract, return at most three targeted context questions, require exact-digest confirmation when ambiguity or risk warrants it, and issue a session-local readiness receipt for the current Git state.",
         "inputSchema": {

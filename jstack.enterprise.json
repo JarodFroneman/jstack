@@ -60,5 +60,16 @@
     "suppressionRequiresOwner": true,
     "suppressionRequiresExpiry": true,
     "releaseRequiresAuditReceipt": false
+  },
+  "program": {
+    "maxPhases": 100,
+    "maxParallelPhases": 4,
+    "maxActiveMinutes": 525600,
+    "requireSignedApprovals": true,
+    "requireCurrentEvidence": true,
+    "requireFinalAudit": true,
+    "allowedIdentityProviders": [
+      "signed-local"
+    ]
   }
 }

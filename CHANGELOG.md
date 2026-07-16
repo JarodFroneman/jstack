@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 - 2026-07-16
+
+- Added a phase-count-agnostic Program -> Phase orchestration protocol above
+  bounded JStack child loops for long, heterogeneous, or dependency-driven
+  projects.
+- Added 14 program MCP tools for exact readiness, durable start/status,
+  conservative DAG scheduling, child binding/completion, human and external
+  gates, pause/resume/revision/cancellation, and finalization.
+- Added exact child-contract matching, durable loop completion attestations,
+  declared-output hashing, transitive invalidation, baseline/policy/tool
+  revalidation, and final release-audit/security/integrated-review floors.
+- Added signed-local human identities with role and quorum checks, exact
+  contract-bound approval challenges, an external operator signer, and
+  freshness-aware external artifact evidence.
+- Added active-work clocks that exclude human, external, and manual waits;
+  approval-paused child loops release and explicitly reacquire write leases.
+- Added transactional idempotency keys for every state-changing program call,
+  hash-chained program events, versioned contracts, pending-write recovery, and
+  private state outside the repository.
+- Added active-budget freezing, orphaned-start reference recovery, history-wide
+  start idempotency, scheduler-enforced binding, inherited blocked actions,
+  revision-safe gate clearing, descriptor-safe evidence hashing, and repeatable
+  completion revalidation.
+- Published JSON Schemas for contracts, status, gates, and evidence plus
+  enterprise policy/identity templates, ADR 0004, operator documentation, and
+  a 0.5 migration/rollback guide.
+- Updated `/jstack-loop` to choose one bounded loop or a project-derived
+  multi-phase program and compose each phase with explicitly approved
+  single-lead, specialist-team, or full-team delivery.
+- Added variable-size, end-to-end child proof, human gate, external evidence,
+  idempotency, active-time, lease, tamper, and program finalization coverage.
+
 ## 0.4.1 - 2026-07-15
 
 - Added mandatory semantic goal readiness before loop start and material

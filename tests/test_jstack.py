@@ -305,6 +305,8 @@ class TransportTests(unittest.TestCase):
         self.assertIn("jstack_audit_finalize", names)
         self.assertIn("jstack_loop_start", names)
         self.assertIn("jstack_loop_finalize", names)
+        self.assertIn("jstack_program_start", names)
+        self.assertIn("jstack_program_finalize", names)
         self.assertFalse(any(name.startswith("gstack_") for name in names))
 
         with tempfile.TemporaryDirectory() as temp:
@@ -427,6 +429,8 @@ class TransportTests(unittest.TestCase):
         self.assertIn("jstack_audit_finalize", names)
         self.assertIn("jstack_loop_start", names)
         self.assertIn("jstack_loop_finalize", names)
+        self.assertIn("jstack_program_start", names)
+        self.assertIn("jstack_program_finalize", names)
         process.stdin.close()
         process.wait(timeout=5)
         stderr = process.stderr.read()
@@ -1554,6 +1558,39 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertIn("[other]", updated)
             self.assertFalse((codex_home / "mcp" / "jstack" / "old.txt").exists())
             self.assertIn("name: jstack-audit", (codex_home / "skills" / "jstack-audit" / "SKILL.md").read_text())
+            self.assertTrue(
+                (codex_home / "mcp" / "jstack" / "program" / "protocol.py").is_file()
+            )
+            self.assertTrue(
+                (codex_home / "mcp" / "jstack" / "sign_program_approval.py").is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "schemas"
+                    / "program-contract.v1.schema.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "templates"
+                    / "jstack.program-identities.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "skills"
+                    / "jstack-loop"
+                    / "references"
+                    / "program-protocol.md"
+                ).is_file()
+            )
 
     def test_mastery_profile_v1_migrates_and_engineering_remains_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
