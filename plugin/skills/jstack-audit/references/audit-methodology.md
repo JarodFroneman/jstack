@@ -26,6 +26,10 @@ not downgrade a missing check after seeing the result.
 
 `--focus` prioritizes semantic review effort and specialist selection; it does
 not remove any domain or evidence requirement fixed by the selected profile.
+`jstack_audit` routes the focus through the versioned capability registry. The
+selected packs may add required audit domains and evidence methods. The audit
+session and final receipt bind the catalog and selection digests, so a changed
+catalog or focus cannot be silently substituted during finalization.
 
 ## Coverage
 
@@ -67,6 +71,10 @@ read-only specialists by focus. `full-team` uses four waves:
 
 Every specialist returns scope, evidence, severity-ordered findings, blockers,
 residual risk, and recommended action. Evidence wins conflicts.
+When platform specialists are used, route the exact core-role capability IDs,
+validate `jstack.specialist.result.v1` plus metadata-only telemetry for each
+role, and obtain a clean specialist handoff receipt before synthesis. These
+receipts do not replace the audit finding/result schemas or audit receipt.
 
 ## Reporting
 

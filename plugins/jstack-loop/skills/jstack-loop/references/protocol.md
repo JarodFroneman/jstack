@@ -66,9 +66,17 @@ tool version, and, for a revision, loop ID plus prior contract digest. The
 receipt authorizes only loop start or that exact revision. It does not approve
 implementation, protected files, push, deployment, or release.
 
-Material changes to the goal, criteria, execution mode, autonomy, risk, paths,
-blocked actions, limits, token budget, or goal context require a new assessment
-and receipt. Named human-criterion updates and explicit retry/resume approvals
+Every new loop also binds a server-routed capability contract: catalog version
+and digest, deterministic selection digest, goal digest, execution mode, exact
+team role-to-capability assignments, explicit capability IDs, audit domains,
+loop controls, and the invariant that capability selection never expands
+permissions. The capability contract is part of readiness, the durable
+contract, status, revisions, and final receipt. Legacy loop state may omit it;
+new server-created state does not.
+
+Material changes to the goal, criteria, execution mode, capability selection,
+autonomy, risk, paths, blocked actions, limits, token budget, or goal context
+require a new assessment and receipt. Named human-criterion updates and explicit retry/resume approvals
 may carry the existing readiness decision when the semantic contract is
 unchanged. Pre-0.4.1 loop state remains readable; its first material revision
 must supply a complete context and current readiness receipt.
@@ -106,6 +114,14 @@ Verifier contracts:
 - `artifact`: Requires an exact repository file and optionally an exact SHA-256.
 - `human`: Requires a named approval key added by an approved contract revision.
 
+Multi-agent checkpoint and finalization calls additionally require a current
+`specialist_handoff_receipt`. It must cover every role in the durable
+capability contract, match its catalog/selection digests and execution mode,
+remain bound to the current Git fingerprint, contain no failed/partial role,
+and have every contradiction explicitly reconciled. Single-lead loops retain
+their normal receipt gates and may use the same one-role handoff contract at
+delivery handoff.
+
 Do not use subjective criteria such as "looks good," "enterprise quality," or
 "the user will probably accept it." Split those into observable behavior,
 tests, artifacts, and an explicit approval where judgment is unavoidable.
@@ -124,8 +140,8 @@ The default contract stops for review after:
 - an observed project-fingerprint oscillation;
 - any policy, protected-path, or scope violation.
 
-Changing the goal, criteria, staffing, autonomy, risk, scope, limits, token
-budget, or goal context requires fresh readiness, creates a new contract
+Changing the goal, criteria, staffing, capability selection, autonomy, risk,
+scope, limits, token budget, or goal context requires fresh readiness, creates a new contract
 revision, and invalidates prior completion state. Never disguise a revision as
 another iteration.
 

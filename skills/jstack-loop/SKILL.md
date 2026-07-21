@@ -61,19 +61,30 @@ worktree. Default implementation work to `L2`.
    evidence first, asking only returned blocking questions. For
    `needs_confirmation`, show the preview and exact digest and wait for real
    confirmation. Never fabricate a confirmation reference.
-4. Pass the returned receipt unchanged to `jstack_loop_start`. Create or reuse
+   Pass any explicitly requested `capability_ids` on every readiness, start,
+   and material revision call. The returned preview binds catalog, selection,
+   exact team-role assignments, audit domains, loop controls, and the
+   no-permission-expansion invariant into the readiness digest.
+4. Pass the returned receipt unchanged to `jstack_loop_start`, including the
+   same `capability_ids`. Create or reuse
    the matching native Goal only after JStack state exists.
 5. On every resumed turn call `jstack_loop_status`, then run one meaningful
    Think -> Plan -> Build -> Review -> Test cycle in the fixed execution mode.
 6. Call `jstack_loop_checkpoint` with current receipts and factual progress.
+   `smart-subagents` and `full-team` loops must first validate all current role
+   results with `jstack_specialist_handoff_check` and pass its
+   `specialist_handoff_receipt`; missing, stale, incomplete, capability-drifted,
+   or unreconciled specialist evidence blocks the checkpoint.
    Follow `continue`, `ready_to_finalize`, `needs_approval`, or `policy_stop`.
 7. A `needs_approval` state releases the write lease and pauses active time.
    Resume through an explicit approved revision; do not mark the native Goal
    blocked merely because a person or external system must respond.
-8. Material goal, context, mode, autonomy, risk, criterion, scope, or limit
-   changes require fresh readiness and `jstack_loop_revise`.
+8. Material goal, context, mode, capability selection, autonomy, risk,
+   criterion, scope, or limit changes require fresh readiness and
+   `jstack_loop_revise`.
 9. Call `jstack_loop_finalize` only with current evidence for the original
-   baseline. Complete the native Goal only after a passed completion receipt.
+   baseline, including the current specialist handoff receipt for multi-agent
+   modes. Complete the native Goal only after a passed completion receipt.
    On user stop, call `jstack_loop_stop` and preserve the durable record.
 
 ## Establish A Program Contract
@@ -114,8 +125,10 @@ worktree. Default implementation work to `L2`.
 3. For each scheduled phase, create a bounded child loop whose goal, mode,
    autonomy, risk, paths, and acceptance criteria exactly match the phase.
    Carry every program- and phase-level blocked action into that child; loop
-   defaults may strengthen the list but never remove a prohibition. Complete
-   child goal readiness and start normally.
+   defaults may strengthen the list but never remove a prohibition. Route and
+   bind phase-specific capabilities during child goal readiness; do not reuse a
+   capability selection from a different phase goal. Complete child readiness
+   and start normally.
 4. Bind the active child with `jstack_program_phase_bind`, using a fresh stable
    `operation_id`. Execute it under its approved JStack delivery workflow.
 5. Finalize the child loop with current evidence. Pass its completion receipt

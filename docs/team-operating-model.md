@@ -6,6 +6,10 @@ JStack is a lead-agent workflow. The Lead Engineer owns scope, dispatch,
 implementation decisions, verification, and handoff. Specialists reduce risk;
 they do not replace accountability.
 
+Versioned specialist capabilities refine how a selected role works on the
+current goal. They do not create another command or roster and never expand the
+role's permissions.
+
 ## Command Modes
 
 - `/j-stack-dev`: Lead Engineer only. Use another command when subagents are
@@ -53,6 +57,8 @@ they do not replace accountability.
 - Subagents are read-only by default.
 - Only one writer may own a file/module scope.
 - Subagents must not spawn other subagents.
+- Capabilities must use the exact deterministic assignment from the team plan
+  and inherit the role's existing permission and write scope.
 - No deploy, push, merge, deletion, reset, production mutation, DNS/SSL change,
   or live-system restart without explicit user approval.
 
@@ -65,8 +71,12 @@ Every specialist response must include:
 - findings or changes
 - blockers
 - residual risk
+- skipped checks and recommended next action
 
-The Lead must synthesize conflicts and produce the final engineering judgment.
+The response and privacy-safe telemetry must pass `jstack_specialist_result`.
+The Lead must then validate the complete current receipt set with
+`jstack_specialist_handoff_check`, resolve evidence-backed contradictions, and
+produce the final engineering judgment.
 
 ## Coordination Packet
 
@@ -81,6 +91,7 @@ must define:
 - read/write permissions
 - file ownership map
 - evidence contract
+- exact capability plan and per-role capability IDs
 - conflict rule
 - stop conditions
 - verification gate

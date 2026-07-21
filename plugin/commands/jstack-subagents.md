@@ -50,6 +50,7 @@ coordination packet:
 - `rolesNotUsed`: skipped roles and reasons
 - `readWritePermissions`
 - `fileOwnershipMap`
+- actual `capabilityPlan` and exact per-role `capabilityIds`
 - `evidenceContract`
 - `conflictRule`
 - `stopConditions`
@@ -64,6 +65,17 @@ Specialists are read-only by default. The Lead may implement. If an editing
 specialist is used, only a Builder may edit implementation, and only inside an
 explicitly assigned disjoint write scope.
 
+Dispatch only the capability subset routed to each existing role. Capabilities
+add method, required evidence, stop conditions, audit domains, and loop
+controls; they never grant tools, writes, delegation, approvals, or release
+authority. Each role, including Lead, returns `jstack.specialist.result.v1`
+plus metadata-only `jstack.specialist.telemetry.v1`. The Lead calls
+`jstack_specialist_result` for every exact assignment, then
+`jstack_specialist_handoff_check` before completion. Do not store raw prompts,
+messages, tool arguments, command/model output, source contents, or secrets.
+Missing, stale, partial, permission-unsafe, capability-drifted, or contradictory
+receipt sets block handoff until explicitly reconciled with evidence.
+
 The MCP plans and validates the team; it does not spawn one. Use platform
 multi-agent tools for actual dispatch, collection, and closure. Finish in the
 order outcome, evidence, residual risk, then an optional three-line mastery
@@ -75,3 +87,6 @@ If more than three specialists are materially required, stop and recommend
 If multi-agent tools are unavailable, write `No subagents deployed:` and give
 the concrete reason. Retain `team_mode="smart-subagents"` in planning and
 apply its evidence rubric, while one Lead performs the actual work.
+
+For an active multi-agent JStack loop, pass the current validated
+`specialist_handoff_receipt` to every checkpoint and finalization.

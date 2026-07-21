@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/capability-catalog.v1.schema.json",
+  "title": "JStack Specialist Capability Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogVersion", "sourceProvenance", "capabilities"],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.capability.catalog.v1"
+    },
+    "catalogVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "license", "adaptedFiles"],
+      "properties": {
+        "repository": {
+          "const": "https://github.com/msitarzewski/agency-agents"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "license": {
+          "const": "MIT"
+        },
+        "adaptedFiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourcePath"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/capability"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 64
+    },
+    "sourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "summary",
+        "priority",
+        "activation",
+        "sourceFiles",
+        "allowedRoles",
+        "defaultRoles",
+        "patterns",
+        "classifications",
+        "method",
+        "requiredEvidence",
+        "stopConditions",
+        "auditDomains",
+        "loopControls",
+        "permissionMode"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "activation": {
+          "enum": ["default", "matched"]
+        },
+        "sourceFiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourcePath"
+          }
+        },
+        "allowedRoles": {
+          "$ref": "#/$defs/roles"
+        },
+        "defaultRoles": {
+          "$ref": "#/$defs/roles"
+        },
+        "patterns": {
+          "type": "array",
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "classifications": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["trivial", "normal", "architecture", "product", "ui_product", "security_compliance", "data_financial", "production_release"]
+          }
+        },
+        "method": {
+          "$ref": "#/$defs/textList"
+        },
+        "requiredEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "stopConditions": {
+          "$ref": "#/$defs/textList"
+        },
+        "auditDomains": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["correctness", "security", "maintainability", "architecture", "performance", "supply-chain", "testability", "operations", "data-integrity", "api-compatibility"]
+          }
+        },
+        "loopControls": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "permissionMode": {
+          "const": "inherit-role"
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["lead", "architect", "investigator", "builder", "reviewer", "qa", "security", "devops", "product", "quant", "docs"]
+      }
+    },
+    "textList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    }
+  }
+}

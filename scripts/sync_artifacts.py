@@ -13,6 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 FILE_MAP = {
+    ROOT / "THIRD_PARTY_NOTICES.md": [
+        ROOT / "mcp" / "jstack" / "THIRD_PARTY_NOTICES.md",
+        ROOT / "plugin" / "THIRD_PARTY_NOTICES.md",
+    ],
     ROOT / "mcp" / "jstack" / "jstack_mcp_server.py": [
         ROOT / "plugin" / "mcp" / "jstack_mcp_server.py",
     ],
@@ -49,6 +53,11 @@ for source in sorted((ROOT / "mcp" / "jstack" / "audit").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "audit")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "audit" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "capabilities").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "capabilities")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "capabilities" / relative]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "loop").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
@@ -94,6 +103,10 @@ FILE_MAP[ROOT / "skills" / "jstack-dev" / "references" / "mastery-system.md"].ap
 
 TREE_MIRRORS = (
     (ROOT / "mcp" / "jstack" / "audit", ROOT / "plugin" / "mcp" / "audit"),
+    (
+        ROOT / "mcp" / "jstack" / "capabilities",
+        ROOT / "plugin" / "mcp" / "capabilities",
+    ),
     (ROOT / "mcp" / "jstack" / "loop", ROOT / "plugin" / "mcp" / "loop"),
     (ROOT / "mcp" / "jstack" / "program", ROOT / "plugin" / "mcp" / "program"),
     (ROOT / "mcp" / "jstack" / "schemas", ROOT / "plugin" / "mcp" / "schemas"),

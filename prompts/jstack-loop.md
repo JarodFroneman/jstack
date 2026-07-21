@@ -23,6 +23,16 @@ for confirmation, and start with a unique stable `operation_id`. Schedule each
 phase through an exact bounded child loop, bind and complete it with current
 receipts, and revalidate declared outputs.
 
+Route capabilities during each bounded goal's readiness and pass the same
+explicit `capability_ids` to start or material revision. The readiness digest
+and durable loop contract bind the catalog/selection digests, exact role
+assignments, audit domains, loop controls, and no-permission-expansion
+invariant. Capability selection never changes staffing authority. Multi-agent
+checkpoint and finalization calls require the current
+`specialist_handoff_receipt` returned after validating every role's structured
+result and metadata-only telemetry; missing, stale, incomplete, drifted, or
+unreconciled receipts block progress.
+
 Treat human and external gates as durable wait states that suspend active time.
 Codex must not sign human approval challenges. Use fresh operation IDs for
 state changes and reuse an ID only to retry the exact same payload.

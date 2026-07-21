@@ -56,9 +56,12 @@ the contract's fixed delivery mode. Let `jstack_loop_checkpoint` and
    identity, rollback, monitoring, and public smoke evidence without claiming
    commit-bound JStack receipts or release certification.
 6. Use `jstack_plan` with the exact command `team_mode`,
-   `quality_level="enterprise"`, and the requested `learning_mode`.
+   `quality_level="enterprise"`, and the requested `learning_mode`. Treat its
+   versioned `capabilityPlan` as part of the execution contract; do not invent,
+   rename, or silently drop routed capability IDs.
 7. For specialist modes, use `jstack_team_plan`, build the actual coordination
-   packet, and pass that object to `jstack_dispatch_check`.
+   packet including `capabilityPlan`, and pass that object plus the exact
+   per-role `capabilityIds` to `jstack_dispatch_check`.
 8. In `git` mode, use `jstack_preflight` before substantial implementation and
    before handoff.
 
@@ -143,6 +146,19 @@ independently usable.
 
 - State outcome, files changed, exact checks and results, residual risk, and
   open work.
+- In Git mode, create a `jstack.specialist.result.v1` result and
+  `jstack.specialist.telemetry.v1` metadata envelope for every routed role,
+  including the Lead. Call `jstack_specialist_result` with the exact team role
+  and capability IDs, then call `jstack_specialist_handoff_check` before the
+  final completion claim.
+- Telemetry contains identifiers, timestamps, status, tool names/statuses,
+  evidence references, and optional counts only. Never store raw prompts,
+  messages, tool arguments, command output, model output, secrets, or source
+  contents. Let the MCP derive input and output digests.
+- A structurally valid partial or blocked receipt is evidence of the stop, not
+  a pass. Missing roles, stale/tampered receipts, capability drift, overlapping
+  change ownership, unresolved contradictions, or an open Lead resolution
+  block handoff.
 - Use `jstack_context_save` for resumable substantial work.
 - Update durable memory only for durable facts or decisions.
 - Never call work production-ready when a required gate is absent.
@@ -155,6 +171,7 @@ Before dispatch, create a coordination packet containing:
 - `mode`, `rolesUsed`, and `rolesNotUsed`
 - `readWritePermissions`
 - `fileOwnershipMap` for every writer
+- the actual versioned `capabilityPlan` and exact per-role `capabilityIds`
 - `evidenceContract` and `stopConditions`
 - `conflictRule`, `verificationGate`, and `handoffGate`
 
@@ -163,6 +180,18 @@ must be explicit and disjoint. Documentation may write documentation only.
 All other specialists are read-only. Unknown roles, traversal, wildcard/root
 ambiguity, ancestor overlap such as `src` versus `src/auth`, or a boolean claim
 that a packet exists block dispatch.
+
+Capability packs add methods, required evidence, stop conditions, audit
+domains, and loop controls to an existing role. They never add tools, write
+permission, scope, delegation authority, approval authority, or release
+authority. Give each specialist only its routed capability subset. Require the
+specialist to return the structured result fields, privacy-safe telemetry, and
+all capability-required evidence kinds. The Lead issues/validates receipts and
+records an explicit evidence-backed resolution for contradictory findings.
+
+For `/j-stack-dev`, the same registry upgrades the Lead's method without
+spawning another agent. Use `team_role_ids=["lead"]`; never interpret a
+capability as permission to violate single-lead command authority.
 
 For full-team work use waves:
 

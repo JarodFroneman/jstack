@@ -26,7 +26,9 @@ planning call.
    mounted. Use `jstack_detect_project`, then branch on `evidenceMode`.
 4. For `git`, use `jstack_policy_check`,
    `jstack_plan(team_mode="single-lead", learning_mode=resolved_learning_mode)`,
-   and `jstack_preflight` when applicable.
+   apply the returned Lead `capabilityIds`, and use `jstack_preflight` when
+   applicable. Capability packs specialize the Lead but never authorize
+   subagents or expand permissions.
 5. For `artifact-only`, state
    `MCP mounted; project binding is artifact-only.`, use `jstack_plan`, do not
    call tools listed in `blockedTools`, and gather direct hashes, tests, backup,
@@ -37,7 +39,13 @@ planning call.
    risk class. In `git` mode, QA execution must use the exact reviewed
    revision/fingerprint and return evidence receipts. In `artifact-only` mode,
    preserve direct evidence and its limitation instead.
-8. Report outcome, evidence, residual risk, then an optional three-line mastery
+8. In Git mode, submit the Lead's exact `jstack.specialist.result.v1` and
+   metadata-only `jstack.specialist.telemetry.v1` through
+   `jstack_specialist_result`, then validate the one-role set with
+   `jstack_specialist_handoff_check`. Never store raw prompts, messages, tool
+   arguments, command/model output, source contents, or secrets. A failed,
+   partial, stale, or capability-incomplete receipt blocks completion.
+9. Report outcome, evidence, residual risk, then an optional three-line mastery
    capsule.
 
 If the task grows beyond a single Lead Engineer, stop and recommend

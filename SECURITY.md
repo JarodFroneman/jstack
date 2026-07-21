@@ -49,6 +49,33 @@ server time and rechecked when release readiness consumes the receipt.
 The original `jstack_security_audit` remains a bounded heuristic credential
 scan. A broad audit result never replaces its security receipt.
 
+## Specialist Capability Safety
+
+The capability catalog is declarative and permission-neutral. Every entry must
+use `permissionMode: inherit-role`; a capability cannot add an agent, grant a
+tool, turn a read-only role into a writer, widen file ownership, weaken policy,
+or authorize a protected action. Unknown or unauthorized explicit capability
+IDs and catalog validation errors fail closed.
+
+Specialist results are accepted only as bounded structured data. Result
+receipts bind the exact goal digest, team, role, capabilities, catalog and
+selection digests, Git state, policy, JStack version, result, telemetry, and
+server session. Handoff validation rejects missing or duplicate roles,
+tampering, staleness, write-scope violations, failed results, and unresolved
+contradictions. These HMAC receipts protect against accidental or caller-side
+alteration during one server session; they do not prove that model-authored
+claims are true or defend against compromise of the same operating-system
+account.
+
+Specialist telemetry is intentionally minimized. It permits bounded IDs,
+timestamps, status, tool names/statuses, evidence references, derived digests,
+and optional counts. `rawContentStored` must be false. Prompts, messages, tool
+arguments, model output, hidden reasoning, and arbitrary logs have no schema
+fields; recognized raw-content keys and secret-like values are rejected.
+Callers must not disguise raw content as metadata. Metadata can still reveal
+activity patterns or project structure, so protect it as local operational
+evidence.
+
 ## Loop Safety
 
 Loop state is stored under `~/.jstack/loops/` with private directories and
@@ -72,6 +99,11 @@ fingerprint, policy, tool version, and revision base. Repository context sources
 must remain inside the Git root and cannot be symlinks. The receipt prevents a
 caller from silently changing the assessed target; it does not prove user
 statements, external sources, or model inferences are true.
+
+The loop's capability contract is part of readiness, durable state, material
+revision, and completion binding. Smart-subagent and full-team checkpoints and
+finalization require a current specialist handoff receipt. This requirement
+does not make agent execution sandboxed and does not extend loop autonomy.
 
 Loop mastery Stage 9 uses a separate assessor HMAC key from
 `JSTACK_LOOP_ASSESSOR_HMAC_KEY`. Keep it outside the repository. It signs the
@@ -99,7 +131,7 @@ Parallel phases require explicit declarations, linked worktrees from the same
 Git common directory, disjoint top-level scopes, and policy capacity. This is a
 conservative conflict check, not proof that changes are semantically mergeable.
 
-Human gates use the `signed-local` provider in 0.5. Identity configuration
+Human gates currently use the `signed-local` provider. Identity configuration
 contains role and key-environment bindings; keys must remain outside Git and
 MCP arguments. The operator signer validates and signs an exact challenge
 outside Codex. HMAC proves possession of the shared local key, not enterprise

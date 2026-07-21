@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.6.0 - Unreleased
+
+### Added
+
+- Added a strict, versioned 14-pack specialist capability registry that routes
+  task-specific methods, required evidence, stop conditions, audit domains, and
+  loop controls to JStack's existing core roles without adding a sixth command.
+- Added `jstack_capability_catalog`, `jstack_specialist_result`, and
+  `jstack_specialist_handoff_check` with published catalog, result, and
+  telemetry schemas.
+- Added schema-validated specialist results, privacy-minimized execution
+  telemetry, per-role session receipts, complete-team handoff receipts,
+  contradiction reconciliation, and change-ownership enforcement.
+- Added adversarial coverage for catalog corruption, unauthorized explicit
+  capabilities, permission elevation, missing evidence, raw-content telemetry,
+  receipt tampering/staleness, missing roles, contradictions, audit routing,
+  and loop handoff gates.
+
+### Changed
+
+- Upgraded `/j-stack-dev`, `/jstack-subagents`, and `/jstack-full-team` to use
+  deterministic role-to-capability assignments while preserving their existing
+  staffing and permission boundaries.
+- Upgraded `/jstack-audit` so bounded specialist routing can strengthen—but
+  never remove—required audit domains, with catalog and selection binding in
+  its signed session and final receipt.
+- Upgraded `/jstack-loop` to persist capability contracts through readiness,
+  start, revision, checkpoint, and completion. Multi-agent loop evidence now
+  requires a current specialist handoff receipt.
+- Extended deterministic packaging so the canonical capability registry and
+  schemas are mirrored and inventory-checked in the umbrella plugin.
+
+### Security
+
+- Telemetry exposes no raw prompt, message, tool-argument, model-output, or log
+  fields; recognized raw-content keys and secret-like values are rejected.
+  Input and output digests are derived by the server.
+- Capability entries must inherit role permissions; unknown fields, roles,
+  unsafe source paths, invalid patterns, duplicate IDs, routing drift, and
+  permission expansion fail closed.
+
+### Attribution
+
+- Adapted selected engineering, testing, security, and handoff guidance from
+  `msitarzewski/agency-agents` at commit
+  `459dce837db3bdfdc4763d3fefd1fd854e73c8f1` under MIT. Exact source paths and
+  the upstream license notice are in `THIRD_PARTY_NOTICES.md`; no upstream
+  installer, agent roster, runtime, or permission model was imported.
+
 ## 0.5.0 - 2026-07-16
 
 - Added a phase-count-agnostic Program -> Phase orchestration protocol above

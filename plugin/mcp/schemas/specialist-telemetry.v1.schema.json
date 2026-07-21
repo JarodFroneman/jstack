@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/specialist-telemetry.v1.schema.json",
+  "title": "JStack Privacy-safe Specialist Telemetry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "traceId",
+    "spanId",
+    "startedAt",
+    "completedAt",
+    "status",
+    "toolCalls",
+    "inputDigest",
+    "outputDigest",
+    "rawContentStored"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.specialist.telemetry.v1"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$"
+    },
+    "traceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "spanId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["success", "partial", "blocked", "error"]
+    },
+    "toolCalls": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["toolName", "status"],
+        "properties": {
+          "toolName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "enum": ["success", "error", "blocked", "not-run"]
+          },
+          "evidenceRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "inputDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "outputDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000
+    },
+    "inputTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "outputTokens": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    "rawContentStored": {
+      "const": false
+    }
+  }
+}

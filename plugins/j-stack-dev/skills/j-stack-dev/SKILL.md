@@ -19,12 +19,22 @@ Default behavior:
    - `artifact-only`: state `MCP mounted; project binding is artifact-only.`, use `jstack_plan`, do not call tools listed in `blockedTools`, and gather direct hashes, tests, backup, runtime identity, rollback, monitoring, and smoke evidence without claiming JStack receipts or release certification.
 5. Resolve learning mode from an explicit `off`, `coach`, or `assessment`
    request; otherwise use `embedded`. Call `jstack_plan` with
-   `team_mode="single-lead"` and that resolved mode.
+   `team_mode="single-lead"` and that resolved mode. Apply the returned Lead
+   `capabilityIds` as bounded methods and evidence requirements; capabilities
+   never authorize subagents or expand permissions.
 6. Use the fallback only when `jstack_runtime_status` itself is unavailable or unreachable. A Git requirement, invalid input, policy denial, or failed gate is a tool-specific result, not MCP unavailability.
 7. Respect project `AGENTS.md`, safety rules, branch/deploy rules, and explicit user approvals.
 8. When an active JStack loop supplies a `loopId`, execute only the current
    single-lead iteration. Let `jstack_loop_checkpoint` and
    `jstack_loop_finalize` own convergence and terminal status.
+
+For Git-backed handoff, submit the Lead's exact `jstack.specialist.result.v1`
+and metadata-only `jstack.specialist.telemetry.v1` to
+`jstack_specialist_result`, then validate the one-role receipt set with
+`jstack_specialist_handoff_check`. Store no raw prompts, messages, tool
+arguments, command/model output, source contents, or secrets in telemetry.
+Missing capability evidence, a partial/blocked result, stale receipt, or failed
+handoff check prevents a completion claim.
 
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.
