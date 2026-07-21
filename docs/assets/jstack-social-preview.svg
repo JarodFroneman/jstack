@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
-  <title id="title">JStack - Evidence-driven engineering control plane for Codex</title>
+  <title id="title">JStack - Evidence-driven engineering control plane for AI coding agents</title>
   <desc id="desc">A dark professional banner showing the JStack identity and its program, delivery, and evidence layers.</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
@@ -60,7 +60,7 @@
     <text x="166" y="124" fill="#F8FAFC" font-size="36" font-weight="750">JSTACK</text>
     <text x="72" y="216" fill="#F8FAFC" font-size="52" font-weight="720">Evidence-driven</text>
     <text x="72" y="276" fill="#F8FAFC" font-size="52" font-weight="720">engineering control</text>
-    <text x="72" y="336" fill="#F8FAFC" font-size="52" font-weight="720">plane for Codex.</text>
+    <text x="72" y="336" fill="#F8FAFC" font-size="52" font-weight="720">plane for AI agents.</text>
     <text x="74" y="378" fill="#94A3B8" font-size="19" font-weight="450">Bounded autonomy. Verifiable delivery. Human authority.</text>
 
     <g transform="translate(72 412)">
@@ -70,7 +70,7 @@
       <rect x="156" width="94" height="34" rx="6" fill="#0F2130" stroke="#94A3B8" stroke-opacity="0.22"/>
       <text x="181" y="23" fill="#CBD5E1" font-size="14" font-weight="650">MIT</text>
       <rect x="262" width="162" height="34" rx="6" fill="#0F2130" stroke="#94A3B8" stroke-opacity="0.22"/>
-      <text x="283" y="23" fill="#CBD5E1" font-size="14" font-weight="650">Python 3.9+</text>
+      <text x="278" y="23" fill="#CBD5E1" font-size="14" font-weight="650">CLAUDE PREVIEW</text>
     </g>
 
     <g transform="translate(74 510)">

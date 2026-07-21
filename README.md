@@ -1,8 +1,8 @@
 <div align="center">
-  <img src="docs/assets/jstack-social-preview.svg" alt="JStack: evidence-driven engineering control plane for Codex" width="100%">
+  <img src="docs/assets/jstack-social-preview.svg" alt="JStack: evidence-driven engineering control plane for AI coding agents" width="100%">
 
   <h1>JStack</h1>
-  <p><strong>Evidence-driven engineering control plane for Codex.</strong></p>
+  <p><strong>Evidence-driven engineering control plane for AI coding agents.</strong></p>
   <p>Bounded autonomy. Verifiable delivery. Human authority.</p>
 
   <p>
@@ -25,11 +25,16 @@
 
 ---
 
-JStack is an independent, open-source Codex workflow, plugin suite, MCP control
-plane, and deliberate-practice system for professional AI-assisted software
-delivery. It gives one engineer or a supervised team a consistent operating
-model for planning, implementation, review, testing, security, release
-readiness, durable goal loops, and multi-phase programs.
+JStack is an independent, open-source AI engineering workflow, plugin suite,
+MCP control plane, and deliberate-practice system for professional
+AI-assisted software delivery. It gives one engineer or a supervised team a
+consistent operating model for planning, implementation, review, testing,
+security, release readiness, durable goal loops, and multi-phase programs.
+
+Codex is the fully packaged host today. Claude Code can connect to JStack's
+standards-based stdio MCP tool plane as a preview integration; host-native
+commands and long-running continuation remain explicitly host-specific rather
+than being presented as feature-equivalent.
 
 > [!IMPORTANT]
 > JStack does not declare generated code "enterprise-ready." It raises
@@ -113,11 +118,28 @@ program orchestration in addition to the delivery, evidence, audit, loop,
 continuity, specialist-review, and mastery tool families. Legacy `gstack_*`
 aliases remain available for compatibility.
 
+## Host Compatibility
+
+JStack separates its portable MCP control plane from host-specific command and
+continuation surfaces.
+
+| Host | Status | Available today |
+| --- | --- | --- |
+| Codex Desktop and Codex CLI | Full | Five command plugins, skills, prompts, MCP tools, subagent workflows, and native Goal composition |
+| Claude Code | MCP preview | Manual local stdio MCP connection to the complete `jstack_*` tool inventory; Claude-native command packaging and continuation parity are not yet shipped |
+| Other MCP-capable coding agents | Protocol-level | The JSONL stdio server may be connected manually, but unlisted hosts are not release-tested or claimed as supported |
+
+The control plane is model-agnostic where the MCP protocol permits it. The
+quality claim is deliberately narrower: a host is fully supported only when
+its install, commands, permissions, continuation semantics, and evidence flow
+are covered by JStack's release tests.
+
 ## Quick Start
 
 ### Requirements
 
-- Codex Desktop or Codex CLI with MCP support
+- Codex Desktop or Codex CLI for the fully packaged workflow
+- Claude Code for the optional MCP preview
 - Git for commit-bound evidence and release controls
 - Python 3.9 or newer
 - macOS, Linux, or Windows
@@ -139,7 +161,7 @@ python3 mcp/jstack/smoke_test.py
 
 On Windows, replace `python3` with `python` where required.
 
-### 3. Install
+### 3. Install In Codex
 
 For the simplest transactional installation:
 
@@ -163,15 +185,15 @@ Restart Codex or open a new task, then confirm that the JStack commands and
 validating a managed environment.
 
 For the clean five-plugin command layout, custom `CODEX_HOME` locations,
-upgrades, rollback, and duplicate-command prevention, read the
+Claude Code MCP preview, upgrades, rollback, and duplicate-command prevention, read the
 [installation guide](docs/installation.md).
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    U[Codex operator] --> S[Skills and slash commands]
-    S --> M[JStack MCP control plane]
+    U[AI coding-agent operator] --> H[Host command or MCP integration]
+    H --> M[JStack MCP control plane]
 
     M --> P[Policy and project binding]
     M --> D[Delivery and team coordination]
@@ -278,7 +300,7 @@ adversarial tests.
 
 | Start here | Deep dive |
 | --- | --- |
-| [Installation](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |

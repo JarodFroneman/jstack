@@ -9,8 +9,8 @@ basis. It does not include a commercial support agreement or response-time SLA.
 2. Read the [installation guide](docs/installation.md) and relevant system
    documentation under `docs/`.
 3. Run `python3 mcp/jstack/smoke_test.py` against the installed MCP payload.
-4. Capture the JStack version, Codex surface, operating system, Python version,
-   selected command, project binding mode, and sanitized error output.
+4. Capture the JStack version, host/runtime surface, operating system, Python
+   version, selected command, project binding mode, and sanitized error output.
 5. Remove credentials, tokens, private source, and personal information from
    every log or screenshot.
 

@@ -19,10 +19,11 @@ body:
   - type: dropdown
     id: surface
     attributes:
-      label: Codex surface
+      label: Host / runtime
       options:
         - Codex Desktop
         - Codex CLI
+        - Claude Code MCP preview
         - Direct MCP JSON-RPC client
         - Installer or packaging workflow
         - Other

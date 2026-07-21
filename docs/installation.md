@@ -1,14 +1,15 @@
 # Installing JStack
 
-JStack supports two installation layouts. Choose one command-distribution
-layout and do not combine them.
+JStack ships a fully packaged Codex experience and a Claude Code MCP preview.
+Choose one Codex command-distribution layout and do not combine those layouts.
 
 ## Requirements
 
-- Codex Desktop or Codex CLI with MCP support
 - Python 3.9 or newer
 - Git for commit-bound workflows
 - A local clone of this repository
+- Codex Desktop or Codex CLI for full command and continuation support, or
+  Claude Code for the MCP preview
 
 ```bash
 git clone https://github.com/JarodFroneman/jstack.git
@@ -25,7 +26,19 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-## Layout A: Transactional Direct Install
+## Host Support
+
+| Host | Support level | Boundary |
+| --- | --- | --- |
+| Codex Desktop and Codex CLI | Full | Release-tested plugins, prompts, skills, MCP tools, and native Goal composition |
+| Claude Code | MCP preview | Complete MCP tool inventory over local stdio; no Claude-native command package or automatic equivalent of Codex Goal continuation yet |
+| Other MCP clients | Protocol-level | Manual connection may work, but JStack does not claim release-tested host compatibility |
+
+The MCP server is portable. Command discovery, permissions, subagent behavior,
+and continuation are host responsibilities, so MCP connectivity alone is not
+presented as complete workflow parity.
+
+## Codex Layout A: Transactional Direct Install
 
 This is the shortest path for an individual installation. It installs the
 canonical prompts, skills, mastery curricula, shared MCP server, and MCP
@@ -53,7 +66,7 @@ The installer stages the complete payload before activation. A late failure
 restores every affected target. The previous Codex configuration is retained
 as a backup after a successful installation.
 
-## Layout B: Dedicated Command Plugins
+## Codex Layout B: Dedicated Command Plugins
 
 This layout provides five clean command surfaces:
 
@@ -113,9 +126,37 @@ Use either:
 - the five dedicated plugins plus one shared MCP server; or
 - the umbrella plugin by itself.
 
+## Claude Code MCP Preview
+
+[Claude Code supports local stdio MCP servers](https://docs.anthropic.com/en/docs/claude-code/mcp),
+so it can connect directly to JStack's JSONL server. Use absolute paths for
+both Python and the server:
+
+```bash
+claude mcp add jstack --scope user -- \
+  /absolute/path/to/python3 \
+  /absolute/path/to/jstack/mcp/jstack/jstack_mcp_server.py
+```
+
+Verify the registration:
+
+```bash
+claude mcp get jstack
+```
+
+Then open Claude Code, run `/mcp`, and confirm that the `jstack_*` tools are
+available. Start with `jstack_runtime_status` and `jstack_detect_project`.
+
+This preview exposes the control-plane tools, but it does not install JStack's
+five Codex command plugins. The current loop skill also composes continuation
+with Codex Goal mode; Claude operators must supervise continuation manually
+until a Claude-native adapter and its release tests ship. Do not interpret MCP
+connectivity as unattended execution or full host parity.
+
 ## Verify The Installation
 
-Restart Codex or open a new task after changing plugins or MCP configuration.
+Restart the selected host or open a new task after changing plugins or MCP
+configuration.
 
 Verify the shared server directly:
 
@@ -123,7 +164,7 @@ Verify the shared server directly:
 python3 ~/.codex/mcp/jstack/smoke_test.py
 ```
 
-Verify installed plugins:
+Verify installed Codex plugins:
 
 ```text
 codex plugin list --marketplace personal
