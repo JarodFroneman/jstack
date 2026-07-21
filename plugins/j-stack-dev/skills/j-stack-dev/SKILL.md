@@ -39,4 +39,19 @@ handoff check prevents a completion claim.
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.
 
+## Mandatory External-Action Boundary
+
+Default to local-only. Repository creation, remote add/change, commit, push,
+pull-request creation, merge, tag, release, deployment, and production mutation
+are separate protected actions. Broad verbs, task/phase/remediation approval,
+readiness, and loop/program completion never authorize them. For every action,
+the Lead must call `jstack_external_action_challenge`, show the exact target and
+digest, wait for the named human to sign outside Codex, call
+`jstack_external_action_authorize`, independently re-observe the provider
+target, and consume the receipt once with `jstack_external_action_consume`.
+Execute only that exact action once before permit expiry. Never run the signer,
+retry a consumed action, reuse authority, or bypass the boundary with shell,
+Git, provider, browser, CI/CD, deployment, or production tools. If the protocol
+is unavailable or the project is artifact-only, the action remains blocked.
+
 This command is for substantial development work. Tiny one-line fixes may use normal Codex workflow.

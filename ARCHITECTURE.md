@@ -7,6 +7,7 @@ Canonical sources live in:
 - `mcp/jstack/jstack_mcp_server.py`
 - `mcp/jstack/capabilities/`
 - `mcp/jstack/audit/`
+- `mcp/jstack/authorization/`
 - `mcp/jstack/loop/`
 - `mcp/jstack/program/`
 - `mcp/jstack/schemas/`
@@ -36,13 +37,15 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   evidence-bound finalization
 - durable Program -> Phase DAGs, intervention gates, child proofs, and final
   integration acceptance
+- signed exact external-action challenges, durable one-time consumption, and
+  short-lived execution permits
 - commit-bound HMAC evidence receipts
 - release readiness evaluation
 - local context and mastery records
 
-The MCP never spawns platform subagents or performs a deployment. Codex's
-platform tools perform real agent dispatch. Project-specific release tools
-perform real production mutation only after separate authorization.
+The MCP never spawns platform subagents and never performs repository, Git,
+provider, deployment, or production actions. Codex's platform tools perform
+real dispatch and action execution only after the applicable JStack boundary.
 
 ## Specialist Capability Protocol
 
@@ -131,6 +134,33 @@ contracts, snapshots, events, operation records, and pending transactions live
 under `~/.jstack/programs` and fail closed on integrity drift. The live program
 manifest never mounts into the Git repository.
 
+## External-Action Authorization Protocol
+
+Every project defaults to local-only. Eleven separately named actions cover
+repository creation, remote add/change, commit, push, pull-request creation,
+merge, tag creation, release creation, deployment, and production mutation.
+One challenge can contain exactly one action.
+
+The challenge binds exact provider, owner, repository, visibility, remote,
+branch, tag, commit, and environment fields to the absolute project, complete
+workspace fingerprint, policy, current HEAD, attached branch, remote snapshot,
+tool version, and MCP session. A configured identity holding the action's exact
+role signs the canonical challenge outside Codex. The server verifies the
+signature and unchanged subject before issuing an unconsumed authorization.
+
+Immediately before execution, the caller supplies a fresh provider observation
+of the same exact target. Destructive consumption revalidates every binding and
+returns a permit valid for at most 60 seconds. Authorization state is private
+and session-sealed under `~/.jstack/external-actions`. In-process consumption
+memory plus sealed state rejects same-session rollback and replay; MCP restart
+invalidates every prior receipt.
+
+The protocol grants no arbitrary execution capability. The external executor
+must perform one exact operation at most once, and command contracts forbid
+bypassing the permit through shell, Git, provider, browser, CI/CD, deployment,
+or production tools. This is a mandatory JStack workflow boundary, not an
+operating-system interceptor.
+
 ## Audit Protocol
 
 `jstack_audit` creates a state-bound coverage contract and signed audit session.
@@ -198,6 +228,12 @@ all phase proof digests, current final evidence, project fingerprint, and
 program event head. Durable child proof is revalidated against its loop event
 chain and current declared output hashes.
 
+External-action authorization receipts additionally bind one action, the exact
+target and required role, challenge and attestation digests, current project
+subject, policy, tool version, and session. Consumption records bind a unique
+operation ID and fresh provider-observation digest. A permit is never a result
+receipt and cannot be reused, retried, widened, or promoted to another action.
+
 ## Security Boundary
 
 Git inspection neutralizes common external diff, prompt, fsmonitor, and global
@@ -225,3 +261,9 @@ The signed-local program identity provider uses environment-held HMAC keys.
 It proves shared-key possession and configured role only; it is not SSO or
 non-repudiation. Codex prepares and verifies challenges but must not sign on a
 human approver's behalf.
+
+The external-action signer has the same same-account/shared-key limitation and
+adds mandatory full challenge-digest confirmation. It prevents broad intent
+from being converted into a compliant JStack permit, but provider protections,
+least-privilege credentials, host tool restrictions, and an OS sandbox remain
+necessary against a malicious executor or account compromise.

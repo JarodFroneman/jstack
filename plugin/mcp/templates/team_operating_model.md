@@ -42,8 +42,11 @@ strictly single-lead.
 - Pass the actual coordination packet to `jstack_dispatch_check`; a boolean
   assertion is not accepted.
 - Subagents must not spawn other subagents.
-- No deploy, push, merge, deletion, reset, production mutation, DNS/SSL change,
-  or live-system restart without explicit user approval.
+- No repository creation, remote add/change, commit, push, pull-request
+  creation, merge, tag, release, deployment, deletion, reset, production
+  mutation, DNS/SSL change, or live-system restart without the exact applicable
+  boundary. The eleven protected external actions each require a separately
+  signed and consumed JStack permit; staffing approval never counts.
 
 ## Specialist Contract
 

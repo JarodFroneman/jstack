@@ -130,17 +130,38 @@ independently usable.
 
 ### Release
 
-- Release/deploy/merge/production mutation requires explicit user approval and
-  project authorization.
+- Default every project to local-only work. Repository creation, remote
+  add/change, commit, push, pull-request creation, merge, tag creation, release
+  creation, deployment, and production mutation are eleven separate protected
+  actions.
+- `implement`, `build`, `finish`, `ship`, `deploy`, `release`, phase approval,
+  remediation approval, team approval, and loop/program completion never grant
+  any protected-action authority, even when those words appear in the task.
+- Before each protected action, call `jstack_external_action_challenge` with
+  one action and the exact provider, owner, repository, visibility, remote name
+  and URL, branch, tag or `not-applicable`, full commit ID, and target
+  environment. Show the complete target and digest, then wait for the named
+  human to sign outside Codex. Never run the signer or fabricate its token.
+- Pass the signed token to `jstack_external_action_authorize`. Immediately
+  before execution, independently re-observe the provider target and call
+  `jstack_external_action_consume` with a fresh operation ID. Execute that one
+  exact action at most once before the returned permit expires. Failure,
+  retry, target drift, state drift, or the next action requires a new challenge.
+- Never bypass this boundary with shell, Git, GitHub/provider, browser, CI/CD,
+  deployment, or production tools. If the three authorization tools are
+  unavailable or the project is `artifact-only`, the protected action is
+  blocked; local editing, review, tests, and artifact generation may continue.
 - Use `jstack_ship_check` and `jstack_release_readiness` with current QA and
   security receipts.
 - Readiness requires a clean committed subject, every discovered required
   command passing for that exact fingerprint, complete security evidence,
   approver reference, rollback plan, and monitoring or canary plan.
-- Never equate implementation completion with deployment completion.
-- `artifact-only` work may follow an explicitly approved operational release
-  boundary, but JStack release readiness remains unavailable until the
-  authoritative source has a committed Git repository.
+- Release readiness is evidence only and `executionAuthorized` remains false.
+  Never equate implementation completion or readiness with action authority or
+  deployment completion.
+- `artifact-only` work may prepare direct operational evidence, but JStack
+  release readiness and v0.7 protected-action permits remain unavailable until
+  the authoritative source has a committed Git repository.
 
 ### Handoff
 

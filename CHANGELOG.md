@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.7.0 - 2026-07-21
+
+### Added
+
+- Added a mandatory local-only default and exact authorization protocol for
+  eleven separate repository, Git, release, deployment, and production actions.
+- Added `jstack_external_action_challenge`,
+  `jstack_external_action_authorize`, and
+  `jstack_external_action_consume`. One independently signed challenge binds
+  exactly one action to provider, owner, repository, visibility, remote URL,
+  branch, tag, full commit, environment, current Git/workspace/policy state,
+  remote snapshot, JStack version, MCP session, identity role, and expiry.
+- Added destructive one-time consumption after a fresh exact provider
+  observation and a single-operation permit valid for at most 60 seconds.
+- Added a separate external-action identity template and operator signer that
+  requires the full displayed challenge digest, plus versioned intent and
+  consumption schemas.
+- Added protocol, migration/rollback, security, architecture, and ADR 0006
+  documentation with adversarial tests for replay, action escalation,
+  ambiguity, Git/remote/provider/visibility drift, artifact-only use, policy
+  weakening, and signer confirmation.
+
+### Changed
+
+- Upgraded all five existing commands without adding a sixth command. Broad
+  task verbs, staffing/phase/remediation approval, audit results, readiness,
+  specialist handoff, and loop/program completion are explicitly non-authority.
+- Strengthened loop and program default blocked actions so every protected
+  action remains outside their completion and human-gate authority.
+- Changed release readiness to report `executionAuthorized=false` even when
+  evidence is ready; caller booleans and approval references remain readiness
+  inputs only.
+- Extended deterministic packaging to mirror the authorization module, signer,
+  schemas, identity template, and updated command contracts.
+
+### Security
+
+- Missing fields, placeholders, wildcards, detached HEAD, abbreviated commits,
+  unsafe refs, embedded remote credentials, ambiguous remotes, unsigned or
+  non-canonical attestations, role mismatch, expiry, replay, retry, subject
+  drift, remote drift, provider/visibility mismatch, and action substitution
+  fail closed.
+- The MCP still performs no protected action and exposes no arbitrary executor.
+  Host/tool restrictions and provider protections remain necessary against
+  direct non-JStack bypass or same-account compromise.
+
 ## 0.6.0 - 2026-07-21
 
 ### Added

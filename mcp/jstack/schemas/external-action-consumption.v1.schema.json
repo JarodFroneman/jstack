@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/external-action-consumption.v1.schema.json",
+  "title": "JStack one-time external-action consumption",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "authorizationId",
+    "operationId",
+    "action",
+    "targetDigest",
+    "bindingDigest",
+    "observationDigest",
+    "authorizationReceiptDigest",
+    "consumedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.external-action.consumption.v1"
+    },
+    "authorizationId": {
+      "type": "string",
+      "pattern": "^authorization-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "operationId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
+    },
+    "action": {
+      "enum": [
+        "repository_create",
+        "remote_add",
+        "remote_change",
+        "commit",
+        "push",
+        "pull_request_create",
+        "merge",
+        "tag_create",
+        "release_create",
+        "deploy",
+        "production_mutation"
+      ]
+    },
+    "targetDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "bindingDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "observationDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "authorizationReceiptDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "consumedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

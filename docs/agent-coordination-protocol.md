@@ -131,8 +131,9 @@ references. An unresolved contradiction blocks the signed handoff.
 
 Pause and escalate before continuing when:
 
-- required user approval is missing
-- production deploy/restart/data mutation is implied but not approved
+- an exact signed action authorization is missing
+- repository, Git, release, deployment, or production mutation is implied by
+  broad task, staffing, phase, or remediation approval
 - secrets or credentials are exposed
 - agents disagree on a release blocker
 - tests fail for an unclear reason

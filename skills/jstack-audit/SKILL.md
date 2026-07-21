@@ -67,6 +67,10 @@ report formal release readiness.
 ## Safety
 
 - Keep the audit read-only. Remediation belongs in a separate development task.
+- Never call the external-action challenge, authorize, or consume tools. An
+  audit request, audit result, release-profile pass, or remediation plan grants
+  no authority to create a repository, change a remote, commit, push, open a
+  pull request, merge, tag, release, deploy, or mutate production.
 - Do not run repository-controlled code by default.
 - Never run repository-controlled code under the Quick profile.
 - Run only a curated adapter after exact execution approval is bound to the

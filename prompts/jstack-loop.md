@@ -42,3 +42,12 @@ Complete it only after a passed current loop or program completion receipt.
 Never describe a Git rejection as an MCP attachment failure, and never treat
 "until done" as authority to bypass scope, security, release, deployment,
 budget, or human-approval boundaries.
+
+Default the complete loop/program to local-only. Repository creation, remote
+add/change, commit, push, pull-request creation, merge, tag, release,
+deployment, and production mutation are separate actions outside loop/program
+authority. For each one, the accountable Lead must use challenge -> human
+signature outside Codex -> authorize -> fresh provider observation -> consume,
+then execute only that exact action once before permit expiry. A goal, phase,
+gate, revision, completion receipt, or broad verb never substitutes. Never run
+the signer or bypass the protocol through another tool.

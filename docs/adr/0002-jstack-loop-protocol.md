@@ -49,8 +49,9 @@ does not accept arbitrary command strings and does not prompt or spawn itself.
 7. Scope or policy violations stop the loop. Repeated failure, stagnation,
    oscillation, time, iteration, change limits, and policy/tool-version drift
    require an approved revision before work resumes.
-8. A loop completion receipt never authorizes commit, push, deployment, or
-   release.
+8. A loop completion receipt never authorizes any v0.7 protected external
+   action; each requires its own exact signed and consumed permit under
+   [ADR 0006](0006-external-action-authorization-boundary.md).
 9. Only native Goal mode applies its three-consecutive-turn blocked rule. MCP
    checkpoint counts are not represented as Goal turns.
 

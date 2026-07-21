@@ -23,6 +23,9 @@ FILE_MAP = {
     ROOT / "mcp" / "jstack" / "sign_program_approval.py": [
         ROOT / "plugin" / "mcp" / "sign_program_approval.py",
     ],
+    ROOT / "mcp" / "jstack" / "sign_external_action_authorization.py": [
+        ROOT / "plugin" / "mcp" / "sign_external_action_authorization.py",
+    ],
     ROOT / "prompts" / "j-stack-dev.md": [ROOT / "plugin" / "commands" / "j-stack-dev.md"],
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
@@ -53,6 +56,11 @@ for source in sorted((ROOT / "mcp" / "jstack" / "audit").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "audit")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "audit" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "authorization").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "authorization")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "authorization" / relative]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "capabilities").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
@@ -103,6 +111,10 @@ FILE_MAP[ROOT / "skills" / "jstack-dev" / "references" / "mastery-system.md"].ap
 
 TREE_MIRRORS = (
     (ROOT / "mcp" / "jstack" / "audit", ROOT / "plugin" / "mcp" / "audit"),
+    (
+        ROOT / "mcp" / "jstack" / "authorization",
+        ROOT / "plugin" / "mcp" / "authorization",
+    ),
     (
         ROOT / "mcp" / "jstack" / "capabilities",
         ROOT / "plugin" / "mcp" / "capabilities",

@@ -52,8 +52,9 @@ documents unresolved risk.
 
 ## Stop Conditions
 
-- missing user approval
-- production deploy/restart/data mutation implied
+- missing exact signed action authorization
+- repository, Git, release, deployment, or production action implied by broad
+  task, staffing, phase, or remediation approval
 - secrets exposed
 - release blocker disagreement
 - unclear failing tests
