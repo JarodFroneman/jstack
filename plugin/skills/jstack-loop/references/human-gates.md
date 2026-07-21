@@ -72,5 +72,10 @@ approvals become pending again.
 - Replacing a decision after dependent work completed invalidates downstream
   proof.
 - An approval does not waive machine criteria or release controls.
+- A program human-gate signature is not an external-action signature and can
+  never be converted into one. Repository creation, remote add/change, commit,
+  push, pull-request creation, merge, tag, release, deployment, and production
+  mutation each use the separate v0.7 challenge/authorize/consume protocol and
+  its own exact role, target, provider observation, expiry, and one-time permit.
 - A wait can last indefinitely in wall time while the active-time budget stays
   paused; freshness still applies when work resumes.

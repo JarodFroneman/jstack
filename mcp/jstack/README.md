@@ -8,8 +8,13 @@ evidence, release readiness, and mastery progression.
 - The MCP plans and validates teams; platform tools spawn real subagents.
 - Capability packs attach task-specific methods and evidence to existing roles;
   they never grant tools, write access, path scope, or release authority.
-- It does not deploy, merge, push, restart production, or expose an arbitrary
-  shell tool.
+- It does not create repositories, change remotes, commit, push, create pull
+  requests, merge, tag, release, deploy, restart production, mutate external
+  systems, or expose an arbitrary shell tool.
+- Every such action defaults to blocked and requires its own independently
+  signed exact challenge, unchanged Git/policy/branch/remote state, fresh
+  provider observation, destructive one-time consumption, and short-lived
+  permit. The MCP issues the permit but never executes the action.
 - Static audit collection and finalization are read-only and perform no network
   work. They expose curated adapter discovery and exact-subject approved fixed
   execution, never caller-defined commands. Approved adapters are trusted-code
@@ -60,6 +65,8 @@ semantic truth or release permission.
 Release readiness requires an explicit base, clean commit, current passing
 receipt for every discovered command, complete current and release-history
 secret scan, environment-specific approval reference, rollback, and monitoring.
+Even a ready result reports `executionAuthorized=false`; evidence is not action
+authority.
 
 ## Tools
 
@@ -69,6 +76,12 @@ validation, policy/preflight, health/review, QA, security,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.
+
+The external-action tools are `jstack_external_action_challenge`,
+`jstack_external_action_authorize`, and `jstack_external_action_consume`. They
+bind exactly one action to provider, owner, repository, visibility, remote,
+branch, tag, full commit, environment, current project state, policy, version,
+and MCP session. Broad task or phase approval is never accepted.
 
 Program tools add project-derived phase DAGs, exact child-loop proofs,
 signed-local human gates, external artifact evidence, pause-aware active-time
@@ -99,6 +112,12 @@ Human program gates additionally require a private identity configuration and
 environment-held approver keys. Use the included
 `templates/jstack.program-identities.json`; named operators sign exact
 challenges with `sign_program_approval.py` outside Codex.
+
+Protected external actions use a separate private identity configuration. Use
+`templates/jstack.external-action-identities.json`, set
+`JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG`, and have the named operator run
+`sign_external_action_authorization.py` outside Codex with the full returned
+challenge digest. Never expose its key to Codex.
 
 ## Verify
 

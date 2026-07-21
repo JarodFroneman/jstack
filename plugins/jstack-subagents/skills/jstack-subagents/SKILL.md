@@ -79,3 +79,13 @@ reproduction, project rules, and safety gates.
 If multi-agent tools are unavailable, state `No subagents deployed:` with the
 concrete reason. Retain `team_mode="smart-subagents"` in planning and apply
 its evidence rubric while one Lead performs the work.
+
+Default to local-only. Team approval authorizes staffing only. Repository
+creation, remote add/change, commit, push, pull-request creation, merge, tag,
+release, deployment, and production mutation each require a separate exact
+signed one-time JStack external-action permit. Only the Lead may perform
+challenge -> human signature outside Codex -> authorize -> fresh provider
+observation -> consume, followed by one exact operation before expiry. No
+specialist may request, sign, consume, or exercise this authority, and no broad
+verb, phase/remediation approval, readiness, handoff, shell, or provider path
+may substitute for or bypass it.

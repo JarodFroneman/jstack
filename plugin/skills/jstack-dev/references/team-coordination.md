@@ -64,5 +64,6 @@ scope, delegation, approvals, or release authority. The Lead reconciles
 disagreement using reproduction, source evidence, project rules, and safety
 gates.
 
-Specialists do not spawn descendants, deploy, push, merge, reset history,
+Specialists do not spawn descendants, create repositories, change remotes,
+commit, push, create pull requests, merge, tag, release, deploy, reset history,
 delete data, alter production, or claim overall completion.

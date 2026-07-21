@@ -24,8 +24,8 @@ returns one of two evidence modes:
 Artifact-only work must preserve direct SHA-256 mappings, exact test/build
 records, a verified pre-change backup, immutable runtime identity, staged
 dependency order, approval, rollback, monitoring, and internal/public smoke
-checks. This evidence can support an explicitly approved operational decision;
-it is not a JStack receipt or release-readiness result.
+checks. This evidence can support operator review, but it is not a JStack
+receipt, release-readiness result, or protected-action authorization.
 
 ## Project Commands
 
@@ -63,6 +63,32 @@ Release readiness denies by default. It needs:
 
 Missing, malformed, stale, failed, blocked, skipped, timed-out, truncated, or
 inconclusive evidence is not a pass.
+
+Readiness is evidence, not authority. Its result always reports
+`executionAuthorized=false`.
+
+## External-Action Authority
+
+Every project defaults to local-only. Repository creation, remote add/change,
+commit, push, pull-request creation, merge, tag creation, release creation,
+deployment, and production mutation are separate actions. No goal word,
+readiness result, audit result, phase approval, remediation approval,
+specialist handoff, or loop/program receipt authorizes one.
+
+Each action requires one `jstack_external_action_challenge` bound to the exact
+provider, owner, repository, visibility, remote URL, branch, tag, full commit,
+target environment, current Git/workspace/policy state, branch, remote snapshot,
+tool version, and MCP session. A named role-holding human signs the canonical
+payload outside Codex. Codex must not run the signer.
+
+After `jstack_external_action_authorize`, independently observe the exact
+provider target and call `jstack_external_action_consume`. The authorization is
+destroyed on consumption and returns a maximum 60-second permit for one exact
+operation. Failure, retry, drift, expiry, or another action requires a new
+challenge. Never use shell, Git, provider, browser, CI/CD, deployment, or
+production tooling to bypass this protocol.
+
+See [the complete boundary](../../../docs/external-action-boundary.md).
 
 ## Scanner Boundary
 

@@ -89,3 +89,13 @@ When an active JStack loop supplies a `loopId`, keep `team_mode="full-team"`
 fixed for that contract and execute only the current wave-bounded iteration.
 Pass the current validated `specialist_handoff_receipt` to every checkpoint
 and finalization; the loop owns convergence and terminal status.
+
+Default to local-only. Full-team approval authorizes staffing only. Repository
+creation, remote add/change, commit, push, pull-request creation, merge, tag,
+release, deployment, and production mutation each require a separate exact
+signed one-time JStack external-action permit. Only the Lead may perform
+challenge -> human signature outside Codex -> authorize -> fresh provider
+observation -> consume, followed by one exact operation before expiry. No
+specialist may request, sign, consume, or exercise this authority, and no broad
+verb, wave/phase/remediation approval, readiness, handoff, shell, or provider
+path may substitute for or bypass it.

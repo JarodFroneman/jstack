@@ -55,7 +55,8 @@ DEFAULT_LIMITS = {
 }
 
 DEFAULT_BLOCKED_ACTIONS = (
-    "Do not push, merge, deploy, release, alter production, or mutate external systems without separate explicit authorization.",
+    "Default to local-only work. Repository creation, remote add/change, commit, push, pull request, merge, tag, release, deployment, and production mutation each require a separate exact signed one-time external-action permit.",
+    "Broad task verbs, phase/remediation approval, human program gates, and loop/program completion never grant external-action authority.",
     "Do not treat a human approval as a substitute for machine-verifiable acceptance evidence.",
     "Do not advance a phase from caller-supplied success claims.",
 )

@@ -841,6 +841,8 @@ class EvidenceTests(unittest.TestCase):
                 }
             )
             self.assertTrue(allowed["ready"], allowed["blockers"])
+            self.assertFalse(allowed["executionAuthorized"])
+            self.assertTrue(allowed["externalActionBoundary"]["readinessIsNotAuthority"])
 
     def test_audit_release_gate_is_opt_in_and_accepts_only_release_profile_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -929,6 +931,7 @@ class EvidenceTests(unittest.TestCase):
             )
             allowed = server.tool_release_readiness({**common, "audit_receipt": audit_receipt})
             self.assertTrue(allowed["ready"], allowed["blockers"])
+            self.assertFalse(allowed["executionAuthorized"])
             self.assertTrue(allowed["auditEvidence"]["required"])
 
     def test_secret_scan_is_complete_or_no_go_and_never_previews_values(self) -> None:
@@ -1569,8 +1572,43 @@ class MasteryAndInstallTests(unittest.TestCase):
                     codex_home
                     / "mcp"
                     / "jstack"
+                    / "authorization"
+                    / "protocol.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "sign_external_action_authorization.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
                     / "schemas"
                     / "program-contract.v1.schema.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "schemas"
+                    / "external-action-intent.v1.schema.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "templates"
+                    / "jstack.external-action-identities.json"
                 ).is_file()
             )
             self.assertTrue(

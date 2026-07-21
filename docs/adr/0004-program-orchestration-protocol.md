@@ -59,8 +59,9 @@ Add a durable Program -> Phase layer above existing bounded JStack loops.
     different action or payload fails closed.
 14. Contract history, snapshot, event chain, and pending transaction are
     mutually digest-bound and validated on every load.
-15. Completion receipts never authorize commit, push, merge, deployment,
-    production mutation, or release.
+15. Completion receipts never authorize any v0.7 protected external action;
+    each requires its own exact signed and consumed permit under
+    [ADR 0006](0006-external-action-authorization-boundary.md).
 
 ## Persistence
 

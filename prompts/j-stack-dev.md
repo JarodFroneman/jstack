@@ -48,6 +48,17 @@ planning call.
 9. Report outcome, evidence, residual risk, then an optional three-line mastery
    capsule.
 
+Mandatory external-action boundary: default to local-only. Repository creation,
+remote add/change, commit, push, pull-request creation, merge, tag, release,
+deployment, and production mutation are separate actions. Broad task verbs or
+task/phase/remediation approval never authorize any of them. For each action,
+use challenge -> independently signed human attestation -> authorize -> fresh
+provider observation -> consume, then execute that exact operation once before
+permit expiry. Never run the signer, reuse a permit, retry after consumption,
+or bypass the boundary through shell, Git, provider, browser, CI/CD, deployment,
+or production tools. If the protocol is unavailable or the project is
+artifact-only, stop that action while continuing safe local work.
+
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.
 

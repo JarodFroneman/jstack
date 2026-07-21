@@ -66,6 +66,11 @@ tool version, and, for a revision, loop ID plus prior contract digest. The
 receipt authorizes only loop start or that exact revision. It does not approve
 implementation, protected files, push, deployment, or release.
 
+It also cannot enter or satisfy the v0.7 external-action boundary. Repository
+creation, remote add/change, commit, push, pull-request creation, merge, tag,
+release, deployment, and production mutation each require a distinct signed
+challenge and consumed one-time permit outside loop authority.
+
 Every new loop also binds a server-routed capability contract: catalog version
 and digest, deterministic selection digest, goal digest, execution mode, exact
 team role-to-capability assignments, explicit capability IDs, audit domains,
@@ -169,3 +174,5 @@ decision protocol. Codex Goal mode supplies continuation across turns.
   outcomes.
 - Preserve sandbox, approval, Git, release, and deployment boundaries on every
   iteration.
+- Never call broad goal, checkpoint, revision, or completion approval an
+  external-action authorization.

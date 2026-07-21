@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/external-action-intent.v1.schema.json",
+  "title": "JStack exact external-action intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "authorizationId",
+    "actionSet",
+    "requiredRole",
+    "target",
+    "binding",
+    "approverId",
+    "approvalReferenceDigest",
+    "issuedAt",
+    "expiresAt",
+    "nonce"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.external-action.attestation.v1"
+    },
+    "authorizationId": {
+      "type": "string",
+      "pattern": "^authorization-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "actionSet": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "repository_create",
+          "remote_add",
+          "remote_change",
+          "commit",
+          "push",
+          "pull_request_create",
+          "merge",
+          "tag_create",
+          "release_create",
+          "deploy",
+          "production_mutation"
+        ]
+      }
+    },
+    "requiredRole": {
+      "enum": [
+        "source-owner",
+        "repository-owner",
+        "merge-owner",
+        "release-owner",
+        "deployment-owner",
+        "production-operator"
+      ]
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectPath",
+        "gitHead",
+        "projectFingerprint",
+        "policyDigest",
+        "toolVersion",
+        "serverSession",
+        "currentBranch",
+        "remoteSnapshotDigest"
+      ],
+      "properties": {
+        "projectPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gitHead": {
+          "$ref": "#/$defs/commit"
+        },
+        "projectFingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "policyDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "toolVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9._-]+)?$"
+        },
+        "serverSession": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "currentBranch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "remoteSnapshotDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "approverId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "approvalReferenceDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "owner",
+        "repository",
+        "visibility",
+        "remoteName",
+        "remoteUrl",
+        "branch",
+        "tag",
+        "exactCommit",
+        "targetEnvironment"
+      ],
+      "properties": {
+        "provider": {
+          "enum": [
+            "local-git",
+            "github",
+            "gitlab",
+            "bitbucket",
+            "azure-devops",
+            "other"
+          ]
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "visibility": {
+          "enum": [
+            "local-only",
+            "private",
+            "internal",
+            "public"
+          ]
+        },
+        "remoteName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "remoteUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "exactCommit": {
+          "$ref": "#/$defs/commit"
+        },
+        "targetEnvironment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    }
+  }
+}

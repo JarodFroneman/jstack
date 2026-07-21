@@ -52,6 +52,17 @@ MAX_READINESS_QUESTIONS = 3
 LOCK_STALE_SECONDS = 30
 
 DEFAULT_BLOCKED_ACTIONS = (
+    "external-action:repository_create:exact-one-time-authorization-required",
+    "external-action:remote_add:exact-one-time-authorization-required",
+    "external-action:remote_change:exact-one-time-authorization-required",
+    "external-action:commit:exact-one-time-authorization-required",
+    "external-action:push:exact-one-time-authorization-required",
+    "external-action:pull_request_create:exact-one-time-authorization-required",
+    "external-action:merge:exact-one-time-authorization-required",
+    "external-action:tag_create:exact-one-time-authorization-required",
+    "external-action:release_create:exact-one-time-authorization-required",
+    "external-action:deploy:exact-one-time-authorization-required",
+    "external-action:production_mutation:exact-one-time-authorization-required",
     "production-release",
     "git-push",
     "git-force",

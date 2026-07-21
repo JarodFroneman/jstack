@@ -110,9 +110,33 @@ Loop mastery Stage 9 uses a separate assessor HMAC key from
 exact capstone evaluation, artifact set, Git state, rubric, and unseen
 challenge; it is not a runtime authorization credential.
 
-A loop completion receipt is not permission to commit, push, deploy, release,
-read secrets, weaken policy, or perform destructive Git operations. Those
-actions continue to require their existing project and user approvals.
+A loop completion receipt is not permission to create a repository, change a
+remote, commit, push, create a pull request, merge, tag, release, deploy, alter
+production, read secrets, weaken policy, or perform destructive Git operations.
+The first eleven actions each require their own exact signed and consumed v0.7
+external-action permit; project/user approval prose is not a substitute.
+
+## External-Action Safety
+
+The external-action protocol binds one action to exact provider, repository,
+visibility, URL, refs, full commit, environment, current Git/workspace/policy
+state, branch, remote snapshot, tool version, and MCP session. A configured
+role holder signs the canonical challenge outside Codex. Authorization and
+one-time consumption repeat state checks, require a fresh exact provider
+observation, and return a permit valid for at most 60 seconds. Expiry, replay,
+retry, mismatch, state drift, or action escalation fails closed.
+
+Private challenge and consumption state under `~/.jstack/external-actions` is
+permission-restricted and session-sealed. Same-session memory rejects replay
+after local state rollback; restarting the MCP invalidates every receipt. This
+protects compliant JStack workflows from accidental inference and caller-side
+tampering, not from compromise of the same OS account.
+
+The MCP never performs the protected operation and cannot intercept a separate
+process that directly invokes Git, a provider API, CI/CD, or production tools.
+Use provider branch protection, environment approvals, least-privilege
+credentials, host tool allowlists, and OS/container isolation for a boundary
+that must withstand a malicious or non-compliant executor.
 
 ## Program Safety
 

@@ -3,7 +3,7 @@ standard: enterprise
 
 # This YAML template is intentionally simple so the local MCP can parse it
 # without third-party dependencies. Use the JSON template for the complete
-# release, security, audit, program, and quant policy surface.
+# release, external-action, security, audit, program, and quant policy surface.
 requiredChecks:
   - project_instructions_read
   - git_status_reviewed
@@ -13,6 +13,7 @@ requiredChecks:
   - secret_scan_clean
   - security_review_for_sensitive_work
   - release_approval_for_production
+  - exact_external_action_authorization
   - rollback_plan_for_production
   - post_release_monitoring_for_production
 

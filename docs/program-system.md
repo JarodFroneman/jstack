@@ -104,12 +104,15 @@ security, and deterministic integrated review. Project contracts can require
 additional QA commands or artifacts.
 
 Completion proves the current contract and Git subject. It does not authorize
-publishing, deployment, or production changes. Those remain separate JStack
-release gates and explicit user decisions.
+repository creation, remote add/change, commit, push, pull-request creation,
+merge, tag, release, deployment, or production changes. Each remains local-only
+until the accountable Lead obtains and consumes its own exact signed
+external-action permit. Program gates and completion receipts cannot substitute.
 
 If the Git subject changes after completion, the same unchanged contract may
 be finalized again with fresh evidence. JStack replaces the current completion
 proof and preserves the prior proof in its hash-chained history.
 
 See [ADR 0004](adr/0004-program-orchestration-protocol.md),
+[ADR 0006](adr/0006-external-action-authorization-boundary.md),
 [loop system](loop-system.md), and [migration guide](migration-0.5.md).

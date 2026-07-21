@@ -28,6 +28,8 @@ Describe the user-visible change and the smallest technical reason it was needed
 - [ ] Secret scan is clean or findings are resolved
 - [ ] Rollback path is documented if production-facing
 - [ ] Monitoring/canary plan is documented if production-facing
+- [ ] This pull request content is evidence only and is not authorization to
+      create, push, merge, tag, release, deploy, or mutate production
 
 # Residual Risk
 

@@ -45,7 +45,9 @@ Options:
 ~~~
 
 Unknown flags and invalid paths fail closed. Audit mode never edits project
-code, deploys, publishes, or records mastery unless separately requested.
+code, enters the external-action authorization lifecycle, deploys, publishes,
+or records mastery. Remediation or publication requires a separate development
+task, and each protected action still needs its own exact signed one-time permit.
 `--fail-on` cannot weaken the enterprise `high` floor; weaker requests,
 including `critical` and `none`, are clamped to the effective policy threshold.
 

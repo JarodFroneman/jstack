@@ -2,15 +2,27 @@
 
 ## Approval
 
-- Explicit release request:
-- Approved by:
+- Readiness assessment request (not action authority):
+- Named action approver:
 - External approval reference:
+- Exact protected action ID:
+- Challenge digest:
+- Authorization ID:
+- Permit operation ID and expiry:
+- Provider / owner / repository / visibility:
+- Remote name and URL:
+- Branch / tag / full commit:
 - Human security reviewer/reference:
 - Target environment:
 - Release scope:
 - Explicit comparison base:
 - HEAD commit:
 - Policy digest:
+
+Create and consume a fresh authorization for every separate repository
+creation, remote add/change, commit, push, pull-request creation, merge, tag,
+release, deployment, or production mutation. Never reuse this checklist entry
+as authority for the next action.
 
 ## Preflight
 

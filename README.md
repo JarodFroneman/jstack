@@ -56,7 +56,7 @@ JStack makes those controls explicit.
 | A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
-| Release confidence becomes release permission | Fail-closed readiness checks plus separate human authority for commit, push, deploy, and release |
+| Release confidence, broad phase approval, or "deploy" becomes publication permission | Local-only default plus a signed, exact, short-lived, one-time permit for each repository, Git, release, deployment, or production action |
 
 ## Operating Modes
 
@@ -78,7 +78,7 @@ not edit project code.
 
 ### Specialist capabilities inside the five commands
 
-JStack v0.6 upgrades the existing commands rather than adding a sixth command.
+JStack v0.7 upgrades the existing commands rather than adding a sixth command.
 The selected delivery mode still decides who works and who may edit; a
 deterministic capability plan then decides which task-specific methods each
 selected role must apply. For example, an API change can route contract and
@@ -106,7 +106,8 @@ flowchart LR
     E -- No --> F[Bounded revision or human gate]
     F --> C
     E -- Yes --> G[Completion receipt]
-    G --> H[Separate human release authority]
+    G --> H[Local-only boundary]
+    H --> I[One exact signed action permit]
 ```
 
 JStack separates four concerns that ordinary prompts tend to collapse:
@@ -118,13 +119,15 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 3. **Evidence**: bind tests, security coverage, review, approvals, and outputs
    to the current project state.
 4. **Authority**: report verified completion without treating it as permission
-   to commit, push, deploy, or release.
+   to create a repository, change a remote, commit, push, open a pull request,
+   merge, tag, release, deploy, or mutate production.
 
-## What Ships In v0.6
+## What Ships In v0.7
 
 | Capability | What it provides |
 | --- | --- |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
+| External-action boundary | Local-only default; independently signed exact challenges; session/Git/policy/remote/provider binding; fresh target observation; destructive one-time consumption; 60-second single-operation permits |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
 | Specialist capabilities | Pinned, versioned routing for 14 engineering, testing, security, reliability, and handoff capability packs inside the existing five commands |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
@@ -135,10 +138,11 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, transactional installers, and cross-platform CI |
 
-The MCP currently exposes 14 canonical `jstack_program_*` tools for generic
-program orchestration in addition to the delivery, evidence, audit, loop,
-continuity, specialist-review, and mastery tool families. Legacy `gstack_*`
-aliases remain available for compatibility.
+The MCP exposes 50 canonical `jstack_*` tools, including 14 generic
+`jstack_program_*` tools and the three-step `jstack_external_action_*`
+authorization protocol, in addition to the delivery, evidence, audit, loop,
+continuity, specialist-review, and mastery families. Legacy `gstack_*` aliases
+remain available for compatibility.
 
 ## Host Compatibility
 
@@ -265,10 +269,17 @@ release gate can require:
   routing is used;
 - complete current-tree and release-range secret scanning;
 - explicit external approval, rollback, monitoring, and smoke-test references;
+- one independently signed and destructively consumed exact authorization for
+  each repository creation, remote add/change, commit, push, pull request,
+  merge, tag, release, deployment, or production mutation;
 - revalidation after any material change or downstream invalidation.
 
 Completion means the acceptance contract passed. It does not grant protected
 action authority.
+
+Release readiness also never grants authority: its result always includes
+`executionAuthorized=false`. Read the
+[external-action authorization boundary](docs/external-action-boundary.md).
 
 ## Trust Boundary
 
@@ -286,8 +297,9 @@ action authority.
   messages, tool arguments, model output, or secret values.
 - Loop and program state under `~/.jstack/` is private local state, not a
   distributed lock or multi-tenant security boundary.
-- Signed-local human gates prove possession of a configured key. They are not
-  enterprise identity, legal non-repudiation, or organizational approval.
+- Signed-local human gates and external-action attestations prove possession of
+  a configured key. They are not enterprise identity, legal non-repudiation,
+  or organizational approval.
 - Audit receipts prove the collected scope, validated structure, and result
   calculation. They do not make every model-authored semantic finding true.
 - Artifact-only projects can use planning and direct operator evidence, but
@@ -301,7 +313,7 @@ environment.
 
 | Path | Purpose |
 | --- | --- |
-| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
+| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, capability registry, external-action authorization, delivery controls, audit, loop, program, schemas, curricula, and templates |
 | [`skills/`](skills/) | Canonical single-lead, audit, and loop skills |
 | [`prompts/`](prompts/) | Canonical slash-command prompts |
 | [`plugins/`](plugins/) | Five dedicated command plugins |
@@ -335,6 +347,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |
+| [v0.7 migration guide](docs/migration-0.7.md) | [External-action boundary](docs/external-action-boundary.md) |
 | [v0.6 migration guide](docs/migration-0.6.md) | [Architecture decisions](docs/adr/) |
 | [v0.5 migration guide](docs/migration-0.5.md) | [Third-party notices](THIRD_PARTY_NOTICES.md) |
 

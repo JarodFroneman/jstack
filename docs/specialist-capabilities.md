@@ -1,6 +1,6 @@
 # JStack Specialist Capability System
 
-JStack v0.6 adds task-specific capability routing inside the five existing
+JStack v0.6 added task-specific capability routing inside the five existing
 commands. It is not a sixth command and it is not a second roster of agents.
 The core role still determines accountability, tools, edit permission, and file
 scope; the capability plan adds a bounded method, required evidence, stop
@@ -148,7 +148,8 @@ evidence.
 ## Authority and assurance limits
 
 Capabilities do not spawn agents, grant tools, authorize filesystem access,
-widen write scope, override policy, or permit commit, push, merge, deploy,
+widen write scope, override policy, or permit repository creation, remote
+change, commit, push, pull-request creation, merge, tag, release, deploy,
 release, or production mutation. JStack validates contracts and evidence; the
 host performs agent execution, and a human retains release authority.
 
