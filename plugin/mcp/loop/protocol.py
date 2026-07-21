@@ -128,6 +128,7 @@ GOAL_READINESS_MATERIAL_FIELDS = {
     "limits",
     "tokenBudget",
     "goalContext",
+    "capabilityContract",
 }
 
 
@@ -203,6 +204,129 @@ def _string_list(
         if normalized not in result:
             result.append(normalized)
     return result
+
+
+def _normalize_capability_contract(
+    value: Any,
+    *,
+    goal: str,
+    execution_mode: str,
+) -> Optional[dict[str, Any]]:
+    """Validate the server-routed capability contract without granting authority."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise LoopError("capability_contract must be a server-routed object.")
+    required = {
+        "schemaVersion",
+        "catalogVersion",
+        "catalogDigest",
+        "selectionDigest",
+        "goalDigest",
+        "executionMode",
+        "teamRoleIds",
+        "roleCapabilities",
+        "explicitCapabilityIds",
+        "auditDomains",
+        "loopControls",
+        "permissionInvariant",
+    }
+    missing = sorted(required - set(value))
+    unknown = sorted(set(value) - required)
+    if missing:
+        raise LoopError("capability_contract is missing fields: " + ", ".join(missing))
+    if unknown:
+        raise LoopError("capability_contract contains unsupported fields: " + ", ".join(unknown))
+    if value.get("schemaVersion") != "jstack.loop.capability-contract.v1":
+        raise LoopError("capability_contract.schemaVersion is unsupported.")
+    catalog_version = _text(
+        value.get("catalogVersion"),
+        "capability_contract.catalogVersion",
+        maximum=64,
+    )
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", catalog_version):
+        raise LoopError("capability_contract.catalogVersion must be semantic version text.")
+    digests: dict[str, str] = {}
+    for field in ("catalogDigest", "selectionDigest", "goalDigest"):
+        digest = _text(value.get(field), f"capability_contract.{field}", maximum=64)
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise LoopError(f"capability_contract.{field} must be a SHA-256 digest.")
+        digests[field] = digest
+    if digests["goalDigest"] != hashlib.sha256(goal.encode("utf-8")).hexdigest():
+        raise LoopError("capability_contract.goalDigest does not match the loop goal.")
+    if value.get("executionMode") != execution_mode:
+        raise LoopError("capability_contract.executionMode does not match execution_mode.")
+    team_role_ids = _string_list(
+        value.get("teamRoleIds"),
+        "capability_contract.teamRoleIds",
+        maximum_items=11,
+        item_maximum=64,
+        required=True,
+    )
+    if len(team_role_ids) != len(value.get("teamRoleIds")):
+        raise LoopError("capability_contract.teamRoleIds must not contain duplicates.")
+    role_capabilities_raw = value.get("roleCapabilities")
+    if not isinstance(role_capabilities_raw, dict):
+        raise LoopError("capability_contract.roleCapabilities must be an object.")
+    if set(role_capabilities_raw) != set(team_role_ids):
+        raise LoopError("capability_contract.roleCapabilities must exactly cover teamRoleIds.")
+    role_capabilities: dict[str, list[str]] = {}
+    for role_id in team_role_ids:
+        capability_ids = _string_list(
+            role_capabilities_raw[role_id],
+            f"capability_contract.roleCapabilities.{role_id}",
+            maximum_items=8,
+            item_maximum=64,
+            required=True,
+        )
+        if len(capability_ids) != len(role_capabilities_raw[role_id]):
+            raise LoopError(
+                f"capability_contract.roleCapabilities.{role_id} must not contain duplicates."
+            )
+        if any(not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", item) for item in capability_ids):
+            raise LoopError(
+                f"capability_contract.roleCapabilities.{role_id} contains an invalid capability id."
+            )
+        role_capabilities[role_id] = capability_ids
+    explicit_ids = _string_list(
+        value.get("explicitCapabilityIds"),
+        "capability_contract.explicitCapabilityIds",
+        maximum_items=64,
+        item_maximum=64,
+    )
+    if len(explicit_ids) != len(value.get("explicitCapabilityIds")):
+        raise LoopError("capability_contract.explicitCapabilityIds must not contain duplicates.")
+    audit_domains = _string_list(
+        value.get("auditDomains"),
+        "capability_contract.auditDomains",
+        maximum_items=20,
+        item_maximum=64,
+    )
+    loop_controls = _string_list(
+        value.get("loopControls"),
+        "capability_contract.loopControls",
+        maximum_items=100,
+        item_maximum=500,
+    )
+    permission_invariant = _text(
+        value.get("permissionInvariant"),
+        "capability_contract.permissionInvariant",
+        maximum=500,
+    )
+    if "never expands" not in permission_invariant.lower():
+        raise LoopError("capability_contract must preserve the no-permission-expansion invariant.")
+    return {
+        "schemaVersion": "jstack.loop.capability-contract.v1",
+        "catalogVersion": catalog_version,
+        **digests,
+        "executionMode": execution_mode,
+        "teamRoleIds": team_role_ids,
+        "roleCapabilities": role_capabilities,
+        "explicitCapabilityIds": explicit_ids,
+        "auditDomains": audit_domains,
+        "loopControls": loop_controls,
+        "permissionInvariant": permission_invariant,
+    }
 
 
 def _normalize_relative_path(value: Any, field: str, *, allow_glob: bool) -> str:
@@ -890,6 +1014,7 @@ def goal_readiness_contract_payload(contract: dict[str, Any]) -> dict[str, Any]:
         "limits": contract["limits"],
         "tokenBudget": contract.get("tokenBudget"),
         "goalContext": contract.get("goalContext"),
+        "capabilityContract": contract.get("capabilityContract"),
     }
 
 
@@ -912,6 +1037,7 @@ def _goal_contract_preview(contract: dict[str, Any]) -> dict[str, Any]:
         "allowedPaths": contract["allowedPaths"],
         "nonGoals": contract["nonGoals"],
         "limits": contract["limits"],
+        "capabilityContract": contract.get("capabilityContract"),
     }
 
 
@@ -1147,6 +1273,11 @@ def _normalize_contract_input(
         raise LoopError("autonomy_level must be L0, L1, L2, or L3.")
     if risk not in RISK_TIERS:
         raise LoopError("risk_tier must be low, medium, high, or critical.")
+    capability_contract = _normalize_capability_contract(
+        args.get("capability_contract"),
+        goal=goal,
+        execution_mode=execution_mode,
+    )
 
     criteria = _normalize_criteria(args.get("acceptance_criteria"))
     _criterion_composition_checks(criteria, autonomy, risk)
@@ -1239,6 +1370,7 @@ def _normalize_contract_input(
         "limits": _normalize_limits(args.get("limits")),
         "tokenBudget": token_budget,
         "goalContext": goal_context,
+        "capabilityContract": capability_contract,
         "approvals": {
             "mode": mode_approval or None,
             "autonomy": autonomy_approval or None,
@@ -1855,6 +1987,7 @@ class LoopService:
             "autonomyLevel": contract["autonomyLevel"],
             "riskTier": contract["riskTier"],
             "goalContext": contract.get("goalContext"),
+            "capabilityContract": contract.get("capabilityContract"),
             "goalReadiness": contract.get("goalReadiness"),
             "contractRevision": contract["revision"],
             "contractDigest": snapshot["contractDigest"],
@@ -2210,6 +2343,9 @@ class LoopService:
                 "goal_context": args.get(
                     "goal_context", _goal_context_as_input(old.get("goalContext"))
                 ),
+                "capability_contract": args.get(
+                    "capability_contract", old.get("capabilityContract")
+                ),
                 "mode_approval_reference": args.get("mode_approval_reference") or old["approvals"].get("mode"),
                 "autonomy_approval_reference": args.get("autonomy_approval_reference") or old["approvals"].get("autonomy"),
                 "risk_approval_reference": args.get("risk_approval_reference") or old["approvals"].get("risk"),
@@ -2249,6 +2385,7 @@ class LoopService:
                     "limits",
                     "tokenBudget",
                     "goalContext",
+                    "capabilityContract",
                     "approvals",
                     "policy",
                 )

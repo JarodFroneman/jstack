@@ -1,0 +1,451 @@
+{
+  "schemaVersion": "jstack.capability.catalog.v1",
+  "catalogVersion": "1.0.0",
+  "sourceProvenance": {
+    "repository": "https://github.com/msitarzewski/agency-agents",
+    "commit": "459dce837db3bdfdc4763d3fefd1fd854e73c8f1",
+    "license": "MIT",
+    "adaptedFiles": [
+      "engineering/engineering-api-platform-engineer.md",
+      "engineering/engineering-codebase-onboarding-engineer.md",
+      "engineering/engineering-database-reliability-engineer.md",
+      "engineering/engineering-developer-tooling-engineer.md",
+      "engineering/engineering-identity-access-engineer.md",
+      "engineering/engineering-incident-response-commander.md",
+      "engineering/engineering-minimal-change-engineer.md",
+      "engineering/engineering-multi-agent-systems-architect.md",
+      "engineering/engineering-sre.md",
+      "security/security-ai-generated-code-auditor.md",
+      "security/security-appsec-engineer.md",
+      "security/security-compliance-auditor.md",
+      "specialized/specialized-workflow-architect.md",
+      "strategy/coordination/handoff-templates.md",
+      "testing/testing-accessibility-auditor.md",
+      "testing/testing-performance-benchmarker.md"
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "evidence-led-handoff",
+      "name": "Evidence-led specialist handoff",
+      "summary": "Make every role return bounded scope, inspectable evidence, explicit blockers, residual risk, and a recommended next action.",
+      "priority": 1000,
+      "activation": "default",
+      "sourceFiles": ["strategy/coordination/handoff-templates.md"],
+      "allowedRoles": ["lead", "architect", "investigator", "builder", "reviewer", "qa", "security", "devops", "product", "quant", "docs"],
+      "defaultRoles": ["lead", "architect", "investigator", "builder", "reviewer", "qa", "security", "devops", "product", "quant", "docs"],
+      "patterns": [],
+      "classifications": [],
+      "method": [
+        "State the exact scope handled and what was intentionally excluded.",
+        "Return structured evidence references instead of unsupported completion claims.",
+        "Separate findings, changes, blockers, skipped checks, and residual risk.",
+        "Give the Lead one concrete next action and an explicit status."
+      ],
+      "requiredEvidence": ["scope-evidence", "verification-evidence"],
+      "stopConditions": [
+        "Required evidence cannot be produced or safely referenced.",
+        "The requested scope or permission boundary is ambiguous.",
+        "A blocker would make a success claim misleading."
+      ],
+      "auditDomains": ["correctness", "maintainability", "testability"],
+      "loopControls": [
+        "Each iteration must record new evidence or a changed hypothesis.",
+        "Unresolved blockers prevent finalization."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "minimal-change",
+      "name": "Minimal coherent change",
+      "summary": "Constrain implementation to the smallest coherent surface that satisfies the request and expose follow-ups instead of smuggling them into the diff.",
+      "priority": 920,
+      "activation": "default",
+      "sourceFiles": ["engineering/engineering-minimal-change-engineer.md"],
+      "allowedRoles": ["lead", "builder", "reviewer", "docs"],
+      "defaultRoles": ["lead", "builder", "reviewer"],
+      "patterns": ["\\bminimal\\b", "smallest (?:diff|change)", "scope creep", "surgical", "bounded change"],
+      "classifications": ["trivial", "normal"],
+      "method": [
+        "Read the task literally and identify the minimum affected surface.",
+        "Justify each changed file against an acceptance criterion.",
+        "Walk the final diff for unrelated cleanup, speculative abstraction, and hidden behavior changes.",
+        "List useful but out-of-scope follow-ups without implementing them."
+      ],
+      "requiredEvidence": ["diff-scope", "acceptance-coverage"],
+      "stopConditions": [
+        "The requested behavior cannot be isolated without changing scope.",
+        "An adjacent refactor is required but was not authorized.",
+        "The diff contains unrelated cleanup or speculative flexibility."
+      ],
+      "auditDomains": ["correctness", "maintainability", "api-compatibility"],
+      "loopControls": [
+        "Reject iterations that add unrelated files or abstractions.",
+        "Reconfirm acceptance coverage after every scope expansion."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "codebase-orientation",
+      "name": "Codebase orientation and execution tracing",
+      "summary": "Build a source-grounded repository map and trace real entry-to-output paths before proposing changes.",
+      "priority": 900,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-codebase-onboarding-engineer.md"],
+      "allowedRoles": ["lead", "architect", "investigator", "reviewer", "docs"],
+      "defaultRoles": ["investigator"],
+      "patterns": ["codebase", "repository", "repo", "onboard", "orientation", "entry point", "execution (?:path|trace)", "root cause", "investigat"],
+      "classifications": ["architecture"],
+      "method": [
+        "Inventory runtime, entry points, configuration, tests, and top-level boundaries.",
+        "Trace the relevant path from input through orchestration to side effects and output.",
+        "Cite inspected files and distinguish source facts from hypotheses.",
+        "Mark unknowns and high-risk boundaries before edits begin."
+      ],
+      "requiredEvidence": ["repository-map", "execution-trace"],
+      "stopConditions": [
+        "The authoritative entry point or runtime cannot be identified.",
+        "A proposed conclusion is not grounded in inspected source.",
+        "Generated or vendored code is being mistaken for authoritative source."
+      ],
+      "auditDomains": ["architecture", "correctness", "maintainability"],
+      "loopControls": [
+        "Record a falsifiable hypothesis before modifying a traced path.",
+        "A repeated failure must produce a revised execution trace."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "developer-tooling",
+      "name": "Developer tooling and command contracts",
+      "summary": "Treat CLI, MCP, installer, packaging, errors, and machine-readable output as stable developer-facing contracts.",
+      "priority": 880,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-developer-tooling-engineer.md"],
+      "allowedRoles": ["lead", "architect", "builder", "reviewer", "qa", "docs"],
+      "defaultRoles": [],
+      "patterns": ["\\bcli\\b", "command", "developer tool", "\\bmcp\\b", "installer", "packag", "manifest", "plugin", "slash command", "exit code", "machine-readable"],
+      "classifications": [],
+      "method": [
+        "Define human-readable and machine-readable behavior together.",
+        "Make errors name the failing field, boundary, and safe corrective action.",
+        "Preserve compatibility for command names, schemas, exit behavior, and packaging.",
+        "Test fresh installation, version parity, startup, and failure paths."
+      ],
+      "requiredEvidence": ["contract-compatibility", "packaging-parity"],
+      "stopConditions": [
+        "A command or schema change silently breaks existing callers.",
+        "Generated and canonical artifacts disagree.",
+        "An error path leaks a stack trace, secret, or raw model content by default."
+      ],
+      "auditDomains": ["api-compatibility", "testability", "supply-chain", "operations"],
+      "loopControls": [
+        "Run parity validation whenever canonical artifacts change.",
+        "Treat a fresh-install failure as a completion blocker."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "agent-systems",
+      "name": "Multi-agent systems engineering",
+      "summary": "Apply hierarchical orchestration, least privilege, schema-bound handoffs, explicit recovery, contradiction handling, and traceable execution to agent workflows.",
+      "priority": 870,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-multi-agent-systems-architect.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "security"],
+      "defaultRoles": [],
+      "patterns": ["agent", "subagent", "multi-agent", "orchestrat", "handoff", "capabilit", "receipt", "telemetry", "trace[_ -]?id", "prompt injection"],
+      "classifications": ["architecture"],
+      "method": [
+        "Use a Lead-owned hierarchical topology unless another topology is explicitly justified.",
+        "Bind each specialist to a role, capability, permission boundary, input contract, and output schema.",
+        "Enumerate timeout, partial result, contradiction, cascade, and stale-context failure paths.",
+        "Emit correlated metadata without storing raw prompts, tool arguments, or outputs."
+      ],
+      "requiredEvidence": ["agent-contract", "failure-paths", "trace-metadata"],
+      "stopConditions": [
+        "A specialist can expand its own permissions or delegate further.",
+        "Required context would be silently truncated.",
+        "Contradictory specialist findings are unresolved.",
+        "Raw prompts, tool arguments, secrets, or unredacted outputs would enter telemetry."
+      ],
+      "auditDomains": ["architecture", "security", "correctness", "operations"],
+      "loopControls": [
+        "Bound retries and stop repeated identical failure signatures.",
+        "Validate each specialist result before synthesis.",
+        "Require explicit reconciliation of contradictions."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "workflow-architecture",
+      "name": "Workflow and state architecture",
+      "summary": "Map actors, triggers, state transitions, side effects, branches, failure recovery, and ownership across user and system workflows.",
+      "priority": 820,
+      "activation": "matched",
+      "sourceFiles": ["specialized/specialized-workflow-architect.md"],
+      "allowedRoles": ["lead", "architect", "investigator", "reviewer", "product", "docs"],
+      "defaultRoles": [],
+      "patterns": ["workflow", "state machine", "lifecycle", "background job", "queue", "worker", "cron", "route", "journey", "multi-phase", "program"],
+      "classifications": ["architecture", "product"],
+      "method": [
+        "Identify actors, triggers, preconditions, transitions, side effects, and terminal states.",
+        "Map happy paths, alternate branches, retries, timeouts, cancellation, and recovery.",
+        "Tie each workflow claim to routes, workers, migrations, config, or orchestration source.",
+        "Assign ownership and acceptance evidence to every material transition."
+      ],
+      "requiredEvidence": ["workflow-map", "failure-transitions"],
+      "stopConditions": [
+        "A state transition lacks an owner or observable outcome.",
+        "Retries or cancellation could duplicate side effects.",
+        "A destructive terminal path lacks explicit approval and recovery."
+      ],
+      "auditDomains": ["architecture", "correctness", "data-integrity", "operations"],
+      "loopControls": [
+        "Bind each phase to a named state transition and acceptance evidence.",
+        "Do not advance while recovery behavior for a failed transition is unknown."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "api-platform",
+      "name": "API and protocol compatibility",
+      "summary": "Review API and tool contracts for schema clarity, compatibility, versioning, deprecation, errors, limits, and integrator experience.",
+      "priority": 810,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-api-platform-engineer.md"],
+      "allowedRoles": ["lead", "architect", "builder", "reviewer", "qa", "security", "docs"],
+      "defaultRoles": [],
+      "patterns": ["\\bapi\\b", "endpoint", "openapi", "protocol", "schema", "json-rpc", "mcp tool", "backward compat", "deprecat", "rate limit", "webhook"],
+      "classifications": ["architecture"],
+      "method": [
+        "Treat the published schema and observable behavior as the contract.",
+        "Classify every change as additive, behavior-changing, or breaking.",
+        "Define stable error shape, bounds, idempotency, and deprecation behavior.",
+        "Test old callers, malformed input, unknown fields, limits, and partial failures."
+      ],
+      "requiredEvidence": ["contract-diff", "compatibility-tests"],
+      "stopConditions": [
+        "A breaking change lacks explicit versioning and migration treatment.",
+        "Unknown or malformed input fails open.",
+        "Error behavior is ambiguous or leaks sensitive implementation detail."
+      ],
+      "auditDomains": ["api-compatibility", "correctness", "security", "testability"],
+      "loopControls": [
+        "Re-run compatibility evidence after every contract change.",
+        "A breaking contract change requires a revised goal and approval."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "database-reliability",
+      "name": "Database reliability and safe change",
+      "summary": "Review data changes for durability, migration safety, expand-contract compatibility, access enforcement, recovery, and operational proof.",
+      "priority": 800,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-database-reliability-engineer.md"],
+      "allowedRoles": ["lead", "architect", "investigator", "builder", "reviewer", "qa", "security", "devops"],
+      "defaultRoles": [],
+      "patterns": ["database", "postgres", "migration", "schema change", "\\bsql\\b", "transaction", "row level security", "\\brls\\b", "backup", "restore", "replication", "failover"],
+      "classifications": ["data_financial", "production_release"],
+      "method": [
+        "Identify data invariants, access boundaries, transaction behavior, and rollback limits.",
+        "Prefer backward-compatible expand-contract migrations for live systems.",
+        "Prove backup usability with restore evidence when recovery claims matter.",
+        "Check locking, long-running backfills, replication, connection, and partial-failure risk."
+      ],
+      "requiredEvidence": ["data-invariants", "migration-recovery"],
+      "stopConditions": [
+        "A destructive migration lacks backup, rollback, and explicit approval.",
+        "Access control is asserted only in application code when database enforcement is required.",
+        "A restore or rollback claim has not been tested at the required risk level."
+      ],
+      "auditDomains": ["data-integrity", "security", "operations", "api-compatibility"],
+      "loopControls": [
+        "A migration phase must preserve old and new readers until contract completion.",
+        "Data mutation criteria require explicit verifier evidence."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "incident-reliability",
+      "name": "Incident and service reliability",
+      "summary": "Apply observable incident command, mitigation-first response, rollback readiness, service objectives, and blameless causal learning.",
+      "priority": 790,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-incident-response-commander.md", "engineering/engineering-sre.md"],
+      "allowedRoles": ["lead", "investigator", "reviewer", "qa", "security", "devops", "docs"],
+      "defaultRoles": [],
+      "patterns": ["incident", "outage", "production", "deploy", "release", "rollback", "monitor", "observab", "sre", "reliability", "runbook", "on-call", "postmortem"],
+      "classifications": ["production_release"],
+      "method": [
+        "Establish impact, timeline, owner, communications, and an observable mitigation target.",
+        "Prefer reversible mitigation before speculative root-cause changes.",
+        "Define service signals, rollback triggers, monitoring windows, and escalation paths.",
+        "Separate contributing system conditions from blame and capture durable follow-up."
+      ],
+      "requiredEvidence": ["operational-signals", "rollback-evidence"],
+      "stopConditions": [
+        "Production mutation lacks explicit authority, owner, rollback, or monitoring.",
+        "Impact cannot be measured or the mitigation cannot be observed.",
+        "The proposed action increases blast radius without a bounded reason."
+      ],
+      "auditDomains": ["operations", "correctness", "security", "performance"],
+      "loopControls": [
+        "Circuit-break on repeated operational failure signatures.",
+        "Require a rollback trigger and monitoring window before release-like progression."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "identity-access",
+      "name": "Identity and access control",
+      "summary": "Review authentication, authorization, sessions, service identities, least privilege, secrets, and auditable access decisions across trust boundaries.",
+      "priority": 780,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-identity-access-engineer.md", "security/security-appsec-engineer.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "security", "devops"],
+      "defaultRoles": [],
+      "patterns": ["auth", "identity", "oauth", "oidc", "session", "jwt", "rbac", "permission", "role", "access control", "secret", "credential", "service account", "least privilege"],
+      "classifications": ["security_compliance"],
+      "method": [
+        "Map principals, credentials, trust boundaries, token lifetime, and authorization decision points.",
+        "Enforce least privilege at the authoritative boundary, not only in presentation code.",
+        "Check provisioning, revocation, session invalidation, elevation, and audit events.",
+        "Treat exposed secrets as compromised and require rotation evidence."
+      ],
+      "requiredEvidence": ["trust-boundary-map", "authorization-tests"],
+      "stopConditions": [
+        "Authorization relies on user-editable metadata or client-only checks.",
+        "A privileged credential crosses into a public or lower-trust boundary.",
+        "Revocation or privilege-elevation behavior is undefined."
+      ],
+      "auditDomains": ["security", "data-integrity", "operations"],
+      "loopControls": [
+        "Security-sensitive criteria require negative authorization evidence.",
+        "Credential exposure stops the loop until revocation and rotation are addressed."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "accessibility-assurance",
+      "name": "Accessibility assurance",
+      "summary": "Combine standards-based automation with manual keyboard, focus, semantics, contrast, dynamic-content, and assistive-technology checks.",
+      "priority": 760,
+      "activation": "matched",
+      "sourceFiles": ["testing/testing-accessibility-auditor.md"],
+      "allowedRoles": ["lead", "builder", "reviewer", "qa", "product"],
+      "defaultRoles": [],
+      "patterns": ["accessib", "wcag", "screen reader", "keyboard", "focus", "aria", "contrast", "semantic html"],
+      "classifications": ["ui_product"],
+      "method": [
+        "Define the applicable standard and affected user flows.",
+        "Use automation for breadth and manual interaction for semantics, focus, keyboard, and announcements.",
+        "Record component, expected behavior, observed behavior, severity, and remediation.",
+        "Distinguish checks performed from checks unavailable in the current environment."
+      ],
+      "requiredEvidence": ["accessibility-automation", "manual-accessibility"],
+      "stopConditions": [
+        "A release-critical flow cannot be completed by keyboard.",
+        "Critical state or error information is unavailable to assistive technology.",
+        "Automation is being presented as complete accessibility proof."
+      ],
+      "auditDomains": ["correctness", "testability"],
+      "loopControls": [
+        "User-interface completion requires both automated and applicable manual evidence.",
+        "Unavailable assistive-technology checks must remain explicit residual risk."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "performance-engineering",
+      "name": "Performance engineering",
+      "summary": "Establish reproducible baselines, representative workloads, percentiles, resource signals, budgets, and statistically honest before/after evidence.",
+      "priority": 750,
+      "activation": "matched",
+      "sourceFiles": ["testing/testing-performance-benchmarker.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "devops"],
+      "defaultRoles": [],
+      "patterns": ["performance", "latency", "throughput", "benchmark", "load test", "capacity", "core web vitals", "startup time", "memory", "cpu", "p95", "p99"],
+      "classifications": [],
+      "method": [
+        "Define workload, environment, warm-up, sample size, metrics, and acceptance budget before measuring.",
+        "Capture baseline and candidate results under comparable conditions.",
+        "Report distributions and resource behavior, not only a single average.",
+        "Tie optimization to a measured bottleneck and re-run correctness checks."
+      ],
+      "requiredEvidence": ["performance-baseline", "performance-comparison"],
+      "stopConditions": [
+        "Baseline and candidate environments are not comparable.",
+        "A performance claim lacks workload, sample, or percentile evidence.",
+        "An optimization changes correctness or exceeds an agreed resource budget."
+      ],
+      "auditDomains": ["performance", "correctness", "operations"],
+      "loopControls": [
+        "Performance iterations must cite a measured bottleneck and comparable baseline.",
+        "Stop optimization when the agreed budget is met or evidence quality degrades."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "ai-code-security",
+      "name": "AI-assisted code security",
+      "summary": "Audit AI-assisted and model-enabled code for leaked secrets, authorization gaps, unsafe trust boundaries, prompt injection, excessive tool authority, and false assurance.",
+      "priority": 850,
+      "activation": "matched",
+      "sourceFiles": ["security/security-ai-generated-code-auditor.md", "security/security-appsec-engineer.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "security"],
+      "defaultRoles": [],
+      "patterns": ["ai-generated", "ai-assisted", "llm", "model", "prompt", "agent", "tool call", "openai", "supabase", "service[_ -]?role", "prompt injection", "rag"],
+      "classifications": ["security_compliance"],
+      "method": [
+        "Trace secrets, privileged clients, identities, untrusted content, model instructions, and tool authority end to end.",
+        "Show exact evidence and exploit path before assigning a security finding.",
+        "Keep external content as data and schema-validate model or specialist output before use.",
+        "State scan scope, blind spots, confidence, and rotation steps for exposed secrets."
+      ],
+      "requiredEvidence": ["ai-trust-boundaries", "negative-security-tests"],
+      "stopConditions": [
+        "Untrusted content can become higher-priority instructions or privileged tool arguments.",
+        "A service credential or secret can reach a client bundle, log, trace, or model context.",
+        "A security pass claim exceeds the checks actually performed."
+      ],
+      "auditDomains": ["security", "data-integrity", "supply-chain", "operations"],
+      "loopControls": [
+        "Model-enabled changes require adversarial negative tests at trust boundaries.",
+        "Do not finalize while privileged tool authority is broader than the verified need."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "compliance-assurance",
+      "name": "Technical compliance assurance",
+      "summary": "Map scoped controls to current state, evidence, gaps, target state, remediation, ownership, and residual risk without substituting checklists for technical proof.",
+      "priority": 730,
+      "activation": "matched",
+      "sourceFiles": ["security/security-compliance-auditor.md"],
+      "allowedRoles": ["lead", "reviewer", "security", "devops", "docs"],
+      "defaultRoles": [],
+      "patterns": ["compliance", "soc ?2", "iso ?27001", "pci", "gdpr", "hipaa", "control", "audit evidence", "policy", "regulat"],
+      "classifications": ["security_compliance"],
+      "method": [
+        "Define the applicable framework, systems, period, control objective, and evidence owner.",
+        "Map each finding to current state, target state, concrete evidence, remediation, and residual risk.",
+        "Test whether the technical control operates, not merely whether documentation exists.",
+        "Separate observed evidence from management assertion and unavailable evidence."
+      ],
+      "requiredEvidence": ["control-evidence", "gap-remediation"],
+      "stopConditions": [
+        "A compliance conclusion depends only on an assertion or policy document.",
+        "The audit scope, period, or control objective is undefined.",
+        "Required evidence contains secrets, personal data, or regulated data that cannot be safely minimized."
+      ],
+      "auditDomains": ["security", "operations", "data-integrity", "supply-chain"],
+      "loopControls": [
+        "Each control criterion must name its verifier and evidence owner.",
+        "Unavailable operating evidence remains an explicit blocker or qualification."
+      ],
+      "permissionMode": "inherit-role"
+    }
+  ]
+}

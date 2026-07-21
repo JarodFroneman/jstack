@@ -1,6 +1,6 @@
 {
   "name": "jstack-loop",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Top-level JStack command for bounded loops and durable multi-phase programs.",
   "author": {
     "name": "Jarod Froneman",
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "JStack Loop Engineer",
     "shortDescription": "Verified goal loops and multi-phase programs",
-    "longDescription": "Top-level Codex workflow that selects one bounded loop or a project-derived Program -> Phase DAG and composes native Goal mode with explicitly approved JStack single-lead, specialist-team, or full-team execution. It preserves Git-bound contracts, durable hash-chained state, intervention gates, child proofs, scoped autonomy, convergence breakers, and current evidence before completion.",
+    "longDescription": "Top-level Codex workflow that selects one bounded loop or a project-derived Program -> Phase DAG and composes native Goal mode with explicitly approved JStack single-lead, specialist-team, or full-team execution. Capability routing is bound into the durable contract, and multi-agent checkpoints require a current signed handoff. Git-bound contracts, scoped autonomy, convergence breakers, and current evidence remain mandatory before completion.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

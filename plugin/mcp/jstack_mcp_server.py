@@ -34,12 +34,13 @@ _SERVER_DIR = Path(__file__).resolve().parent
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 import audit as audit_core
+import capabilities as capability_core
 import loop as loop_core
 import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.5.0"
+SERVER_VERSION = "0.6.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -53,6 +54,10 @@ GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS = 30 * 60
 LOOP_MAX_QA_RECEIPTS = 50
 LOOP_MAX_AUDIT_RECEIPTS = 20
 LOOP_MAX_RECEIPT_CHARS = 100_000
+SPECIALIST_MAX_RECEIPTS = 20
+SPECIALIST_MAX_RECEIPT_CHARS = 200_000
+SPECIALIST_MAX_STRUCTURED_BYTES = 100_000
+SPECIALIST_MAX_HANDOFF_BYTES = 2_500_000
 PROGRAM_MAX_RECEIPT_CHARS = 100_000
 PROGRAM_MAX_ARTIFACT_BYTES = 100_000_000
 PROGRAM_ARTIFACT_TIMEOUT_SECONDS = 30
@@ -80,6 +85,8 @@ GIT_REQUIRED_TOOLS = [
     "jstack_ship_check",
     "jstack_release_readiness",
     "jstack_quant_backtest_review",
+    "jstack_specialist_result",
+    "jstack_specialist_handoff_check",
     "jstack_loop_goal_readiness",
     "jstack_loop_start",
     "jstack_loop_status",
@@ -842,7 +849,7 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
         )
         if set(providers) - {"signed-local"}:
             raise ToolError(
-                "JStack v0.5.0 supports only the signed-local program identity provider."
+                "JStack currently supports only the signed-local program identity provider."
             )
 
 
@@ -2173,6 +2180,7 @@ TEAM_COORDINATION_PROTOCOL = {
         "rolesNotUsed",
         "readWritePermissions",
         "fileOwnershipMap",
+        "capabilityPlan",
         "evidenceContract",
         "conflictRule",
         "stopConditions",
@@ -2199,6 +2207,7 @@ TEAM_COORDINATION_PROTOCOL = {
         "explicit blockers",
         "residual risk",
         "recommended next action",
+        "session-signed jstack.specialist.result.v1 receipt",
     ],
     "conflictRule": "Evidence beats opinion. Reproduction beats speculation. Project rules beat generic best practice. Safety gates beat speed. Lead Engineer decides and documents unresolved risk.",
     "stopConditions": [
@@ -2233,6 +2242,52 @@ def roster_agent(agent_id: str) -> dict[str, Any]:
     return next(agent for agent in AGENT_ROSTER if agent["id"] == agent_id)
 
 
+def _capability_call(operation: Callable[[], Any]) -> Any:
+    try:
+        return operation()
+    except capability_core.CapabilityError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def specialist_capability_plan(
+    goal: str,
+    classifications: list[dict[str, Any]],
+    selected_ids: list[str],
+    explicit_capability_ids: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    return _capability_call(
+        lambda: capability_core.select_capabilities(
+            goal,
+            selected_ids,
+            [str(item["id"]) for item in classifications],
+            explicit_capability_ids or [],
+        )
+    )
+
+
+def capability_assignments_by_role(capability_plan: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return {
+        str(assignment["roleId"]): list(assignment.get("capabilities") or [])
+        for assignment in capability_plan.get("assignments") or []
+    }
+
+
+def capability_enriched_agents(
+    selected_ids: list[str], capability_plan: dict[str, Any]
+) -> list[dict[str, Any]]:
+    assignments = capability_assignments_by_role(capability_plan)
+    agents: list[dict[str, Any]] = []
+    for agent_id in selected_ids:
+        agent = dict(roster_agent(agent_id))
+        role_capabilities = assignments.get(agent_id, [])
+        agent["capabilityIds"] = [str(item["capabilityId"]) for item in role_capabilities]
+        agent["capabilities"] = role_capabilities
+        agent["capabilityCatalogDigest"] = capability_plan["catalogDigest"]
+        agent["permissionInvariant"] = capability_plan["permissionInvariant"]
+        agents.append(agent)
+    return agents
+
+
 def normalize_team_mode(team_mode: Optional[str]) -> str:
     normalized = (team_mode or "auto").strip().lower().replace("_", "-")
     aliases = {
@@ -2259,6 +2314,7 @@ def choose_agent_team(
     classifications: list[dict[str, Any]],
     quality_level: str = "enterprise",
     team_mode: Optional[str] = "auto",
+    capability_ids: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     mode_requested = normalize_team_mode(team_mode)
     classification_ids = {item["id"] for item in classifications}
@@ -2271,7 +2327,10 @@ def choose_agent_team(
 
     if mode_requested == "full-team":
         selected_ids = [agent["id"] for agent in AGENT_ROSTER]
-        agents = [roster_agent(agent_id) for agent_id in selected_ids]
+        capability_plan = specialist_capability_plan(
+            goal, classifications, selected_ids, capability_ids
+        )
+        agents = capability_enriched_agents(selected_ids, capability_plan)
         return {
             "mode": "full-team",
             "requestedMode": mode_requested,
@@ -2283,15 +2342,21 @@ def choose_agent_team(
             "requiresLeadJustification": False,
             "leadJustification": "Explicit /jstack-full-team invocation or full-team mode request.",
             "agents": agents,
+            "capabilityPlan": capability_plan,
             "dispatchPolicy": TEAM_DISPATCH_POLICY,
-            "coordinationProtocol": agent_coordination_packet(goal, "full-team", selected_ids, classifications),
-            "handoffContract": team_handoff_contract(selected_ids),
+            "coordinationProtocol": agent_coordination_packet(
+                goal, "full-team", selected_ids, classifications, capability_plan
+            ),
+            "handoffContract": team_handoff_contract(selected_ids, capability_plan),
             "blockedActions": team_blocked_actions(),
         }
 
     if mode_requested == "single-lead" or (
         mode_requested == "auto" and "trivial" in classification_ids and quality_level == "standard"
     ):
+        capability_plan = specialist_capability_plan(
+            goal, classifications, ["lead"], capability_ids
+        )
         return {
             "mode": "single-agent",
             "requestedMode": mode_requested,
@@ -2301,10 +2366,13 @@ def choose_agent_team(
             "maxAgents": 1,
             "specialistCount": 0,
             "requiresLeadJustification": False,
-            "agents": [roster_agent("lead")],
+            "agents": capability_enriched_agents(["lead"], capability_plan),
+            "capabilityPlan": capability_plan,
             "dispatchPolicy": TEAM_DISPATCH_POLICY,
-            "coordinationProtocol": agent_coordination_packet(goal, "single-lead", ["lead"], classifications),
-            "handoffContract": team_handoff_contract(["lead"]),
+            "coordinationProtocol": agent_coordination_packet(
+                goal, "single-lead", ["lead"], classifications, capability_plan
+            ),
+            "handoffContract": team_handoff_contract(["lead"], capability_plan),
             "blockedActions": team_blocked_actions(),
         }
 
@@ -2353,7 +2421,10 @@ def choose_agent_team(
         prioritize("investigator", "reviewer")
     selected_ids = ["lead"] + specialist_priority[: int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])]
 
-    agents = [roster_agent(agent_id) for agent_id in selected_ids]
+    capability_plan = specialist_capability_plan(
+        goal, classifications, selected_ids, capability_ids
+    )
+    agents = capability_enriched_agents(selected_ids, capability_plan)
     mode = "single-agent" if selected_ids == ["lead"] else "lead-plus-specialists"
     execution_mode = "single-lead" if selected_ids == ["lead"] else "smart-subagents"
     specialist_count = max(0, len(selected_ids) - 1)
@@ -2369,14 +2440,28 @@ def choose_agent_team(
         "specialistCount": specialist_count,
         "requiresLeadJustification": specialist_count > int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"]),
         "agents": agents,
+        "capabilityPlan": capability_plan,
         "dispatchPolicy": TEAM_DISPATCH_POLICY,
-        "coordinationProtocol": agent_coordination_packet(goal, execution_mode, selected_ids, classifications),
-        "handoffContract": team_handoff_contract(selected_ids),
+        "coordinationProtocol": agent_coordination_packet(
+            goal, execution_mode, selected_ids, classifications, capability_plan
+        ),
+        "handoffContract": team_handoff_contract(selected_ids, capability_plan),
         "blockedActions": team_blocked_actions(),
     }
 
 
-def agent_coordination_packet(goal: str, mode: str, selected_ids: list[str], classifications: list[dict[str, Any]]) -> dict[str, Any]:
+def agent_coordination_packet(
+    goal: str,
+    mode: str,
+    selected_ids: list[str],
+    classifications: list[dict[str, Any]],
+    capability_plan: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    if capability_plan is None:
+        capability_plan = specialist_capability_plan(
+            goal, classifications, selected_ids, []
+        )
+    capability_assignments = capability_assignments_by_role(capability_plan)
     selected = set(selected_ids)
     roles_used = []
     roles_not_used = []
@@ -2389,6 +2474,11 @@ def agent_coordination_packet(goal: str, mode: str, selected_ids: list[str], cla
         }
         if agent["id"] in selected:
             entry["whyNeeded"] = role_selection_reason(agent["id"], classifications, mode)
+            entry["capabilities"] = capability_assignments.get(agent["id"], [])
+            entry["capabilityIds"] = [
+                str(item["capabilityId"])
+                for item in capability_assignments.get(agent["id"], [])
+            ]
             roles_used.append(entry)
         else:
             entry["whySkipped"] = "Not required for this mode/risk class unless new evidence raises risk."
@@ -2403,11 +2493,12 @@ def agent_coordination_packet(goal: str, mode: str, selected_ids: list[str], cla
         "readWritePermissions": TEAM_COORDINATION_PROTOCOL["permissionDefaults"],
         "fileOwnershipMapRequired": mode != "single-lead",
         "fileOwnershipRules": TEAM_COORDINATION_PROTOCOL["fileOwnershipRules"],
+        "capabilityPlan": capability_plan,
         "evidenceContract": TEAM_COORDINATION_PROTOCOL["evidenceContract"],
         "conflictRule": TEAM_COORDINATION_PROTOCOL["conflictRule"],
         "stopConditions": TEAM_COORDINATION_PROTOCOL["stopConditions"],
         "verificationGate": "Define tests, lint/typecheck/build, browser QA, security scan, backtest evidence, logs, or screenshots required for this risk class.",
-        "handoffGate": "Lead must summarize changed files, checks run, specialist findings reconciled, unresolved risks, and next steps.",
+        "handoffGate": "Lead must validate session-signed specialist receipts, reconcile findings and conflicts, then summarize changed files, checks, unresolved risks, and next steps.",
         "wavePattern": TEAM_COORDINATION_PROTOCOL["fullTeamWavePattern"] if mode == "full-team" else [],
         "antiSlopStandard": ANTI_SLOP_BASE,
     }
@@ -2463,19 +2554,33 @@ def dispatch_requirement_text(required: bool, goal: str) -> str:
     return "Specialist dispatch is optional; the Lead may stay single-agent if the task remains scoped and low-risk."
 
 
-def team_handoff_contract(agent_ids: list[str]) -> dict[str, Any]:
+def team_handoff_contract(
+    agent_ids: list[str], capability_plan: Optional[dict[str, Any]] = None
+) -> dict[str, Any]:
+    assignments = capability_assignments_by_role(capability_plan or {"assignments": []})
     return {
         "leadMustSynthesize": True,
+        "specialistResultSchema": "jstack.specialist.result.v1",
+        "specialistTelemetrySchema": "jstack.specialist.telemetry.v1",
+        "specialistReceiptKind": "specialist-result",
+        "capabilityCatalogDigest": (capability_plan or {}).get("catalogDigest"),
+        "expectedRoleCapabilities": {
+            agent_id: [str(item["capabilityId"]) for item in assignments.get(agent_id, [])]
+            for agent_id in agent_ids
+        },
         "requiredFromEachSpecialist": [
             "scope handled",
             "evidence gathered",
             "findings or changes",
             "blockers",
             "residual risk",
+            "privacy-safe telemetry metadata",
+            "session-signed specialist result receipt",
         ],
         "writeOwnership": "Any editing specialist must own a disjoint file/module scope and list changed paths.",
         "finalLeadChecklist": [
             "specialist results reconciled",
+            "specialist receipts validated against the current Git state and capability catalog",
             "conflicts resolved",
             "verification run or blockers reported",
             "production claims limited to available evidence",
@@ -3645,9 +3750,16 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     if not mastery_mode:
         learning_mode = "off"
     team_mode = normalize_team_mode(args.get("team_mode") or "single-lead")
+    capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
     selected = choose_skills(goal, quality_level=quality_level)
-    team_plan = choose_agent_team(goal, classifications, quality_level=quality_level, team_mode=team_mode)
+    team_plan = choose_agent_team(
+        goal,
+        classifications,
+        quality_level=quality_level,
+        team_mode=team_mode,
+        capability_ids=capability_ids,
+    )
     detected = tool_detect_project({"project_path": binding["requestedPath"]})
     steps = [
         {
@@ -3786,6 +3898,9 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         "masterySystem": mastery_system(),
         "taskTraining": task_training,
         "agentTeam": team_plan,
+        "specialistCapabilityCatalog": _capability_call(
+            lambda: capability_core.catalog_summary()
+        ),
         "antiSlopChecklist": task_training["antiSlopChecklist"] if task_training else ANTI_SLOP_BASE,
         "recommendedSkills": selected,
         "availableWorkflowSkills": workflow_skill_names(),
@@ -3812,17 +3927,74 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
     if quality_level not in {"standard", "enterprise"}:
         raise ToolError("quality_level must be 'standard' or 'enterprise'.")
     team_mode = normalize_team_mode(args.get("team_mode"))
+    capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
     return {
         "goal": goal,
         "qualityLevel": quality_level,
         "teamMode": team_mode,
         "classifications": classifications,
-        "team": choose_agent_team(goal, classifications, quality_level=quality_level, team_mode=team_mode),
+        "team": choose_agent_team(
+            goal,
+            classifications,
+            quality_level=quality_level,
+            team_mode=team_mode,
+            capability_ids=capability_ids,
+        ),
+        "capabilityCatalog": _capability_call(lambda: capability_core.catalog_summary()),
         "availableRoster": AGENT_ROSTER,
         "policy": TEAM_DISPATCH_POLICY,
         "coordinationProtocol": TEAM_COORDINATION_PROTOCOL,
     }
+
+
+def tool_capability_catalog(args: dict[str, Any]) -> dict[str, Any]:
+    include_details = bool(args.get("include_details", False))
+    catalog = _capability_call(lambda: capability_core.load_catalog())
+    summary = _capability_call(
+        lambda: capability_core.catalog_summary(catalog, include_details=include_details)
+    )
+    role_ids = args.get("role_ids") or []
+    capability_ids = args.get("capability_ids") or []
+    query = str(args.get("query") or "").strip().lower()
+    if role_ids:
+        unknown_roles = sorted(set(str(item) for item in role_ids) - capability_core.ROSTER_ROLE_IDS)
+        if unknown_roles:
+            raise ToolError("Unknown role ids: " + ", ".join(unknown_roles))
+    if capability_ids:
+        indexed = _capability_call(lambda: capability_core.capability_by_id(catalog))
+        unknown_capabilities = sorted(set(str(item) for item in capability_ids) - set(indexed))
+        if unknown_capabilities:
+            raise ToolError("Unknown capability ids: " + ", ".join(unknown_capabilities))
+    filtered = []
+    for capability in summary["capabilities"]:
+        if role_ids and not set(str(item) for item in role_ids) & set(capability["allowedRoles"]):
+            continue
+        if capability_ids and capability["id"] not in capability_ids:
+            continue
+        if query and query not in " ".join(
+            [
+                str(capability["id"]),
+                str(capability["name"]),
+                str(capability["summary"]),
+                " ".join(str(item) for item in capability.get("auditDomains") or []),
+            ]
+        ).lower():
+            continue
+        filtered.append(capability)
+    summary["capabilities"] = filtered
+    summary["resultCount"] = len(filtered)
+    goal = str(args.get("goal") or "").strip()
+    if goal:
+        selected_roles = [str(item) for item in role_ids] or ["lead"]
+        classifications = classify_work(goal)
+        summary["selection"] = specialist_capability_plan(
+            goal,
+            classifications,
+            selected_roles,
+            [str(item) for item in capability_ids],
+        )
+    return summary
 
 
 def normalize_agent_plan(agent: Any) -> dict[str, Any]:
@@ -3835,12 +4007,20 @@ def normalize_agent_plan(agent: Any) -> dict[str, Any]:
         write_scope = [write_scope]
     if not isinstance(write_scope, list):
         write_scope = []
+    capability_ids = agent.get("capabilityIds", agent.get("capability_ids"))
+    capabilities_provided = capability_ids is not None
+    if isinstance(capability_ids, str):
+        capability_ids = [capability_ids]
+    if not isinstance(capability_ids, list):
+        capability_ids = []
     return {
         "id": agent_id,
         "readOnly": read_only,
         "mayEdit": not read_only,
         "writeScope": [str(item).replace("\\", "/") for item in write_scope],
         "task": str(agent.get("task") or ""),
+        "capabilityIds": [str(item).strip() for item in capability_ids if str(item).strip()],
+        "capabilitiesProvided": capabilities_provided,
     }
 
 
@@ -3878,7 +4058,13 @@ def scopes_overlap(left: str, right: str) -> bool:
     )
 
 
-def coordination_packet_errors(packet: Any, goal: str, team_mode: str, agent_ids: list[str]) -> list[str]:
+def coordination_packet_errors(
+    packet: Any,
+    goal: str,
+    team_mode: str,
+    agent_ids: list[str],
+    expected_capability_plan: Optional[dict[str, Any]] = None,
+) -> list[str]:
     if not isinstance(packet, dict):
         return ["Specialist dispatch requires the actual coordination_packet object, not a boolean assertion."]
     errors: list[str] = []
@@ -3903,6 +4089,30 @@ def coordination_packet_errors(packet: Any, goal: str, team_mode: str, agent_ids
                 used_ids.add(role_id)
     if used_ids != set(agent_ids):
         errors.append("Coordination packet rolesUsed must exactly match the proposed agent ids.")
+    packet_capability_plan = packet.get("capabilityPlan")
+    if expected_capability_plan is not None:
+        if not isinstance(packet_capability_plan, dict):
+            errors.append("Coordination packet capabilityPlan must be the actual capability plan object.")
+        else:
+            for field in ("catalogDigest", "selectionDigest"):
+                if packet_capability_plan.get(field) != expected_capability_plan.get(field):
+                    errors.append(
+                        f"Coordination packet capabilityPlan.{field} does not match deterministic routing."
+                    )
+            expected_by_role = capability_assignments_by_role(expected_capability_plan)
+            for role in roles_used if isinstance(roles_used, list) else []:
+                if not isinstance(role, dict):
+                    continue
+                role_id = str(role.get("id") or "")
+                expected_ids = [
+                    str(item["capabilityId"])
+                    for item in expected_by_role.get(role_id, [])
+                ]
+                supplied_ids = role.get("capabilityIds") or []
+                if supplied_ids != expected_ids:
+                    errors.append(
+                        f"Coordination packet role '{role_id}' capabilityIds do not match deterministic routing."
+                    )
     ownership = packet.get("fileOwnershipMap")
     if not isinstance(ownership, dict):
         errors.append("Coordination packet fileOwnershipMap must be an object keyed by editing agent id.")
@@ -3942,6 +4152,47 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         blockers.append("Unknown agent ids are not allowed: " + ", ".join(unknown_ids))
     if "lead" not in ids:
         blockers.append("Agent plan must include the Lead Engineer with id 'lead'.")
+    expected_capability_plan: Optional[dict[str, Any]] = None
+    if not goal:
+        blockers.append("A non-empty goal is required for deterministic capability validation.")
+    else:
+        known_role_ids = [agent_id for agent_id in ids if agent_id in allowed_ids]
+        if known_role_ids:
+            expected_capability_plan = specialist_capability_plan(
+                goal,
+                classifications,
+                known_role_ids,
+                [str(item) for item in (args.get("capability_ids") or [])],
+            )
+            expected_by_role = capability_assignments_by_role(expected_capability_plan)
+            for agent in agents:
+                if agent["id"] not in allowed_ids:
+                    continue
+                if not agent["capabilitiesProvided"]:
+                    blockers.append(
+                        f"Agent '{agent['id']}' must include capabilityIds from jstack_team_plan."
+                    )
+                    continue
+                if len(agent["capabilityIds"]) != len(set(agent["capabilityIds"])):
+                    blockers.append(
+                        f"Agent '{agent['id']}' capabilityIds must not contain duplicates."
+                    )
+                try:
+                    capability_core.validate_role_capabilities(
+                        agent["id"], agent["capabilityIds"]
+                    )
+                except capability_core.CapabilityError as exc:
+                    blockers.append(str(exc))
+                    continue
+                expected_ids = [
+                    str(item["capabilityId"])
+                    for item in expected_by_role.get(agent["id"], [])
+                ]
+                if agent["capabilityIds"] != expected_ids:
+                    blockers.append(
+                        f"Agent '{agent['id']}' capabilityIds do not match deterministic routing: expected "
+                        + ", ".join(expected_ids)
+                    )
     if team_mode == "smart-subagents":
         high_risk_requirements = {
             "production_release": {"devops", "security", "qa"},
@@ -3977,7 +4228,15 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
     if team_mode == "smart-subagents" and specialist_count > max_specialists and not explicit_justification:
         blockers.append("Smart-subagents mode should normally stay within two or three specialists unless the Lead justifies more.")
     if specialist_count > 0:
-        blockers.extend(coordination_packet_errors(coordination_packet, goal, team_mode, ids))
+        blockers.extend(
+            coordination_packet_errors(
+                coordination_packet,
+                goal,
+                team_mode,
+                ids,
+                expected_capability_plan,
+            )
+        )
     if "production_release" in classification_ids and not explicit_release_requested:
         blockers.append("Production/release-classified work requires explicit release approval before deploy/release actions.")
 
@@ -4036,10 +4295,832 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         "maxSpecialists": max_specialists,
         "leadJustification": explicit_justification,
         "coordinationPacket": coordination_packet,
+        "capabilityPlan": expected_capability_plan,
         "agents": agents,
         "blockedActions": team_blocked_actions(),
         "coordinationProtocol": TEAM_COORDINATION_PROTOCOL,
         "policy": TEAM_DISPATCH_POLICY,
+    }
+
+
+_SPECIALIST_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+_SPECIALIST_TRACE_RE = re.compile(r"^[0-9a-f]{32}$")
+_SPECIALIST_SPAN_RE = re.compile(r"^[0-9a-f]{16}$")
+_SPECIALIST_RUN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
+_SPECIALIST_RAW_KEYS = {
+    "prompt",
+    "prompts",
+    "rawinput",
+    "rawoutput",
+    "rawcontent",
+    "toolarguments",
+    "arguments",
+    "messages",
+    "modelresponse",
+}
+
+
+def _specialist_digest(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _specialist_structured_limit(
+    value: Any,
+    field: str,
+    *,
+    maximum: int = SPECIALIST_MAX_STRUCTURED_BYTES,
+) -> None:
+    try:
+        size = len(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"{field} must be bounded JSON data.") from exc
+    if size > maximum:
+        raise ToolError(
+            f"{field} exceeds the {maximum}-byte structured data limit."
+        )
+
+
+def _reject_specialist_sensitive_content(value: Any, field: str = "arguments") -> None:
+    if isinstance(value, str):
+        if audit_core.contains_secret_like(value):
+            raise ToolError(
+                f"{field} contains a secret-like value. Redact it and reference safe evidence instead."
+            )
+        return
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized_key = re.sub(r"[^a-z]", "", str(key).lower())
+            if normalized_key in _SPECIALIST_RAW_KEYS:
+                raise ToolError(
+                    f"{field}.{key} is forbidden: specialist telemetry and receipts may not store raw prompts, model output, or tool arguments."
+                )
+            _reject_specialist_sensitive_content(child, f"{field}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_specialist_sensitive_content(child, f"{field}[{index}]")
+
+
+def _specialist_identifier(value: Any, field: str) -> str:
+    normalized = str(value or "").strip()
+    if not _SPECIALIST_IDENTIFIER_RE.fullmatch(normalized) or len(normalized) > 100:
+        raise ToolError(f"{field} must be a lowercase kebab-case identifier.")
+    return normalized
+
+
+def _specialist_role_ids(values: Any, field: str = "team_role_ids") -> list[str]:
+    if not isinstance(values, list) or not values:
+        raise ToolError(f"{field} must be a non-empty array of JStack role ids.")
+    roles = [str(item or "").strip() for item in values]
+    if len(roles) != len(set(roles)):
+        raise ToolError(f"{field} must not contain duplicates.")
+    unknown = sorted(set(roles) - capability_core.ROSTER_ROLE_IDS)
+    if unknown:
+        raise ToolError(f"{field} contains unknown role ids: " + ", ".join(unknown))
+    return roles
+
+
+def _specialist_capability_ids(
+    role_id: str, values: Any, field: str = "capability_ids"
+) -> list[str]:
+    if not isinstance(values, list) or not values:
+        raise ToolError(f"{field} must be a non-empty capability id array.")
+    normalized = [str(item or "").strip() for item in values]
+    if len(normalized) != len(set(normalized)):
+        raise ToolError(f"{field} must not contain duplicates.")
+    return _capability_call(
+        lambda: capability_core.validate_role_capabilities(role_id, normalized)
+    )
+
+
+def _specialist_write_scopes(values: Any) -> list[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        raise ToolError("write_scope must be an array of repository-relative paths or globs.")
+    scopes = [normalize_write_scope(str(item)) for item in values]
+    if len(scopes) != len(set(scopes)):
+        raise ToolError("write_scope must not contain duplicates.")
+    return scopes
+
+
+def _specialist_change_path(value: Any, field: str) -> str:
+    path = normalize_write_scope(str(value or ""))
+    if any(marker in path for marker in ("*", "?", "[")):
+        raise ToolError(f"{field} must identify one concrete repository path, not a glob.")
+    return path
+
+
+def _path_owned_by_scope(path: str, scope: str) -> bool:
+    if fnmatch.fnmatch(path, scope):
+        return True
+    prefix = scope_static_prefix(scope)
+    return bool(prefix and (path == prefix or path.startswith(prefix + "/")))
+
+
+def _specialist_timestamp(value: Any, field: str) -> _dt.datetime:
+    try:
+        parsed = _dt.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ToolError(f"{field} must be a valid ISO-8601 timestamp.") from exc
+    if parsed.tzinfo is None:
+        raise ToolError(f"{field} must include a timezone.")
+    return parsed.astimezone(_dt.timezone.utc)
+
+
+def _deterministic_specialist_team(
+    goal: str,
+    team_mode: str,
+    explicit_capability_ids: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    classifications = classify_work(goal)
+    team = choose_agent_team(
+        goal,
+        classifications,
+        quality_level="enterprise",
+        team_mode=team_mode,
+        capability_ids=explicit_capability_ids,
+    )
+    return classifications, team
+
+
+def _validate_specialist_result(
+    result: Any,
+    *,
+    role_id: str,
+    capability_ids: list[str],
+    write_scopes: list[str],
+    catalog: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    validate_schema_value(result, SPECIALIST_RESULT_SCHEMA, "result")
+    _specialist_structured_limit(result, "result")
+    _reject_specialist_sensitive_content(result, "result")
+    normalized = json.loads(json.dumps(result))
+    status = str(normalized["status"])
+    blockers = normalized["blockers"]
+    skipped = normalized["skippedChecks"]
+    if status == "success" and blockers:
+        raise ToolError("A successful specialist result may not contain blockers.")
+    if status in {"blocked", "error"} and not blockers:
+        raise ToolError(f"A {status} specialist result must contain at least one blocker.")
+    if status == "partial" and not blockers and not skipped:
+        raise ToolError("A partial specialist result must identify a blocker or skipped check.")
+
+    evidence_kinds: list[str] = []
+    evidence_status: dict[str, str] = {}
+    evidence_references: set[str] = set()
+    for index, evidence in enumerate(normalized["evidence"]):
+        kind = _specialist_identifier(evidence["kind"], f"result.evidence[{index}].kind")
+        if kind in evidence_kinds:
+            raise ToolError(f"Duplicate specialist evidence kind: {kind}")
+        evidence["kind"] = kind
+        evidence_kinds.append(kind)
+        evidence_status[kind] = str(evidence["status"])
+        references = [str(item) for item in evidence["references"]]
+        if len(references) != len(set(references)):
+            raise ToolError(
+                f"result.evidence[{index}].references must not contain duplicates."
+            )
+        evidence_references.update(references)
+
+    indexed = _capability_call(lambda: capability_core.capability_by_id(catalog))
+    required_evidence = sorted(
+        {
+            kind
+            for capability_id in capability_ids
+            for kind in indexed[capability_id]["requiredEvidence"]
+        }
+    )
+    missing_evidence = sorted(set(required_evidence) - set(evidence_kinds))
+    if missing_evidence:
+        raise ToolError(
+            "Specialist result is missing capability-required evidence kinds: "
+            + ", ".join(missing_evidence)
+        )
+
+    finding_ids: set[str] = set()
+    for index, finding in enumerate(normalized["findings"]):
+        finding_id = _specialist_identifier(
+            finding["findingId"], f"result.findings[{index}].findingId"
+        )
+        if finding_id in finding_ids:
+            raise ToolError(f"Duplicate specialist findingId: {finding_id}")
+        finding_ids.add(finding_id)
+        finding["findingId"] = finding_id
+        finding["resolutionKey"] = _specialist_identifier(
+            finding["resolutionKey"], f"result.findings[{index}].resolutionKey"
+        )
+        finding_evidence = [
+            _specialist_identifier(item, f"result.findings[{index}].evidenceKinds")
+            for item in finding["evidenceKinds"]
+        ]
+        if len(finding_evidence) != len(set(finding_evidence)):
+            raise ToolError(
+                f"result.findings[{index}].evidenceKinds must not contain duplicates."
+            )
+        unknown_evidence = sorted(set(finding_evidence) - set(evidence_kinds))
+        if unknown_evidence:
+            raise ToolError(
+                f"result.findings[{index}] references unknown evidence kinds: "
+                + ", ".join(unknown_evidence)
+            )
+        finding["evidenceKinds"] = finding_evidence
+        if finding.get("location"):
+            finding["location"]["path"] = _specialist_change_path(
+                finding["location"]["path"],
+                f"result.findings[{index}].location.path",
+            )
+    if status == "success" and any(
+        finding["disposition"] == "block" for finding in normalized["findings"]
+    ):
+        raise ToolError("A successful specialist result may not contain a blocking finding.")
+
+    change_paths: set[str] = set()
+    for index, change in enumerate(normalized["changes"]):
+        path = _specialist_change_path(change["path"], f"result.changes[{index}].path")
+        if path in change_paths:
+            raise ToolError(f"Duplicate changed path in specialist result: {path}")
+        change_paths.add(path)
+        change["path"] = path
+        if role_id not in {"lead", "builder", "docs"}:
+            raise ToolError(f"Read-only role '{role_id}' may not report file changes.")
+        if role_id != "lead" and not write_scopes:
+            raise ToolError(f"Editing role '{role_id}' requires a non-empty write_scope.")
+        if write_scopes and not any(_path_owned_by_scope(path, scope) for scope in write_scopes):
+            raise ToolError(
+                f"Changed path '{path}' is outside role '{role_id}' write_scope."
+            )
+        if role_id == "docs" and not (
+            path.startswith("docs/")
+            or path in {"README.md", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md"}
+            or path.endswith(".md")
+        ):
+            raise ToolError(f"Documentation role may not report non-document change '{path}'.")
+
+    blocker_codes: set[str] = set()
+    for index, blocker in enumerate(blockers):
+        code = _specialist_identifier(blocker["code"], f"result.blockers[{index}].code")
+        if code in blocker_codes:
+            raise ToolError(f"Duplicate specialist blocker code: {code}")
+        blocker_codes.add(code)
+        blocker["code"] = code
+
+    required_evidence_complete = all(
+        evidence_status.get(kind) in {"observed", "passed"}
+        for kind in required_evidence
+    )
+    passed = (
+        status == "success"
+        and not blockers
+        and required_evidence_complete
+        and not any(item["status"] == "failed" for item in normalized["evidence"])
+    )
+    return normalized, passed
+
+
+def _build_specialist_telemetry(
+    telemetry: Any,
+    *,
+    result: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    validate_schema_value(
+        telemetry, SPECIALIST_TELEMETRY_INPUT_SCHEMA, "telemetry"
+    )
+    _specialist_structured_limit(telemetry, "telemetry")
+    _reject_specialist_sensitive_content(telemetry, "telemetry")
+    normalized = json.loads(json.dumps(telemetry))
+    if normalized["rawContentStored"] is not False:
+        raise ToolError("telemetry.rawContentStored must be false.")
+    if normalized["status"] != result["status"]:
+        raise ToolError("telemetry.status must exactly match result.status.")
+    if not _SPECIALIST_RUN_RE.fullmatch(str(normalized["runId"])):
+        raise ToolError("telemetry.runId has an invalid bounded identifier format.")
+    if not _SPECIALIST_TRACE_RE.fullmatch(str(normalized["traceId"])):
+        raise ToolError("telemetry.traceId must be 32 lowercase hexadecimal characters.")
+    if not _SPECIALIST_SPAN_RE.fullmatch(str(normalized["spanId"])):
+        raise ToolError("telemetry.spanId must be 16 lowercase hexadecimal characters.")
+    started = _specialist_timestamp(normalized["startedAt"], "telemetry.startedAt")
+    completed = _specialist_timestamp(normalized["completedAt"], "telemetry.completedAt")
+    if completed < started:
+        raise ToolError("telemetry.completedAt may not precede telemetry.startedAt.")
+    elapsed_ms = int((completed - started).total_seconds() * 1000)
+    if elapsed_ms > 86_400_000:
+        raise ToolError("Specialist telemetry duration may not exceed 24 hours.")
+    if normalized.get("durationMs") is not None and abs(int(normalized["durationMs"]) - elapsed_ms) > 1000:
+        raise ToolError("telemetry.durationMs must agree with the supplied timestamps within one second.")
+    normalized["durationMs"] = elapsed_ms
+    evidence_references = {
+        reference
+        for evidence in result["evidence"]
+        for reference in evidence["references"]
+    }
+    for index, tool_call in enumerate(normalized["toolCalls"]):
+        evidence_ref = tool_call.get("evidenceRef")
+        if evidence_ref and evidence_ref not in evidence_references:
+            raise ToolError(
+                f"telemetry.toolCalls[{index}].evidenceRef must reference result evidence."
+            )
+    normalized["inputDigest"] = _specialist_digest(context)
+    normalized["outputDigest"] = _specialist_digest(result)
+    return normalized
+
+
+def tool_specialist_result(args: dict[str, Any]) -> dict[str, Any]:
+    _specialist_structured_limit(args, "arguments")
+    project_path = require_project_path(args.get("project_path"))
+    goal = str(args.get("goal") or "").strip()
+    if not goal:
+        raise ToolError("goal is required.")
+    team_mode = normalize_team_mode(args.get("team_mode"))
+    if team_mode == "auto":
+        raise ToolError("team_mode must be a resolved single-lead, smart-subagents, or full-team mode.")
+    explicit_capability_ids = [str(item) for item in (args.get("explicit_capability_ids") or [])]
+    _, team = _deterministic_specialist_team(
+        goal, team_mode, explicit_capability_ids
+    )
+    expected_role_ids = [str(agent["id"]) for agent in team["agents"]]
+    supplied_role_ids = _specialist_role_ids(args.get("team_role_ids"))
+    if supplied_role_ids != expected_role_ids:
+        raise ToolError(
+            "team_role_ids must exactly match deterministic JStack routing: "
+            + ", ".join(expected_role_ids)
+        )
+    role_id = str(args.get("role_id") or "").strip()
+    if role_id not in expected_role_ids:
+        raise ToolError(f"role_id '{role_id}' is not in the deterministic team plan.")
+    capability_ids = _specialist_capability_ids(role_id, args.get("capability_ids"))
+    expected_assignments = capability_assignments_by_role(team["capabilityPlan"])
+    expected_capability_ids = [
+        str(item["capabilityId"])
+        for item in expected_assignments.get(role_id, [])
+    ]
+    if capability_ids != expected_capability_ids:
+        raise ToolError(
+            f"capability_ids for role '{role_id}' must exactly match deterministic routing: "
+            + ", ".join(expected_capability_ids)
+        )
+    write_scopes = _specialist_write_scopes(args.get("write_scope"))
+    catalog = _capability_call(lambda: capability_core.load_catalog())
+    result, result_passed = _validate_specialist_result(
+        args.get("result"),
+        role_id=role_id,
+        capability_ids=capability_ids,
+        write_scopes=write_scopes,
+        catalog=catalog,
+    )
+    subject_before = evidence_subject(project_path)
+    goal_digest = hashlib.sha256(goal.encode("utf-8")).hexdigest()
+    telemetry_context = {
+        "schemaVersion": "jstack.specialist.telemetry-input.v1",
+        "goalDigest": goal_digest,
+        "teamMode": team_mode,
+        "teamRoleIds": supplied_role_ids,
+        "roleId": role_id,
+        "capabilityIds": capability_ids,
+        "writeScope": write_scopes,
+        "catalogDigest": team["capabilityPlan"]["catalogDigest"],
+        "selectionDigest": team["capabilityPlan"]["selectionDigest"],
+        "gitHead": subject_before["gitHead"],
+        "projectFingerprint": subject_before["projectFingerprint"],
+    }
+    telemetry = _build_specialist_telemetry(
+        args.get("telemetry"), result=result, context=telemetry_context
+    )
+    telemetry_passed = telemetry["status"] == "success" and all(
+        item["status"] not in {"error", "blocked"}
+        for item in telemetry["toolCalls"]
+    )
+    passed = result_passed and telemetry_passed
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed while the specialist result was being validated. Re-run against one stable Git state."
+        )
+    result_digest = _specialist_digest(result)
+    telemetry_digest = _specialist_digest(telemetry)
+    payload = {
+        "kind": "specialist-result",
+        "schemaVersion": "jstack.specialist.receipt.v1",
+        "projectPath": subject_after["gitRoot"],
+        "gitHead": subject_after["gitHead"],
+        "projectFingerprint": subject_after["projectFingerprint"],
+        "baseRef": subject_after.get("baseRef"),
+        "baseCommit": subject_after.get("baseCommit"),
+        "policyDigest": subject_after["policyDigest"],
+        "toolVersion": SERVER_VERSION,
+        "goalDigest": goal_digest,
+        "teamMode": team_mode,
+        "teamRoleIds": supplied_role_ids,
+        "roleId": role_id,
+        "capabilityIds": capability_ids,
+        "capabilityCatalogVersion": team["capabilityPlan"]["catalogVersion"],
+        "capabilityCatalogDigest": team["capabilityPlan"]["catalogDigest"],
+        "capabilitySelectionDigest": team["capabilityPlan"]["selectionDigest"],
+        "writeScope": write_scopes,
+        "result": result,
+        "resultDigest": result_digest,
+        "telemetry": telemetry,
+        "telemetryDigest": telemetry_digest,
+        "passed": passed,
+    }
+    receipt = issue_receipt(payload)
+    return {
+        "schemaVersion": "jstack.specialist.result-issuance.v1",
+        "passed": passed,
+        "roleId": role_id,
+        "capabilityIds": capability_ids,
+        "capabilityCatalogDigest": team["capabilityPlan"]["catalogDigest"],
+        "capabilitySelectionDigest": team["capabilityPlan"]["selectionDigest"],
+        "goalDigest": goal_digest,
+        "resultDigest": result_digest,
+        "telemetry": telemetry,
+        "telemetryDigest": telemetry_digest,
+        "specialistResultReceipt": receipt,
+        "receiptDigest": _receipt_digest(receipt),
+        "receiptMeaning": (
+            "Session-local proof that one structured specialist result and privacy-safe telemetry envelope passed schema, capability, permission, evidence, and current-Git binding checks. It does not prove semantic truth or authorize release."
+        ),
+    }
+
+
+def _specialist_diagnostic(
+    code: str,
+    message: str,
+    *,
+    severity: str = "error",
+    role_id: Optional[str] = None,
+    resolution_key: Optional[str] = None,
+) -> dict[str, Any]:
+    diagnostic: dict[str, Any] = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+    }
+    if role_id:
+        diagnostic["roleId"] = role_id
+    if resolution_key:
+        diagnostic["resolutionKey"] = resolution_key
+    return diagnostic
+
+
+def tool_specialist_handoff_check(args: dict[str, Any]) -> dict[str, Any]:
+    _specialist_structured_limit(
+        args,
+        "arguments",
+        maximum=SPECIALIST_MAX_HANDOFF_BYTES,
+    )
+    project_path = require_project_path(args.get("project_path"))
+    goal = str(args.get("goal") or "").strip()
+    if not goal:
+        raise ToolError("goal is required.")
+    team_mode = normalize_team_mode(args.get("team_mode"))
+    if team_mode == "auto":
+        raise ToolError("team_mode must be resolved before specialist handoff validation.")
+    explicit_capability_ids = [str(item) for item in (args.get("explicit_capability_ids") or [])]
+    _, team = _deterministic_specialist_team(
+        goal, team_mode, explicit_capability_ids
+    )
+    expected_agents_raw = args.get("expected_agents")
+    if not isinstance(expected_agents_raw, list) or not expected_agents_raw:
+        raise ToolError("expected_agents must be a non-empty array from jstack_team_plan.")
+    for index, expected in enumerate(expected_agents_raw):
+        validate_schema_value(
+            expected, SPECIALIST_EXPECTED_AGENT_SCHEMA, f"expected_agents[{index}]"
+        )
+    expected_role_ids = [str(item["roleId"]) for item in expected_agents_raw]
+    if len(expected_role_ids) != len(set(expected_role_ids)):
+        raise ToolError("expected_agents may not contain duplicate roleId values.")
+    routed_role_ids = [str(agent["id"]) for agent in team["agents"]]
+    if expected_role_ids != routed_role_ids:
+        raise ToolError(
+            "expected_agents role order must exactly match deterministic JStack routing: "
+            + ", ".join(routed_role_ids)
+        )
+    routed_assignments = capability_assignments_by_role(team["capabilityPlan"])
+    expected_by_role: dict[str, list[str]] = {}
+    for index, expected in enumerate(expected_agents_raw):
+        role_id = str(expected["roleId"])
+        capability_ids = _specialist_capability_ids(
+            role_id,
+            expected["capabilityIds"],
+            f"expected_agents[{index}].capabilityIds",
+        )
+        routed_capability_ids = [
+            str(item["capabilityId"])
+            for item in routed_assignments.get(role_id, [])
+        ]
+        if capability_ids != routed_capability_ids:
+            raise ToolError(
+                f"expected_agents[{index}].capabilityIds do not match deterministic routing for '{role_id}'."
+            )
+        expected_by_role[role_id] = capability_ids
+
+    resolutions_raw = args.get("resolutions") or []
+    if not isinstance(resolutions_raw, list):
+        raise ToolError("resolutions must be an array.")
+    resolutions: dict[str, dict[str, Any]] = {}
+    for index, resolution in enumerate(resolutions_raw):
+        validate_schema_value(
+            resolution, SPECIALIST_RESOLUTION_SCHEMA, f"resolutions[{index}]"
+        )
+        _reject_specialist_sensitive_content(resolution, f"resolutions[{index}]")
+        resolution_key = _specialist_identifier(
+            resolution["resolutionKey"], f"resolutions[{index}].resolutionKey"
+        )
+        if resolution_key in resolutions:
+            raise ToolError(f"Duplicate resolutionKey in resolutions: {resolution_key}")
+        resolutions[resolution_key] = json.loads(json.dumps(resolution))
+
+    receipts = args.get("receipts")
+    if not isinstance(receipts, list) or not all(isinstance(item, str) for item in receipts):
+        raise ToolError("receipts must be an array returned by jstack_specialist_result.")
+    if len(receipts) > SPECIALIST_MAX_RECEIPTS or any(
+        len(item) > SPECIALIST_MAX_RECEIPT_CHARS for item in receipts
+    ):
+        raise ToolError("receipts exceeds the bounded specialist handoff limits.")
+    subject_before = evidence_subject(project_path)
+    goal_digest = hashlib.sha256(goal.encode("utf-8")).hexdigest()
+    diagnostics: list[dict[str, Any]] = []
+    verified_by_role: dict[str, dict[str, Any]] = {}
+    receipt_digests: list[str] = []
+    for receipt in receipts:
+        receipt_digest = _receipt_digest(receipt)
+        if receipt_digest in receipt_digests:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-DUPLICATE-RECEIPT",
+                    "The same specialist receipt was supplied more than once.",
+                )
+            )
+            continue
+        receipt_digests.append(receipt_digest)
+        try:
+            verification = verify_receipt(
+                receipt,
+                "specialist-result",
+                subject_before,
+                expected_subject=subject_before,
+                require_passed=False,
+            )
+        except ToolError:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RECEIPT-MALFORMED",
+                    f"Receipt {receipt_digest[:12]} is malformed or from another server session.",
+                )
+            )
+            continue
+        payload = verification["payload"]
+        role_id = str(payload.get("roleId") or "")
+        if not verification["valid"]:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RECEIPT-STALE",
+                    f"Receipt {receipt_digest[:12]} is stale or bound to another project state.",
+                    role_id=role_id or None,
+                )
+            )
+            continue
+        receipt_checks = {
+            "schemaVersion": payload.get("schemaVersion") == "jstack.specialist.receipt.v1",
+            "goalDigest": payload.get("goalDigest") == goal_digest,
+            "teamMode": payload.get("teamMode") == team_mode,
+            "teamRoleIds": payload.get("teamRoleIds") == routed_role_ids,
+            "catalogDigest": payload.get("capabilityCatalogDigest")
+            == team["capabilityPlan"]["catalogDigest"],
+            "selectionDigest": payload.get("capabilitySelectionDigest")
+            == team["capabilityPlan"]["selectionDigest"],
+            "expectedRole": role_id in expected_by_role,
+            "capabilityIds": payload.get("capabilityIds") == expected_by_role.get(role_id),
+            "resultDigest": payload.get("resultDigest")
+            == _specialist_digest(payload.get("result")),
+            "telemetryDigest": payload.get("telemetryDigest")
+            == _specialist_digest(payload.get("telemetry")),
+        }
+        if not all(receipt_checks.values()):
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RECEIPT-MISMATCH",
+                    "A specialist receipt does not match the expected goal, team, capabilities, catalog, or structured payload digests.",
+                    role_id=role_id or None,
+                )
+            )
+            continue
+        if role_id in verified_by_role:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-DUPLICATE-ROLE",
+                    f"Multiple receipts claim role '{role_id}'.",
+                    role_id=role_id,
+                )
+            )
+            continue
+        verified_by_role[role_id] = {
+            "receiptDigest": receipt_digest,
+            "payload": payload,
+        }
+        if payload.get("passed") is not True:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RESULT-NOT-PASSED",
+                    f"Role '{role_id}' returned a structurally valid but incomplete, blocked, or failed result.",
+                    role_id=role_id,
+                )
+            )
+
+    for role_id in routed_role_ids:
+        if role_id not in verified_by_role:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-MISSING-ROLE",
+                    f"No current valid specialist receipt was supplied for role '{role_id}'.",
+                    role_id=role_id,
+                )
+            )
+
+    resolution_views: dict[str, list[dict[str, str]]] = {}
+    resolution_evidence_references: dict[str, set[str]] = {}
+    changed_path_owners: list[tuple[str, str]] = []
+    telemetry_summary = {
+        "runCount": 0,
+        "toolCallCount": 0,
+        "durationMs": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "rawContentStored": False,
+    }
+    for role_id, verified in verified_by_role.items():
+        payload = verified["payload"]
+        result = payload["result"]
+        telemetry = payload["telemetry"]
+        evidence_by_kind = {
+            str(item["kind"]): set(str(reference) for reference in item["references"])
+            for item in result.get("evidence") or []
+        }
+        telemetry_summary["runCount"] += 1
+        telemetry_summary["toolCallCount"] += len(telemetry.get("toolCalls") or [])
+        telemetry_summary["durationMs"] += int(telemetry.get("durationMs") or 0)
+        telemetry_summary["inputTokens"] += int(telemetry.get("inputTokens") or 0)
+        telemetry_summary["outputTokens"] += int(telemetry.get("outputTokens") or 0)
+        telemetry_summary["rawContentStored"] = (
+            telemetry_summary["rawContentStored"]
+            or telemetry.get("rawContentStored") is not False
+        )
+        for finding in result.get("findings") or []:
+            resolution_key = str(finding["resolutionKey"])
+            resolution_views.setdefault(resolution_key, []).append(
+                {
+                    "roleId": role_id,
+                    "disposition": str(finding["disposition"]),
+                    "findingId": str(finding["findingId"]),
+                }
+            )
+            relevant_references = resolution_evidence_references.setdefault(
+                resolution_key, set()
+            )
+            for evidence_kind in finding.get("evidenceKinds") or []:
+                relevant_references.update(evidence_by_kind.get(str(evidence_kind), set()))
+        for change in result.get("changes") or []:
+            path = str(change["path"])
+            for prior_path, prior_owner in changed_path_owners:
+                if prior_owner != role_id and scopes_overlap(path, prior_path):
+                    diagnostics.append(
+                        _specialist_diagnostic(
+                            "JSTACK-SPECIALIST-CHANGE-OWNERSHIP-CONFLICT",
+                            f"Changed path '{path}' claimed by '{role_id}' overlaps "
+                            f"'{prior_path}' claimed by '{prior_owner}'.",
+                            role_id=role_id,
+                        )
+                    )
+            changed_path_owners.append((path, role_id))
+
+    reconciliations: list[dict[str, Any]] = []
+    for resolution_key, views in sorted(resolution_views.items()):
+        dispositions = {
+            item["disposition"]
+            for item in views
+            if item["disposition"] != "not-applicable"
+        }
+        resolution = resolutions.get(resolution_key)
+        if len(dispositions) > 1 and resolution is None:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-UNRESOLVED-CONTRADICTION",
+                    f"Specialists disagree on '{resolution_key}': "
+                    + ", ".join(
+                        f"{item['roleId']}={item['disposition']}" for item in views
+                    ),
+                    resolution_key=resolution_key,
+                )
+            )
+        if resolution is not None:
+            unknown_references = sorted(
+                set(str(item) for item in resolution["evidenceReferences"])
+                - resolution_evidence_references.get(resolution_key, set())
+            )
+            if unknown_references:
+                diagnostics.append(
+                    _specialist_diagnostic(
+                        "JSTACK-SPECIALIST-RESOLUTION-EVIDENCE-MISMATCH",
+                        f"Lead resolution for '{resolution_key}' cites evidence not present "
+                        "in the relevant signed specialist findings: "
+                        + ", ".join(unknown_references),
+                        resolution_key=resolution_key,
+                    )
+                )
+            reconciliations.append(
+                {
+                    "resolutionKey": resolution_key,
+                    "specialistViews": views,
+                    "leadResolution": resolution,
+                }
+            )
+            if resolution["decision"] == "block":
+                diagnostics.append(
+                    _specialist_diagnostic(
+                        "JSTACK-SPECIALIST-LEAD-RESOLUTION-BLOCKS",
+                        f"Lead resolution for '{resolution_key}' remains blocking.",
+                        resolution_key=resolution_key,
+                    )
+                )
+    for resolution_key in sorted(set(resolutions) - set(resolution_views)):
+        diagnostics.append(
+            _specialist_diagnostic(
+                "JSTACK-SPECIALIST-UNREFERENCED-RESOLUTION",
+                f"Resolution '{resolution_key}' does not correspond to a specialist finding.",
+                severity="warning",
+                resolution_key=resolution_key,
+            )
+        )
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed while specialist handoff receipts were being checked. Re-run against one stable state."
+        )
+    error_diagnostics = [item for item in diagnostics if item["severity"] == "error"]
+    valid = not error_diagnostics
+    handoff_receipt = None
+    if valid:
+        handoff_receipt = issue_receipt(
+            {
+                "kind": "specialist-handoff",
+                "schemaVersion": "jstack.specialist.handoff-receipt.v1",
+                "projectPath": subject_after["gitRoot"],
+                "gitHead": subject_after["gitHead"],
+                "projectFingerprint": subject_after["projectFingerprint"],
+                "baseRef": subject_after.get("baseRef"),
+                "baseCommit": subject_after.get("baseCommit"),
+                "policyDigest": subject_after["policyDigest"],
+                "toolVersion": SERVER_VERSION,
+                "goalDigest": goal_digest,
+                "teamMode": team_mode,
+                "teamRoleIds": routed_role_ids,
+                "capabilityCatalogDigest": team["capabilityPlan"]["catalogDigest"],
+                "capabilitySelectionDigest": team["capabilityPlan"]["selectionDigest"],
+                "specialistReceiptDigests": [
+                    verified_by_role[role_id]["receiptDigest"]
+                    for role_id in routed_role_ids
+                ],
+                "reconciliationDigest": _specialist_digest(reconciliations),
+                "telemetrySummaryDigest": _specialist_digest(telemetry_summary),
+                "passed": True,
+            }
+        )
+    return {
+        "schemaVersion": "jstack.specialist.handoff.v1",
+        "valid": valid,
+        "complete": valid,
+        "goalDigest": goal_digest,
+        "teamMode": team_mode,
+        "teamRoleIds": routed_role_ids,
+        "capabilityCatalogDigest": team["capabilityPlan"]["catalogDigest"],
+        "capabilitySelectionDigest": team["capabilityPlan"]["selectionDigest"],
+        "verifiedRoles": [
+            {
+                "roleId": role_id,
+                "capabilityIds": expected_by_role[role_id],
+                "receiptDigest": verified_by_role[role_id]["receiptDigest"],
+                "resultStatus": verified_by_role[role_id]["payload"]["result"]["status"],
+            }
+            for role_id in routed_role_ids
+            if role_id in verified_by_role
+        ],
+        "diagnostics": diagnostics,
+        "reconciliations": reconciliations,
+        "telemetrySummary": telemetry_summary,
+        "specialistHandoffReceipt": handoff_receipt,
+        "handoffReceiptDigest": _receipt_digest(handoff_receipt) if handoff_receipt else None,
+        "receiptMeaning": (
+            "When issued, this session-local receipt proves complete current-role coverage, structural validity, capability/catalog binding, Git-state binding, and explicit contradiction reconciliation. It does not prove semantic truth or authorize release."
+        ),
     }
 
 
@@ -4823,6 +5904,22 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
             base_ref = str(discovered_base.get("baseCommit") or "").strip() or None
     fail_on = audit_effective_fail_on(audit_policy.get("failOnSeverity"), args.get("fail_on"))
     required_domains = audit_effective_required_domains(profile_definition, audit_policy)
+    audit_focus = str(args.get("focus") or "").strip()
+    audit_capability_goal = audit_focus or (
+        f"{profile} audit of " + " ".join(str(item) for item in (args.get("scope") or ["repository"]))
+    )
+    audit_capability_classifications = classify_work(audit_capability_goal)
+    audit_capability_plan = specialist_capability_plan(
+        audit_capability_goal,
+        audit_capability_classifications,
+        ["reviewer", "security", "qa"],
+        [str(item) for item in (args.get("capability_ids") or [])],
+    )
+    capability_domains = set(audit_capability_plan["auditDomains"])
+    required_domain_set = set(required_domains) | capability_domains
+    required_domains = [
+        domain for domain in audit_core.DOMAINS if domain in required_domain_set
+    ]
     if profile == "quick" and args.get("adapter_approvals"):
         raise ToolError("Quick audits prohibit repository-controlled adapter execution.")
     scope_mode, requested_scope, effective_scope = audit_effective_scope(
@@ -4933,6 +6030,13 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
         "adapterRequirements": profile_definition["adapterRequirements"],
         "adapterInventory": adapter_inventory,
         "adapterResults": adapter_results,
+        "capabilityCatalogVersion": audit_capability_plan["catalogVersion"],
+        "capabilityCatalogDigest": audit_capability_plan["catalogDigest"],
+        "capabilitySelectionDigest": audit_capability_plan["selectionDigest"],
+        "capabilityGoalDigest": audit_capability_plan["goalDigest"],
+        "capabilityIds": [
+            item["id"] for item in audit_capability_plan["selectedCapabilities"]
+        ],
         "releaseRangeDigest": audit_release_range_digest(project_path, base_ref)
         if profile == "release" and binding["evidenceMode"] == "git"
         else None,
@@ -4961,7 +6065,9 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
             "adapterRequirements": profile_definition["adapterRequirements"],
             "limits": profile_definition["limits"],
             "repositoryExecutionAllowed": profile != "quick",
+            "capabilityRequiredDomains": audit_capability_plan["auditDomains"],
         },
+        "specialistCapabilityPlan": audit_capability_plan,
         "deterministicEvidence": deterministic_evidence,
         "adapterPlans": adapter_plans,
         "adapterResults": adapter_results,
@@ -5034,6 +6140,9 @@ def audit_assert_session_subject(
     inventory: dict[str, Any],
     subject: dict[str, Any],
 ) -> None:
+    capability_catalog = _capability_call(
+        lambda: capability_core.catalog_summary()
+    )
     checks = {
         "projectPath": token_payload.get("projectPath") == binding["projectPath"],
         "evidenceMode": token_payload.get("evidenceMode") == binding["evidenceMode"],
@@ -5044,6 +6153,10 @@ def audit_assert_session_subject(
         "controlDigest": token_payload.get("controlDigest") == audit_core.controls_digest(),
         "scopeManifestDigest": token_payload.get("scopeManifestDigest") == inventory.get("scopeManifestDigest"),
         "toolVersion": token_payload.get("toolVersion") == SERVER_VERSION,
+        "capabilityCatalogVersion": token_payload.get("capabilityCatalogVersion")
+        == capability_catalog["catalogVersion"],
+        "capabilityCatalogDigest": token_payload.get("capabilityCatalogDigest")
+        == capability_catalog["catalogDigest"],
     }
     if token_payload.get("profile") == "release" and binding["evidenceMode"] == "git":
         current_range_digest = audit_release_range_digest(
@@ -5518,6 +6631,10 @@ def tool_audit_finalize(args: dict[str, Any]) -> dict[str, Any]:
                 "projectFingerprint": subject["projectFingerprint"],
                 "policyDigest": subject["policyDigest"],
                 "controlDigest": token_payload["controlDigest"],
+                "capabilityCatalogVersion": token_payload.get("capabilityCatalogVersion"),
+                "capabilityCatalogDigest": token_payload.get("capabilityCatalogDigest"),
+                "capabilitySelectionDigest": token_payload.get("capabilitySelectionDigest"),
+                "capabilityIds": token_payload.get("capabilityIds", []),
                 "toolVersion": SERVER_VERSION,
                 "adapterVersions": token_payload.get("adapterInventory", []),
                 "profile": profile,
@@ -5555,6 +6672,12 @@ def tool_audit_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "auditReceipt": receipt,
         "gitBoundReceiptAvailable": receipt is not None,
         "releaseCertificationAvailable": release_certification_available,
+        "specialistCapabilities": {
+            "catalogVersion": token_payload.get("capabilityCatalogVersion"),
+            "catalogDigest": token_payload.get("capabilityCatalogDigest"),
+            "selectionDigest": token_payload.get("capabilitySelectionDigest"),
+            "capabilityIds": token_payload.get("capabilityIds", []),
+        },
         "receiptMeaning": "Attests deterministic scope, coverage, finding/result digests, and state binding; it does not prove semantic finding truth.",
     }
     if "json" in requested_formats:
@@ -6229,6 +7352,7 @@ def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
         "qa_receipts",
         "security_receipt",
         "audit_receipts",
+        "specialist_handoff_receipt",
         "goal_readiness_receipt",
         "program_readiness_receipt",
         "loop_completion_receipt",
@@ -6255,7 +7379,10 @@ def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
 
 
 def _loop_receipt_evidence(
-    args: dict[str, Any], subject: dict[str, Any]
+    args: dict[str, Any],
+    subject: dict[str, Any],
+    capability_contract: Optional[dict[str, Any]] = None,
+    expected_goal_digest: Optional[str] = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     evidence: dict[str, Any] = {"qa": [], "audit": []}
     invalid: list[dict[str, Any]] = []
@@ -6369,6 +7496,73 @@ def _loop_receipt_evidence(
                 "passed": True,
             }
         )
+    specialist_handoff_receipt = str(
+        args.get("specialist_handoff_receipt") or ""
+    ).strip()
+    if len(specialist_handoff_receipt) > LOOP_MAX_RECEIPT_CHARS:
+        raise ToolError(
+            "specialist_handoff_receipt exceeds the bounded loop evidence limit."
+        )
+    if specialist_handoff_receipt:
+        digest = _receipt_digest(specialist_handoff_receipt)
+        try:
+            verification = verify_receipt(
+                specialist_handoff_receipt,
+                "specialist-handoff",
+                subject,
+            )
+        except ToolError:
+            invalid.append(
+                {
+                    "kind": "specialist-handoff",
+                    "receiptDigest": digest,
+                    "reason": "malformed-or-wrong-session",
+                }
+            )
+        else:
+            payload = verification["payload"]
+            capability_checks = {
+                "schemaVersion": payload.get("schemaVersion")
+                == "jstack.specialist.handoff-receipt.v1",
+                "policyDigest": payload.get("policyDigest")
+                == subject.get("policyDigest"),
+                "toolVersion": payload.get("toolVersion")
+                == subject.get("toolVersion"),
+                "catalogDigest": capability_contract is None
+                or payload.get("capabilityCatalogDigest")
+                == capability_contract.get("catalogDigest"),
+                "selectionDigest": capability_contract is None
+                or payload.get("capabilitySelectionDigest")
+                == capability_contract.get("selectionDigest"),
+                "teamMode": capability_contract is None
+                or payload.get("teamMode")
+                == capability_contract.get("executionMode"),
+                "teamRoleIds": capability_contract is None
+                or payload.get("teamRoleIds")
+                == capability_contract.get("teamRoleIds"),
+                "goalDigest": expected_goal_digest is None
+                or payload.get("goalDigest") == expected_goal_digest,
+            }
+            if verification["valid"] and all(capability_checks.values()):
+                evidence["specialistHandoff"] = {
+                    "type": "specialist-handoff-receipt",
+                    "receiptDigest": digest,
+                    "catalogDigest": payload.get("capabilityCatalogDigest"),
+                    "selectionDigest": payload.get("capabilitySelectionDigest"),
+                    "teamRoleIds": payload.get("teamRoleIds"),
+                    "passed": True,
+                }
+            else:
+                invalid.append(
+                    {
+                        "kind": "specialist-handoff",
+                        "receiptDigest": digest,
+                        "checks": {
+                            **verification["checks"],
+                            **capability_checks,
+                        },
+                    }
+                )
     return evidence, invalid
 
 
@@ -6441,7 +7635,28 @@ def _loop_iteration_evidence(
     protected_files = [
         path for path in changed_files if path_matches_patterns(path, protected_patterns)
     ]
-    evidence, invalid = _loop_receipt_evidence(args, subject)
+    capability_contract = loop_status.get("capabilityContract")
+    if capability_contract is not None and not _loop_capability_contract_matches(
+        loop_status
+    ):
+        raise ToolError(
+            "The loop capability contract no longer matches the current catalog or "
+            "deterministic routing. Run goal readiness and an approved material "
+            "contract revision before continuing."
+        )
+    evidence, invalid = _loop_receipt_evidence(
+        args,
+        subject,
+        capability_contract,
+        hashlib.sha256(str(loop_status.get("goal") or "").encode("utf-8")).hexdigest(),
+    )
+    if (
+        loop_status.get("executionMode") in {"smart-subagents", "full-team"}
+        and not evidence.get("specialistHandoff")
+    ):
+        raise ToolError(
+            "Multi-agent loop checkpoints and finalization require a current passed specialist_handoff_receipt bound to this capability contract and Git state."
+        )
     review = tool_review({"project_path": str(project_path), "base_ref": baseline})
     evidence["review"] = {
         "type": "deterministic-review",
@@ -6497,6 +7712,82 @@ def _verified_goal_readiness_attestation(
     return {**payload, "receiptDigest": _receipt_digest(receipt)}
 
 
+def _loop_capability_contract(
+    goal: str,
+    execution_mode: str,
+    explicit_capability_ids: list[str],
+) -> dict[str, Any]:
+    _, team = _deterministic_specialist_team(
+        goal, execution_mode, explicit_capability_ids
+    )
+    capability_plan = team["capabilityPlan"]
+    assignments = capability_assignments_by_role(capability_plan)
+    return {
+        "schemaVersion": "jstack.loop.capability-contract.v1",
+        "catalogVersion": capability_plan["catalogVersion"],
+        "catalogDigest": capability_plan["catalogDigest"],
+        "selectionDigest": capability_plan["selectionDigest"],
+        "goalDigest": capability_plan["goalDigest"],
+        "executionMode": execution_mode,
+        "teamRoleIds": [str(agent["id"]) for agent in team["agents"]],
+        "roleCapabilities": {
+            str(agent["id"]): [
+                str(item["capabilityId"])
+                for item in assignments.get(str(agent["id"]), [])
+            ]
+            for agent in team["agents"]
+        },
+        "explicitCapabilityIds": list(explicit_capability_ids),
+        "auditDomains": capability_plan["auditDomains"],
+        "loopControls": capability_plan["loopControls"],
+        "permissionInvariant": capability_plan["permissionInvariant"],
+    }
+
+
+def _loop_capability_contract_matches(loop_status: dict[str, Any]) -> Optional[bool]:
+    capability_contract = loop_status.get("capabilityContract")
+    if capability_contract is None:
+        return None
+    expected = _loop_capability_contract(
+        str(loop_status.get("goal") or ""),
+        str(loop_status.get("executionMode") or ""),
+        [
+            str(item)
+            for item in capability_contract.get("explicitCapabilityIds") or []
+        ],
+    )
+    return expected == capability_contract
+
+
+def _loop_args_with_capabilities(
+    args: dict[str, Any],
+    prior_status: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    enriched = dict(args)
+    goal = str(args.get("goal") or (prior_status or {}).get("goal") or "").strip()
+    execution_mode = str(
+        args.get("execution_mode")
+        or (prior_status or {}).get("executionMode")
+        or ""
+    ).strip()
+    if not goal or execution_mode not in {"single-lead", "smart-subagents", "full-team"}:
+        return enriched
+    prior_contract = (prior_status or {}).get("capabilityContract") or {}
+    if "capability_ids" in args:
+        raw_capability_ids = args.get("capability_ids") or []
+    else:
+        raw_capability_ids = prior_contract.get("explicitCapabilityIds") or []
+    if not isinstance(raw_capability_ids, list):
+        raise ToolError("capability_ids must be an array.")
+    explicit_capability_ids = [str(item) for item in raw_capability_ids]
+    enriched["goal"] = goal
+    enriched["execution_mode"] = execution_mode
+    enriched["capability_contract"] = _loop_capability_contract(
+        goal, execution_mode, explicit_capability_ids
+    )
+    return enriched
+
+
 def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     _reject_loop_secret_inputs(args)
     project_path = require_project_path(args.get("project_path"))
@@ -6504,14 +7795,17 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     service = _loop_service(project_path)
     loop_id = str(args.get("loop_id") or "").strip() or None
     prior_contract_digest = None
+    prior_status = None
     if loop_id:
         status = _loop_call(lambda: service.status(loop_id))
         if status["status"] in {"succeeded", "stopped"}:
             raise ToolError("Terminal loops cannot receive a revised goal-readiness receipt.")
         prior_contract_digest = status["contractDigest"]
+        prior_status = status
+    enriched_args = _loop_args_with_capabilities(args, prior_status)
     assessment = _loop_call(
         lambda: loop_core.assess_goal_readiness(
-            args,
+            enriched_args,
             project_root=str(project_path),
             subject=subject,
             worktree=worktree["isLinkedWorktree"],
@@ -6581,10 +7875,11 @@ def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
     readiness_attestation = _verified_goal_readiness_attestation(
         args.get("goal_readiness_receipt"), subject
     )
+    enriched_args = _loop_args_with_capabilities(args)
     service = _loop_service(project_path)
     result = _loop_call(
         lambda: service.start(
-            args,
+            enriched_args,
             subject=subject,
             worktree=worktree["isLinkedWorktree"],
             policy_source=policy.get("_sourcePath"),
@@ -6625,6 +7920,9 @@ def tool_loop_status(args: dict[str, Any]) -> dict[str, Any]:
     result["toolVersionMatchesContract"] = (
         result["contractToolVersion"] == subject["toolVersion"]
     )
+    result["capabilityCatalogMatchesContract"] = (
+        _loop_capability_contract_matches(result)
+    )
     return result
 
 
@@ -6661,10 +7959,13 @@ def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
             args.get("goal_readiness_receipt"), subject
         )
     service = _loop_service(project_path)
+    loop_id = str(args.get("loop_id") or "")
+    prior_status = _loop_call(lambda: service.status(loop_id))
+    enriched_args = _loop_args_with_capabilities(args, prior_status)
     return _loop_call(
         lambda: service.revise(
-            str(args.get("loop_id") or ""),
-            args,
+            loop_id,
+            enriched_args,
             subject=subject,
             worktree=worktree["isLinkedWorktree"],
             policy_source=policy.get("_sourcePath"),
@@ -6733,6 +8034,15 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "completionEvidenceDigest": result["completionEvidenceDigest"],
             "latestEventHash": result["latestEventHash"],
             "executionMode": result["executionMode"],
+            "capabilityCatalogDigest": (result.get("capabilityContract") or {}).get(
+                "catalogDigest"
+            ),
+            "capabilitySelectionDigest": (result.get("capabilityContract") or {}).get(
+                "selectionDigest"
+            ),
+            "specialistHandoffReceiptDigest": (
+                context["evidence"].get("specialistHandoff") or {}
+            ).get("receiptDigest"),
             "autonomyLevel": result["autonomyLevel"],
             "riskTier": result["riskTier"],
             "passed": True,
@@ -7896,6 +9206,254 @@ LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
         "maxItems": LOOP_MAX_AUDIT_RECEIPTS,
         "items": {"type": "string", "maxLength": LOOP_MAX_RECEIPT_CHARS},
     },
+    "specialist_handoff_receipt": {
+        "type": "string",
+        "maxLength": LOOP_MAX_RECEIPT_CHARS,
+        "description": "Required for multi-agent loop checkpoints/finalization; returned by jstack_specialist_handoff_check for the current capability contract and Git state.",
+    },
+}
+
+SPECIALIST_EVIDENCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["kind", "status", "summary", "references"],
+    "properties": {
+        "kind": {"type": "string", "minLength": 3, "maxLength": 100},
+        "status": {
+            "type": "string",
+            "enum": ["observed", "passed", "failed", "not-run", "unavailable"],
+        },
+        "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "references": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 30,
+            "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+        },
+        "verifier": {"type": "string", "minLength": 1, "maxLength": 500},
+    },
+}
+
+SPECIALIST_FINDING_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "findingId",
+        "resolutionKey",
+        "disposition",
+        "severity",
+        "confidence",
+        "title",
+        "claim",
+        "evidenceKinds",
+    ],
+    "properties": {
+        "findingId": {"type": "string", "minLength": 3, "maxLength": 100},
+        "resolutionKey": {"type": "string", "minLength": 3, "maxLength": 100},
+        "disposition": {
+            "type": "string",
+            "enum": ["pass", "concern", "block", "not-applicable"],
+        },
+        "severity": {
+            "type": "string",
+            "enum": ["info", "low", "medium", "high", "critical"],
+        },
+        "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+        "title": {"type": "string", "minLength": 1, "maxLength": 300},
+        "claim": {"type": "string", "minLength": 1, "maxLength": 3000},
+        "evidenceKinds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {"type": "string", "minLength": 3, "maxLength": 100},
+        },
+        "location": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["path"],
+            "properties": {
+                "path": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "line": {"type": "integer", "minimum": 1},
+            },
+        },
+    },
+}
+
+SPECIALIST_RESULT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "schemaVersion",
+        "status",
+        "scopeHandled",
+        "evidence",
+        "findings",
+        "changes",
+        "blockers",
+        "residualRisk",
+        "skippedChecks",
+        "recommendedNextAction",
+    ],
+    "properties": {
+        "schemaVersion": {
+            "type": "string",
+            "enum": ["jstack.specialist.result.v1"],
+        },
+        "status": {
+            "type": "string",
+            "enum": ["success", "partial", "blocked", "error"],
+        },
+        "scopeHandled": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": SPECIALIST_EVIDENCE_SCHEMA,
+        },
+        "findings": {
+            "type": "array",
+            "maxItems": 100,
+            "items": SPECIALIST_FINDING_SCHEMA,
+        },
+        "changes": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["path", "summary"],
+                "properties": {
+                    "path": {"type": "string", "minLength": 1, "maxLength": 1000},
+                    "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+                },
+            },
+        },
+        "blockers": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["code", "summary", "approvalRequired"],
+                "properties": {
+                    "code": {"type": "string", "minLength": 3, "maxLength": 100},
+                    "summary": {"type": "string", "minLength": 1, "maxLength": 2000},
+                    "approvalRequired": {"type": "boolean"},
+                },
+            },
+        },
+        "residualRisk": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+        },
+        "skippedChecks": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["check", "reason", "impact"],
+                "properties": {
+                    "check": {"type": "string", "minLength": 1, "maxLength": 500},
+                    "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+                    "impact": {"type": "string", "minLength": 1, "maxLength": 1000},
+                },
+            },
+        },
+        "recommendedNextAction": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+        },
+    },
+}
+
+SPECIALIST_TELEMETRY_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "schemaVersion",
+        "runId",
+        "traceId",
+        "spanId",
+        "startedAt",
+        "completedAt",
+        "status",
+        "toolCalls",
+        "rawContentStored",
+    ],
+    "properties": {
+        "schemaVersion": {
+            "type": "string",
+            "enum": ["jstack.specialist.telemetry.v1"],
+        },
+        "runId": {"type": "string", "minLength": 8, "maxLength": 128},
+        "traceId": {"type": "string", "minLength": 32, "maxLength": 32},
+        "spanId": {"type": "string", "minLength": 16, "maxLength": 16},
+        "startedAt": {"type": "string", "minLength": 20, "maxLength": 64},
+        "completedAt": {"type": "string", "minLength": 20, "maxLength": 64},
+        "status": {
+            "type": "string",
+            "enum": ["success", "partial", "blocked", "error"],
+        },
+        "toolCalls": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["toolName", "status"],
+                "properties": {
+                    "toolName": {"type": "string", "minLength": 1, "maxLength": 200},
+                    "status": {
+                        "type": "string",
+                        "enum": ["success", "error", "blocked", "not-run"],
+                    },
+                    "evidenceRef": {"type": "string", "minLength": 1, "maxLength": 500},
+                },
+            },
+        },
+        "durationMs": {"type": "integer", "minimum": 0, "maximum": 86_400_000},
+        "inputTokens": {"type": "integer", "minimum": 0, "maximum": 1_000_000_000},
+        "outputTokens": {"type": "integer", "minimum": 0, "maximum": 1_000_000_000},
+        "rawContentStored": {"type": "boolean"},
+    },
+}
+
+SPECIALIST_EXPECTED_AGENT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["roleId", "capabilityIds"],
+    "properties": {
+        "roleId": {"type": "string", "minLength": 2, "maxLength": 64},
+        "capabilityIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {"type": "string", "minLength": 3, "maxLength": 64},
+        },
+    },
+}
+
+SPECIALIST_RESOLUTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["resolutionKey", "decision", "rationale", "evidenceReferences"],
+    "properties": {
+        "resolutionKey": {"type": "string", "minLength": 3, "maxLength": 100},
+        "decision": {
+            "type": "string",
+            "enum": ["pass", "concern", "block", "not-applicable"],
+        },
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "evidenceReferences": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+        },
+    },
 }
 
 PROGRAM_VERIFIER_SCHEMA: dict[str, Any] = {
@@ -8096,6 +9654,130 @@ PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
 
 
 TOOLS: dict[str, dict[str, Any]] = {
+    "gstack_capability_catalog": {
+        "description": "Inspect the versioned JStack specialist capability registry or deterministically route bounded capabilities to existing core roles. Capabilities never grant tools, write access, or release authority.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "goal": {"type": "string", "maxLength": 20000},
+                "role_ids": {
+                    "type": "array",
+                    "maxItems": 11,
+                    "items": {"type": "string", "maxLength": 64},
+                },
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                },
+                "query": {"type": "string", "maxLength": 200},
+                "include_details": {"type": "boolean"},
+            },
+        },
+        "handler": tool_capability_catalog,
+        "readOnlyHint": True,
+    },
+    "gstack_specialist_result": {
+        "description": "Validate one existing JStack role's capability-bound structured result and privacy-safe telemetry, enforce role/write/evidence contracts, bind it to the current Git state, and issue a session-local signed receipt.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "project_path",
+                "goal",
+                "team_mode",
+                "team_role_ids",
+                "role_id",
+                "capability_ids",
+                "result",
+                "telemetry",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "goal": {"type": "string", "minLength": 1, "maxLength": 20000},
+                "team_mode": {
+                    "type": "string",
+                    "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "team_role_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 11,
+                    "items": {"type": "string", "maxLength": 64},
+                },
+                "role_id": {"type": "string", "minLength": 2, "maxLength": 64},
+                "capability_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {"type": "string", "maxLength": 64},
+                },
+                "explicit_capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                },
+                "write_scope": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {"type": "string", "maxLength": 1000},
+                },
+                "result": SPECIALIST_RESULT_SCHEMA,
+                "telemetry": SPECIALIST_TELEMETRY_INPUT_SCHEMA,
+            },
+        },
+        "handler": tool_specialist_result,
+        "readOnlyHint": True,
+    },
+    "gstack_specialist_handoff_check": {
+        "description": "Verify complete current specialist receipt coverage, exact capability routing, Git/catalog binding, write ownership, blockers, and contradiction reconciliation before Lead synthesis; issue a handoff receipt only when all gates pass.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "project_path",
+                "goal",
+                "team_mode",
+                "expected_agents",
+                "receipts",
+            ],
+            "properties": {
+                "project_path": {"type": "string"},
+                "goal": {"type": "string", "minLength": 1, "maxLength": 20000},
+                "team_mode": {
+                    "type": "string",
+                    "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "expected_agents": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 11,
+                    "items": SPECIALIST_EXPECTED_AGENT_SCHEMA,
+                },
+                "receipts": {
+                    "type": "array",
+                    "maxItems": SPECIALIST_MAX_RECEIPTS,
+                    "items": {
+                        "type": "string",
+                        "maxLength": SPECIALIST_MAX_RECEIPT_CHARS,
+                    },
+                },
+                "explicit_capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                },
+                "resolutions": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": SPECIALIST_RESOLUTION_SCHEMA,
+                },
+            },
+        },
+        "handler": tool_specialist_handoff_check,
+        "readOnlyHint": True,
+    },
     "gstack_program_goal_readiness": {
         "description": "Assess a multi-phase JStack program contract, validate its dependency DAG and policy-required final gates, ask at most three blocking questions, require exact-digest confirmation, and issue a current readiness receipt.",
         "inputSchema": {
@@ -8407,6 +10089,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "enum": ["single-lead", "smart-subagents", "full-team"],
                 },
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "Optional explicit capabilities bound into the loop readiness digest and durable contract.",
+                },
                 "autonomy_level": {
                     "type": "string",
                     "enum": ["L0", "L1", "L2", "L3"],
@@ -8454,6 +10142,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "execution_mode": {
                     "type": "string",
                     "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "Must match the capability selection used for goal readiness.",
                 },
                 "autonomy_level": {
                     "type": "string",
@@ -8527,6 +10221,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "execution_mode": {
                     "type": "string",
                     "enum": ["single-lead", "smart-subagents", "full-team"],
+                },
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "Optional revised explicit capability ids; changing them is a material contract revision.",
                 },
                 "autonomy_level": {
                     "type": "string",
@@ -8717,6 +10417,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "project_path": {"type": "string"},
                 "quality_level": {"type": "string", "enum": ["standard", "enterprise"], "default": "enterprise"},
                 "team_mode": {"type": "string", "enum": ["single-lead", "smart-subagents", "full-team"], "default": "single-lead"},
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "Optional explicit specialist capability ids; they remain bounded by the selected core roles.",
+                },
                 "mastery_mode": {"type": "boolean", "default": True, "description": "When true, include staged training objectives, benchmarks, anti-slop checklist, review rubric, and next drill."},
                 "learning_mode": {"type": "string", "enum": ["off", "embedded", "coach", "assessment"], "default": "embedded"},
             },
@@ -8733,6 +10439,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "goal": {"type": "string"},
                 "quality_level": {"type": "string", "enum": ["standard", "enterprise"], "default": "enterprise"},
                 "team_mode": {"type": "string", "enum": ["auto", "single-lead", "smart-subagents", "full-team"], "default": "auto"},
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "Optional explicit capability ids to add when allowed for the selected roles.",
+                },
             },
         },
         "handler": tool_team_plan,
@@ -8749,6 +10461,12 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "agents": {"type": "array", "items": {"type": "object"}, "description": "Alternative direct agent list."},
                 "max_specialists": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
                 "lead_justification": {"type": "string"},
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "The same explicit capability id list used to create the team plan.",
+                },
                 "coordination_packet": {
                     "type": "object",
                     "description": "The actual coordination packet. Its required fields, roles, and file ownership are validated.",
@@ -8847,6 +10565,17 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Repository-relative POSIX paths. Omit for the profile default.",
+                },
+                "focus": {
+                    "type": "string",
+                    "maxLength": 4000,
+                    "description": "Optional audit focus used for deterministic specialist capability and domain routing.",
+                },
+                "capability_ids": {
+                    "type": "array",
+                    "maxItems": 14,
+                    "items": {"type": "string", "maxLength": 64},
+                    "description": "Optional explicit audit capability ids, constrained to read-only audit roles.",
                 },
                 "base_ref": {"type": "string"},
                 "fail_on": {

@@ -58,6 +58,7 @@ Before dispatching, create a coordination packet with:
 - `rolesNotUsed`: empty because all 11 are accounted for
 - `readWritePermissions`
 - `fileOwnershipMap`
+- actual `capabilityPlan` and exact per-role `capabilityIds`
 - `evidenceContract`
 - `conflictRule`
 - `stopConditions`
@@ -80,6 +81,21 @@ When concurrency would create noise, dispatch the full team in waves:
 2. Build: Builder only after Lead approval of scope.
 3. Review: Reviewer, QA, Security, DevOps, Documentation.
 4. Synthesis: Lead reconciles findings, verifies, and hands off.
+
+Every role receives only its routed capability subset. Capabilities add method,
+required evidence, stop conditions, audit domains, and loop controls while
+inheriting core-role permissions; they never grant tools, writes, delegation,
+approvals, or release authority. Every wave returns
+`jstack.specialist.result.v1` plus metadata-only
+`jstack.specialist.telemetry.v1` per role, including Lead. Call
+`jstack_specialist_result` for all 11 exact assignments and then
+`jstack_specialist_handoff_check`. Raw prompts, messages, tool arguments,
+command/model output, source contents, and secrets are forbidden. Missing,
+stale, partial, capability-drifted, permission-unsafe, or contradictory receipt
+sets block handoff until explicitly reconciled with evidence.
+
+For an active full-team loop, pass the current validated
+`specialist_handoff_receipt` to every checkpoint and finalization.
 
 Finish in the order outcome, evidence, residual risk, then an optional
 three-line mastery capsule. Do not emit eleven role-by-role lessons.

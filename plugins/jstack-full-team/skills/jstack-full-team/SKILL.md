@@ -58,6 +58,7 @@ Coordination packet:
 - `mode: full-team`
 - `rolesUsed` (all 11) and empty `rolesNotUsed`
 - `readWritePermissions` and `fileOwnershipMap`
+- actual `capabilityPlan` and exact per-role `capabilityIds`
 - `evidenceContract`, `conflictRule`, and `stopConditions`
 - `verificationGate` and `handoffGate`
 
@@ -68,10 +69,23 @@ Full-team wave pattern:
 3. Review: Reviewer, QA, Security, DevOps, Documentation.
 4. Synthesis: Lead reconciles evidence, resolves conflicts, verifies, and hands off.
 
+Every role receives only its routed capability subset. Capability packs add
+methods, evidence requirements, stop conditions, audit domains, and loop
+controls while inheriting the core role's permissions; they never grant tools,
+writes, delegation, approvals, or release authority. Every wave returns one
+`jstack.specialist.result.v1` plus metadata-only
+`jstack.specialist.telemetry.v1` per role, including a Lead result. The Lead
+calls `jstack_specialist_result` for all 11 exact role/capability assignments,
+then `jstack_specialist_handoff_check`. Do not retain raw prompts, messages,
+tool arguments, command/model output, source contents, or secrets. Missing,
+stale, partial, permission-unsafe, capability-drifted, or contradictory receipt
+sets block handoff until explicitly reconciled with evidence.
+
 If multi-agent tools are unavailable, state `No subagents deployed:` with the
 concrete reason. Retain `team_mode="full-team"` in planning and apply its
 evidence rubric while one Lead performs the work.
 
 When an active JStack loop supplies a `loopId`, keep `team_mode="full-team"`
 fixed for that contract and execute only the current wave-bounded iteration.
-The loop checkpoint owns convergence and terminal status.
+Pass the current validated `specialist_handoff_receipt` to every checkpoint
+and finalization; the loop owns convergence and terminal status.

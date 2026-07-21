@@ -69,10 +69,14 @@ required evidence cannot be downgraded into a pass.
 
 1. resolves the canonical Git root or advisory artifact-only root;
 2. validates the baseline, scope, profile, policy, controls, and limits;
-3. records HEAD, workspace fingerprint, policy/control digests, adapter
-   inventory, and inspected-input manifest;
-4. composes deterministic health, review, and the existing secret-scan result;
-5. returns a signed, session-local audit token plus required coverage and gaps.
+3. deterministically routes bounded audit capabilities from the focus and any
+   permitted explicit IDs through read-only Reviewer, QA, and Security roles;
+4. strengthens required domains with capability domains without removing any
+   profile, control-catalog, or policy requirement;
+5. records HEAD, workspace fingerprint, policy/control and capability digests,
+   adapter inventory, and inspected-input manifest;
+6. composes deterministic health, review, and the existing secret-scan result;
+7. returns a signed, session-local audit token plus required coverage and gaps.
 
 The start operation discovers curated analyzers but does not execute them by
 default. Quick rejects every execution approval. Deep and release first return
@@ -109,6 +113,12 @@ An unverified hypothesis is an observation and cannot block release.
 4. renders only the requested JSON, Markdown, and/or SARIF 2.1.0 artifacts,
    plus a bounded executive/result envelope;
 5. issues a Git-bound audit receipt when the evidence is eligible.
+
+When platform specialists are used, their structured results and minimized
+telemetry must also pass the specialist result and handoff validators. This
+does not replace audit finalization: the audit receipt independently binds the
+capability catalog/selection and selected IDs to the complete domain coverage
+and findings result.
 
 `pass` means complete required coverage with no verified finding at or above the
 policy failure threshold. `fail` means complete coverage with a verified

@@ -53,6 +53,7 @@ JStack makes those controls explicit.
 | A prompt drifts away from the real goal | Versioned goal contracts, non-goals, policy floors, and exact-digest confirmation |
 | "Tests passed" exists only as prose | QA and security receipts tied to the exact Git revision, workspace, policy, and command |
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
+| A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
 | Release confidence becomes release permission | Fail-closed readiness checks plus separate human authority for commit, push, deploy, and release |
@@ -75,13 +76,32 @@ Subagents` or `use JStack Full Team` in the same request when that staffing is
 explicitly intended. Audit remains an independent inspection boundary and does
 not edit project code.
 
+### Specialist capabilities inside the five commands
+
+JStack v0.6 upgrades the existing commands rather than adding a sixth command.
+The selected delivery mode still decides who works and who may edit; a
+deterministic capability plan then decides which task-specific methods each
+selected role must apply. For example, an API change can route contract and
+compatibility evidence to the existing Architect, Builder, Reviewer, QA, or
+Security roles, while an authentication change can add trust-boundary and
+negative-authorization evidence.
+
+Every selected capability inherits the role's existing permissions. It cannot
+turn a read-only Reviewer into a writer, add a role, widen a path scope, or
+authorize deployment. Multi-agent work returns schema-validated specialist
+results and privacy-safe telemetry metadata; a signed handoff is issued only
+when every expected role is present, current, capability-matched, and free of
+unresolved contradictions. See the
+[specialist capability system](docs/specialist-capabilities.md).
+
 ## How It Works
 
 ```mermaid
 flowchart LR
     A[Goal and context] --> B[Readiness and policy]
     B --> C[Selected delivery mode]
-    C --> D[QA, security, review, and audit evidence]
+    C --> K[Role-bound capability plan]
+    K --> D[Structured specialist, QA, security, review, and audit evidence]
     D --> E{Acceptance contract met?}
     E -- No --> F[Bounded revision or human gate]
     F --> C
@@ -100,12 +120,14 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 4. **Authority**: report verified completion without treating it as permission
    to commit, push, deploy, or release.
 
-## What Ships In v0.5
+## What Ships In v0.6
 
 | Capability | What it provides |
 | --- | --- |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
+| Specialist capabilities | Pinned, versioned routing for 14 engineering, testing, security, reliability, and handoff capability packs inside the existing five commands |
+| Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
 | Audit system | Read-only quick, standard, deep, and release profiles with deterministic finalization and SARIF output |
 | Goal loops | Versioned contracts, private atomic state, one write lease per checkout, circuit breakers, checkpoints, revision, and terminal receipts |
 | Program orchestration | Phase-count-agnostic dependency graphs, child-goal proofs, human and external gates, pause-aware budgets, invalidation, recovery, and final integrated evidence |
@@ -196,7 +218,7 @@ flowchart TB
     H --> M[JStack MCP control plane]
 
     M --> P[Policy and project binding]
-    M --> D[Delivery and team coordination]
+    M --> D[Delivery, capability routing, and team coordination]
     M --> E[QA, security, audit, and release evidence]
     M --> L[Bounded goal loops]
     M --> R[Program and phase orchestration]
@@ -220,6 +242,8 @@ artifacts before release.
 - **Policy** defines non-overridable floors, trusted commands, protected paths,
   and release requirements.
 - **Delivery** owns plans, staffing, permissions, scopes, and implementation.
+- **Capabilities** add role-bound methods, required evidence, stop conditions,
+  and audit/loop controls without expanding those permissions or scopes.
 - **Evidence** owns current QA, security, audit, output, and approval proofs.
 - **Loop** owns one bounded Phase -> Iteration convergence contract.
 - **Program** owns a project-defined Program -> Phase dependency graph above
@@ -237,6 +261,8 @@ release gate can require:
 - a distinct pre-release base and clean committed candidate;
 - complete committed, staged, unstaged, and untracked change evidence;
 - current QA, security, deterministic review, and audit receipts;
+- current specialist result and handoff receipts when multi-agent capability
+  routing is used;
 - complete current-tree and release-range secret scanning;
 - explicit external approval, rollback, monitoring, and smoke-test references;
 - revalidation after any material change or downstream invalidation.
@@ -255,6 +281,9 @@ action authority.
   code still runs with the current user's filesystem and network privileges.
 - Session-local receipts reduce accidental and caller-side evidence tampering;
   they do not protect against compromise of the same operating-system account.
+- Specialist telemetry stores bounded identifiers, timing, status, counts, tool
+  names/statuses, evidence references, and derived digests—not prompts,
+  messages, tool arguments, model output, or secret values.
 - Loop and program state under `~/.jstack/` is private local state, not a
   distributed lock or multi-tenant security boundary.
 - Signed-local human gates prove possession of a configured key. They are not
@@ -272,7 +301,7 @@ environment.
 
 | Path | Purpose |
 | --- | --- |
-| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, delivery controls, audit, loop, program, schemas, curricula, and templates |
+| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
 | [`skills/`](skills/) | Canonical single-lead, audit, and loop skills |
 | [`prompts/`](prompts/) | Canonical slash-command prompts |
 | [`plugins/`](plugins/) | Five dedicated command plugins |
@@ -293,8 +322,8 @@ python3 mcp/jstack/smoke_test.py
 ```
 
 CI runs the same release-critical checks on Ubuntu, macOS, and Windows with
-Python 3.9 and 3.12. The current release contains 148 passing unit and
-adversarial tests.
+Python 3.9 and 3.12, including capability-routing, receipt-tamper, privacy,
+artifact-parity, installation, and orchestration adversarial tests.
 
 ## Documentation
 
@@ -303,9 +332,11 @@ adversarial tests.
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
+| [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |
-| [v0.5 migration guide](docs/migration-0.5.md) | [Architecture decisions](docs/adr/) |
+| [v0.6 migration guide](docs/migration-0.6.md) | [Architecture decisions](docs/adr/) |
+| [v0.5 migration guide](docs/migration-0.5.md) | [Third-party notices](THIRD_PARTY_NOTICES.md) |
 
 ## Governance
 
@@ -314,6 +345,8 @@ adversarial tests.
 - Review release history in [CHANGELOG.md](CHANGELOG.md) and
   [GitHub Releases](https://github.com/JarodFroneman/jstack/releases).
 - JStack is distributed under the [MIT License](LICENSE).
+- Third-party adaptations and pinned source provenance are documented in
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Relationship To gstack
 

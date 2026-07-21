@@ -31,7 +31,7 @@ implicit escalation.
    states, constraints, non-goals, sources, niche requirements, assumptions,
    and unresolved or inferred fields.
 3. Define acceptance criteria, allowed paths, blocked actions, autonomy, and
-   convergence limits.
+   convergence limits, then route the task's capability plan.
 4. Run the Goal Readiness Gate, resolve its targeted context questions, and
    obtain exact-digest confirmation when required.
 5. Start durable JStack loop state with the readiness receipt and create the
@@ -64,6 +64,17 @@ and bound to the semantic contract plus current Git and policy state.
 Changing a semantic contract field requires a fresh readiness receipt bound to
 the loop ID and prior contract digest. Approval-only and explicit retry/resume
 revisions carry existing readiness when the contracted target is unchanged.
+
+Readiness, start, durable status, material revisions, and completion all bind a
+`capabilityContract`: catalog/selection/goal digests, execution mode, exact
+role assignments, explicit capability IDs, strengthened audit domains, loop
+controls, and the no-permission-expansion invariant. Changing explicit IDs is a
+material revision requiring fresh readiness.
+
+For `smart-subagents` and `full-team`, each checkpoint and finalization must
+include a current `specialist_handoff_receipt` matching the capability contract
+and Git state. Single-lead loops validate the Lead's structured result in the
+workflow but do not require a multi-agent handoff at every checkpoint.
 
 ## Autonomy
 

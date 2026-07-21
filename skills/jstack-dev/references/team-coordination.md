@@ -13,7 +13,7 @@ Documentation may edit assigned documentation. Every other role is read-only.
 
 The packet uses exact keys: `goal`, `riskClass` (array), `mode`,
 `rolesUsed`, `rolesNotUsed`, `readWritePermissions`,
-`fileOwnershipMap`, `evidenceContract`, `conflictRule`,
+`fileOwnershipMap`, `capabilityPlan`, `evidenceContract`, `conflictRule`,
 `stopConditions`, `verificationGate`, and `handoffGate`.
 
 Each assignment states:
@@ -21,6 +21,7 @@ Each assignment states:
 - one bounded question or deliverable
 - read-only or write permission
 - exact path/module scope for writers
+- exact versioned capability IDs, methods, required evidence, and stop conditions
 - evidence expected
 - actions the specialist must not perform
 
@@ -39,10 +40,29 @@ cleanly, use one writer.
 
 ## Evidence
 
-Each specialist returns scope handled, files/commands/data inspected, findings
-ordered by severity, explicit blockers, residual risk, and recommended action.
-The Lead reconciles disagreement using reproduction, source evidence, project
-rules, and safety gates.
+Each routed role, including Lead, returns `jstack.specialist.result.v1` with
+status, scope handled, typed evidence, findings, changes, blockers, residual
+risk, skipped checks, and one recommended action. Every capability-required
+evidence kind must appear. A result marked success cannot contain an open
+blocker or blocking finding.
+
+Each result also carries `jstack.specialist.telemetry.v1`: run/trace/span IDs,
+timestamps, status, tool names and statuses, evidence references, derived input
+and output digests, duration, and optional token counts. `rawContentStored` is
+always false. Raw prompts, messages, tool arguments, command or model output,
+source contents, credentials, and secrets are forbidden.
+
+The Lead calls `jstack_specialist_result` for every exact role/capability
+assignment, then `jstack_specialist_handoff_check`. The latter rejects missing,
+duplicate, stale, tampered, capability-drifted, permission-unsafe, overlapping,
+blocked, or contradictory receipt sets. Contradictions need a named
+`resolutionKey` and an evidence-backed Lead resolution. The issued handoff
+receipt proves structural/current contract consistency, not semantic truth.
+
+Capability packs inherit the selected role. They never grant new tools, write
+scope, delegation, approvals, or release authority. The Lead reconciles
+disagreement using reproduction, source evidence, project rules, and safety
+gates.
 
 Specialists do not spawn descendants, deploy, push, merge, reset history,
 delete data, alter production, or claim overall completion.

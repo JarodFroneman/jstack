@@ -5,6 +5,7 @@
 Canonical sources live in:
 
 - `mcp/jstack/jstack_mcp_server.py`
+- `mcp/jstack/capabilities/`
 - `mcp/jstack/audit/`
 - `mcp/jstack/loop/`
 - `mcp/jstack/program/`
@@ -26,6 +27,7 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - command/risk routing and enterprise gates
 - project and policy inspection
 - team planning and coordination validation
+- deterministic role-bound capability routing and specialist handoff validation
 - QA command discovery and explicitly approved execution
 - current-tree and release-range secret scanning
 - deterministic audit collection and evidence-bound finalization
@@ -42,6 +44,36 @@ The MCP never spawns platform subagents or performs a deployment. Codex's
 platform tools perform real agent dispatch. Project-specific release tools
 perform real production mutation only after separate authorization.
 
+## Specialist Capability Protocol
+
+The capability registry upgrades the five existing workflows without creating
+another command or another source of permissions. A core role remains the unit
+of accountability and authority. The registry deterministically attaches at
+most four applicable capability packs to each selected role from the goal,
+risk classification, catalog priorities, default-role rules, and any permitted
+explicit IDs.
+
+Each pack is data: methods, required evidence kinds, stop conditions, audit
+domains, loop controls, allowed roles, and `permissionMode: inherit-role`.
+Strict catalog validation rejects unknown fields, unsafe source paths, invalid
+patterns, unknown roles, duplicate identifiers, and any attempt to grant
+authority. Canonical catalog and selection digests make routing reproducible
+and bind it into downstream receipts.
+
+`jstack_specialist_result` validates one role's structured result and minimized
+telemetry, enforces its evidence and write contract, checks a stable Git
+subject, and issues a session-local receipt. The server derives telemetry input
+and output digests. The telemetry schema has no raw-content fields and rejects
+recognized raw-content keys and secret-like values.
+
+`jstack_specialist_handoff_check` recomputes the expected team and capability
+plan, validates complete current receipt coverage, rejects overlapping change
+ownership and unresolved contradictions, and issues one team handoff receipt.
+The Lead may record an evidence-referenced resolution, but cannot bypass a
+missing role, invalid signature, stale project state, or failed specialist
+result. These receipts attest structural validation and binding, not semantic
+truth or release authority.
+
 ## Loop Protocol
 
 Codex Goal mode is the continuation engine. The JStack loop protocol is the
@@ -55,6 +87,13 @@ domain-aware context, returns at most three prioritized questions per round,
 and requires exact-digest confirmation for ambiguity or elevated risk. Start
 and material revision require a short-lived receipt bound to that semantic
 contract and the current Git/policy subject.
+
+Readiness also binds a deterministic `capabilityContract`: catalog and
+selection digests, goal digest, execution mode, exact role assignments,
+explicit IDs, audit domains, loop controls, and the no-permission-expansion
+invariant. Changing capabilities is a material revision. Multi-agent
+checkpoints and finalization require a current specialist handoff receipt that
+matches the durable contract and Git state.
 
 Write loops require a clean start and an exclusive repository lease. L3 also
 requires a linked worktree, low risk, bounded paths, and QA, security, audit,
@@ -95,6 +134,10 @@ manifest never mounts into the Git repository.
 ## Audit Protocol
 
 `jstack_audit` creates a state-bound coverage contract and signed audit session.
+Its bounded focus and optional explicit capability IDs route only through the
+read-only Reviewer, QA, and Security roles. Capability domains may strengthen
+required coverage but cannot remove profile, control-catalog, or policy
+requirements.
 `jstack_audit_finalize` validates repository-relative evidence, coverage,
 findings, suppressions, and current state before deriving a result and, for Git
 projects, issuing an audit receipt. The deterministic MCP validates evidence; it
@@ -128,9 +171,17 @@ and server session. Any mismatch denies readiness.
 Audit sessions additionally bind controls, profile, scope, required domains,
 adapter inventory, and a deterministic manifest of inspected inputs. Audit
 receipts bind coverage and finding digests, server evaluation time, and active
-suppression expiries. Release-profile receipts bind complete repository scope
-and the release-range digest. The audit release gate is opt-in; QA and security
-receipt compatibility is unchanged.
+suppression expiries plus the capability catalog, selection, goal, and selected
+capability IDs. Release-profile receipts bind complete repository scope and the
+release-range digest. The audit release gate is opt-in; QA and security receipt
+compatibility is unchanged.
+
+Specialist result receipts bind the complete role roster, exact role and
+capability assignment, write scope, catalog and selection digests, result and
+telemetry digests, Git subject, policy, tool version, and server session. A
+handoff receipt additionally binds every accepted result receipt and structured
+Lead resolution. Any missing, duplicate, stale, contradictory, or
+permission-inconsistent input denies the handoff.
 
 QA discovery is not evidence. A complete clean scan is evidence only for the
 heuristics it actually ran. Missing, stale, failed, timed-out, truncated, or
@@ -138,6 +189,7 @@ inconclusive evidence never becomes a pass.
 
 Loop completion receipts additionally bind the loop ID, contract digest,
 baseline commit, completion-evidence digest, event-chain head, execution mode,
+capability catalog and selection digests, the applicable specialist handoff,
 autonomy, and risk tier. Durable state survives MCP restarts, but signed
 receipts remain intentionally session-local and must be revalidated.
 
@@ -156,6 +208,12 @@ The Python QA runner is not an operating-system sandbox. It closes stdin,
 scrubs inherited variables, isolates HOME, avoids a shell, caps output/time, and
 kills its process group. Untrusted project execution still requires a
 container, VM, or host sandbox.
+
+Specialist telemetry is bounded metadata, not a raw trace store. It may contain
+identifiers, timing, status, counts, tool names/statuses, evidence references,
+and server-derived digests. It rejects raw content and recognized secret-like
+values, but the retained metadata can still be sensitive and inherits the same
+local account boundary as other session receipts.
 
 The same boundary applies to approved audit adapters. Static audit collection
 does not execute repository code or perform network work. Adapter offline flags

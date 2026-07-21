@@ -29,6 +29,7 @@ Before dispatch, require a coordination packet:
 - `mode: smart-subagents`
 - `rolesUsed` and `rolesNotUsed`
 - `readWritePermissions` and `fileOwnershipMap`
+- actual `capabilityPlan` and exact per-role `capabilityIds`
 - `evidenceContract`, `conflictRule`, and `stopConditions`
 - `verificationGate` and `handoffGate`
 
@@ -38,6 +39,19 @@ claim is invalid. Use `jstack_plan` with
 `off`, `coach`, or `assessment`, otherwise `embedded`.
 The MCP plans and validates; platform multi-agent tools perform actual
 dispatch, collection, and closure.
+
+Dispatch each specialist with only the capability subset returned for its core
+role. Capability packs add methods, evidence requirements, stop conditions,
+audit domains, and loop controls; they never grant tools, writes, delegation,
+approvals, or release authority. Each routed role, including the Lead, returns
+a `jstack.specialist.result.v1` object and metadata-only
+`jstack.specialist.telemetry.v1`. The Lead calls `jstack_specialist_result` for
+each exact role/capability assignment and calls
+`jstack_specialist_handoff_check` before completion. Raw prompts, messages,
+tool arguments, command/model output, source contents, and secrets are
+forbidden in telemetry. Missing, stale, partial, conflicting, permission-unsafe,
+or capability-drifted receipts block handoff; contradictions need an explicit
+evidence-backed Lead resolution.
 
 Call `jstack_runtime_status` before project tools. A successful call proves the
 MCP is mounted. Use `jstack_detect_project` and branch on `evidenceMode`. For
@@ -54,7 +68,9 @@ required, stop and recommend `/jstack-full-team`.
 
 When an active JStack loop supplies a `loopId`, keep
 `team_mode="smart-subagents"` fixed for that contract and execute only the
-current iteration. The loop checkpoint owns convergence and terminal status.
+current iteration. Pass the current validated `specialist_handoff_receipt` to
+every checkpoint and finalization; the loop owns convergence and terminal
+status.
 
 No two editing agents may own the same file or module. If scope cannot be split
 cleanly, use one Builder. The Lead Engineer resolves conflicts using evidence,

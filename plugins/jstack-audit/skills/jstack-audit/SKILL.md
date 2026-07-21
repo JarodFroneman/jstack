@@ -22,7 +22,9 @@ reasoned work.
 3. Read project instructions and relevant durable context.
 4. Call `jstack_runtime_status`, then `jstack_detect_project`.
 5. Call `jstack_audit` to bind the subject, controls, profile, scope manifest,
-   adapter inventory, review evidence, and existing secret-scan evidence.
+   adapter inventory, review evidence, existing secret-scan evidence, and the
+   focus-routed `specialistCapabilityPlan`. Its capability audit domains may
+   strengthen required coverage but may never remove profile or policy domains.
 6. Generate candidate findings from cited source evidence, then run a separate
    challenge pass that looks for guards, callers, tests, reachability limits,
    and mitigating controls.
@@ -84,6 +86,20 @@ Default to one Audit Lead. `smart-subagents` may use up to three relevant
 read-only specialists with a validated coordination packet. `full-team` uses
 controlled discovery, domain review, verification, and synthesis waves. No
 specialist edits audited code. The Audit Lead owns the final evidence decision.
+
+Capability packs specialize the existing audit roles; they do not create a new
+command or grant tools, writes, delegation, approval, or release authority.
+Use the exact catalog and selection digests returned by `jstack_audit`. If a
+specialist team is deployed, first obtain the matching `jstack_team_plan`, give
+each read-only role only its routed capability subset, and require structured
+specialist results plus privacy-safe telemetry. Validate them through
+`jstack_specialist_result` and `jstack_specialist_handoff_check` before Audit
+Lead synthesis. Never store raw prompts, messages, tool arguments, command or
+model output, source contents, credentials, or secrets in telemetry.
+
+The final audit receipt binds the capability catalog, selection, and selected
+IDs alongside the existing subject, controls, coverage, and finding digests.
+This binding proves contract consistency, not semantic finding truth.
 
 ## Result Semantics
 

@@ -7,7 +7,7 @@ Codex may prepare a challenge and verify a returned signature. It must never
 create the decision, handle the private key, run the signer on the approver's
 behalf, or claim that silence is approval.
 
-JStack v0.5 supports the `signed-local` identity provider. It proves possession
+JStack currently supports the `signed-local` identity provider. It proves possession
 of a configured shared key and role; it does not provide enterprise SSO,
 non-repudiation, or protection from compromise of the same operating-system
 account. Organizations can replace this provider in a future protocol version.

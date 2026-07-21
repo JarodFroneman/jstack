@@ -6,6 +6,8 @@ evidence, release readiness, and mastery progression.
 ## Boundaries
 
 - The MCP plans and validates teams; platform tools spawn real subagents.
+- Capability packs attach task-specific methods and evidence to existing roles;
+  they never grant tools, write access, path scope, or release authority.
 - It does not deploy, merge, push, restart production, or expose an arbitrary
   shell tool.
 - Static audit collection and finalization are read-only and perform no network
@@ -28,6 +30,9 @@ evidence, release readiness, and mastery progression.
   receipt in that mode.
 - Artifact-only audit planning is advisory and cannot issue a Git-bound audit
   receipt or formal release-ready result.
+- Specialist telemetry stores bounded metadata and server-derived digests. Its
+  schema has no raw prompt, message, tool-argument, model-output, or arbitrary
+  log fields, and rejects recognized raw-content keys and secret-like values.
 
 ## Evidence
 
@@ -46,6 +51,12 @@ evaluation time, active suppression expiries, result status, and completeness.
 Release-profile receipts also bind complete repository scope and the release
 range digest. They attest these deterministic facts, not semantic truth.
 
+Specialist result receipts bind exact role/capability routing, permissions,
+required evidence, minimized telemetry, catalog/selection digests, and current
+Git state. A specialist handoff receipt requires complete current role coverage
+and resolved contradictions. These receipts attest validation and binding, not
+semantic truth or release permission.
+
 Release readiness requires an explicit base, clean commit, current passing
 receipt for every discovered command, complete current and release-history
 secret scan, environment-specific approval reference, rollback, and monitoring.
@@ -53,7 +64,8 @@ secret scan, environment-specific approval reference, rollback, and monitoring.
 ## Tools
 
 The server exposes `jstack_*` tools for runtime status, project detection,
-planning, team validation, policy/preflight, health/review, QA, security,
+planning, capability routing, specialist result/handoff validation, team
+validation, policy/preflight, health/review, QA, security,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.
@@ -64,6 +76,9 @@ budgets, revisions, idempotent mutations, and final integrated acceptance.
 They do not hardcode a phase count or domain roadmap.
 
 Use `tools/list` after MCP initialization for the authoritative schemas.
+The capability-specific entry points are `jstack_capability_catalog`,
+`jstack_specialist_result`, and `jstack_specialist_handoff_check`; planning,
+audit, and loop tools also expose capability fields.
 
 ## Install
 

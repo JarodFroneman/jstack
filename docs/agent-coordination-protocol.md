@@ -55,14 +55,16 @@ define:
 | Read/write permissions | Who may edit and who is read-only |
 | File ownership map | Path or module ownership for every editing agent |
 | Evidence contract | What each specialist must return |
+| Capability plan | Exact versioned role-to-capability assignments from JStack planning |
 | Conflict rule | How contradictory findings are resolved |
 | Stop conditions | Conditions that force pause/escalation |
 | Verification gate | Tests, checks, QA, screenshots, logs, or reports required |
 | Handoff gate | Final summary shape and residual-risk requirements |
 
-`jstack_dispatch_check` receives this actual object. A boolean assertion that
-a packet exists is invalid. The MCP never claims to spawn agents; Codex
-platform tools perform dispatch and collection.
+`jstack_dispatch_check` receives this actual object, including the unmodified
+`capabilityPlan` and exact per-role `capabilityIds` from planning. A boolean
+assertion that a packet exists is invalid. The MCP recomputes routing and never
+claims to spawn agents; Codex platform tools perform dispatch and collection.
 
 ## Role Permission Defaults
 
@@ -101,6 +103,18 @@ Every specialist must return:
 - residual risk
 - recommended next action
 
+The response uses `jstack.specialist.result.v1` and must include every evidence
+kind required by the role's routed capabilities. Each role also submits
+`jstack.specialist.telemetry.v1`: bounded IDs, timing, status, tool
+names/statuses, evidence references, and optional counts with
+`rawContentStored: false`. Do not submit prompts, messages, tool arguments,
+model output, arbitrary logs, hidden reasoning, or secret values.
+
+`jstack_specialist_result` validates and signs each role's current result.
+Before synthesis, `jstack_specialist_handoff_check` must validate the complete
+receipt set. It fails closed on missing or stale roles, routing drift,
+unauthorized changes, failed results, or unresolved contradictions.
+
 ## Conflict Resolution
 
 1. Evidence beats opinion.
@@ -108,6 +122,10 @@ Every specialist must return:
 3. Project rules beat generic best practice.
 4. Safety gates beat speed.
 5. The Lead Engineer makes the final decision and documents unresolved risk.
+
+Contradictory findings use a shared `resolutionKey`. The Lead may resolve them
+only through the handoff validator with a decision, rationale, and evidence
+references. An unresolved contradiction blocks the signed handoff.
 
 ## Stop Conditions
 
