@@ -31,6 +31,10 @@ Authorization and consumption revalidate the complete subject. Consumption is
 destructive and produces a maximum 60-second permit for one operation. Replay,
 retry, action substitution, provider/visibility/remote/ref/commit/environment
 drift, expiry, or state change requires a new challenge.
+Push intents distinguish an exact branch-only operation
+(`tag=not-applicable`) from an exact tag-only operation. The selected local
+branch or tag must resolve to the authorized full commit before the challenge,
+authorization, and consumption can succeed.
 
 The five existing command surfaces adopt the boundary. Audit cannot enter the
 authorization lifecycle. Loop and program contracts retain every protected
@@ -42,6 +46,8 @@ remains evidence and always reports execution authority as false.
 - Local development remains unchanged until a protected action is requested.
 - Even local commits require exact signed authority.
 - Multi-step release work requires multiple human decisions, one per action.
+- Annotated release tags use separate local-tag creation, exact tag-only push,
+  tag CI, and release-creation decisions.
 - A failed provider call cannot be retried under the consumed permit.
 - Identity configuration and operator signing add deliberate friction.
 - The protocol blocks accidental or inferred authority inside compliant JStack

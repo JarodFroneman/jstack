@@ -82,6 +82,8 @@ The external-action tools are `jstack_external_action_challenge`,
 bind exactly one action to provider, owner, repository, visibility, remote,
 branch, tag, full commit, environment, current project state, policy, version,
 and MCP session. Broad task or phase approval is never accepted.
+Push targets are ref-kind exact: `tag=not-applicable` is branch-only, while an
+exact local tag is tag-only; the selected ref must resolve to the full commit.
 
 Program tools add project-derived phase DAGs, exact child-loop proofs,
 signed-local human gates, external artifact evidence, pause-aware active-time

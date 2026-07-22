@@ -60,6 +60,13 @@ Repository-provider actions use an exact non-local visibility and
 exact tag. Deployment environments are exact names; `production_mutation`
 requires an environment beginning with `production`.
 
+A `push` challenge is also ref-kind exact. `tag=not-applicable` authorizes
+only the named branch, and that local branch tip must resolve to
+`exactCommit`. Supplying an exact tag authorizes only that tag, and the local
+tag must peel to `exactCommit`. Create, push, and release a version tag as
+three separately signed actions; wait for tag CI before release publication
+when the repository requires it.
+
 ## Lifecycle
 
 1. The accountable Lead calls `jstack_external_action_challenge` for one exact

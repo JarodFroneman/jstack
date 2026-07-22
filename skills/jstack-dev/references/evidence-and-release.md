@@ -81,6 +81,12 @@ target environment, current Git/workspace/policy state, branch, remote snapshot,
 tool version, and MCP session. A named role-holding human signs the canonical
 payload outside Codex. Codex must not run the signer.
 
+For `push`, `tag=not-applicable` is a branch-only intent and the local branch
+tip must equal `exactCommit`. An exact tag is a tag-only intent and that local
+tag must peel to `exactCommit`. Do not push an annotated release tag under a
+branch-push permit: create the local tag, push that tag, wait for required tag
+CI, and create the release under three separate authorizations.
+
 After `jstack_external_action_authorize`, independently observe the exact
 provider target and call `jstack_external_action_consume`. The authorization is
 destroyed on consumption and returns a maximum 60-second permit for one exact

@@ -142,6 +142,10 @@ independently usable.
   and URL, branch, tag or `not-applicable`, full commit ID, and target
   environment. Show the complete target and digest, then wait for the named
   human to sign outside Codex. Never run the signer or fabricate its token.
+- Keep pushes ref-kind exact: `tag=not-applicable` is branch-only and requires
+  the local branch tip at `exactCommit`; an exact tag is tag-only and requires
+  that local tag to peel to `exactCommit`. A release tag therefore needs
+  separate tag-create, tag-push, and release-create authorizations.
 - Pass the signed token to `jstack_external_action_authorize`. Immediately
   before execution, independently re-observe the provider target and call
   `jstack_external_action_consume` with a fresh operation ID. Execute that one
