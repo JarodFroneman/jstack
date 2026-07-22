@@ -39,13 +39,20 @@ planning call.
    risk class. In `git` mode, QA execution must use the exact reviewed
    revision/fingerprint and return evidence receipts. In `artifact-only` mode,
    preserve direct evidence and its limitation instead.
-8. In Git mode, submit the Lead's exact `jstack.specialist.result.v1` and
+8. For production readiness in Git mode, declare `core` plus every applicable
+   product surface with `jstack_launch_assess`, register bounded typed artifacts
+   with `jstack_launch_evidence_register`, and require a passing
+   `jstack_launch_finalize` receipt. Blockers cannot be waived. Public-web,
+   commercial, payment, and regulated-data profiles also require a
+   release-profile audit by default. Launch readiness never authorizes an
+   external action.
+9. In Git mode, submit the Lead's exact `jstack.specialist.result.v1` and
    metadata-only `jstack.specialist.telemetry.v1` through
    `jstack_specialist_result`, then validate the one-role set with
    `jstack_specialist_handoff_check`. Never store raw prompts, messages, tool
    arguments, command/model output, source contents, or secrets. A failed,
    partial, stale, or capability-incomplete receipt blocks completion.
-9. Report outcome, evidence, residual risk, then an optional three-line mastery
+10. Report outcome, evidence, residual risk, then an optional three-line mastery
    capsule.
 
 Mandatory external-action boundary: default to local-only. Repository creation,

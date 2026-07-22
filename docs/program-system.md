@@ -1,6 +1,6 @@
 # JStack Program System
 
-JStack 0.5 adds a durable orchestration layer for projects whose real outcome
+JStack's durable program layer handles projects whose real outcome
 contains multiple independently verified phases. It composes existing bounded
 loops; it does not replace them.
 
@@ -39,7 +39,7 @@ flowchart TD
   L --> F
   J -->|yes| M{"All phases and final gates current?"}
   M -->|no| F
-  M -->|yes| N["Final audit, security, and integrated review"]
+  M -->|yes| N["Final QA, security, launch, audit, and integrated review"]
   N --> O["Program completion receipt"]
 ```
 
@@ -101,7 +101,10 @@ contracts, gates, evidence, and status independently.
 Finalization requires all current child and gate proof plus current final
 criteria. The default enterprise floor requires release-profile audit,
 security, and deterministic integrated review. Project contracts can require
-additional QA commands or artifacts.
+additional QA commands, artifacts, or a `launch` verifier bound to an exact
+target environment and exact `core`-inclusive surface set. Program finalization
+accepts `launch_receipt` and rejects a stale, differently scoped, or
+catalog/policy-drifted launch result.
 
 Completion proves the current contract and Git subject. It does not authorize
 repository creation, remote add/change, commit, push, pull-request creation,

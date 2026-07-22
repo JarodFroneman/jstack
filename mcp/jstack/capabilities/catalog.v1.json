@@ -1,6 +1,6 @@
 {
   "schemaVersion": "jstack.capability.catalog.v1",
-  "catalogVersion": "1.0.0",
+  "catalogVersion": "1.1.0",
   "sourceProvenance": {
     "repository": "https://github.com/msitarzewski/agency-agents",
     "commit": "459dce837db3bdfdc4763d3fefd1fd854e73c8f1",
@@ -444,6 +444,126 @@
       "loopControls": [
         "Each control criterion must name its verifier and evidence owner.",
         "Unavailable operating evidence remains an explicit blocker or qualification."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "web-launch-assurance",
+      "name": "Applicability-aware web launch assurance",
+      "summary": "Declare the real product surfaces, select only applicable launch controls, and require fresh commit-bound evidence for public web, browser, search, performance, and final-flow risks.",
+      "priority": 845,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-sre.md", "security/security-appsec-engineer.md", "specialized/specialized-workflow-architect.md", "testing/testing-accessibility-auditor.md", "testing/testing-performance-benchmarker.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "security", "devops", "product", "docs"],
+      "defaultRoles": [],
+      "patterns": ["pre[- ]?launch", "launch assurance", "public web", "browser ui", "seo", "findability", "page ?speed", "web vitals", "go[- ]live", "release readiness"],
+      "classifications": ["ui_product", "production_release"],
+      "method": [
+        "Declare core and every applicable product surface before selecting controls; never infer away an inconvenient gate.",
+        "Bind evidence to the exact commit, policy, catalogue, target environment, and bounded target URL.",
+        "Resolve blocker and required controls with current typed evidence, and keep advisory gaps visible.",
+        "Treat launch readiness as evidence only; it never grants release, deployment, or production-mutation authority."
+      ],
+      "requiredEvidence": ["launch-profile", "launch-control-evidence"],
+      "stopConditions": [
+        "The declared surfaces omit a known production capability.",
+        "A blocker has failed, incomplete, stale, waived, or unsupported evidence.",
+        "Evidence is not bound to the current release candidate or target environment."
+      ],
+      "auditDomains": ["correctness", "security", "performance", "testability", "operations"],
+      "loopControls": [
+        "A changed commit, policy, catalogue, surface profile, or target invalidates prior launch finalization.",
+        "Repeated checks must add evidence or revise the failure hypothesis rather than relabeling a gap."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "email-deliverability",
+      "name": "Transactional email deliverability",
+      "summary": "Verify domain authentication, real event triggers, independent mailbox delivery, rendering, link behavior, failure visibility, and the chosen sender-domain boundary.",
+      "priority": 835,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-sre.md", "specialized/specialized-workflow-architect.md", "strategy/coordination/handoff-templates.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "devops", "product", "docs"],
+      "defaultRoles": [],
+      "patterns": ["transactional email", "email deliver", "spf", "dkim", "dmarc", "mail[- ]?tester", "signup email", "outlook", "gmail", "sender domain"],
+      "classifications": ["production_release"],
+      "method": [
+        "Trace each launch-critical message from the real product event through provider acceptance to mailbox delivery.",
+        "Verify SPF, DKIM, DMARC, visible-From alignment, return path, and the documented sender-domain decision.",
+        "Test representative messages in independent mailbox providers and exercise links, expiry, and rendering.",
+        "Record bounded headers and results without retaining credentials, personal content, or full message bodies."
+      ],
+      "requiredEvidence": ["email-authentication", "cross-client-delivery"],
+      "stopConditions": [
+        "A required message path is untested or cannot be delivered to an independent mailbox provider.",
+        "Authentication alignment fails or the sending identity is ambiguous.",
+        "Evidence would expose mailbox credentials, provider keys, or personal message content."
+      ],
+      "auditDomains": ["correctness", "security", "operations", "testability"],
+      "loopControls": [
+        "Provider API acceptance alone never completes a delivery criterion.",
+        "A template or domain change invalidates affected delivery evidence."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "product-observability",
+      "name": "Product analytics and observability",
+      "summary": "Make analytics, web vitals, conversion journeys, errors, and abuse signals decision-useful, consent-aware, release-correlated, and safe to retain.",
+      "priority": 825,
+      "activation": "matched",
+      "sourceFiles": ["engineering/engineering-incident-response-commander.md", "engineering/engineering-sre.md", "strategy/coordination/handoff-templates.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "security", "devops", "product"],
+      "defaultRoles": [],
+      "patterns": ["analytics", "conversion funnel", "event tracking", "error tracking", "observability", "session recording", "web vitals", "telemetry", "bot protection"],
+      "classifications": ["product", "ui_product", "production_release"],
+      "method": [
+        "Define event and metric semantics, ownership, consent state, and the decision each signal supports.",
+        "Exercise representative events and failures end to end, including denied-consent and duplicate-delivery paths.",
+        "Correlate observable failures and performance with the exact release while minimizing identifiers and cardinality.",
+        "Verify an owned alert, triage, or review path rather than stopping at data ingestion."
+      ],
+      "requiredEvidence": ["analytics-delivery", "error-observability"],
+      "stopConditions": [
+        "A required event, error, or performance signal cannot be observed at its owned destination.",
+        "Tracking occurs before the documented consent boundary.",
+        "Telemetry retains secrets, session tokens, raw prompts, or unnecessary personal data."
+      ],
+      "auditDomains": ["correctness", "performance", "operations", "data-integrity"],
+      "loopControls": [
+        "Metric and event definition changes invalidate affected acceptance evidence.",
+        "Do not optimize a signal until its semantics and delivery are verified."
+      ],
+      "permissionMode": "inherit-role"
+    },
+    {
+      "id": "privacy-legal-evidence",
+      "name": "Privacy and legal evidence coordination",
+      "summary": "Coordinate accountable evidence for terms, privacy, tracking consent, merchant-of-record identity, processors, and implementation alignment without pretending to provide legal certification.",
+      "priority": 815,
+      "activation": "matched",
+      "sourceFiles": ["security/security-compliance-auditor.md", "specialized/specialized-workflow-architect.md", "strategy/coordination/handoff-templates.md"],
+      "allowedRoles": ["lead", "architect", "reviewer", "qa", "security", "devops", "product", "docs"],
+      "defaultRoles": [],
+      "patterns": ["privacy", "terms", "cookie", "consent", "merchant of record", "legal", "personal data", "processor", "gdpr", "tracking"],
+      "classifications": ["security_compliance", "production_release"],
+      "method": [
+        "Name the accountable legal or business owner and the exact decision JStack is validating against.",
+        "Reconcile published disclosures, processors, retention, tracking, checkout identity, and implemented data flows.",
+        "Exercise consent, withdrawal, link, and identity behavior where technically testable.",
+        "Separate technical evidence, management assertion, unavailable evidence, and jurisdiction-dependent legal judgment."
+      ],
+      "requiredEvidence": ["accountable-legal-decision", "implementation-alignment"],
+      "stopConditions": [
+        "No accountable human owns the legal or merchant-of-record determination.",
+        "Published disclosures materially conflict with observed product behavior.",
+        "A technical checklist is being presented as legal advice or jurisdictional certification."
+      ],
+      "auditDomains": ["security", "operations", "data-integrity", "correctness"],
+      "loopControls": [
+        "A changed processor, data flow, tracking behavior, payment identity, or disclosure invalidates affected evidence.",
+        "Unavailable legal judgment remains an explicit human gate, never an inferred pass."
       ],
       "permissionMode": "inherit-role"
     }

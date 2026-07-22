@@ -90,6 +90,17 @@ fixed for that contract and execute only the current wave-bounded iteration.
 Pass the current validated `specialist_handoff_receipt` to every checkpoint
 and finalization; the loop owns convergence and terminal status.
 
+For production/release work, the Lead declares `core` plus every applicable
+product surface with `jstack_launch_assess` on the clean integrated candidate.
+Route selected controls through the existing roster: Security, QA, DevOps,
+Product, Reviewer, Architect, and Documentation collect their bounded evidence;
+accountable humans own legal and merchant decisions. The Lead alone registers
+and finalizes the exact selection. Missing, stale, failed, incomplete, or
+drifted blocker/required launch evidence blocks synthesis. Public-web,
+commercial, payment, and regulated-data profiles also require a current
+release-profile audit receipt by default. Full-team staffing is not launch or
+external-action authority.
+
 Default to local-only. Full-team approval authorizes staffing only. Repository
 creation, remote add/change, commit, push, pull-request creation, merge, tag,
 release, deployment, and production mutation each require a separate exact

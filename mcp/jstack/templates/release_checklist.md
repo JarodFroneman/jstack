@@ -36,6 +36,10 @@ tag-only push, tag CI, and release creation as distinct steps.
 - Diff hygiene:
 - QA receipt for every discovered test/lint/typecheck/build command:
 - Complete current-tree and release-history security receipt:
+- Accountable launch profile owner/reference:
+- Declared launch surfaces and target URL:
+- Current passing launch receipt:
+- Release-profile audit receipt when required by launch surfaces:
 - Security/compliance review:
 
 ## Rollback

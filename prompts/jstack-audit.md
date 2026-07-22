@@ -49,6 +49,14 @@ deployment, or production authority.
 7. Report status, coverage, severity-ordered findings, blockers, residual risk,
    and next action. Never turn missing evidence into a pass.
 
+For a release-profile audit, identify observable launch surfaces and risks but
+never invent the accountable surface declaration. When a current launch
+selection is supplied, map cited audit evidence and findings to its controls.
+Audit and launch receipts remain separate; neither replaces the other.
+Public-web, commercial, payment, and regulated-data production profiles require
+the repository-wide release-profile audit by default. Legal, live-provider,
+mailbox, device, and merchant facts remain external or human evidence.
+
 If the requested audit team mode deploys platform specialists, obtain the
 matching `jstack_team_plan`, keep every role read-only, validate each exact
 role/capability result and metadata-only telemetry through

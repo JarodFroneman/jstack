@@ -97,6 +97,14 @@ sets block handoff until explicitly reconciled with evidence.
 For an active full-team loop, pass the current validated
 `specialist_handoff_receipt` to every checkpoint and finalization.
 
+For production/release work, the Lead declares `core` plus every applicable
+surface on the clean integrated candidate. Existing Security, QA, DevOps,
+Product, Architect, Reviewer, Documentation, and accountable human owners
+collect the selected launch evidence; only the Lead registers and finalizes
+it. Missing or failed blocker/required evidence blocks synthesis. Public-web,
+commercial, payment, and regulated-data profiles also require a release-profile
+audit by default. Full-team approval remains staffing authority only.
+
 Default to local-only. Full-team approval authorizes staffing only. Repository
 creation, remote add/change, commit, push, pull-request creation, merge, tag,
 release, deployment, and production mutation each require their own exact

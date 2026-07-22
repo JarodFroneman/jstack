@@ -103,6 +103,15 @@ Use stable IDs and observable verifiers:
     "verifier": {"type": "security"}
   },
   {
+    "id": "launch",
+    "description": "The exact production public-web launch profile passes.",
+    "verifier": {
+      "type": "launch",
+      "targetEnvironment": "production",
+      "surfaces": ["core", "public-web"]
+    }
+  },
+  {
     "id": "review",
     "description": "Deterministic diff hygiene passes.",
     "verifier": {"type": "review"}
@@ -115,6 +124,10 @@ Verifier contracts:
 - `qa`: Requires a current passing JStack QA receipt for `commandKey`.
 - `security`: Requires a current complete passing security receipt.
 - `audit`: Requires a current passing audit receipt for the specified profile.
+- `launch`: Requires a current complete passing launch receipt for the exact
+  normalized target environment and exact ordered surface set. The receipt is
+  revalidated against the current Git state, baseline, policy, tool version,
+  catalog, and applicability selection.
 - `review`: Uses server-derived Git change evidence and `git diff --check`.
 - `artifact`: Requires an exact repository file and optionally an exact SHA-256.
 - `human`: Requires a named approval key added by an approved contract revision.
@@ -132,6 +145,11 @@ Do not use subjective criteria such as "looks good," "enterprise quality," or
 tests, artifacts, and an explicit approval where judgment is unavoidable.
 Artifact verification is bounded to 20 criteria, 25 MB per file, 100 MB in
 aggregate, and a 30-second collection window.
+
+A launch criterion is appropriate only for a clean committed candidate because
+`jstack_launch_assess` deliberately refuses a dirty or uncommitted release
+subject. It does not authorize the commit, release, deployment, or production
+mutation needed around that candidate.
 
 ## Circuit Breakers
 

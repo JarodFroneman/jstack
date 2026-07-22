@@ -76,6 +76,18 @@ No two editing agents may own the same file or module. If scope cannot be split
 cleanly, use one Builder. The Lead Engineer resolves conflicts using evidence,
 reproduction, project rules, and safety gates.
 
+For production/release work, the Lead declares `core` plus every applicable
+product surface with `jstack_launch_assess` on the clean integrated candidate.
+Assign evidence collection to existing roles: Security owns security controls,
+QA owns interaction/device/delivery checks, DevOps owns transport and
+observability, Product owns findability/analytics semantics, and accountable
+humans own legal and business facts. Specialists return bounded artifacts and
+attestations; only the Lead registers and finalizes the exact selection.
+Missing or failed blocker/required launch evidence blocks handoff. Public-web,
+commercial, payment, and regulated-data profiles also require the current
+release-profile audit receipt by default. This is a capability of the existing
+team, not a new role or staffing command.
+
 If multi-agent tools are unavailable, state `No subagents deployed:` with the
 concrete reason. Retain `team_mode="smart-subagents"` in planning and apply
 its evidence rubric while one Lead performs the work.

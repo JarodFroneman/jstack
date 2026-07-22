@@ -17,12 +17,14 @@
 5. Run policy and preflight checks.
 6. Implement the smallest coherent change.
 7. Review, test, QA, and security-check proportionally to risk.
-8. Run release readiness only when a readiness assessment is explicitly
+8. On a clean committed production candidate, declare applicable product
+   surfaces, register typed launch evidence, and finalize a launch receipt.
+9. Run release readiness only when a readiness assessment is explicitly
    requested; it never authorizes execution.
-9. Default to local-only. For each protected action, use exact challenge,
+10. Default to local-only. For each protected action, use exact challenge,
    independent human signature, authorization, fresh provider observation,
    destructive one-time consumption, and one execution before permit expiry.
-10. Save handoff context and document residual risk.
+11. Save handoff context and document residual risk.
 
 ## Production Controls
 
@@ -33,6 +35,10 @@
 - diff hygiene
 - commit-bound QA receipts for every discovered command
 - complete current-tree and release-history secret evidence
+- explicit `core` plus every applicable launch surface
+- a current passing launch receipt with typed per-control evidence
+- a release-profile audit for public-web, commercial, payment, and
+  regulated-data profiles
 - explicit base and environment-specific approval reference
 - exact signed one-action authorization bound to provider, owner, repository,
   visibility, remote URL, branch/tag, full commit, target environment, current

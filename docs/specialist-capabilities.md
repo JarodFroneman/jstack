@@ -1,7 +1,8 @@
 # JStack Specialist Capability System
 
 JStack v0.6 added task-specific capability routing inside the five existing
-commands. It is not a sixth command and it is not a second roster of agents.
+commands; v0.8 extends that catalog with launch-assurance packs. It is not a
+sixth command and it is not a second roster of agents.
 The core role still determines accountability, tools, edit permission, and file
 scope; the capability plan adds a bounded method, required evidence, stop
 conditions, audit domains, and loop controls for that role's current task.
@@ -27,7 +28,7 @@ unknown roles, invalid regular expressions, unsafe source paths, and every
 permission mode except `inherit-role`. The catalog and each selection receive
 canonical SHA-256 digests.
 
-The initial catalog contains 14 capability packs:
+The v0.8 catalog contains 18 capability packs:
 
 | Capability | Main purpose |
 | --- | --- |
@@ -45,6 +46,10 @@ The initial catalog contains 14 capability packs:
 | `performance-engineering` | Reproducible baselines, percentiles, budgets, and comparisons |
 | `ai-code-security` | Model/tool trust boundaries, prompt injection, secrets, and negative tests |
 | `compliance-assurance` | Technical control evidence, gaps, remediation, and residual risk |
+| `web-launch-assurance` | Surface declaration, typed launch controls, freshness, and release binding |
+| `email-deliverability` | Domain authentication, real triggers, mailbox delivery, and rendering |
+| `product-observability` | Analytics, web vitals, funnels, errors, consent, and owned response paths |
+| `privacy-legal-evidence` | Accountable legal/business decisions and implementation alignment without legal certification |
 
 ## Deterministic routing
 

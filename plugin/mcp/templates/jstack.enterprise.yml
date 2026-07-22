@@ -3,7 +3,7 @@ standard: enterprise
 
 # This YAML template is intentionally simple so the local MCP can parse it
 # without third-party dependencies. Use the JSON template for the complete
-# release, external-action, security, audit, program, and quant policy surface.
+# release, external-action, security, audit, launch, program, and quant policy surface.
 requiredChecks:
   - project_instructions_read
   - git_status_reviewed
@@ -12,6 +12,7 @@ requiredChecks:
   - focused_tests_run_or_blocked
   - secret_scan_clean
   - security_review_for_sensitive_work
+  - launch_assurance_for_production
   - release_approval_for_production
   - exact_external_action_authorization
   - rollback_plan_for_production
@@ -37,3 +38,9 @@ program:
   requireSignedApprovals: true
   requireCurrentEvidence: true
   requireFinalAudit: true
+
+launch:
+  requireReceiptForProduction: true
+  requireProfileDeclaration: true
+  maxEvidenceAgeMinutes: 1440
+  allowWaivers: true

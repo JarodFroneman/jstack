@@ -464,7 +464,7 @@ class ExternalActionTests(unittest.TestCase):
         runtime = server.tool_runtime_status({"project_path": str(self.repo)})
         self.assertEqual("local-only", runtime["externalActionBoundary"]["defaultMode"])
         names = {item["name"] for item in server.tool_definitions()}
-        self.assertEqual(50, len(names))
+        self.assertEqual(53, len(names))
         self.assertTrue(
             {
                 "jstack_external_action_challenge",

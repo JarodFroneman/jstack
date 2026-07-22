@@ -8,6 +8,7 @@ Canonical sources live in:
 - `mcp/jstack/capabilities/`
 - `mcp/jstack/audit/`
 - `mcp/jstack/authorization/`
+- `mcp/jstack/launch/`
 - `mcp/jstack/loop/`
 - `mcp/jstack/program/`
 - `mcp/jstack/schemas/`
@@ -31,6 +32,8 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - deterministic role-bound capability routing and specialist handoff validation
 - QA command discovery and explicitly approved execution
 - current-tree and release-range secret scanning
+- applicability-aware launch profiles, typed artifact evidence, and
+  release-consumable launch finalization
 - deterministic audit collection and evidence-bound finalization
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
@@ -76,6 +79,28 @@ The Lead may record an evidence-referenced resolution, but cannot bypass a
 missing role, invalid signature, stale project state, or failed specialist
 result. These receipts attest structural validation and binding, not semantic
 truth or release authority.
+
+## Launch Assurance Protocol
+
+The launch registry contains exactly 37 versioned controls across security,
+email, findability, speed, analytics, legal, and final-test categories. An
+accountable profile declares `core` plus every applicable product surface. The
+registry deterministically selects controls and hashes the catalog, target,
+environment, surfaces, and effective gate levels.
+
+Assessment requires a clean committed candidate and explicit base. Evidence
+registration accepts only a bounded regular non-symlink artifact inside the
+project or private evidence directory, hashes it with stable identity, records
+one typed outcome and named verifier, and returns no artifact content.
+Finalization revalidates every receipt against the current Git subject, policy,
+catalog, selection, environment, target, and server session. Blocker and
+required gaps fail closed; blockers cannot be waived.
+
+Production release readiness consumes the passing launch receipt. Public-web,
+commercial, payment, and regulated-data profiles elevate a repository-wide
+release audit to a mandatory gate by default. Launch tools perform no network,
+payment, provider, deployment, or production action and never expand the
+external-action authority boundary.
 
 ## Loop Protocol
 

@@ -31,7 +31,9 @@ implicit escalation.
    states, constraints, non-goals, sources, niche requirements, assumptions,
    and unresolved or inferred fields.
 3. Define acceptance criteria, allowed paths, blocked actions, autonomy, and
-   convergence limits, then route the task's capability plan.
+   convergence limits, then route the task's capability plan. A production
+   candidate can use a `launch` criterion bound to its exact environment and
+   exact `core`-inclusive surface set.
 4. Run the Goal Readiness Gate, resolve its targeted context questions, and
    obtain exact-digest confirmation when required.
 5. Start durable JStack loop state with the readiness receipt and create the
@@ -75,6 +77,13 @@ For `smart-subagents` and `full-team`, each checkpoint and finalization must
 include a current `specialist_handoff_receipt` matching the capability contract
 and Git state. Single-lead loops validate the Lead's structured result in the
 workflow but do not require a multi-agent handoff at every checkpoint.
+
+Launch criteria consume only a current `jstack_launch_finalize` receipt whose
+environment and ordered surfaces exactly equal the durable criterion. Receipt
+signature, Git fingerprint, baseline, policy, JStack version, catalog, and
+selection are revalidated at every checkpoint or finalization. A core-only
+receipt cannot satisfy a public-web criterion, and launch evidence cannot be
+collected until the release candidate is clean and committed.
 
 ## Autonomy
 
