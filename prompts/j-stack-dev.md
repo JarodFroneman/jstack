@@ -58,6 +58,10 @@ permit expiry. Never run the signer, reuse a permit, retry after consumption,
 or bypass the boundary through shell, Git, provider, browser, CI/CD, deployment,
 or production tools. If the protocol is unavailable or the project is
 artifact-only, stop that action while continuing safe local work.
+For `push`, `tag=not-applicable` is branch-only and the exact local branch
+tip must match the commit; an exact tag is tag-only and the local tag must peel
+to that commit. Create, push, and release a version tag under three separate
+authorizations, with required tag CI before release publication.
 
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.

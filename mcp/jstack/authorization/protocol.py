@@ -202,6 +202,7 @@ def normalize_target(value: Any, action: str) -> dict[str, Any]:
     remote_url = _text(value.get("remoteUrl"), "target.remoteUrl", 1000)
     branch = _ref(value.get("branch"), "target.branch", allow_not_applicable=False)
     tag_required = action in {"tag_create", "release_create"}
+    tag_allowed = action in {"push", "tag_create", "release_create"}
     tag = _ref(value.get("tag"), "target.tag", allow_not_applicable=not tag_required)
     exact_commit = _text(value.get("exactCommit"), "target.exactCommit", 64).lower()
     if not _COMMIT.fullmatch(exact_commit):
@@ -260,7 +261,7 @@ def normalize_target(value: Any, action: str) -> dict[str, Any]:
         raise AuthorizationError("production_mutation requires an exact production targetEnvironment.")
     if action == "deploy" and target_environment in {"local", "repository"}:
         raise AuthorizationError("deploy requires an exact non-local deployment environment.")
-    if not tag_required and tag != NOT_APPLICABLE:
+    if not tag_allowed and tag != NOT_APPLICABLE:
         raise AuthorizationError(f"target.tag must be not-applicable for {action}.")
 
     return {

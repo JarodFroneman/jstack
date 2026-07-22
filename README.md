@@ -127,7 +127,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Capability | What it provides |
 | --- | --- |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
-| External-action boundary | Local-only default; independently signed exact challenges; session/Git/policy/remote/provider binding; fresh target observation; destructive one-time consumption; 60-second single-operation permits |
+| External-action boundary | Local-only default; independently signed exact challenges; session/Git/policy/remote/provider binding; exact branch-only or tag-only pushes; fresh target observation; destructive one-time consumption; 60-second single-operation permits |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
 | Specialist capabilities | Pinned, versioned routing for 14 engineering, testing, security, reliability, and handoff capability packs inside the existing five commands |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |

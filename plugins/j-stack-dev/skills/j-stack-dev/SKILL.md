@@ -53,5 +53,9 @@ Execute only that exact action once before permit expiry. Never run the signer,
 retry a consumed action, reuse authority, or bypass the boundary with shell,
 Git, provider, browser, CI/CD, deployment, or production tools. If the protocol
 is unavailable or the project is artifact-only, the action remains blocked.
+For `push`, `tag=not-applicable` is branch-only and the exact local branch
+tip must match the commit; an exact tag is tag-only and the local tag must peel
+to that commit. Create, push, and release a version tag under three separate
+authorizations, with required tag CI before release publication.
 
 This command is for substantial development work. Tiny one-line fixes may use normal Codex workflow.

@@ -8517,6 +8517,27 @@ def _validated_external_action_target(
                 "The named remote exists but does not exactly match the deployment/production target."
             )
 
+    if action == "push":
+        if target["tag"] == authorization_core.NOT_APPLICABLE:
+            push_ref = f"refs/heads/{target['branch']}"
+            push_ref_kind = "branch"
+        else:
+            push_ref = f"refs/tags/{target['tag']}"
+            push_ref_kind = "tag"
+        push_ref_result = run_complete(
+            ["git", "rev-parse", "--verify", f"{push_ref}^{{commit}}"],
+            project_path,
+            timeout=10,
+            max_bytes=10_000,
+        )
+        if (
+            not push_ref_result["ok"]
+            or _git_text(push_ref_result).strip().lower() != commit
+        ):
+            raise ToolError(
+                f"push requires the exact local {push_ref_kind} to resolve to exactCommit."
+            )
+
     if action in {"tag_create", "release_create"}:
         tag_ref = f"refs/tags/{target['tag']}"
         tag_result = run_complete(

@@ -32,6 +32,10 @@
 - Changed release readiness to report `executionAuthorized=false` even when
   evidence is ready; caller booleans and approval references remain readiness
   inputs only.
+- Made branch pushes and tag pushes distinct exact `push` intents. A
+  branch-only push requires `tag=not-applicable` and the named local branch
+  tip to equal `exactCommit`; a tag-only push requires the exact local tag to
+  peel to `exactCommit`.
 - Extended deterministic packaging to mirror the authorization module, signer,
   schemas, identity template, and updated command contracts.
 

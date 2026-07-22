@@ -147,6 +147,10 @@ workspace fingerprint, policy, current HEAD, attached branch, remote snapshot,
 tool version, and MCP session. A configured identity holding the action's exact
 role signs the canonical challenge outside Codex. The server verifies the
 signature and unchanged subject before issuing an unconsumed authorization.
+For `push`, `tag=not-applicable` selects a branch-only operation whose local
+branch tip must equal the full commit. An exact tag selects a tag-only operation
+whose local tag must peel to that commit, so release tag publication cannot
+reuse or hide inside a branch-push permit.
 
 Immediately before execution, the caller supplies a fresh provider observation
 of the same exact target. Destructive consumption revalidates every binding and

@@ -12,6 +12,7 @@
 - Provider / owner / repository / visibility:
 - Remote name and URL:
 - Branch / tag / full commit:
+- Push ref kind (branch-only or tag-only):
 - Human security reviewer/reference:
 - Target environment:
 - Release scope:
@@ -23,6 +24,9 @@ Create and consume a fresh authorization for every separate repository
 creation, remote add/change, commit, push, pull-request creation, merge, tag,
 release, deployment, or production mutation. Never reuse this checklist entry
 as authority for the next action.
+
+For an annotated release tag, record and authorize local tag creation, exact
+tag-only push, tag CI, and release creation as distinct steps.
 
 ## Preflight
 

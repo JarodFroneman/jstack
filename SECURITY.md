@@ -125,6 +125,9 @@ role holder signs the canonical challenge outside Codex. Authorization and
 one-time consumption repeat state checks, require a fresh exact provider
 observation, and return a permit valid for at most 60 seconds. Expiry, replay,
 retry, mismatch, state drift, or action escalation fails closed.
+Branch pushes require the exact local branch tip at the authorized commit.
+Tag pushes instead carry the exact tag and require that local tag to peel to
+the authorized commit; neither permit authorizes the other ref kind.
 
 Private challenge and consumption state under `~/.jstack/external-actions` is
 permission-restricted and session-sealed. Same-session memory rejects replay

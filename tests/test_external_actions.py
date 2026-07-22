@@ -249,6 +249,34 @@ class ExternalActionTests(unittest.TestCase):
         with self.assertRaisesRegex(server.ToolError, "authorized push URL"):
             self.challenge("push", target)
 
+    def test_branch_push_requires_exact_local_branch_tip(self) -> None:
+        target = self.external_target()
+        git(self.repo, "remote", "add", "origin", target["remoteUrl"])
+        target["branch"] = "missing-branch"
+        with self.assertRaisesRegex(server.ToolError, "exact local branch"):
+            self.challenge("push", target)
+
+    def test_tag_push_binds_exact_existing_local_tag_and_commit(self) -> None:
+        target = self.external_target()
+        target["tag"] = "v1.0.0"
+        git(self.repo, "remote", "add", "origin", target["remoteUrl"])
+        with self.assertRaisesRegex(server.ToolError, "exact local tag"):
+            self.challenge("push", target)
+
+        git(self.repo, "tag", "-a", target["tag"], "-m", "release")
+        challenge = self.challenge("push", target)
+        self.assertEqual(target["tag"], challenge["challenge"]["target"]["tag"])
+
+        (self.repo / "README.md").write_text(
+            "# Exact action test\nnext release\n", encoding="utf-8"
+        )
+        git(self.repo, "add", "README.md")
+        git(self.repo, "commit", "-m", "next")
+        drifted = dict(target)
+        drifted["exactCommit"] = git(self.repo, "rev-parse", "HEAD")
+        with self.assertRaisesRegex(server.ToolError, "exact local tag"):
+            self.challenge("push", drifted)
+
     def test_remote_drift_after_authorization_invalidates_consumption(self) -> None:
         target = self.external_target()
         git(self.repo, "remote", "add", "origin", target["remoteUrl"])
