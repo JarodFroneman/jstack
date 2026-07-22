@@ -128,6 +128,23 @@ independently usable.
 - A clean heuristic secret scan does not replace dependency, SAST, container,
   infrastructure, or human security review when those are relevant.
 
+### Launch Assurance
+
+- For a clean committed production candidate, declare `core` plus every real
+  product surface and call `jstack_launch_assess`. Never omit a surface to
+  avoid a control or infer away unknown business and legal facts.
+- Register one bounded, current artifact per evidenced control with
+  `jstack_launch_evidence_register`. The artifact hash and named attestation
+  bind the claim; JStack does not independently certify semantic truth.
+- Call `jstack_launch_finalize`. Missing, stale, failed, incomplete, duplicate,
+  or drifted blocker/required evidence prevents readiness. Blockers cannot be
+  waived; eligible required waivers need owner, reason, approval reference,
+  expiry, compensating control, and residual risk.
+- Keep launch checks conditional. Email, search, browser, analytics, payment,
+  tracking, legal, and regulated-data controls activate only for declared
+  surfaces. Preserve existing accessibility, supply-chain, migration, backup,
+  data-integrity, compatibility, and incident-recovery gates.
+
 ### Release
 
 - Default every project to local-only work. Repository creation, remote
@@ -155,16 +172,19 @@ independently usable.
   deployment, or production tools. If the three authorization tools are
   unavailable or the project is `artifact-only`, the protected action is
   blocked; local editing, review, tests, and artifact generation may continue.
-- Use `jstack_ship_check` and `jstack_release_readiness` with current QA and
-  security receipts.
+- Use `jstack_ship_check` and `jstack_release_readiness` with current QA,
+  security, and production launch-assurance receipts. Public-web, commercial,
+  payment, and regulated-data profiles also require a release-profile audit by
+  default.
 - Readiness requires a clean committed subject, every discovered required
   command passing for that exact fingerprint, complete security evidence,
-  approver reference, rollback plan, and monitoring or canary plan.
+  applicable typed launch evidence, approver reference, rollback plan, and
+  monitoring or canary plan.
 - Release readiness is evidence only and `executionAuthorized` remains false.
   Never equate implementation completion or readiness with action authority or
   deployment completion.
 - `artifact-only` work may prepare direct operational evidence, but JStack
-  release readiness and v0.7 protected-action permits remain unavailable until
+  release readiness and v0.8 protected-action permits remain unavailable until
   the authoritative source has a committed Git repository.
 
 ### Handoff
@@ -264,3 +284,6 @@ the claim.
 
 Read [evidence-and-release.md](references/evidence-and-release.md) before
 changing policy, QA execution, evidence receipts, installers, or release gates.
+Read [launch-assurance.md](references/launch-assurance.md) before declaring a
+production surface profile, registering launch evidence, or finalizing release
+readiness.

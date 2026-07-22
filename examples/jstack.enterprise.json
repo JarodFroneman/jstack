@@ -14,6 +14,7 @@
     "focused_tests_run_or_blocked",
     "secret_scan_clean",
     "security_review_for_sensitive_work",
+    "launch_assurance_for_production",
     "release_approval_for_production",
     "exact_external_action_authorization",
     "rollback_plan_for_production",
@@ -90,6 +91,20 @@
     "allowedIdentityProviders": [
       "signed-local"
     ]
+  },
+  "launch": {
+    "requireReceiptForProduction": true,
+    "requireProfileDeclaration": true,
+    "maxEvidenceAgeMinutes": 1440,
+    "requiredControlIds": [],
+    "advisoryControlIds": [],
+    "requireReleaseAuditForSurfaces": [
+      "public-web",
+      "commercial",
+      "payments",
+      "regulated-data"
+    ],
+    "allowWaivers": true
   },
   "quant": {
     "minimumHistoryQualityPercent": 99.0,

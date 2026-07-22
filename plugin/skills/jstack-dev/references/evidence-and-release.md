@@ -2,7 +2,7 @@
 
 ## Evidence Subject
 
-QA and security receipts are signed by the active local MCP process and bound
+QA, security, audit, and launch receipts are signed by the active local MCP process and bound
 to repository root, git HEAD, full project fingerprint, check identity, result,
 and issue time. They expire after 24 hours and after any relevant project-state
 change or MCP restart.
@@ -16,8 +16,8 @@ Call `jstack_runtime_status` first. A successful response proves the MCP is
 mounted independently of project eligibility. `jstack_detect_project` then
 returns one of two evidence modes:
 
-- `git`: commit-bound policy, QA, security, context, mastery, quant, and release
-  tools are available.
+- `git`: commit-bound policy, QA, security, launch, context, mastery, quant, and
+  release tools are available.
 - `artifact-only`: detection and planning are available, but every Git-bound
   tool remains blocked.
 
@@ -57,6 +57,10 @@ Release readiness denies by default. It needs:
 - clean committed repository state
 - one current passing receipt for every discovered required command
 - complete current security receipt
+- a current passing launch receipt for production, based on `core` plus every
+  applicable product surface
+- a current release-profile audit receipt when the launch profile includes a
+  policy-triggering public, commercial, payment, or regulated-data surface
 - explicit release request and approver reference for production
 - rollback plan
 - monitoring or canary plan
@@ -66,6 +70,10 @@ inconclusive evidence is not a pass.
 
 Readiness is evidence, not authority. Its result always reports
 `executionAuthorized=false`.
+
+Use [launch-assurance.md](launch-assurance.md) for profile declaration,
+per-control evidence, not-applicable rules, waivers, freshness, and the
+live-provider safety boundary.
 
 ## External-Action Authority
 

@@ -23,6 +23,14 @@ for confirmation, and start with a unique stable `operation_id`. Schedule each
 phase through an exact bounded child loop, bind and complete it with current
 receipts, and revalidate declared outputs.
 
+If the integrated outcome is a production release, declare `core` plus every
+applicable surface on the clean candidate and complete
+`jstack_launch_assess` -> `jstack_launch_evidence_register` ->
+`jstack_launch_finalize`. Bind the current passing launch receipt into final
+acceptance and require a release-profile audit for policy-triggering surfaces.
+A phase, human gate, or program completion receipt cannot waive a launch
+blocker or fabricate external evidence.
+
 Route capabilities during each bounded goal's readiness and pass the same
 explicit `capability_ids` to start or material revision. The readiness digest
 and durable loop contract bind the catalog/selection digests, exact role

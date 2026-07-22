@@ -1,6 +1,6 @@
 {
   "name": "jstack-subagents",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Top-level JStack command that deploys the right specialist subagent team.",
   "author": {
     "name": "Jarod Froneman",
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "JStack Subagents",
     "shortDescription": "Deploy the right team, normally two or three specialists",
-    "longDescription": "Top-level Codex command for JStack specialist-team mode. This command is explicit approval to use the right subagent team for the task when multi-agent tools are available. Deterministic capability routing, structured results, privacy-safe telemetry, and signed handoff validation keep the Lead Engineer accountable for synthesis and delivery.",
+    "longDescription": "Top-level Codex command for JStack specialist-team mode. This command is explicit approval to use the right subagent team for the task when multi-agent tools are available. Deterministic capability routing, applicability-aware launch evidence, structured results, privacy-safe telemetry, and signed handoff validation keep the Lead Engineer accountable for synthesis and delivery.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

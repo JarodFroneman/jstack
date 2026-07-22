@@ -14,6 +14,11 @@ import time
 from pathlib import Path, PurePosixPath
 from typing import Any, Optional
 
+try:
+    from ..launch import registry as launch_core
+except (ImportError, ValueError):  # Support the packaged top-level server layout.
+    from launch import registry as launch_core
+
 
 PROGRAM_CONTRACT_SCHEMA = "jstack.program.contract.v1"
 PROGRAM_SNAPSHOT_SCHEMA = "jstack.program.snapshot.v1"
@@ -188,15 +193,16 @@ def _normalize_criterion(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(verifier, dict):
         raise ProgramError("%s.verifier must be an object." % field)
     verifier_type = _text(verifier.get("type"), field + ".verifier.type", maximum=20)
-    if verifier_type not in {"qa", "security", "audit", "review", "artifact"}:
+    if verifier_type not in {"qa", "security", "audit", "launch", "review", "artifact"}:
         raise ProgramError(
-            "%s verifier must be qa, security, audit, review, or artifact; use a program gate for human decisions."
+            "%s verifier must be qa, security, audit, launch, review, or artifact; use a program gate for human decisions."
             % field
         )
     allowed = {
         "qa": {"type", "commandKey"},
         "security": {"type"},
         "audit": {"type", "profile"},
+        "launch": {"type", "targetEnvironment", "surfaces"},
         "review": {"type"},
         "artifact": {"type", "path", "sha256"},
     }[verifier_type]
@@ -215,6 +221,25 @@ def _normalize_criterion(value: Any, field: str) -> dict[str, Any]:
         if profile not in {"quick", "standard", "deep", "release"}:
             raise ProgramError("%s.verifier.profile is unsupported." % field)
         normalized["profile"] = profile
+    elif verifier_type == "launch":
+        environment = _text(
+            verifier.get("targetEnvironment"),
+            field + ".verifier.targetEnvironment",
+            maximum=64,
+        ).lower()
+        if environment == "prod":
+            environment = "production"
+        if not re.fullmatch(r"[a-z][a-z0-9._-]{1,63}", environment):
+            raise ProgramError(
+                "%s.verifier.targetEnvironment must be a lowercase environment identifier."
+                % field
+            )
+        try:
+            surfaces = launch_core.normalize_surfaces(verifier.get("surfaces") or [])
+        except launch_core.LaunchError as exc:
+            raise ProgramError("%s.verifier.surfaces is invalid: %s" % (field, exc)) from exc
+        normalized["targetEnvironment"] = environment
+        normalized["surfaces"] = surfaces
     elif verifier_type == "artifact":
         normalized["path"] = _relative_path(
             verifier.get("path"), field + ".verifier.path", allow_glob=False

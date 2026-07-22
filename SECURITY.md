@@ -49,6 +49,35 @@ server time and rechecked when release readiness consumes the receipt.
 The original `jstack_security_audit` remains a bounded heuristic credential
 scan. A broad audit result never replaces its security receipt.
 
+## Launch-Assurance Safety
+
+The launch catalog is declarative, versioned, and selected only from an
+explicit surface profile. Assessment requires a clean committed subject and
+binds Git, base, policy, catalog, selection, target, environment, tool version,
+and server session. Omitting a known surface is a profile-integrity failure;
+JStack cannot independently discover legal, merchant, or production facts.
+
+Evidence registration accepts only a bounded regular non-symlink file inside
+the project or `~/.jstack/evidence`, uses stable file-identity hashing, and
+returns no content. Verifier, reference, and summary fields reject recognized
+secret formats and are stored as bounded metadata or digests. Callers must not
+place raw secrets, personal data, mailbox credentials, payment data, prompts,
+session tokens, or unredacted telemetry in artifacts merely because JStack does
+not render them.
+
+Receipts prove contract binding, artifact identity at collection, freshness,
+and the recorded verifier outcome. They do not prove semantic truth, legal
+sufficiency, provider state, or independence of the verifier. Blockers cannot
+be waived. Eligible required waivers remain unauthenticated recorded decisions
+and therefore require an external approval reference, owner, bounded expiry,
+compensating control, and residual risk; policy can disable them.
+
+Launch tools make no network request or production change. Live payment,
+webhook, email, DNS, search, analytics, browser, and device exercises require a
+separately authorized safe workflow. A launch receipt never authorizes a charge,
+commit, push, pull request, merge, tag, release, deployment, or production
+mutation.
+
 ## Specialist Capability Safety
 
 The capability catalog is declarative and permission-neutral. Every entry must

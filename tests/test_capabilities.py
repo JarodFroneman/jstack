@@ -147,6 +147,16 @@ class CapabilityRegistryTests(unittest.TestCase):
     def test_catalog_is_pinned_valid_deterministic_and_permission_neutral(self) -> None:
         catalog = capabilities.load_catalog()
         self.assertEqual("jstack.capability.catalog.v1", catalog["schemaVersion"])
+        self.assertEqual("1.1.0", catalog["catalogVersion"])
+        self.assertEqual(18, len(catalog["capabilities"]))
+        self.assertTrue(
+            {
+                "web-launch-assurance",
+                "email-deliverability",
+                "product-observability",
+                "privacy-legal-evidence",
+            }.issubset({item["id"] for item in catalog["capabilities"]})
+        )
         self.assertEqual("MIT", catalog["sourceProvenance"]["license"])
         self.assertEqual(
             "459dce837db3bdfdc4763d3fefd1fd854e73c8f1",

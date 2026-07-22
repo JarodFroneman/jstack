@@ -67,8 +67,10 @@ worktree. Default implementation work to `L2`.
 1. Build source-attributed `goal_context`: stakeholders, current and desired
    states, constraints, non-goals, assumptions, sources, niche requirements,
    open questions, and material inference.
-2. Define observable QA, security, audit, review, artifact, or named human
-   acceptance criteria. Bound paths, blocked actions, iterations, active time,
+2. Define observable QA, security, audit, launch, review, artifact, or named
+   human acceptance criteria. A launch verifier must name the exact target
+   environment and exact `core`-inclusive surface set. Bound paths, blocked
+   actions, iterations, active time,
    failures, and changed files. Never supply arbitrary shell commands.
 3. Call `jstack_loop_goal_readiness`. Resolve `needs_context` from inspected
    evidence first, asking only returned blocking questions. For
@@ -113,7 +115,10 @@ worktree. Default implementation work to `L2`.
    backtests, certifications, data exports, device results, legal sign-off
    artifacts, or other non-Codex evidence. Waiting is a durable pause.
 5. Define program-level final acceptance. Enterprise policy requires current
-   release-audit, security, and deterministic integrated-review evidence.
+   security and deterministic integrated-review evidence. A production outcome
+   also requires an accountable launch-surface declaration, typed launch
+   evidence, a passing launch receipt, and a release audit whenever the profile
+   contains a policy-triggering surface.
 6. Set ceilings for phase count, parallel phases, and active minutes. These
    are safety limits, not a target plan size. Preserve blocked release and
    production actions plus every v0.7 protected external action. They can be
@@ -160,6 +165,12 @@ worktree. Default implementation work to `L2`.
    `~/.jstack/evidence`, then call `jstack_program_evidence_register`. JStack
    records its hash, provenance reference, and expiry. Replacement invalidates
    affected downstream proof.
+   For launch controls, use the separate `jstack_launch_assess` ->
+   `jstack_launch_evidence_register` -> `jstack_launch_finalize` contract on the
+   clean integrated release candidate. A phase or program gate never fabricates
+   a launch pass or waives a blocker. Pass the returned `launch_receipt` only
+   to a matching `launch` criterion; environment or surface mismatch remains
+   unsatisfied.
 9. Use `jstack_program_pause` only after active child loops reach checkpoints.
    Human and external wait states already pause the program active-time clock.
    Resume only after integrity revalidation and an explicit reference.
@@ -173,7 +184,8 @@ worktree. Default implementation work to `L2`.
 
 Call `jstack_program_finalize` only when every phase and final gate is current.
 Provide fresh final QA receipts where contracted, a current security receipt,
-a release-profile audit receipt, deterministic integrated review, declared
+a current production launch receipt where applicable, the policy-required
+release-profile audit receipt, deterministic integrated review, declared
 artifacts, and a factual completion summary. Use a new stable `operation_id`.
 
 Complete the native Goal only after finalization returns a passed current

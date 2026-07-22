@@ -192,6 +192,44 @@ def phase_proof(status: dict, phase_id: str) -> dict:
 
 
 class ProgramProtocolTests(unittest.TestCase):
+    def test_launch_criteria_are_normalized_for_phase_and_final_acceptance(self) -> None:
+        launch_criterion = {
+            "id": "launch-ready",
+            "description": "The exact production web launch profile passes.",
+            "verifier": {
+                "type": "launch",
+                "targetEnvironment": "prod",
+                "surfaces": ["public-web", "core"],
+            },
+        }
+        value = contract(
+            [
+                {
+                    **phase("launch"),
+                    "acceptance_criteria": [launch_criterion],
+                }
+            ],
+            final_acceptance_criteria=[launch_criterion],
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            normalized = program.normalize_program_input(
+                value,
+                project_root=str(root),
+                subject=SUBJECT,
+                policy_source=None,
+                policy_digest=POLICY_DIGEST,
+                common_dir_digest=COMMON_DIR_DIGEST,
+                program_policy=PROGRAM_POLICY,
+            )
+        expected = {
+            "type": "launch",
+            "targetEnvironment": "production",
+            "surfaces": ["core", "public-web"],
+        }
+        self.assertEqual(expected, normalized["phases"][0]["acceptanceCriteria"][0]["verifier"])
+        self.assertEqual(expected, normalized["finalAcceptanceCriteria"][0]["verifier"])
+
     def test_published_program_schemas_are_valid_json_and_versioned(self) -> None:
         schema_root = Path(__file__).resolve().parents[1] / "mcp" / "jstack" / "schemas"
         expected = {

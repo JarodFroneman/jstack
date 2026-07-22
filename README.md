@@ -29,7 +29,8 @@ JStack is an independent, open-source AI engineering workflow, plugin suite,
 MCP control plane, and deliberate-practice system for professional
 AI-assisted software delivery. It gives one engineer or a supervised team a
 consistent operating model for planning, implementation, review, testing,
-security, release readiness, durable goal loops, and multi-phase programs.
+security, launch assurance, release readiness, durable goal loops, and
+multi-phase programs.
 
 Codex is the fully packaged host today. Claude Code can connect to JStack's
 standards-based stdio MCP tool plane as a preview integration; host-native
@@ -54,6 +55,7 @@ JStack makes those controls explicit.
 | "Tests passed" exists only as prose | QA and security receipts tied to the exact Git revision, workspace, policy, and command |
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
 | A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
+| A web/email/payment launch checklist is forgotten or applied to the wrong project | Explicit product surfaces select a versioned 37-control catalog and require fresh typed launch evidence |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
 | Release confidence, broad phase approval, or "deploy" becomes publication permission | Local-only default plus a signed, exact, short-lived, one-time permit for each repository, Git, release, deployment, or production action |
@@ -78,7 +80,7 @@ not edit project code.
 
 ### Specialist capabilities inside the five commands
 
-JStack v0.7 upgrades the existing commands rather than adding a sixth command.
+JStack v0.8 upgrades the existing commands rather than adding a sixth command.
 The selected delivery mode still decides who works and who may edit; a
 deterministic capability plan then decides which task-specific methods each
 selected role must apply. For example, an API change can route contract and
@@ -101,7 +103,7 @@ flowchart LR
     A[Goal and context] --> B[Readiness and policy]
     B --> C[Selected delivery mode]
     C --> K[Role-bound capability plan]
-    K --> D[Structured specialist, QA, security, review, and audit evidence]
+    K --> D[Structured specialist, QA, security, launch, review, and audit evidence]
     D --> E{Acceptance contract met?}
     E -- No --> F[Bounded revision or human gate]
     F --> C
@@ -122,14 +124,15 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    to create a repository, change a remote, commit, push, open a pull request,
    merge, tag, release, deploy, or mutate production.
 
-## What Ships In v0.7
+## What Ships In v0.8
 
 | Capability | What it provides |
 | --- | --- |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | External-action boundary | Local-only default; independently signed exact challenges; session/Git/policy/remote/provider binding; exact branch-only or tag-only pushes; fresh target observation; destructive one-time consumption; 60-second single-operation permits |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
-| Specialist capabilities | Pinned, versioned routing for 14 engineering, testing, security, reliability, and handoff capability packs inside the existing five commands |
+| Launch assurance | Explicit surface profiles, a versioned 37-control catalog, bounded typed evidence, fail-closed finalization, and a mandatory production launch receipt |
+| Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the existing five commands |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
 | Audit system | Read-only quick, standard, deep, and release profiles with deterministic finalization and SARIF output |
 | Goal loops | Versioned contracts, private atomic state, one write lease per checkout, circuit breakers, checkpoints, revision, and terminal receipts |
@@ -138,11 +141,11 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, transactional installers, and cross-platform CI |
 
-The MCP exposes 50 canonical `jstack_*` tools, including 14 generic
+The MCP exposes 53 canonical `jstack_*` tools, including 14 generic
 `jstack_program_*` tools and the three-step `jstack_external_action_*`
-authorization protocol, in addition to the delivery, evidence, audit, loop,
-continuity, specialist-review, and mastery families. Legacy `gstack_*` aliases
-remain available for compatibility.
+authorization protocol plus the three-step `jstack_launch_*` evidence protocol,
+in addition to the delivery, audit, loop, continuity, specialist-review, and
+mastery families. Legacy `gstack_*` aliases remain available for compatibility.
 
 ## Host Compatibility
 
@@ -345,6 +348,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
 | [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |
+| [Launch assurance](docs/launch-assurance.md) | [v0.8 migration guide](docs/migration-0.8.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |
 | [v0.7 migration guide](docs/migration-0.7.md) | [External-action boundary](docs/external-action-boundary.md) |

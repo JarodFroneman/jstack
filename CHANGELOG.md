@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.8.0 - 2026-07-22
+
+### Added
+
+- Added a versioned 37-control launch catalog across security, email,
+  findability, speed, analytics, legal, and final-test categories, selected
+  from 14 explicit product surfaces.
+- Added `jstack_launch_assess`, `jstack_launch_evidence_register`, and
+  `jstack_launch_finalize` for clean-candidate profile binding, bounded
+  content-free artifact identity, typed expiring outcomes, fail-closed
+  aggregation, and signed release-consumable receipts.
+- Added launch catalog, evidence, and result schemas; enterprise policy floors;
+  ADR 0007; operator, migration, and rollback documentation; and adversarial
+  coverage for staleness, drift, malformed receipts, path escape, symlinks,
+  invalid applicability, waiver abuse, and release integration.
+- Added `web-launch-assurance`, `email-deliverability`,
+  `product-observability`, and `privacy-legal-evidence` capability packs inside
+  the existing five workflows.
+
+### Changed
+
+- Production release readiness now requires a current passing launch receipt
+  in addition to QA, security, approval, rollback, and monitoring evidence.
+- Public-web, commercial, payment, and regulated-data launch profiles now
+  require a complete repository-wide release-profile audit by default.
+- Upgraded all five existing commands without adding a sixth command. Launch
+  evidence routes through current Lead, Security, QA, DevOps, Product,
+  Reviewer, Architect, Documentation, and accountable human owners.
+- Expanded deterministic packaging to mirror the launch registry and schemas,
+  and expanded the canonical MCP inventory from 50 to 53 tools.
+
+### Security
+
+- Blocker launch controls are unwaivable. Eligible required waivers require an
+  owner, reason, external reference, bounded expiry, compensating control, and
+  residual risk, and policy can disable them.
+- Launch receipts bind Git HEAD, workspace fingerprint, base, policy, tool,
+  catalog, selection, surfaces, target, environment, server session, artifact
+  hashes, verifier attestations, and freshness. Raw artifact content is never
+  returned.
+- Launch readiness remains evidence only and always reports
+  `executionAuthorized=false`. The v0.7 exact one-action external authority
+  boundary is unchanged, including for live payment and production checks.
+
+### Attribution
+
+- Adapted the concepts in Nico Burkart's reviewed 37-point pre-launch checklist
+  into conditional, paraphrased JStack engineering controls. Vendor-specific
+  recommendations and legal judgments remain advisory, conditional, or
+  human-owned as documented in `docs/launch-assurance.md`.
+
 ## 0.7.0 - 2026-07-21
 
 ### Added

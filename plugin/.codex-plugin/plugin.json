@@ -1,7 +1,7 @@
 {
   "name": "jstack",
-  "version": "0.7.0",
-  "description": "Universal JStack delivery, specialist capabilities, bounded loops, multi-phase programs, read-only audits, mastery, and MCP evidence workflows for Codex.",
+  "version": "0.8.0",
+  "description": "Universal JStack delivery, launch assurance, specialist capabilities, bounded loops, multi-phase programs, read-only audits, mastery, and MCP evidence workflows for Codex.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "JStack",
     "shortDescription": "Enterprise delivery, goal programs, and audits for Codex",
-    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. Versioned capability routing upgrades those same roles with task-specific methods, required evidence, stop conditions, privacy-safe telemetry, and signed specialist handoffs without granting extra permissions. Its MCP also provides exact readiness, durable loop and program state, human and external gates, review, QA, security, audit finalization, release readiness, and mastery.",
+    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. Versioned capability routing upgrades those same roles with task-specific methods, required evidence, stop conditions, privacy-safe telemetry, and signed specialist handoffs without granting extra permissions. Its MCP also provides exact readiness, applicability-aware 37-control launch assurance, durable loop and program state, human and external gates, review, QA, security, audit finalization, release readiness, and mastery.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

@@ -39,6 +39,17 @@ handoff check prevents a completion claim.
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.
 
+For production readiness, declare `core` plus every applicable product surface
+with `jstack_launch_assess` on a clean committed candidate. Register bounded
+typed evidence with `jstack_launch_evidence_register`, then call
+`jstack_launch_finalize`. Missing, stale, failed, incomplete, duplicate, or
+drifted blocker/required evidence blocks readiness. Blockers cannot be waived;
+eligible required waivers must remain owned, reasoned, expiring, compensated,
+and explicit about residual risk. Pass the current launch receipt to
+`jstack_release_readiness`; public-web, commercial, payment, and regulated-data
+profiles also require a release-profile audit by default. Readiness and launch
+receipts never authorize an external action.
+
 ## Mandatory External-Action Boundary
 
 Default to local-only. Repository creation, remote add/change, commit, push,

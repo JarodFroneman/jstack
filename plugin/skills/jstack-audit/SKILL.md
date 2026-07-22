@@ -50,6 +50,22 @@ For `artifact-only`, return the aggregate scope-manifest digest and explicit lim
 issue a Git-bound audit receipt, call the result release certification, or
 report formal release readiness.
 
+## Launch-Assurance Relationship
+
+For a release-profile audit, identify observable product surfaces and launch
+risks, but never silently declare the accountable launch profile. When the
+surrounding task supplies a current `jstack_launch_assess` selection, map cited
+audit evidence and findings to its applicable controls and keep uncovered
+controls explicit. Register a launch-control artifact only when the Audit Lead
+actually verified that bounded claim and can be named as its verifier.
+
+An audit receipt and a launch receipt are separate evidence layers. Neither
+substitutes for the other. Production profiles containing `public-web`,
+`commercial`, `payments`, or `regulated-data` require a complete repository-wide
+release-profile audit by default before release readiness. Legal, merchant-of-
+record, consent, live-payment, mailbox, DNS, device, and provider facts remain
+human or external evidence; source review must not invent them.
+
 ## Finding Standard
 
 - Separate severity, confidence, and organisational priority.

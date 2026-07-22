@@ -1,7 +1,7 @@
 # JStack MCP
 
 Local JSONL stdio MCP server for JStack workflow planning, governance,
-evidence, release readiness, and mastery progression.
+evidence, launch assurance, release readiness, and mastery progression.
 
 ## Boundaries
 
@@ -41,7 +41,7 @@ evidence, release readiness, and mastery progression.
 
 ## Evidence
 
-QA, security, and audit receipts are HMAC-signed for one server session and bind:
+QA, security, audit, and launch receipts are HMAC-signed for one server session and bind:
 
 - canonical repository root
 - explicit comparison base where supplied
@@ -62,9 +62,17 @@ Git state. A specialist handoff receipt requires complete current role coverage
 and resolved contradictions. These receipts attest validation and binding, not
 semantic truth or release permission.
 
+Launch sessions bind the accountable surface declaration, catalog and selection
+digests, target environment, and bounded target URL. Per-control evidence
+receipts add a permitted evidence kind, verifier attestation, outcome, artifact
+hash, and expiry without returning artifact content. Final launch receipts
+require all blocker/required controls to resolve and cannot waive blockers.
+
 Release readiness requires an explicit base, clean commit, current passing
 receipt for every discovered command, complete current and release-history
-secret scan, environment-specific approval reference, rollback, and monitoring.
+secret scan, a current production launch receipt, environment-specific approval
+reference, rollback, and monitoring. Policy-triggering launch surfaces also
+require a release-profile audit.
 Even a ready result reports `executionAuthorized=false`; evidence is not action
 authority.
 
@@ -72,7 +80,7 @@ authority.
 
 The server exposes `jstack_*` tools for runtime status, project detection,
 planning, capability routing, specialist result/handoff validation, team
-validation, policy/preflight, health/review, QA, security,
+validation, policy/preflight, health/review, QA, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.
@@ -84,6 +92,11 @@ branch, tag, full commit, environment, current project state, policy, version,
 and MCP session. Broad task or phase approval is never accepted.
 Push targets are ref-kind exact: `tag=not-applicable` is branch-only, while an
 exact local tag is tag-only; the selected ref must resolve to the full commit.
+
+The launch tools are `jstack_launch_assess`,
+`jstack_launch_evidence_register`, and `jstack_launch_finalize`. They select
+and validate evidence only; they perform no network, provider, payment,
+deployment, or production action.
 
 Program tools add project-derived phase DAGs, exact child-loop proofs,
 signed-local human gates, external artifact evidence, pause-aware active-time

@@ -100,6 +100,51 @@ def qa_receipt(repo: Path, base_ref: str = "HEAD") -> dict:
     )
 
 
+def launch_receipt(
+    repo: Path,
+    base_ref: str,
+    surfaces: Optional[list[str]] = None,
+    target_url: Optional[str] = None,
+) -> dict:
+    selected_surfaces = surfaces or ["core"]
+    assessment = server.tool_launch_assess(
+        {
+            "project_path": str(repo),
+            "base_ref": base_ref,
+            "surfaces": selected_surfaces,
+            "target_environment": "production",
+            "target_url": target_url,
+            "profile_owner": "test-launch-owner",
+            "profile_reference": "TEST-LAUNCH-PROFILE",
+        }
+    )
+    evidence_receipts = []
+    for control in assessment["selection"]["selectedControls"]:
+        if control["effectiveGateLevel"] == "advisory":
+            continue
+        evidence = server.tool_launch_evidence_register(
+            {
+                "project_path": str(repo),
+                "launch_session_token": assessment["launchSessionToken"],
+                "control_id": control["id"],
+                "evidence_kind": control["evidenceKinds"][0],
+                "outcome": "pass",
+                "artifact_path": "README.md",
+                "verifier": "test-launch-verifier",
+                "source_reference": f"TEST-LAUNCH-{control['sequence']}",
+                "summary": "The test fixture records a bounded passing launch-control attestation.",
+            }
+        )
+        evidence_receipts.append(evidence["launchEvidenceReceipt"])
+    return server.tool_launch_finalize(
+        {
+            "project_path": str(repo),
+            "launch_session_token": assessment["launchSessionToken"],
+            "evidence_receipts": evidence_receipts,
+        }
+    )
+
+
 def complete_quick_audit_submission(start: dict) -> dict:
     subject = start["subjectDigest"]
     evidence = [
@@ -822,6 +867,7 @@ class EvidenceTests(unittest.TestCase):
 
             qa = qa_receipt(repo, base)
             security = server.tool_security_audit({"project_path": str(repo), "base_ref": base})
+            launch = launch_receipt(repo, base)
             self.assertTrue(qa["result"]["ok"])
             self.assertTrue(security["passed"])
             allowed = server.tool_release_readiness(
@@ -838,6 +884,7 @@ class EvidenceTests(unittest.TestCase):
                     "monitoring_plan": "watch health",
                     "qa_receipts": [qa["evidenceReceipt"]],
                     "security_receipt": security["evidenceReceipt"],
+                    "launch_receipt": launch["launchReceipt"],
                 }
             )
             self.assertTrue(allowed["ready"], allowed["blockers"])
@@ -856,6 +903,7 @@ class EvidenceTests(unittest.TestCase):
             git(repo, "commit", "-m", "audited release candidate")
             qa = qa_receipt(repo, base)
             security = server.tool_security_audit({"project_path": str(repo), "base_ref": base})
+            launch = launch_receipt(repo, base)
             common = {
                 "project_path": str(repo),
                 "base_ref": base,
@@ -870,6 +918,7 @@ class EvidenceTests(unittest.TestCase):
                 "monitoring_plan": "watch health",
                 "qa_receipts": [qa["evidenceReceipt"]],
                 "security_receipt": security["evidenceReceipt"],
+                "launch_receipt": launch["launchReceipt"],
             }
             denied = server.tool_release_readiness(common)
             self.assertFalse(denied["ready"])

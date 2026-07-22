@@ -21,6 +21,11 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+try:
+    from ..launch import registry as launch_core
+except (ImportError, ValueError):  # Support the packaged top-level server layout.
+    from launch import registry as launch_core
+
 
 LOOP_CONTRACT_SCHEMA = "jstack.loop.contract.v1"
 LOOP_SNAPSHOT_SCHEMA = "jstack.loop.snapshot.v1"
@@ -33,7 +38,15 @@ GOAL_READINESS_RECEIPT_SCHEMA = "jstack.loop.goal-readiness-receipt.v1"
 EXECUTION_MODES = ("single-lead", "smart-subagents", "full-team")
 AUTONOMY_LEVELS = ("L0", "L1", "L2", "L3")
 RISK_TIERS = ("low", "medium", "high", "critical")
-VERIFIER_TYPES = ("qa", "security", "audit", "review", "artifact", "human")
+VERIFIER_TYPES = (
+    "qa",
+    "security",
+    "audit",
+    "launch",
+    "review",
+    "artifact",
+    "human",
+)
 TERMINAL_STATUSES = {"succeeded", "stopped"}
 WRITE_AUTONOMY = {"L2", "L3"}
 
@@ -422,6 +435,7 @@ def _normalize_criteria(value: Any) -> list[dict[str, Any]]:
             "qa": {"type", "commandKey"},
             "security": {"type"},
             "audit": {"type", "profile"},
+            "launch": {"type", "targetEnvironment", "surfaces"},
             "review": {"type"},
             "artifact": {"type", "path", "sha256"},
             "human": {"type", "approvalKey"},
@@ -444,6 +458,26 @@ def _normalize_criteria(value: Any) -> list[dict[str, Any]]:
             if profile not in {"quick", "standard", "deep", "release"}:
                 raise LoopError("Audit criterion profile must be quick, standard, deep, or release.")
             verifier["profile"] = profile
+        elif verifier_type == "launch":
+            environment = _text(
+                verifier_raw.get("targetEnvironment"),
+                f"acceptance_criteria[{index}].verifier.targetEnvironment",
+                maximum=64,
+            ).lower()
+            if environment == "prod":
+                environment = "production"
+            if not re.fullmatch(r"[a-z][a-z0-9._-]{1,63}", environment):
+                raise LoopError(
+                    "Launch criterion targetEnvironment must be a lowercase environment identifier."
+                )
+            try:
+                surfaces = launch_core.normalize_surfaces(
+                    verifier_raw.get("surfaces") or []
+                )
+            except launch_core.LaunchError as exc:
+                raise LoopError(f"Invalid launch criterion surfaces: {exc}") from exc
+            verifier["targetEnvironment"] = environment
+            verifier["surfaces"] = surfaces
         elif verifier_type == "artifact":
             verifier["path"] = _normalize_relative_path(
                 verifier_raw.get("path"),
@@ -2050,6 +2084,7 @@ class LoopService:
         qa = {item.get("commandKey"): item for item in evidence.get("qa", [])}
         security = evidence.get("security")
         audits = evidence.get("audit", [])
+        launch = evidence.get("launch")
         review = evidence.get("review")
         artifacts = {item.get("path"): item for item in evidence.get("artifacts", [])}
         approvals = snapshot.get("completionApprovals", {})
@@ -2072,6 +2107,15 @@ class LoopService:
                     for item in audits
                     if item.get("passed") is True and item.get("profile") == verifier["profile"]
                 ]
+            elif (
+                verifier_type == "launch"
+                and launch
+                and launch.get("passed") is True
+                and launch.get("targetEnvironment")
+                == verifier["targetEnvironment"]
+                and launch.get("surfaces") == verifier["surfaces"]
+            ):
+                matched = [launch]
             elif verifier_type == "review" and review and review.get("passed") is True:
                 matched = [review]
             elif verifier_type == "artifact":

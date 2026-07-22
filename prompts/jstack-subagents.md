@@ -91,6 +91,14 @@ apply its evidence rubric, while one Lead performs the actual work.
 For an active multi-agent JStack loop, pass the current validated
 `specialist_handoff_receipt` to every checkpoint and finalization.
 
+For production/release work, the Lead declares `core` plus every applicable
+surface on the clean integrated candidate. Route selected launch-control
+evidence through existing Security, QA, DevOps, Product, Reviewer, and
+accountable human owners; only the Lead registers and finalizes it. Missing or
+failed blocker/required evidence blocks handoff. Public-web, commercial,
+payment, and regulated-data profiles also require a release-profile audit by
+default. This adds capability packs, not a sixth command or new role.
+
 Default to local-only. Team deployment authorizes staffing only. Repository
 creation, remote add/change, commit, push, pull-request creation, merge, tag,
 release, deployment, and production mutation each require their own exact

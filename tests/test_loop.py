@@ -282,6 +282,61 @@ class LoopProtocolTests(unittest.TestCase):
         )
         self.assertFalse(evaluated[0]["satisfied"])
 
+    def test_launch_evaluator_requires_exact_environment_and_surface_contract(self) -> None:
+        criteria = server.loop_core.protocol._normalize_criteria(
+            [
+                {
+                    "id": "launch",
+                    "description": "The declared production launch profile passes.",
+                    "verifier": {
+                        "type": "launch",
+                        "targetEnvironment": "prod",
+                        "surfaces": ["public-web", "core"],
+                    },
+                }
+            ]
+        )
+        verifier = criteria[0]["verifier"]
+        self.assertEqual("production", verifier["targetEnvironment"])
+        self.assertEqual(["core", "public-web"], verifier["surfaces"])
+        contract = {"acceptanceCriteria": criteria}
+        snapshot = {"completionApprovals": {}}
+        exact = {
+            "qa": [],
+            "audit": [],
+            "artifacts": [],
+            "launch": {
+                "targetEnvironment": "production",
+                "surfaces": ["core", "public-web"],
+                "passed": True,
+            },
+        }
+        evaluated = server.loop_core.LoopService._evaluate_criteria(
+            contract, snapshot, exact
+        )
+        self.assertTrue(evaluated[0]["satisfied"])
+        mismatched = copy.deepcopy(exact)
+        mismatched["launch"]["surfaces"] = ["core"]
+        evaluated = server.loop_core.LoopService._evaluate_criteria(
+            contract, snapshot, mismatched
+        )
+        self.assertFalse(evaluated[0]["satisfied"])
+
+        with self.assertRaisesRegex(server.loop_core.LoopError, "include 'core'"):
+            server.loop_core.protocol._normalize_criteria(
+                [
+                    {
+                        "id": "launch",
+                        "description": "An impossible launch profile.",
+                        "verifier": {
+                            "type": "launch",
+                            "targetEnvironment": "production",
+                            "surfaces": ["public-web"],
+                        },
+                    }
+                ]
+            )
+
     def test_goal_readiness_returns_bounded_questions_for_a_vague_partial_goal(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
