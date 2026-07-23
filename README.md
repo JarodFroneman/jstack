@@ -303,6 +303,8 @@ Release readiness also never grants authority: its result always includes
 - Signed-local human gates and external-action attestations prove possession of
   a configured key. They are not enterprise identity, legal non-repudiation,
   or organizational approval.
+- Protected-action approval uses a private local mailbox, so the operator
+  reviews and confirms a short command while signed tokens never enter chat.
 - Audit receipts prove the collected scope, validated structure, and result
   calculation. They do not make every model-authored semantic finding true.
 - Artifact-only projects can use planning and direct operator evidence, but
@@ -351,7 +353,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Launch assurance](docs/launch-assurance.md) | [v0.8 migration guide](docs/migration-0.8.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |
-| [v0.7 migration guide](docs/migration-0.7.md) | [External-action boundary](docs/external-action-boundary.md) |
+| [v0.8.1 migration guide](docs/migration-0.8.1.md) | [External-action boundary](docs/external-action-boundary.md) |
 | [v0.6 migration guide](docs/migration-0.6.md) | [Architecture decisions](docs/adr/) |
 | [v0.5 migration guide](docs/migration-0.5.md) | [Third-party notices](THIRD_PARTY_NOTICES.md) |
 

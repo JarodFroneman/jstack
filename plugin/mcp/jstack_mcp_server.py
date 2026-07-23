@@ -17,6 +17,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import signal
 import shutil
 import stat
@@ -43,7 +44,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.8.0"
+SERVER_VERSION = "0.8.1"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -74,6 +75,7 @@ PROGRAM_IDENTITY_CONFIG_ENV = "JSTACK_PROGRAM_IDENTITY_CONFIG"
 PROGRAM_IDENTITY_CONFIG_SCHEMA = "jstack.program.identity-config.v1"
 EXTERNAL_ACTION_IDENTITY_CONFIG_ENV = "JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG"
 EXTERNAL_ACTION_IDENTITY_CONFIG_SCHEMA = "jstack.external-action.identity-config.v1"
+EXTERNAL_ACTION_APPROVER_COMMAND_ENV = "JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND"
 EXTERNAL_ACTION_MAX_RECEIPT_CHARS = 100_000
 EXTERNAL_ACTION_PERMIT_MAX_AGE_SECONDS = 60
 AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
@@ -3914,6 +3916,8 @@ def tool_runtime_status(args: dict[str, Any]) -> dict[str, Any]:
         "projectBinding": binding,
         "externalActionBoundary": {
             "defaultMode": "local-only",
+            "approvalTransport": "private-local-mailbox",
+            "tokenPasteRequired": False,
             "protectedActions": list(authorization_core.ACTIONS),
             "authorizationTools": [
                 "jstack_external_action_challenge",
@@ -9408,6 +9412,27 @@ def _external_action_service(
         raise ToolError(str(exc)) from exc
 
 
+def _external_action_approval_command(request_path: str) -> str:
+    configured = str(
+        os.environ.get(EXTERNAL_ACTION_APPROVER_COMMAND_ENV) or ""
+    ).strip()
+    if configured:
+        if len(configured) > 2_000 or any(
+            ord(character) < 32 or ord(character) == 127
+            for character in configured
+        ):
+            raise ToolError("External-action approver command is invalid.")
+        command = [configured, "--request-file", request_path]
+    else:
+        command = [
+            sys.executable,
+            str(_SERVER_DIR / "sign_external_action_authorization.py"),
+            "--request-file",
+            request_path,
+        ]
+    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+
+
 def _external_action_identity_config() -> dict[str, dict[str, Any]]:
     configured = str(os.environ.get(EXTERNAL_ACTION_IDENTITY_CONFIG_ENV) or "").strip()
     if not configured:
@@ -9824,10 +9849,16 @@ def tool_external_action_challenge(args: dict[str, Any]) -> dict[str, Any]:
         )
     except authorization_core.AuthorizationError as exc:
         raise ToolError(str(exc)) from exc
-    challenge = _external_action_call(
-        lambda: _external_action_service(project_path).create_challenge(payload)
+    service = _external_action_service(project_path)
+    challenge = _external_action_call(lambda: service.create_challenge(payload))
+    mailbox = _external_action_call(
+        lambda: service.publish_approval_request(
+            authorization_id,
+            key_environment=identity["keyEnv"],
+        )
     )
     encoded = _b64encode(authorization_core.canonical(payload))
+    approval_command = _external_action_approval_command(mailbox["requestPath"])
     return {
         "schemaVersion": authorization_core.CHALLENGE_SCHEMA,
         "authorizationId": authorization_id,
@@ -9836,13 +9867,20 @@ def tool_external_action_challenge(args: dict[str, Any]) -> dict[str, Any]:
         "encodedPayload": encoded,
         "signatureAlgorithm": "HMAC-SHA256",
         "keyEnvironment": identity["keyEnv"],
+        "approvalTransport": {
+            "mode": "private-local-mailbox",
+            "tokenPasteRequired": False,
+            "requestFile": mailbox["requestPath"],
+            "responseFile": mailbox["responsePath"],
+            "approvalCommand": approval_command,
+        },
         "confirmationText": (
             "AUTHORIZE JSTACK EXTERNAL ACTION "
             + challenge["challengeDigest"]
             + " ONCE"
         ),
         "signingRule": (
-            "The named human reviews every field and signs encodedPayload outside Codex with the private key in keyEnvironment and the full challengeDigest. Codex must not run the signer or create the approval."
+            "The named human runs approvalCommand outside Codex, reviews every exact field, and confirms APPROVE ONCE. The helper writes a private response that JStack collects automatically; no token is pasted into chat. Codex must not run the approver command or create the approval."
         ),
         "authorityRule": (
             "This challenge authorizes nothing. Implement, build, finish, ship, deploy, release, phase approval, remediation approval, and loop/program completion are never substitutes for this exact signed action."
@@ -9855,8 +9893,19 @@ def tool_external_action_authorize(args: dict[str, Any]) -> dict[str, Any]:
     authorization_id = str(args.get("authorization_id") or "")
     policy = load_enterprise_policy(project_path)
     external_policy = policy["externalActions"]
+    service = _external_action_service(project_path)
+    supplied_attestation = str(args.get("approval_attestation") or "").strip()
+    if supplied_attestation:
+        token = supplied_attestation
+        approval_transport = "inline-legacy"
+    else:
+        response = _external_action_call(
+            lambda: service.approval_response(authorization_id)
+        )
+        token = str(response["approvalAttestation"])
+        approval_transport = "private-local-mailbox"
     attestation = _verify_external_action_attestation(
-        str(args.get("approval_attestation") or ""),
+        token,
         authorization_id,
         int(external_policy["maxAuthorizationSeconds"]),
     )
@@ -9864,7 +9913,7 @@ def tool_external_action_authorize(args: dict[str, Any]) -> dict[str, Any]:
     _validated_external_action_target(project_path, action, attestation["target"])
     current_binding = _external_action_binding(project_path)
     grant = _external_action_call(
-        lambda: _external_action_service(project_path).authorize(
+        lambda: service.authorize(
             authorization_id,
             {
                 key: value
@@ -9875,6 +9924,7 @@ def tool_external_action_authorize(args: dict[str, Any]) -> dict[str, Any]:
             current_binding=current_binding,
         )
     )
+    service.clear_approval_mailbox(authorization_id)
     subject = evidence_subject(project_path)
     receipt = issue_receipt(
         {
@@ -9907,6 +9957,8 @@ def tool_external_action_authorize(args: dict[str, Any]) -> dict[str, Any]:
         "action": action,
         "target": attestation["target"],
         "expiresAt": attestation["expiresAt"],
+        "approvalTransport": approval_transport,
+        "tokenPasteUsed": approval_transport == "inline-legacy",
         "authorizationReceipt": receipt,
         "receiptMeaning": (
             "A short-lived session/Git/remote/target-bound approval awaiting one destructive consumption. It is not an execution result and cannot authorize any other action."
@@ -11808,7 +11860,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_external_action_challenge": {
-        "description": "Create one exact short-lived signed-local challenge for a single repository, Git, release, deployment, or production action. The challenge grants no authority, and broad task or phase approval never satisfies it.",
+        "description": "Create one exact short-lived signed-local challenge and private local approval request for a single repository, Git, release, deployment, or production action. The challenge grants no authority, and broad task or phase approval never satisfies it.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -11843,14 +11895,13 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": False,
     },
     "gstack_external_action_authorize": {
-        "description": "Verify an independently signed exact-action attestation against its server challenge and unchanged session, Git, policy, branch, remote, provider, target, and expiry; issue a still-unconsumed one-action receipt.",
+        "description": "Collect a private local approval response (or accept a legacy inline attestation), verify it against the exact server challenge and unchanged session, Git, policy, branch, remote, provider, target, and expiry, then issue a still-unconsumed one-action receipt.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
             "required": [
                 "project_path",
                 "authorization_id",
-                "approval_attestation",
             ],
             "properties": {
                 "project_path": {"type": "string"},
@@ -11863,6 +11914,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": EXTERNAL_ACTION_MAX_RECEIPT_CHARS,
+                    "description": "Deprecated compatibility transport. Omit to collect the signed response from the private local approval mailbox without pasting a token.",
                 },
             },
         },

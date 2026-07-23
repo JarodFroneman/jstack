@@ -103,8 +103,10 @@ Default to local-only. Team deployment authorizes staffing only. Repository
 creation, remote add/change, commit, push, pull-request creation, merge, tag,
 release, deployment, and production mutation each require their own exact
 signed one-time JStack external-action permit. Only the accountable Lead may
-run challenge -> human signature outside Codex -> authorize -> fresh provider
+run challenge -> the human runs the returned approval command outside Codex and
+types `APPROVE ONCE` -> authorize by ID -> fresh provider
 observation -> consume and then execute the exact action once before expiry.
 No subagent may request, sign, consume, or exercise that authority. Broad task
 verbs, phase/remediation approval, readiness, or specialist handoff never
-substitute, and no shell/provider path may bypass the boundary.
+substitute, no token is pasted into chat, and no shell/provider path may bypass
+the boundary.

@@ -6,6 +6,7 @@ import hmac
 import importlib.util
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -150,6 +151,23 @@ class ExternalActionTests(unittest.TestCase):
             }
         )
 
+    def sign_to_mailbox(self, challenge: dict) -> subprocess.CompletedProcess[str]:
+        environment = {**os.environ, "JSTACK_TEST_EXTERNAL_ACTION_KEY": self.key}
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SIGNER_PATH),
+                "--request-file",
+                challenge["approvalTransport"]["requestFile"],
+                "--confirm-digest",
+                challenge["challengeDigest"],
+            ],
+            text=True,
+            capture_output=True,
+            env=environment,
+            check=False,
+        )
+
     def observation(self, target: dict, *, exists: bool = True) -> dict:
         return {
             "target": target,
@@ -190,6 +208,79 @@ class ExternalActionTests(unittest.TestCase):
         self.authorize(challenge)
         with self.assertRaisesRegex(server.ToolError, "already resolved|replay"):
             self.authorize(challenge)
+
+    def test_private_mailbox_approval_requires_no_token_paste(self) -> None:
+        challenge = self.challenge()
+        transport = challenge["approvalTransport"]
+        self.assertEqual("private-local-mailbox", transport["mode"])
+        self.assertFalse(transport["tokenPasteRequired"])
+        self.assertIn("--request-file", transport["approvalCommand"])
+        request_path = Path(transport["requestFile"])
+        response_path = Path(transport["responseFile"])
+        self.assertTrue(request_path.is_file())
+        if os.name == "posix":
+            self.assertEqual(0, stat.S_IMODE(request_path.stat().st_mode) & 0o077)
+
+        signed = self.sign_to_mailbox(challenge)
+        self.assertEqual(0, signed.returncode, signed.stderr)
+        self.assertIn("no token needs to be pasted", signed.stdout)
+        self.assertNotIn(challenge["encodedPayload"], signed.stdout)
+        self.assertTrue(response_path.is_file())
+        if os.name == "posix":
+            self.assertEqual(0, stat.S_IMODE(response_path.stat().st_mode) & 0o077)
+
+        grant = server.tool_external_action_authorize(
+            {
+                "project_path": str(self.repo),
+                "authorization_id": challenge["authorizationId"],
+            }
+        )
+        self.assertTrue(grant["authorized"])
+        self.assertEqual("private-local-mailbox", grant["approvalTransport"])
+        self.assertFalse(grant["tokenPasteUsed"])
+        self.assertFalse(request_path.exists())
+        self.assertFalse(response_path.exists())
+
+    def test_mailbox_authorization_waits_for_the_named_human(self) -> None:
+        challenge = self.challenge()
+        environment = {**os.environ, "JSTACK_TEST_EXTERNAL_ACTION_KEY": self.key}
+        headless = subprocess.run(
+            [
+                sys.executable,
+                str(SIGNER_PATH),
+                "--request-file",
+                challenge["approvalTransport"]["requestFile"],
+            ],
+            text=True,
+            capture_output=True,
+            env=environment,
+            check=False,
+        )
+        self.assertEqual(2, headless.returncode)
+        self.assertIn("human-operated terminal", headless.stderr)
+        self.assertFalse(Path(challenge["approvalTransport"]["responseFile"]).exists())
+        with self.assertRaisesRegex(server.ToolError, "No signed local approval response"):
+            server.tool_external_action_authorize(
+                {
+                    "project_path": str(self.repo),
+                    "authorization_id": challenge["authorizationId"],
+                }
+            )
+
+    @unittest.skipUnless(os.name == "posix", "POSIX mode-bit enforcement")
+    def test_mailbox_rejects_group_or_world_accessible_responses(self) -> None:
+        challenge = self.challenge()
+        signed = self.sign_to_mailbox(challenge)
+        self.assertEqual(0, signed.returncode, signed.stderr)
+        response_path = Path(challenge["approvalTransport"]["responseFile"])
+        response_path.chmod(0o644)
+        with self.assertRaisesRegex(server.ToolError, "group/world accessible"):
+            server.tool_external_action_authorize(
+                {
+                    "project_path": str(self.repo),
+                    "authorization_id": challenge["authorizationId"],
+                }
+            )
 
     def test_action_escalation_is_rejected_before_consumption(self) -> None:
         grant = self.authorize(self.challenge())
@@ -463,6 +554,11 @@ class ExternalActionTests(unittest.TestCase):
     def test_runtime_and_tool_inventory_publish_the_boundary(self) -> None:
         runtime = server.tool_runtime_status({"project_path": str(self.repo)})
         self.assertEqual("local-only", runtime["externalActionBoundary"]["defaultMode"])
+        self.assertEqual(
+            "private-local-mailbox",
+            runtime["externalActionBoundary"]["approvalTransport"],
+        )
+        self.assertFalse(runtime["externalActionBoundary"]["tokenPasteRequired"])
         names = {item["name"] for item in server.tool_definitions()}
         self.assertEqual(53, len(names))
         self.assertTrue(
@@ -473,6 +569,10 @@ class ExternalActionTests(unittest.TestCase):
             }.issubset(names)
         )
         definitions = {item["name"]: item for item in server.tool_definitions()}
+        authorize_required = definitions["jstack_external_action_authorize"][
+            "inputSchema"
+        ]["required"]
+        self.assertNotIn("approval_attestation", authorize_required)
         self.assertTrue(
             definitions["jstack_external_action_consume"]["annotations"][
                 "destructiveHint"

@@ -130,9 +130,12 @@ its key environment variable to at least 32 bytes. Set
 `JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG` in the MCP environment to that file.
 Restart Codex after changing the environment.
 
-The named human runs `sign_external_action_authorization.py` outside Codex with
-the returned encoded payload and full challenge digest. Never expose the key to
-Codex, place it in Git, or pass it through an MCP argument. See the
+The named human runs the challenge's returned `approvalCommand` outside Codex,
+reviews the exact action, and types `APPROVE ONCE`. The helper writes a private
+response that JStack collects by authorization ID; no token is pasted into
+chat. Never expose the key to Codex, place it in Git, or pass it through an MCP
+argument. Optionally set `JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND` in the MCP
+launcher to a short site-specific wrapper such as `jstack-approve`. See the
 [external-action boundary](external-action-boundary.md).
 
 ### 4. Keep The Umbrella Plugin Uninstalled

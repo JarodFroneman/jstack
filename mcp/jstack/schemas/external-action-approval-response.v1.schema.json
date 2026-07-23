@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/external-action-approval-response.v1.schema.json",
+  "title": "JStack private local external-action approval response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "authorizationId",
+    "approvalAttestation",
+    "approvedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.external-action.approval-response.v1"
+    },
+    "authorizationId": {
+      "type": "string",
+      "pattern": "^authorization-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "approvalAttestation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100000
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

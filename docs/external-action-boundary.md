@@ -70,13 +70,17 @@ when the repository requires it.
 ## Lifecycle
 
 1. The accountable Lead calls `jstack_external_action_challenge` for one exact
-   action. This writes private challenge state but grants no authority.
-2. JStack returns the full target, encoded payload, full SHA-256 challenge
-   digest, and confirmation text.
-3. The named operator reviews every field and signs outside Codex. Codex must
-   not run the signer, access the private key, fabricate a token, or treat
-   silence as approval.
-4. `jstack_external_action_authorize` verifies the configured identity,
+   action. This writes private challenge and approval-request state but grants
+   no authority.
+2. JStack returns the full target, SHA-256 challenge digest, private request
+   path, and a short `approvalCommand`. Token paste is not required.
+3. The named operator runs that command in their own terminal, reviews every
+   displayed field, and types `APPROVE ONCE`. The helper signs outside Codex,
+   writes an owner-only response, and never prints the signed capability.
+   Codex must not run the helper, access the private key, fabricate a response,
+   or treat silence as approval.
+4. `jstack_external_action_authorize` collects the response by authorization
+   ID and verifies the configured identity,
    required role, signature, canonical payload, challenge record, expiry, MCP
    session, Git/workspace/policy state, branch, remotes, provider, and target.
 5. Immediately before execution, the Lead obtains a fresh provider observation
@@ -88,7 +92,7 @@ when the repository requires it.
    changed argument, next action, expired permit, or any drift requires a new
    challenge and signature.
 
-Challenge and authorization state lives under
+Challenge, approval-mailbox, and authorization state lives under
 `~/.jstack/external-actions/<project>/` with private permissions and a
 session-keyed integrity seal. A receipt is invalid after MCP restart, project
 or policy change, HEAD/workspace change, branch or remote change, expiry, or
@@ -103,19 +107,26 @@ the MCP process to that path and provide at least 32 bytes in each identity's
 configured key environment variable. Do not put keys in Git, policy, prompts,
 chat, logs, screenshots, or MCP arguments.
 
-The operator signs a returned challenge outside Codex:
+The default operator flow uses the request file returned by the challenge:
 
 ```text
 python sign_external_action_authorization.py \
-  --encoded-payload '<encodedPayload>' \
-  --key-env JSTACK_EXTERNAL_ACTION_HMAC_KEY \
-  --approver-id jay \
-  --confirm-digest '<full challengeDigest>'
+  --request-file '/private/path/from/approvalTransport/requestFile'
 ```
 
-The explicit digest argument forces the operator to bind the signature to the
-displayed challenge. The helper validates the canonical payload and expiry,
-reads the key only from the environment, and never prints the key.
+The request supplies the configured key-environment name and approver ID. The
+helper validates the canonical payload, digest, and expiry, shows the complete
+action and target, requires the operator to type `APPROVE ONCE`, reads the key
+only from the environment, and writes the signed response to the paired
+private mailbox. It prints neither key nor token. A non-interactive operator
+may supply the full `--confirm-digest`; legacy inline token output remains
+available only when no response file/request mailbox is selected.
+
+For a short site-specific command, set
+`JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND` in the MCP launcher to an executable
+that loads the human's key and delegates to the helper. JStack then returns a
+command such as `jstack-approve --request-file ...`. The accountable human
+still has to run it; Codex never does.
 
 ## Read-Only And Artifact-Only Modes
 

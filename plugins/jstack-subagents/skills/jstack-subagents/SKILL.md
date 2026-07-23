@@ -96,8 +96,9 @@ Default to local-only. Team approval authorizes staffing only. Repository
 creation, remote add/change, commit, push, pull-request creation, merge, tag,
 release, deployment, and production mutation each require a separate exact
 signed one-time JStack external-action permit. Only the Lead may perform
-challenge -> human signature outside Codex -> authorize -> fresh provider
+challenge -> the human runs the returned approval command outside Codex and
+types `APPROVE ONCE` -> authorize by ID -> fresh provider
 observation -> consume, followed by one exact operation before expiry. No
 specialist may request, sign, consume, or exercise this authority, and no broad
-verb, phase/remediation approval, readiness, handoff, shell, or provider path
-may substitute for or bypass it.
+verb, phase/remediation approval, readiness, handoff, pasted token, shell, or
+provider path may substitute for or bypass it.

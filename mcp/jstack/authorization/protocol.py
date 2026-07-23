@@ -7,6 +7,7 @@ separate executor performs the approved operation.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import hashlib
 import hmac
@@ -23,6 +24,8 @@ from typing import Any, Iterator, Optional
 
 CHALLENGE_SCHEMA = "jstack.external-action.challenge.v1"
 ATTESTATION_SCHEMA = "jstack.external-action.attestation.v1"
+APPROVAL_REQUEST_SCHEMA = "jstack.external-action.approval-request.v1"
+APPROVAL_RESPONSE_SCHEMA = "jstack.external-action.approval-response.v1"
 GRANT_SCHEMA = "jstack.external-action.grant.v1"
 STATE_SCHEMA = "jstack.external-action.state.v1"
 CONSUMPTION_SCHEMA = "jstack.external-action.consumption.v1"
@@ -143,6 +146,46 @@ def canonical(value: Any) -> bytes:
 
 def digest(value: Any) -> str:
     return hashlib.sha256(canonical(value)).hexdigest()
+
+
+def encoded_payload(value: Any) -> str:
+    return base64.urlsafe_b64encode(canonical(value)).decode("ascii").rstrip("=")
+
+
+def _read_bounded_file(
+    path: Path,
+    *,
+    label: str,
+    maximum: int,
+    private: bool = False,
+) -> bytes:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise AuthorizationError(f"{label} is missing or unsafe.") from exc
+    try:
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode) or details.st_size > maximum:
+            raise AuthorizationError(f"{label} is missing or unsafe.")
+        if private and os.name == "posix":
+            if details.st_uid != os.getuid():
+                raise AuthorizationError(f"{label} has an unexpected owner.")
+            if stat.S_IMODE(details.st_mode) & 0o077:
+                raise AuthorizationError(
+                    f"{label} must not be group/world accessible."
+                )
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
+            content = handle.read(maximum + 1)
+        if len(content) > maximum:
+            raise AuthorizationError(f"{label} is missing or unsafe.")
+        return content
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
 def parse_time(value: Any, field: str) -> dt.datetime:
@@ -524,6 +567,8 @@ class AuthorizationService:
         self.root = external_root / f"{slug}-{key}"
         self.challenge_root = self.root / "challenges"
         self.state_root = self.root / "authorizations"
+        self.approval_request_root = self.root / "approval-requests"
+        self.approval_response_root = self.root / "approval-responses"
         self.lock_path = self.root / ".lock"
         self.project_path = str(project)
         self.server_session = server_session
@@ -534,6 +579,8 @@ class AuthorizationService:
             self.root,
             self.challenge_root,
             self.state_root,
+            self.approval_request_root,
+            self.approval_response_root,
         ):
             _safe_directory(directory)
 
@@ -586,6 +633,100 @@ class AuthorizationService:
         return self._read(
             self.challenge_root / f"{authorization_id}.json", "Authorization challenge"
         )
+
+    def approval_paths(self, authorization_id: str) -> dict[str, Path]:
+        if not _AUTHORIZATION_ID.fullmatch(str(authorization_id or "")):
+            raise AuthorizationError("authorization_id is invalid.")
+        return {
+            "request": self.approval_request_root / f"{authorization_id}.json",
+            "response": self.approval_response_root / f"{authorization_id}.json",
+        }
+
+    def publish_approval_request(
+        self,
+        authorization_id: str,
+        *,
+        key_environment: str,
+    ) -> dict[str, Any]:
+        challenge = self.challenge(authorization_id)
+        payload = validate_attestation_payload(challenge["payload"])
+        if payload["authorizationId"] != authorization_id:
+            raise AuthorizationError("Approval request does not match its authorization ID.")
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,100}", str(key_environment or "")):
+            raise AuthorizationError("Approval request key environment is invalid.")
+        paths = self.approval_paths(authorization_id)
+        request = {
+            "schemaVersion": APPROVAL_REQUEST_SCHEMA,
+            "authorizationId": authorization_id,
+            "challengeDigest": challenge["challengeDigest"],
+            "encodedPayload": encoded_payload(payload),
+            "signatureAlgorithm": "HMAC-SHA256",
+            "keyEnvironment": key_environment,
+            "approverId": payload["approverId"],
+            "createdAt": now_iso(),
+        }
+        with _lock(self.lock_path):
+            if paths["request"].exists() or paths["response"].exists():
+                raise AuthorizationError("Approval mailbox already exists for this challenge.")
+            _atomic_write(paths["request"], request)
+        return {
+            "request": request,
+            "requestPath": str(paths["request"]),
+            "responsePath": str(paths["response"]),
+        }
+
+    def approval_response(self, authorization_id: str) -> dict[str, Any]:
+        path = self.approval_paths(authorization_id)["response"]
+        try:
+            raw = _read_bounded_file(
+                path,
+                label="Signed local approval response",
+                maximum=200_000,
+                private=True,
+            )
+        except AuthorizationError as exc:
+            if not path.exists():
+                raise AuthorizationError(
+                    "No signed local approval response is available yet. "
+                    "The named human must run the displayed jstack-approve "
+                    "command outside Codex."
+                ) from exc
+            raise
+        try:
+            value = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise AuthorizationError(
+                "Signed local approval response is malformed."
+            ) from exc
+        expected_fields = {
+            "schemaVersion",
+            "authorizationId",
+            "approvalAttestation",
+            "approvedAt",
+        }
+        if not isinstance(value, dict) or set(value) != expected_fields:
+            raise AuthorizationError("Signed local approval response fields do not match the protocol.")
+        if value.get("schemaVersion") != APPROVAL_RESPONSE_SCHEMA:
+            raise AuthorizationError("Signed local approval response schema is unsupported.")
+        if value.get("authorizationId") != authorization_id:
+            raise AuthorizationError("Signed local approval response belongs to another authorization ID.")
+        token = value.get("approvalAttestation")
+        if not isinstance(token, str) or not token or len(token) > 100_000:
+            raise AuthorizationError("Signed local approval response token is missing or oversized.")
+        parse_time(value.get("approvedAt"), "approvedAt")
+        return value
+
+    def clear_approval_mailbox(self, authorization_id: str) -> None:
+        paths = self.approval_paths(authorization_id)
+        with _lock(self.lock_path):
+            for path in paths.values():
+                try:
+                    if not path.is_symlink() and path.is_file():
+                        path.unlink()
+                except OSError:
+                    # A resolved authorization cannot be replayed even if best-effort
+                    # capability-file cleanup is interrupted.
+                    pass
 
     def authorize(
         self,

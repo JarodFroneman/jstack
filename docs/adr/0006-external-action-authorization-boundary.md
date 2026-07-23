@@ -27,6 +27,12 @@ subject, attached branch, complete remote snapshot, MCP session, named
 identity, role, reference digest, nonce, and a maximum ten-minute policy
 window. A configured human signs the canonical payload outside Codex.
 
+As of 0.8.1, the default transport is a private local mailbox. The challenge
+writes an owner-only request, the human independently runs a displayed helper
+and confirms `APPROVE ONCE`, and the helper writes an owner-only response that
+the MCP collects and deletes after verification. This removes token copying
+from chat without merging the requester, approver, and executor roles.
+
 Authorization and consumption revalidate the complete subject. Consumption is
 destructive and produces a maximum 60-second permit for one operation. Replay,
 retry, action substitution, provider/visibility/remote/ref/commit/environment
@@ -50,6 +56,8 @@ remains evidence and always reports execution authority as false.
   tag CI, and release-creation decisions.
 - A failed provider call cannot be retried under the consumed permit.
 - Identity configuration and operator signing add deliberate friction.
+- The operator no longer copies or pastes signed tokens; the private mailbox is
+  the default transport and inline tokens are compatibility-only.
 - The protocol blocks accidental or inferred authority inside compliant JStack
   workflows, but it is not an OS-level interceptor. Provider protections and
   host tool restrictions remain necessary against bypass or account compromise.

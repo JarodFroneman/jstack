@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.8.1 - 2026-07-22
+
+### Added
+
+- Added a private local approval mailbox for every protected external action.
+  Challenges now create owner-only request files and return a short
+  `jstack-approve` command; the independently run helper writes an owner-only
+  response that JStack collects automatically.
+- Added versioned approval-request and approval-response schemas plus
+  adversarial coverage for missing responses, unsafe permissions, transport
+  compatibility, automatic cleanup, and zero-token-output behavior.
+
+### Changed
+
+- `jstack_external_action_authorize` now needs only `project_path` and
+  `authorization_id` for the default flow. Inline `approval_attestation`
+  remains available only as a compatibility transport.
+- Updated all write-capable JStack workflows to ask the named human to run the
+  displayed local approval command and never request that a token be pasted
+  into chat.
+
+### Security
+
+- Human approval remains independent, exact-action, short-lived, role-bound,
+  session/Git/remote/target-bound, and one-time. The helper requires an
+  interactive `APPROVE ONCE` confirmation unless the full digest is supplied
+  non-interactively, never prints the signed capability in mailbox mode, and
+  stores it in a `0600` response removed after successful authorization.
+- The no-copy transport does not turn broad task approval into authority and
+  does not let Codex run the approver command, access the private key, retry a
+  consumed action, or bypass provider observation and one-time consumption.
+
 ## 0.8.0 - 2026-07-22
 
 ### Added
