@@ -157,14 +157,18 @@ independently usable.
 - Before each protected action, call `jstack_external_action_challenge` with
   one action and the exact provider, owner, repository, visibility, remote name
   and URL, branch, tag or `not-applicable`, full commit ID, and target
-  environment. Show the complete target and digest, then wait for the named
-  human to sign outside Codex. Never run the signer or fabricate its token.
+  environment. Show the complete target, digest, and returned
+  `approvalCommand`, then wait for the named human to run that command outside
+  Codex, review the fields, type `APPROVE ONCE`, and confirm completion. Never
+  run the approver command, fabricate a response, or ask the human to paste a
+  signed token into chat.
 - Keep pushes ref-kind exact: `tag=not-applicable` is branch-only and requires
   the local branch tip at `exactCommit`; an exact tag is tag-only and requires
   that local tag to peel to `exactCommit`. A release tag therefore needs
   separate tag-create, tag-push, and release-create authorizations.
-- Pass the signed token to `jstack_external_action_authorize`. Immediately
-  before execution, independently re-observe the provider target and call
+- Call `jstack_external_action_authorize` with only the project path and
+  authorization ID so JStack collects the private response automatically.
+  Immediately before execution, independently re-observe the provider target and call
   `jstack_external_action_consume` with a fresh operation ID. Execute that one
   exact action at most once before the returned permit expires. Failure,
   retry, target drift, state drift, or the next action requires a new challenge.

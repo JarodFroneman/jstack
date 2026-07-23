@@ -61,7 +61,9 @@ deployment, and production mutation are separate actions. Broad task verbs or
 task/phase/remediation approval never authorize any of them. For each action,
 use challenge -> independently signed human attestation -> authorize -> fresh
 provider observation -> consume, then execute that exact operation once before
-permit expiry. Never run the signer, reuse a permit, retry after consumption,
+permit expiry. Show the returned `approvalCommand`; the named human runs it
+outside Codex and types `APPROVE ONCE`, then authorize by ID so no signed token
+is pasted into chat. Never run the approver command, reuse a permit, retry after consumption,
 or bypass the boundary through shell, Git, provider, browser, CI/CD, deployment,
 or production tools. If the protocol is unavailable or the project is
 artifact-only, stop that action while continuing safe local work.

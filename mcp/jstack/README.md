@@ -130,9 +130,12 @@ challenges with `sign_program_approval.py` outside Codex.
 
 Protected external actions use a separate private identity configuration. Use
 `templates/jstack.external-action-identities.json`, set
-`JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG`, and have the named operator run
-`sign_external_action_authorization.py` outside Codex with the full returned
-challenge digest. Never expose its key to Codex.
+`JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG`, and have the named operator run the
+returned approval command outside Codex. The helper reviews the exact request
+interactively, writes a private response, and JStack collects it by
+authorization ID without a pasted token. Set
+`JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND` for a short site-specific wrapper.
+Never expose the signing key to Codex.
 
 ## Verify
 

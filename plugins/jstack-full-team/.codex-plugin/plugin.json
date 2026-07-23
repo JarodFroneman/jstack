@@ -1,6 +1,6 @@
 {
   "name": "jstack-full-team",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Top-level JStack command that deploys the full 11-role team.",
   "author": {
     "name": "Jarod Froneman",

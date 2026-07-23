@@ -1,6 +1,6 @@
 {
   "name": "jstack-loop",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Top-level JStack command for bounded loops and durable multi-phase programs.",
   "author": {
     "name": "Jarod Froneman",

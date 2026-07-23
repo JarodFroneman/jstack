@@ -16,11 +16,12 @@ actions outside loop/program authority. A phase gate, revision approval,
 completion receipt, `implement`, `finish`, `ship`, `deploy`, or `release`
 request never substitutes for the exact external-action protocol. For each
 action, the accountable Lead must create one `jstack_external_action_challenge`,
-wait for an independently signed human attestation, authorize it, obtain a
-fresh exact provider observation, consume it once, and execute only the exact
-operation before permit expiry. Never run the signer or bypass the protocol
-through another tool. Any failure, retry, drift, or next action needs a new
-challenge.
+show the exact target, digest, and returned approval command, wait for the named
+human to run it outside Codex and type `APPROVE ONCE`, authorize by ID, obtain
+a fresh exact provider observation, consume it once, and execute only the
+exact operation before permit expiry. Never run the approver command, ask for
+a pasted token, or bypass the protocol through another tool. Any failure,
+retry, drift, or next action needs a new challenge.
 
 ## Select The Orchestration Level
 

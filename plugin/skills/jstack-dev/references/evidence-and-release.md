@@ -86,8 +86,10 @@ specialist handoff, or loop/program receipt authorizes one.
 Each action requires one `jstack_external_action_challenge` bound to the exact
 provider, owner, repository, visibility, remote URL, branch, tag, full commit,
 target environment, current Git/workspace/policy state, branch, remote snapshot,
-tool version, and MCP session. A named role-holding human signs the canonical
-payload outside Codex. Codex must not run the signer.
+tool version, and MCP session. A named role-holding human runs the returned
+approval command outside Codex, reviews the exact fields, and confirms
+`APPROVE ONCE`; JStack then collects the signed private response by
+authorization ID. Codex must not run the command or ask for a pasted token.
 
 For `push`, `tag=not-applicable` is a branch-only intent and the local branch
 tip must equal `exactCommit`. An exact tag is a tag-only intent and that local
