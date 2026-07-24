@@ -889,7 +889,8 @@ class EvidenceTests(unittest.TestCase):
             )
             self.assertTrue(allowed["ready"], allowed["blockers"])
             self.assertFalse(allowed["executionAuthorized"])
-            self.assertTrue(allowed["externalActionBoundary"]["readinessIsNotAuthority"])
+            self.assertTrue(allowed["actionSafety"]["readinessIsNotExecution"])
+            self.assertFalse(allowed["actionSafety"]["customApprovalProtocol"])
 
     def test_audit_release_gate_is_opt_in_and_accepts_only_release_profile_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -1613,25 +1614,19 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertTrue(
                 (codex_home / "mcp" / "jstack" / "program" / "protocol.py").is_file()
             )
-            self.assertTrue(
-                (codex_home / "mcp" / "jstack" / "sign_program_approval.py").is_file()
+            self.assertFalse(
+                (codex_home / "mcp" / "jstack" / "sign_program_approval.py").exists()
             )
-            self.assertTrue(
-                (
-                    codex_home
-                    / "mcp"
-                    / "jstack"
-                    / "authorization"
-                    / "protocol.py"
-                ).is_file()
+            self.assertFalse(
+                (codex_home / "mcp" / "jstack" / "authorization").exists()
             )
-            self.assertTrue(
+            self.assertFalse(
                 (
                     codex_home
                     / "mcp"
                     / "jstack"
                     / "sign_external_action_authorization.py"
-                ).is_file()
+                ).exists()
             )
             self.assertTrue(
                 (
@@ -1642,32 +1637,32 @@ class MasteryAndInstallTests(unittest.TestCase):
                     / "program-contract.v1.schema.json"
                 ).is_file()
             )
-            self.assertTrue(
+            self.assertFalse(
                 (
                     codex_home
                     / "mcp"
                     / "jstack"
                     / "schemas"
                     / "external-action-intent.v1.schema.json"
-                ).is_file()
+                ).exists()
             )
-            self.assertTrue(
+            self.assertFalse(
                 (
                     codex_home
                     / "mcp"
                     / "jstack"
                     / "templates"
                     / "jstack.external-action-identities.json"
-                ).is_file()
+                ).exists()
             )
-            self.assertTrue(
+            self.assertFalse(
                 (
                     codex_home
                     / "mcp"
                     / "jstack"
                     / "templates"
                     / "jstack.program-identities.json"
-                ).is_file()
+                ).exists()
             )
             self.assertTrue(
                 (

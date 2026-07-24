@@ -28,7 +28,7 @@ PROGRAM_READINESS_SCHEMA = "jstack.program.goal-readiness.v1"
 PROGRAM_READINESS_RECEIPT_SCHEMA = "jstack.program.goal-readiness-receipt.v1"
 PROGRAM_COMPLETION_PROOF_SCHEMA = "jstack.program.completion-proof.v1"
 PHASE_COMPLETION_PROOF_SCHEMA = "jstack.program.phase-completion-proof.v1"
-APPROVAL_ATTESTATION_SCHEMA = "jstack.program.approval-attestation.v1"
+HUMAN_DECISION_SCHEMA = "jstack.program.human-decision.v1"
 EXTERNAL_EVIDENCE_SCHEMA = "jstack.program.external-evidence.v1"
 
 EXECUTION_MODES = ("single-lead", "smart-subagents", "full-team")
@@ -60,8 +60,8 @@ DEFAULT_LIMITS = {
 }
 
 DEFAULT_BLOCKED_ACTIONS = (
-    "Default to local-only work. Repository creation, remote add/change, commit, push, pull request, merge, tag, release, deployment, and production mutation each require a separate exact signed one-time external-action permit.",
-    "Broad task verbs, phase/remediation approval, human program gates, and loop/program completion never grant external-action authority.",
+    "Stay within the user's explicit scope and the host's normal permissions for repository, Git, provider, deployment, and production actions.",
+    "A human program gate or completion receipt records a project decision; it does not bypass host, provider, or platform safety controls.",
     "Do not treat a human approval as a substitute for machine-verifiable acceptance evidence.",
     "Do not advance a phase from caller-supplied success claims.",
 )
@@ -1349,6 +1349,8 @@ class ProgramService:
             approvals = []
             rejected = []
             for approval in state.get("approvals", []):
+                if approval.get("schemaVersion") != HUMAN_DECISION_SCHEMA:
+                    continue
                 try:
                     fresh = now < _parse_time(approval.get("expiresAt"), "approval.expiresAt")
                 except ProgramError:
@@ -2011,10 +2013,17 @@ class ProgramService:
     ) -> dict[str, Any]:
         operation_id = self._operation_id(operation_id)
         gate_id = _identifier(gate_id, "gate_id")
-        if not isinstance(approval, dict) or approval.get("schemaVersion") != APPROVAL_ATTESTATION_SCHEMA:
-            raise ProgramError("A verified identity-bound approval attestation is required.")
+        if not isinstance(approval, dict) or approval.get("schemaVersion") != HUMAN_DECISION_SCHEMA:
+            raise ProgramError("A server-derived human decision record is required.")
         input_digest = self._operation_digest(
-            "gate-resolve", {"gateId": gate_id, "approval": approval}
+            "gate-resolve",
+            {
+                "gateId": gate_id,
+                "approverId": approval.get("approverId"),
+                "roles": approval.get("roles"),
+                "decision": approval.get("decision"),
+                "referenceDigest": approval.get("referenceDigest"),
+            },
         )
         with _DirectoryLock(self.lock_path):
             program_dir, contract, snapshot, events = self._load(program_id)
@@ -2042,12 +2051,12 @@ class ProgramService:
                 or approval.get("gateDigest") != _gate_digest(gate)
                 or approval.get("decision") not in {"approved", "rejected"}
             ):
-                raise ProgramError("Approval attestation is not bound to this gate and contract.")
+                raise ProgramError("Human decision is not bound to this gate and contract.")
             roles = approval.get("roles")
             if not isinstance(roles, list) or not set(roles) & set(gate["requiredRoles"]):
-                raise ProgramError("Approver identity does not hold a required gate role.")
+                raise ProgramError("The recorded approver role is not required by this gate.")
             if _now() >= _parse_time(approval.get("expiresAt"), "approval.expiresAt"):
-                raise ProgramError("Approval attestation is expired.")
+                raise ProgramError("Human decision is expired.")
             issued_at = _parse_time(approval.get("issuedAt"), "approval.issuedAt")
             expires_at = _parse_time(approval.get("expiresAt"), "approval.expiresAt")
             if (
@@ -2055,7 +2064,24 @@ class ProgramService:
                 or (expires_at - issued_at).total_seconds()
                 > gate["maxAgeMinutes"] * 60 + 1
             ):
-                raise ProgramError("Approval attestation exceeds the gate freshness boundary.")
+                raise ProgramError("Human decision exceeds the gate freshness boundary.")
+            reference_digest = approval.get("referenceDigest")
+            decision_digest = approval.get("decisionDigest")
+            if (
+                not isinstance(reference_digest, str)
+                or not _SHA256.fullmatch(reference_digest)
+                or not isinstance(decision_digest, str)
+                or not _SHA256.fullmatch(decision_digest)
+                or decision_digest
+                != _digest(
+                    {
+                        key: value
+                        for key, value in approval.items()
+                        if key != "decisionDigest"
+                    }
+                )
+            ):
+                raise ProgramError("Human decision digest is invalid.")
             approvals = snapshot["gateStates"][gate_id]["approvals"]
             approvals = [item for item in approvals if item.get("approverId") != approval.get("approverId")]
             approvals.append(approval)
@@ -2077,7 +2103,7 @@ class ProgramService:
                     "gateId": gate_id,
                     "approverId": approval.get("approverId"),
                     "decision": approval.get("decision"),
-                    "attestationDigest": approval.get("attestationDigest"),
+                    "decisionDigest": approval.get("decisionDigest"),
                     "invalidatedPhases": invalidated,
                     "operationId": operation_id,
                 },
@@ -2139,7 +2165,7 @@ class ProgramService:
                 raise ProgramError("Unknown gate_id: %s" % gate_id)
             phase_id, gate = gate_contracts[gate_id]
             if gate["type"] != "external":
-                raise ProgramError("Human gates require identity-bound approval attestations.")
+                raise ProgramError("Human gates require a recorded conversational decision.")
             if (
                 evidence.get("programId") != program_id
                 or evidence.get("gateId") != gate_id

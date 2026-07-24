@@ -4,7 +4,7 @@
   "title": "JStack Program Evidence v1",
   "oneOf": [
     {
-      "$ref": "#/$defs/approvalAttestation"
+      "$ref": "#/$defs/humanDecision"
     },
     {
       "$ref": "#/$defs/externalEvidence"
@@ -34,7 +34,7 @@
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
       "maxLength": 100
     },
-    "approvalAttestation": {
+    "humanDecision": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -49,12 +49,11 @@
         "referenceDigest",
         "issuedAt",
         "expiresAt",
-        "nonce",
-        "attestationDigest"
+        "decisionDigest"
       ],
       "properties": {
         "schemaVersion": {
-          "const": "jstack.program.approval-attestation.v1"
+          "const": "jstack.program.human-decision.v1"
         },
         "programId": {
           "$ref": "#/$defs/programId"
@@ -95,11 +94,7 @@
         "expiresAt": {
           "$ref": "#/$defs/timestamp"
         },
-        "nonce": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{32}$"
-        },
-        "attestationDigest": {
+        "decisionDigest": {
           "$ref": "#/$defs/sha256"
         }
       }

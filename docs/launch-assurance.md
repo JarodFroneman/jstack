@@ -154,8 +154,8 @@ criterion. This makes launch assurance a first-class machine gate without
 silently adding it to projects that did not declare a launch boundary.
 
 Because assessment requires a clean committed candidate, this criterion is a
-late release/program boundary. It does not grant commit authority or weaken the
-external-action protocol.
+late release/program boundary. It is evidence and does not execute a commit,
+release, deployment, or production operation.
 
 ## Safety and authority
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import hashlib
 import importlib
 import json
 import tempfile
@@ -80,6 +81,40 @@ def contract(phases: list[dict] | None = None, **overrides: object) -> dict:
     }
     value.update(overrides)
     return value
+
+
+def human_decision(
+    status: dict,
+    context: dict,
+    identity: str,
+    roles: list[str],
+) -> dict:
+    issued = dt.datetime.now(dt.timezone.utc)
+    record = {
+        "schemaVersion": program.HUMAN_DECISION_SCHEMA,
+        "programId": status["programId"],
+        "gateId": context["gate"]["id"],
+        "contractDigest": status["contractDigest"],
+        "gateDigest": context["gateDigest"],
+        "approverId": identity,
+        "roles": roles,
+        "decision": "approved",
+        "referenceDigest": hashlib.sha256(
+            ("conversation:" + identity).encode("utf-8")
+        ).hexdigest(),
+        "issuedAt": issued.isoformat(),
+        "expiresAt": (issued + dt.timedelta(minutes=30)).isoformat(),
+    }
+    record["decisionDigest"] = hashlib.sha256(
+        json.dumps(
+            record,
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    return record
 
 
 def readiness(
@@ -353,33 +388,45 @@ class ProgramProtocolTests(unittest.TestCase):
             self.assertEqual("waiting_human", status["status"])
             context = service.gate_context(status["programId"], "design-approval")
 
-            def approval(identity: str, roles: list[str]) -> dict:
-                return {
-                    "schemaVersion": program.APPROVAL_ATTESTATION_SCHEMA,
-                    "programId": status["programId"],
-                    "gateId": "design-approval",
-                    "contractDigest": status["contractDigest"],
-                    "gateDigest": context["gateDigest"],
-                    "approverId": identity,
-                    "roles": roles,
-                    "decision": "approved",
-                    "issuedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
-                    "expiresAt": (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=30)).isoformat(),
-                    "attestationDigest": "4" * 64,
-                }
-
             one = service.resolve_gate(
                 status["programId"],
                 "design-approval",
-                approval("alice", ["product-owner"]),
+                human_decision(
+                    status, context, "alice", ["product-owner"]
+                ),
             )
             self.assertEqual("waiting_human", one["status"])
             two = service.resolve_gate(
                 status["programId"],
                 "design-approval",
-                approval("bob", ["risk-owner"]),
+                human_decision(status, context, "bob", ["risk-owner"]),
             )
             self.assertEqual(["design"], two["readyPhaseIds"])
+
+    def test_legacy_signed_approval_records_do_not_satisfy_human_gates(self) -> None:
+        gate = {
+            "id": "owner-approval",
+            "type": "human",
+            "when": "before_phase",
+            "requiredRoles": ["owner"],
+            "quorum": 1,
+        }
+        old_signed_record = {
+            "schemaVersion": "jstack.program.approval-attestation.v1",
+            "approverId": "legacy-owner",
+            "roles": ["owner"],
+            "decision": "approved",
+            "expiresAt": (
+                dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=30)
+            ).isoformat(),
+        }
+        view = program.ProgramService._gate_view(
+            gate,
+            {"approvals": [old_signed_record]},
+        )
+        self.assertEqual("pending", view["status"])
+        self.assertFalse(view["satisfied"])
+        self.assertEqual(0, view["approvalCount"])
 
     def test_phase_proofs_external_evidence_and_program_finalization(self) -> None:
         external_gate = {
@@ -535,21 +582,7 @@ class ProgramProtocolTests(unittest.TestCase):
             approved = service.resolve_gate(
                 status["programId"],
                 "owner-approval",
-                {
-                    "schemaVersion": program.APPROVAL_ATTESTATION_SCHEMA,
-                    "programId": status["programId"],
-                    "gateId": "owner-approval",
-                    "contractDigest": status["contractDigest"],
-                    "gateDigest": context["gateDigest"],
-                    "approverId": "owner-one",
-                    "roles": ["owner"],
-                    "decision": "approved",
-                    "issuedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
-                    "expiresAt": (
-                        dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=30)
-                    ).isoformat(),
-                    "attestationDigest": "4" * 64,
-                },
+                human_decision(status, context, "owner-one", ["owner"]),
             )
             self.assertEqual(["one"], approved["readyPhaseIds"])
 

@@ -59,11 +59,11 @@ role's permissions.
 - Subagents must not spawn other subagents.
 - Capabilities must use the exact deterministic assignment from the team plan
   and inherit the role's existing permission and write scope.
-- No repository creation, remote add/change, commit, push, pull-request
-  creation, merge, tag, release, deployment, deletion, reset, production
-  mutation, DNS/SSL change, or live-system restart without the exact applicable
-  boundary. The eleven protected external actions each require a separately
-  signed and consumed v0.7 permit; staffing approval never counts.
+- Subagents do not perform repository, Git, provider, deployment, destructive,
+  production, DNS/SSL, or live-system actions. The accountable Lead may do so
+  only within explicit user scope and normal host/provider permissions.
+  Staffing approval never widens that scope, and JStack adds no token or
+  terminal approval ceremony.
 
 ## Specialist Contract
 

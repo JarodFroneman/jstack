@@ -27,10 +27,9 @@ Supported options are `--profile`, `--focus`, `--base`, `--fail-on`,
 This command is read-only. Do not edit code/configuration, change Git state,
 install tools, write context, deploy, or access production. Remediation needs a
 separate development task.
-Never call the external-action challenge, authorize, or consume tools. Audit
-scope, release-profile results, findings, and remediation plans grant no
-repository, remote, commit, push, pull-request, merge, tag, release,
-deployment, or production authority.
+Audit scope, release-profile results, findings, and remediation plans do not
+authorize writes or external actions. JStack Audit remains strictly read-only
+even though development workflows use normal host-native action safety.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`.

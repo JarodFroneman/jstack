@@ -33,7 +33,7 @@ flowchart TD
   G --> H["Run approved JStack delivery mode"]
   H --> I["Finalize child and bind proof"]
   I --> J{"Phase gates current?"}
-  J -->|human wait| K["Signed human decision"]
+  J -->|human wait| K["Recorded conversational decision"]
   J -->|external wait| L["Fresh hashed artifact"]
   K --> F
   L --> F
@@ -49,8 +49,8 @@ flowchart TD
 - Recovery: `jstack_program_status`, `jstack_program_next`
 - Child proof: `jstack_program_phase_bind`,
   `jstack_program_phase_complete`
-- Interventions: `jstack_program_gate_challenge`,
-  `jstack_program_gate_resolve`, `jstack_program_evidence_register`
+- Interventions: `jstack_program_gate_resolve`,
+  `jstack_program_evidence_register`
 - Lifecycle: `jstack_program_pause`, `jstack_program_resume`,
   `jstack_program_revise`, `jstack_program_cancel`,
   `jstack_program_finalize`
@@ -76,10 +76,12 @@ acceptance gate.
 ## Human Oversight
 
 Human intervention is a first-class state, not a workaround. A phase or final
-gate can require named roles and quorum. The MCP emits an exact challenge; the
-human signs it outside Codex; the MCP verifies identity, role, decision,
-contract, gate, nonce, and expiry. Waiting pauses active time and releases a
-child loop's write lease at a safe checkpoint.
+gate can require named roles and quorum. After the named person explicitly
+decides in the active conversation, the Lead records the approver ID, required
+role, decision, and bounded reference. The MCP binds that server-derived record
+to the current contract and gate with a freshness window. It is auditable but
+does not claim cryptographic identity proof. Waiting pauses active time and
+releases a child loop's write lease at a safe checkpoint.
 
 External systems use hashed artifact gates with provenance and freshness.
 Examples include backtest reports, hardware tests, data exports, or compliance
@@ -106,16 +108,15 @@ target environment and exact `core`-inclusive surface set. Program finalization
 accepts `launch_receipt` and rejects a stale, differently scoped, or
 catalog/policy-drifted launch result.
 
-Completion proves the current contract and Git subject. It does not authorize
-repository creation, remote add/change, commit, push, pull-request creation,
-merge, tag, release, deployment, or production changes. Each remains local-only
-until the accountable Lead obtains and consumes its own exact signed
-external-action permit. Program gates and completion receipts cannot substitute.
+Completion proves the current contract and Git subject. It does not execute a
+repository, Git, provider, release, deployment, or production operation.
+Those actions remain governed by explicit user scope and normal host/provider
+permissions. Program gates and completion receipts do not widen that scope.
 
 If the Git subject changes after completion, the same unchanged contract may
 be finalized again with fresh evidence. JStack replaces the current completion
 proof and preserves the prior proof in its hash-chained history.
 
 See [ADR 0004](adr/0004-program-orchestration-protocol.md),
-[ADR 0006](adr/0006-external-action-authorization-boundary.md),
+[ADR 0008](adr/0008-host-native-action-safety.md),
 [loop system](loop-system.md), and [migration guide](migration-0.5.md).

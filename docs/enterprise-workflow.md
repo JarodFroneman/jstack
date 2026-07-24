@@ -19,11 +19,10 @@
 7. Review, test, QA, and security-check proportionally to risk.
 8. On a clean committed production candidate, declare applicable product
    surfaces, register typed launch evidence, and finalize a launch receipt.
-9. Run release readiness only when a readiness assessment is explicitly
-   requested; it never authorizes execution.
-10. Default to local-only. For each protected action, use exact challenge,
-   independent human signature, authorization, fresh provider observation,
-   destructive one-time consumption, and one execution before permit expiry.
+9. Run release readiness when requested; it reports evidence and does not
+   execute a release.
+10. Perform external actions only within explicit user scope and normal
+   Codex/provider permissions. JStack adds no token or terminal ceremony.
 11. Save handoff context and document residual risk.
 
 ## Production Controls
@@ -40,19 +39,15 @@
 - a release-profile audit for public-web, commercial, payment, and
   regulated-data profiles
 - explicit base and environment-specific approval reference
-- exact signed one-action authorization bound to provider, owner, repository,
-  visibility, remote URL, branch/tag, full commit, target environment, current
-  Git/workspace/policy/remote state, and MCP session
-- fresh provider observation and one-time permit consumption
 - rollback plan
 - canary or monitoring plan
 - quant/backtest evidence gates
 
-Repository creation, remote add/change, commit, push, pull-request creation,
-merge, tag, release, deployment, and production mutation are separate actions.
-Task verbs, phase/remediation approval, release readiness, audit results,
-specialist handoff, and loop/program completion are evidence or workflow state,
-not authority. See [External-Action Authorization Boundary](external-action-boundary.md).
+Repository, Git, provider, release, deployment, and production actions remain
+separate from evidence collection. Task scope and the host/provider's normal
+permissions govern execution. Release readiness, audit results, specialist
+handoff, and loop/program completion remain evidence or workflow state. See
+[Host-Native Action Safety](action-safety.md).
 
 ## Mastery Path
 

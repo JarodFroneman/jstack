@@ -105,17 +105,12 @@ it. Missing or failed blocker/required evidence blocks synthesis. Public-web,
 commercial, payment, and regulated-data profiles also require a release-profile
 audit by default. Full-team approval remains staffing authority only.
 
-Default to local-only. Full-team approval authorizes staffing only. Repository
-creation, remote add/change, commit, push, pull-request creation, merge, tag,
-release, deployment, and production mutation each require their own exact
-signed one-time JStack external-action permit. Only the accountable Lead may
-run challenge -> the human runs the returned approval command outside Codex and
-types `APPROVE ONCE` -> authorize by ID -> fresh provider
-observation -> consume and then execute the exact action once before expiry.
-No specialist may request, sign, consume, or exercise that authority. Broad
-task verbs, wave/phase/remediation approval, readiness, or handoff never
-substitute, no token is pasted into chat, and no shell/provider path may bypass
-the boundary.
+JStack never generates approval challenges, tokens, signing commands, or
+terminal approval steps. Only the accountable Lead may perform repository,
+Git, provider, deployment, or production actions, and only within the user's
+explicit request plus normal Codex/provider permissions. Specialists remain
+unable to perform those actions. Full-team staffing approval, readiness, and
+handoff do not widen task scope or bypass the host's ordinary safety controls.
 
 Finish in the order outcome, evidence, residual risk, then an optional
 three-line mastery capsule. Do not emit eleven role-by-role lessons.

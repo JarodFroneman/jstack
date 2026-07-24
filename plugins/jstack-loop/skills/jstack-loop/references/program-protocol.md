@@ -137,8 +137,7 @@ A completed contract may be revalidated against a newer current Git subject.
 The latest completion proof is replaced only after all unchanged contract
 criteria pass again; prior proof remains in the immutable event history.
 
-The resulting session receipt proves that exact current state only. It
-authorizes no repository creation, remote add/change, commit, push,
-pull-request creation, merge, tag, release, deployment, or production mutation.
-Each remains local-only until the accountable Lead obtains and consumes its own
-exact signed v0.7 external-action permit.
+The resulting session receipt proves that exact current state only. It does not
+execute repository, Git, provider, release, deployment, or production actions.
+Those operations remain within explicit user scope and normal host/provider
+permissions; JStack adds no custom token or terminal approval step.
