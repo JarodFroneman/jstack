@@ -1,8 +1,11 @@
 # ADR 0006: Exact External-Action Authorization Boundary
 
-- Status: Accepted
+- Status: Superseded by [ADR 0008](0008-host-native-action-safety.md)
 - Date: 2026-07-21
 - Target release: 0.7.0
+
+> Historical record: this protocol shipped through v0.8.1 and was removed in
+> v0.8.2. It is not part of the current runtime or user workflow.
 
 ## Context
 

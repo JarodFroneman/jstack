@@ -11,7 +11,6 @@
     "security_review_for_sensitive_work",
     "launch_assurance_for_production",
     "release_approval_for_production",
-    "exact_external_action_authorization",
     "rollback_plan_for_production",
     "post_release_monitoring_for_production"
   ],
@@ -29,29 +28,6 @@
     "requiresRollbackPlan": true,
     "requiresCanaryOrMonitoring": true,
     "requiresCleanDiffCheck": true
-  },
-  "externalActions": {
-    "defaultMode": "local-only",
-    "requireSignedAuthorization": true,
-    "oneActionPerAuthorization": true,
-    "maxAuthorizationSeconds": 600,
-    "permitMaxAgeSeconds": 60,
-    "allowedIdentityProviders": [
-      "signed-local"
-    ],
-    "protectedActions": [
-      "repository_create",
-      "remote_add",
-      "remote_change",
-      "commit",
-      "push",
-      "pull_request_create",
-      "merge",
-      "tag_create",
-      "release_create",
-      "deploy",
-      "production_mutation"
-    ]
   },
   "security": {
     "secretScanRequired": true,
@@ -90,12 +66,8 @@
     "maxPhases": 100,
     "maxParallelPhases": 4,
     "maxActiveMinutes": 525600,
-    "requireSignedApprovals": true,
     "requireCurrentEvidence": true,
-    "requireFinalAudit": true,
-    "allowedIdentityProviders": [
-      "signed-local"
-    ]
+    "requireFinalAudit": true
   },
   "launch": {
     "requireReceiptForProduction": true,

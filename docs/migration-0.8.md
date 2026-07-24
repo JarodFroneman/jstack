@@ -1,5 +1,8 @@
 # Migrating To JStack 0.8
 
+> Historical guide: v0.8.2 removes the custom action-approval protocol carried
+> forward by this release. See [migration-0.8.2.md](migration-0.8.2.md).
+
 JStack 0.8 adds mandatory applicability-aware launch assurance for production
 release readiness. It upgrades the existing five commands and retains the v0.7
 local-only external-action boundary.

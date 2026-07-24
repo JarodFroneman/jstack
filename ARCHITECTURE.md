@@ -7,7 +7,6 @@ Canonical sources live in:
 - `mcp/jstack/jstack_mcp_server.py`
 - `mcp/jstack/capabilities/`
 - `mcp/jstack/audit/`
-- `mcp/jstack/authorization/`
 - `mcp/jstack/launch/`
 - `mcp/jstack/loop/`
 - `mcp/jstack/program/`
@@ -40,8 +39,7 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   evidence-bound finalization
 - durable Program -> Phase DAGs, intervention gates, child proofs, and final
   integration acceptance
-- signed exact external-action challenges, durable one-time consumption, and
-  short-lived execution permits
+- host-native action safety with no JStack approval token or terminal ceremony
 - commit-bound HMAC evidence receipts
 - release readiness evaluation
 - local context and mastery records
@@ -100,7 +98,7 @@ Production release readiness consumes the passing launch receipt. Public-web,
 commercial, payment, and regulated-data profiles elevate a repository-wide
 release audit to a mandatory gate by default. Launch tools perform no network,
 payment, provider, deployment, or production action and never expand the
-external-action authority boundary.
+user's explicit task scope.
 
 ## Loop Protocol
 
@@ -149,8 +147,9 @@ both a current session receipt and validated durable child-loop attestation.
 Declared outputs are hashed at phase completion and revalidated before program
 completion.
 
-Human decisions use signed configured identities, role coverage, quorum, and
-freshness. External gates use bounded hashed artifacts and provenance.
+Human decisions are recorded from the active conversation with named roles,
+quorum, contract binding, references, and freshness. External gates use
+bounded hashed artifacts and provenance.
 Waiting states pause active program time. Revisions invalidate changed phases
 and all transitive dependants while preserving unaffected current proof.
 
@@ -159,36 +158,21 @@ contracts, snapshots, events, operation records, and pending transactions live
 under `~/.jstack/programs` and fail closed on integrity drift. The live program
 manifest never mounts into the Git repository.
 
-## External-Action Authorization Protocol
+## Host-Native Action Safety
 
-Every project defaults to local-only. Eleven separately named actions cover
-repository creation, remote add/change, commit, push, pull-request creation,
-merge, tag creation, release creation, deployment, and production mutation.
-One challenge can contain exactly one action.
+JStack does not maintain a parallel approval system. There are no JStack
+challenge, authorize, consume, signer, mailbox, token, or terminal-approval
+components. Repository, Git, provider, deployment, and production operations
+are performed by the host only when they fit the user's explicit request and
+the host/provider's normal permissions.
 
-The challenge binds exact provider, owner, repository, visibility, remote,
-branch, tag, commit, and environment fields to the absolute project, complete
-workspace fingerprint, policy, current HEAD, attached branch, remote snapshot,
-tool version, and MCP session. A configured identity holding the action's exact
-role signs the canonical challenge outside Codex. The server verifies the
-signature and unchanged subject before issuing an unconsumed authorization.
-For `push`, `tag=not-applicable` selects a branch-only operation whose local
-branch tip must equal the full commit. An exact tag selects a tag-only operation
-whose local tag must peel to that commit, so release tag publication cannot
-reuse or hide inside a branch-push permit.
-
-Immediately before execution, the caller supplies a fresh provider observation
-of the same exact target. Destructive consumption revalidates every binding and
-returns a permit valid for at most 60 seconds. Authorization state is private
-and session-sealed under `~/.jstack/external-actions`. In-process consumption
-memory plus sealed state rejects same-session rollback and replay; MCP restart
-invalidates every prior receipt.
-
-The protocol grants no arbitrary execution capability. The external executor
-must perform one exact operation at most once, and command contracts forbid
-bypassing the permit through shell, Git, provider, browser, CI/CD, deployment,
-or production tools. This is a mandatory JStack workflow boundary, not an
-operating-system interceptor.
+The MCP reports evidence and readiness separately from execution. A passing
+audit, launch receipt, release-readiness result, human gate, specialist
+handoff, loop receipt, or program receipt never invokes an external operation.
+The accountable Lead resolves exact targets and rechecks state before
+irreversible work. Provider branch protection, protected environments,
+least-privilege credentials, and host isolation remain the enforcement layer
+for production-grade controls.
 
 ## Audit Protocol
 
@@ -257,12 +241,6 @@ all phase proof digests, current final evidence, project fingerprint, and
 program event head. Durable child proof is revalidated against its loop event
 chain and current declared output hashes.
 
-External-action authorization receipts additionally bind one action, the exact
-target and required role, challenge and attestation digests, current project
-subject, policy, tool version, and session. Consumption records bind a unique
-operation ID and fresh provider-observation digest. A permit is never a result
-receipt and cannot be reused, retried, widened, or promoted to another action.
-
 ## Security Boundary
 
 Git inspection neutralizes common external diff, prompt, fsmonitor, and global
@@ -286,13 +264,8 @@ are advisory process configuration; they do not remove host filesystem or
 network privileges. Quick therefore rejects all adapter execution, and
 untrusted verification requires an externally enforced read-only sandbox.
 
-The signed-local program identity provider uses environment-held HMAC keys.
-It proves shared-key possession and configured role only; it is not SSO or
-non-repudiation. Codex prepares and verifies challenges but must not sign on a
-human approver's behalf.
-
-The external-action signer has the same same-account/shared-key limitation and
-adds mandatory full challenge-digest confirmation. It prevents broad intent
-from being converted into a compliant JStack permit, but provider protections,
-least-privilege credentials, host tool restrictions, and an OS sandbox remain
-necessary against a malicious executor or account compromise.
+Program human decisions are caller-supplied conversational records. They bind
+the decision to the current contract, gate, named approver role, reference
+digest, and freshness window, but do not authenticate identity. Organizations
+needing SSO, non-repudiation, or separation of duties should enforce those
+controls in their host and provider workflows.

@@ -1,81 +1,51 @@
 # JStack Human Gates
 
-## Trust Boundary
+## Purpose
 
 Human gates represent accountable decisions that machine evidence cannot make.
-Codex may prepare a challenge and verify a returned signature. It must never
-create the decision, handle the private key, run the signer on the approver's
-behalf, or claim that silence is approval.
+They are recorded directly from the active Codex conversation. JStack v0.8.2
+does not use approval challenges, signing keys, tokens, mailbox responses, or
+terminal commands.
 
-JStack currently supports the `signed-local` identity provider. It proves possession
-of a configured shared key and role; it does not provide enterprise SSO,
-non-repudiation, or protection from compromise of the same operating-system
-account. Organizations can replace this provider in a future protocol version.
-
-## Configure Identities
-
-Copy `mcp/jstack/templates/jstack.program-identities.json` to a private path
-outside the repository. Map stable lowercase identity IDs to roles and to the
-name of an environment variable containing that identity's key:
-
-```json
-{
-  "schemaVersion": "jstack.program.identity-config.v1",
-  "identities": {
-    "alice": {
-      "roles": ["program-owner", "risk-owner"],
-      "hmacKeyEnv": "JSTACK_ALICE_APPROVER_KEY"
-    }
-  }
-}
-```
-
-Set `JSTACK_PROGRAM_IDENTITY_CONFIG` to that file path in the MCP process
-environment. Set each key environment variable to at least 32 bytes. Never put
-keys in Git, policy files, prompts, MCP arguments, screenshots, logs, or chat.
+The Lead must show the exact program, gate, proposed decision, approver
+identity, approver role, and bounded reference before resolution. The named
+person must explicitly approve or reject in the conversation. Silence,
+inference, a broad earlier request, or an agent-generated statement is not a
+decision.
 
 ## Resolve A Gate
 
-1. Codex calls `jstack_program_gate_challenge` with the program, gate, named
-   approver, decision, bounded validity, and an external approval reference.
-2. JStack verifies the identity has a required role and returns
-   `encodedPayload`. The payload binds program, contract, gate, identity,
-   decision, reference digest, issue/expiry times, and a nonce.
-3. The named person reviews the actual decision and runs the signer outside
-   Codex:
+1. Inspect `jstack_program_status` and identify the pending human gate.
+2. Show its description, required roles, quorum, freshness limit, and effect on
+   downstream phases.
+3. Obtain an explicit `approved` or `rejected` decision in the active
+   conversation.
+4. Call `jstack_program_gate_resolve` with:
+   - the exact `program_id` and `gate_id`;
+   - a stable lowercase `approver_id`;
+   - one `approver_role` required by the gate;
+   - the exact decision;
+   - a bounded, non-secret `approval_reference`; and
+   - a fresh stable `operation_id`.
+5. JStack binds the server-derived decision record to the current program
+   contract and gate digest, applies its freshness window, stores only the
+   reference digest, and updates role/quorum coverage.
 
-```text
-python ~/.codex/mcp/jstack/sign_program_approval.py \
-  --encoded-payload '<encodedPayload>' \
-  --key-env JSTACK_ALICE_APPROVER_KEY \
-  --approver-id alice
-```
+Multiple roles or quorum requirements need distinct approver identities. A
+fresh rejection blocks the gate. Expired decisions become pending again.
 
-The helper prints `<encodedPayload>.<signature>`. It accepts the key only from
-the environment, validates every payload field and freshness window, and never
-prints the key.
+## Trust And Operating Rules
 
-4. The operator returns the signed token. Codex calls
-   `jstack_program_gate_resolve` with a fresh operation ID.
-5. The MCP verifies signature, identity, role, quorum, decision, contract,
-   gate digest, nonce, and expiry before recording the attestation digest.
-
-Multiple roles and a quorum may be required. Distinct approver identities must
-cover every required role. A fresh rejection blocks the program. Expired
-approvals become pending again.
-
-## Operational Rules
-
-- Approval references identify an external decision record; they are not the
-  private key and must not contain secrets.
-- A new contract or gate digest invalidates the old signature.
+- The record is an auditable caller-supplied decision, not cryptographic proof
+  of identity, enterprise SSO, or legal non-repudiation.
+- Never invent an approver, role, reference, or decision.
+- A new contract or gate digest invalidates prior gate decisions.
 - Replacing a decision after dependent work completed invalidates downstream
   proof.
-- An approval does not waive machine criteria or release controls.
-- A program human-gate signature is not an external-action signature and can
-  never be converted into one. Repository creation, remote add/change, commit,
-  push, pull-request creation, merge, tag, release, deployment, and production
-  mutation each use the separate v0.7 challenge/authorize/consume protocol and
-  its own exact role, target, provider observation, expiry, and one-time permit.
+- A human decision never substitutes for machine criteria, security evidence,
+  launch assurance, release review, or external evidence.
+- Repository, Git, provider, deployment, and production actions use explicit
+  user scope plus normal Codex/provider permissions. JStack adds no custom
+  approval token or terminal ceremony.
 - A wait can last indefinitely in wall time while the active-time budget stays
   paused; freshness still applies when work resumes.

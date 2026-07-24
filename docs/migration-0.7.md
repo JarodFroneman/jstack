@@ -1,5 +1,8 @@
 # Migrating To JStack 0.7
 
+> Historical guide: v0.8.2 removes the custom action-approval protocol
+> described below. See [migration-0.8.2.md](migration-0.8.2.md).
+
 JStack 0.7 adds a mandatory local-only default and exact one-time authorization
 for repository, Git, release, deployment, and production actions. It upgrades
 the existing five commands; it does not add a sixth command.

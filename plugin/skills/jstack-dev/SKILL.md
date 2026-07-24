@@ -147,35 +147,18 @@ independently usable.
 
 ### Release
 
-- Default every project to local-only work. Repository creation, remote
-  add/change, commit, push, pull-request creation, merge, tag creation, release
-  creation, deployment, and production mutation are eleven separate protected
-  actions.
-- `implement`, `build`, `finish`, `ship`, `deploy`, `release`, phase approval,
-  remediation approval, team approval, and loop/program completion never grant
-  any protected-action authority, even when those words appear in the task.
-- Before each protected action, call `jstack_external_action_challenge` with
-  one action and the exact provider, owner, repository, visibility, remote name
-  and URL, branch, tag or `not-applicable`, full commit ID, and target
-  environment. Show the complete target, digest, and returned
-  `approvalCommand`, then wait for the named human to run that command outside
-  Codex, review the fields, type `APPROVE ONCE`, and confirm completion. Never
-  run the approver command, fabricate a response, or ask the human to paste a
-  signed token into chat.
-- Keep pushes ref-kind exact: `tag=not-applicable` is branch-only and requires
-  the local branch tip at `exactCommit`; an exact tag is tag-only and requires
-  that local tag to peel to `exactCommit`. A release tag therefore needs
-  separate tag-create, tag-push, and release-create authorizations.
-- Call `jstack_external_action_authorize` with only the project path and
-  authorization ID so JStack collects the private response automatically.
-  Immediately before execution, independently re-observe the provider target and call
-  `jstack_external_action_consume` with a fresh operation ID. Execute that one
-  exact action at most once before the returned permit expires. Failure,
-  retry, target drift, state drift, or the next action requires a new challenge.
-- Never bypass this boundary with shell, Git, GitHub/provider, browser, CI/CD,
-  deployment, or production tools. If the three authorization tools are
-  unavailable or the project is `artifact-only`, the protected action is
-  blocked; local editing, review, tests, and artifact generation may continue.
+- JStack adds no custom approval challenge, token, signer, mailbox, or terminal
+  approval step. Never ask the user to run or paste one.
+- Perform repository, Git, provider, deployment, and production actions only
+  when they are within the user's explicit request, the active task scope, and
+  normal Codex/provider permissions. Follow the host's ordinary approval UI
+  when it appears.
+- Resolve exact targets before irreversible operations, re-check current state,
+  and do not infer authority for a materially different repository, branch,
+  tag, environment, or action.
+- Keep action execution separate from readiness evidence. A passing audit,
+  launch receipt, release-readiness result, phase gate, or completion receipt
+  does not itself run an operation.
 - Use `jstack_ship_check` and `jstack_release_readiness` with current QA,
   security, and production launch-assurance receipts. Public-web, commercial,
   payment, and regulated-data profiles also require a release-profile audit by
@@ -185,11 +168,11 @@ independently usable.
   applicable typed launch evidence, approver reference, rollback plan, and
   monitoring or canary plan.
 - Release readiness is evidence only and `executionAuthorized` remains false.
-  Never equate implementation completion or readiness with action authority or
-  deployment completion.
+  Never equate implementation completion or readiness with deployment
+  completion.
 - `artifact-only` work may prepare direct operational evidence, but JStack
-  release readiness and v0.8 protected-action permits remain unavailable until
-  the authoritative source has a committed Git repository.
+  release readiness remains unavailable until the authoritative source has a
+  committed Git repository.
 
 ### Handoff
 

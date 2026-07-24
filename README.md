@@ -58,7 +58,7 @@ JStack makes those controls explicit.
 | A web/email/payment launch checklist is forgotten or applied to the wrong project | Explicit product surfaces select a versioned 37-control catalog and require fresh typed launch evidence |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
-| Release confidence, broad phase approval, or "deploy" becomes publication permission | Local-only default plus a signed, exact, short-lived, one-time permit for each repository, Git, release, deployment, or production action |
+| Release confidence or a broad phase request silently triggers publication | Evidence remains separate from execution; external actions stay within explicit user scope and normal host/provider permissions, with no JStack token or terminal ceremony |
 
 ## Operating Modes
 
@@ -108,8 +108,8 @@ flowchart LR
     E -- No --> F[Bounded revision or human gate]
     F --> C
     E -- Yes --> G[Completion receipt]
-    G --> H[Local-only boundary]
-    H --> I[One exact signed action permit]
+    G --> H[Explicit user scope]
+    H --> I[Host/provider action controls]
 ```
 
 JStack separates four concerns that ordinary prompts tend to collapse:
@@ -120,16 +120,16 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    change what.
 3. **Evidence**: bind tests, security coverage, review, approvals, and outputs
    to the current project state.
-4. **Authority**: report verified completion without treating it as permission
-   to create a repository, change a remote, commit, push, open a pull request,
-   merge, tag, release, deploy, or mutate production.
+4. **Action safety**: keep evidence separate from execution and perform
+   repository, Git, provider, deployment, or production actions only within
+   explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.8
+## What Ships In v0.8.2
 
 | Capability | What it provides |
 | --- | --- |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
-| External-action boundary | Local-only default; independently signed exact challenges; session/Git/policy/remote/provider binding; exact branch-only or tag-only pushes; fresh target observation; destructive one-time consumption; 60-second single-operation permits |
+| Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
 | Launch assurance | Explicit surface profiles, a versioned 37-control catalog, bounded typed evidence, fail-closed finalization, and a mandatory production launch receipt |
 | Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the existing five commands |
@@ -141,11 +141,11 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, transactional installers, and cross-platform CI |
 
-The MCP exposes 53 canonical `jstack_*` tools, including 14 generic
-`jstack_program_*` tools and the three-step `jstack_external_action_*`
-authorization protocol plus the three-step `jstack_launch_*` evidence protocol,
-in addition to the delivery, audit, loop, continuity, specialist-review, and
-mastery families. Legacy `gstack_*` aliases remain available for compatibility.
+The MCP exposes 49 canonical `jstack_*` tools, including 13 generic
+`jstack_program_*` tools and the three-step `jstack_launch_*` evidence
+protocol, in addition to the delivery, audit, loop, continuity,
+specialist-review, and mastery families. Legacy `gstack_*` aliases remain
+available for compatibility.
 
 ## Host Compatibility
 
@@ -271,18 +271,15 @@ release gate can require:
 - current specialist result and handoff receipts when multi-agent capability
   routing is used;
 - complete current-tree and release-range secret scanning;
-- explicit external approval, rollback, monitoring, and smoke-test references;
-- one independently signed and destructively consumed exact authorization for
-  each repository creation, remote add/change, commit, push, pull request,
-  merge, tag, release, deployment, or production mutation;
+- explicit release approval, rollback, monitoring, and smoke-test references;
 - revalidation after any material change or downstream invalidation.
 
-Completion means the acceptance contract passed. It does not grant protected
-action authority.
+Completion means the acceptance contract passed. It does not execute an
+external action or widen task scope.
 
-Release readiness also never grants authority: its result always includes
-`executionAuthorized=false`. Read the
-[external-action authorization boundary](docs/external-action-boundary.md).
+Release readiness is evidence only: its result always includes
+`executionAuthorized=false`. Read
+[Host-Native Action Safety](docs/action-safety.md).
 
 ## Trust Boundary
 
@@ -300,11 +297,11 @@ Release readiness also never grants authority: its result always includes
   messages, tool arguments, model output, or secret values.
 - Loop and program state under `~/.jstack/` is private local state, not a
   distributed lock or multi-tenant security boundary.
-- Signed-local human gates and external-action attestations prove possession of
-  a configured key. They are not enterprise identity, legal non-repudiation,
-  or organizational approval.
-- Protected-action approval uses a private local mailbox, so the operator
-  reviews and confirms a short command while signed tokens never enter chat.
+- Program human gates are caller-supplied conversational decision records.
+  They are not enterprise identity, legal non-repudiation, or organizational
+  approval.
+- JStack has no custom action-approval token or terminal flow. Stronger
+  separation of duties belongs in host and provider controls.
 - Audit receipts prove the collected scope, validated structure, and result
   calculation. They do not make every model-authored semantic finding true.
 - Artifact-only projects can use planning and direct operator evidence, but
@@ -318,7 +315,7 @@ environment.
 
 | Path | Purpose |
 | --- | --- |
-| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, capability registry, external-action authorization, delivery controls, audit, loop, program, schemas, curricula, and templates |
+| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
 | [`skills/`](skills/) | Canonical single-lead, audit, and loop skills |
 | [`prompts/`](prompts/) | Canonical slash-command prompts |
 | [`plugins/`](plugins/) | Five dedicated command plugins |
@@ -353,7 +350,8 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Launch assurance](docs/launch-assurance.md) | [v0.8 migration guide](docs/migration-0.8.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |
-| [v0.8.1 migration guide](docs/migration-0.8.1.md) | [External-action boundary](docs/external-action-boundary.md) |
+| [v0.8.2 migration guide](docs/migration-0.8.2.md) | [Host-native action safety](docs/action-safety.md) |
+| [v0.8.1 migration guide](docs/migration-0.8.1.md) | [v0.8 migration guide](docs/migration-0.8.md) |
 | [v0.6 migration guide](docs/migration-0.6.md) | [Architecture decisions](docs/adr/) |
 | [v0.5 migration guide](docs/migration-0.5.md) | [Third-party notices](THIRD_PARTY_NOTICES.md) |
 

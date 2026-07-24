@@ -68,43 +68,26 @@ Release readiness denies by default. It needs:
 Missing, malformed, stale, failed, blocked, skipped, timed-out, truncated, or
 inconclusive evidence is not a pass.
 
-Readiness is evidence, not authority. Its result always reports
+Readiness is evidence, not execution. Its result always reports
 `executionAuthorized=false`.
 
 Use [launch-assurance.md](launch-assurance.md) for profile declaration,
 per-control evidence, not-applicable rules, waivers, freshness, and the
 live-provider safety boundary.
 
-## External-Action Authority
+## Host-Native Action Safety
 
-Every project defaults to local-only. Repository creation, remote add/change,
-commit, push, pull-request creation, merge, tag creation, release creation,
-deployment, and production mutation are separate actions. No goal word,
-readiness result, audit result, phase approval, remediation approval,
-specialist handoff, or loop/program receipt authorizes one.
+JStack v0.8.2 has no approval challenge, token, signer, mailbox, or terminal
+approval step. Repository, Git, provider, deployment, and production actions
+use the user's explicit request and normal Codex/provider permissions.
 
-Each action requires one `jstack_external_action_challenge` bound to the exact
-provider, owner, repository, visibility, remote URL, branch, tag, full commit,
-target environment, current Git/workspace/policy state, branch, remote snapshot,
-tool version, and MCP session. A named role-holding human runs the returned
-approval command outside Codex, reviews the exact fields, and confirms
-`APPROVE ONCE`; JStack then collects the signed private response by
-authorization ID. Codex must not run the command or ask for a pasted token.
+The accountable Lead resolves exact targets, rechecks current state, follows
+ordinary host approval UI when it appears, and does not infer authority for a
+materially different action. Readiness results, audit results, human gates,
+specialist handoffs, and loop/program receipts remain evidence; they do not
+execute operations or widen task scope.
 
-For `push`, `tag=not-applicable` is a branch-only intent and the local branch
-tip must equal `exactCommit`. An exact tag is a tag-only intent and that local
-tag must peel to `exactCommit`. Do not push an annotated release tag under a
-branch-push permit: create the local tag, push that tag, wait for required tag
-CI, and create the release under three separate authorizations.
-
-After `jstack_external_action_authorize`, independently observe the exact
-provider target and call `jstack_external_action_consume`. The authorization is
-destroyed on consumption and returns a maximum 60-second permit for one exact
-operation. Failure, retry, drift, expiry, or another action requires a new
-challenge. Never use shell, Git, provider, browser, CI/CD, deployment, or
-production tooling to bypass this protocol.
-
-See [the complete boundary](../../../docs/external-action-boundary.md).
+See [Host-Native Action Safety](../../../docs/action-safety.md).
 
 ## Scanner Boundary
 

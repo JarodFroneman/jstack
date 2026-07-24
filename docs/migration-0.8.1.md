@@ -1,5 +1,8 @@
 # Migrating To JStack 0.8.1
 
+> Historical guide: v0.8.2 removes the approval mailbox, signer, tokens, and
+> terminal flow described below. See [migration-0.8.2.md](migration-0.8.2.md).
+
 JStack 0.8.1 keeps the 0.8.0 launch-assurance controls and the complete 0.7
 external-action boundary. It changes only the approval transport: signed
 capabilities move through a private local mailbox instead of chat.
