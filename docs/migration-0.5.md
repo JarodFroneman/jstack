@@ -1,5 +1,8 @@
 # Migrating To JStack 0.5
 
+> Historical guide: v0.8.2 replaces signed-local program gates with direct
+> conversational decision records. See [migration-0.8.2.md](migration-0.8.2.md).
+
 ## Scope
 
 Version 0.5 adds Program -> Phase orchestration and pause-aware child-loop

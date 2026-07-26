@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.8.2 - 2026-07-24
+
+### Removed
+
+- Removed the JStack external-action challenge, authorize, consume, HMAC
+  signer, private mailbox, identity template, schemas, policy floor, and
+  generated artifacts.
+- Removed the signed program-gate challenge, signer, identity configuration,
+  and token input.
+
+### Changed
+
+- Human program gates now record an explicit conversational decision directly
+  through `jstack_program_gate_resolve`, bound to the current program, gate,
+  required role, reference digest, freshness window, and decision digest.
+- External operations now rely on explicit user scope and normal Codex/provider
+  permissions. JStack never asks for an approval token or terminal command.
+- Existing v0.8.1 policy files remain loadable; retired custom-approval fields
+  are ignored with a migration warning.
+- Reduced the canonical MCP inventory from 53 to 49 tools and the Program tool
+  family from 14 to 13 tools.
+
+### Security
+
+- Read-only Audit, protected-path checks, QA/security receipts, launch
+  assurance, release evidence, rollback/monitoring requirements, exact
+  project-state binding, and provider-side protection guidance remain.
+- Conversational human-gate records are explicitly documented as auditable
+  caller-supplied decisions, not cryptographic identity, SSO, or
+  non-repudiation.
+
 ## 0.8.1 - 2026-07-22
 
 ### Added

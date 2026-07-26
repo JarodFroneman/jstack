@@ -44,8 +44,8 @@ planning call.
    with `jstack_launch_evidence_register`, and require a passing
    `jstack_launch_finalize` receipt. Blockers cannot be waived. Public-web,
    commercial, payment, and regulated-data profiles also require a
-   release-profile audit by default. Launch readiness never authorizes an
-   external action.
+   release-profile audit by default. Launch readiness is evidence and does not
+   execute an external action.
 9. In Git mode, submit the Lead's exact `jstack.specialist.result.v1` and
    metadata-only `jstack.specialist.telemetry.v1` through
    `jstack_specialist_result`, then validate the one-role set with
@@ -55,22 +55,14 @@ planning call.
 10. Report outcome, evidence, residual risk, then an optional three-line mastery
    capsule.
 
-Mandatory external-action boundary: default to local-only. Repository creation,
-remote add/change, commit, push, pull-request creation, merge, tag, release,
-deployment, and production mutation are separate actions. Broad task verbs or
-task/phase/remediation approval never authorize any of them. For each action,
-use challenge -> independently signed human attestation -> authorize -> fresh
-provider observation -> consume, then execute that exact operation once before
-permit expiry. Show the returned `approvalCommand`; the named human runs it
-outside Codex and types `APPROVE ONCE`, then authorize by ID so no signed token
-is pasted into chat. Never run the approver command, reuse a permit, retry after consumption,
-or bypass the boundary through shell, Git, provider, browser, CI/CD, deployment,
-or production tools. If the protocol is unavailable or the project is
-artifact-only, stop that action while continuing safe local work.
-For `push`, `tag=not-applicable` is branch-only and the exact local branch
-tip must match the commit; an exact tag is tag-only and the local tag must peel
-to that commit. Create, push, and release a version tag under three separate
-authorizations, with required tag CI before release publication.
+Native action safety: JStack never generates approval challenges, tokens,
+signing commands, or terminal approval steps. Repository, Git, provider,
+deployment, and production actions may be performed directly only when they
+are within the user's explicit request, the current task scope, and normal
+Codex/provider permissions. Keep exact targets visible, re-check state before
+irreversible work, follow the host's ordinary approval UI when it appears, and
+never infer permission for a materially different action. Audit remains
+read-only, and evidence/readiness results never execute actions by themselves.
 
 If the task grows beyond a single Lead Engineer, stop and recommend
 `/jstack-subagents` or `/jstack-full-team` rather than silently escalating.

@@ -63,13 +63,10 @@ process even if it passes schema validation.
 A successful assessment issues a short-lived, session-local receipt bound to
 the semantic contract input, context digest, Git HEAD and fingerprint, policy,
 tool version, and, for a revision, loop ID plus prior contract digest. The
-receipt authorizes only loop start or that exact revision. It does not approve
-implementation, protected files, push, deployment, or release.
-
-It also cannot enter or satisfy the v0.7 external-action boundary. Repository
-creation, remote add/change, commit, push, pull-request creation, merge, tag,
-release, deployment, and production mutation each require a distinct signed
-challenge and consumed one-time permit outside loop authority.
+receipt authorizes only loop start or that exact revision. It does not execute
+implementation, protected-file, Git, deployment, or release actions. Those
+actions stay within explicit user scope and normal host/provider permissions;
+JStack adds no custom token or terminal approval step.
 
 Every new loop also binds a server-routed capability contract: catalog version
 and digest, deterministic selection digest, goal digest, execution mode, exact
@@ -190,7 +187,7 @@ decision protocol. Codex Goal mode supplies continuation across turns.
   turns.
 - Treat user stop, approval wait, policy stop, and budget exhaustion as distinct
   outcomes.
-- Preserve sandbox, approval, Git, release, and deployment boundaries on every
+- Preserve sandbox, scope, Git, release, and deployment boundaries on every
   iteration.
-- Never call broad goal, checkpoint, revision, or completion approval an
-  external-action authorization.
+- Never treat broad goal, checkpoint, revision, or completion approval as
+  permission for a materially different action.

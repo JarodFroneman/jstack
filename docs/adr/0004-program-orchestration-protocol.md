@@ -1,5 +1,9 @@
 # ADR 0004: Program -> Phase Orchestration Protocol
 
+> Update: signed-local human-gate and external-action details in this
+> historical decision were superseded by
+> [ADR 0008](0008-host-native-action-safety.md) in v0.8.2.
+
 - Status: Accepted
 - Target release: 0.5.0
 - Date: 2026-07-16

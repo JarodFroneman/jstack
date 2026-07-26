@@ -117,28 +117,7 @@ tool_timeout_sec = 300.0
 Do not configure the MCP from both the shared installation and the umbrella
 plugin.
 
-### 3. Configure External-Action Identities When Needed
-
-Local editing, review, audit, and tests need no action identity. Repository
-creation, remote add/change, commit, push, pull-request creation, merge, tag,
-release, deployment, and production mutation fail closed until a signed-local
-identity is configured.
-
-Copy `mcp/jstack/templates/jstack.external-action-identities.json` to a private
-path outside all repositories, replace the example identity and roles, and set
-its key environment variable to at least 32 bytes. Set
-`JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG` in the MCP environment to that file.
-Restart Codex after changing the environment.
-
-The named human runs the challenge's returned `approvalCommand` outside Codex,
-reviews the exact action, and types `APPROVE ONCE`. The helper writes a private
-response that JStack collects by authorization ID; no token is pasted into
-chat. Never expose the key to Codex, place it in Git, or pass it through an MCP
-argument. Optionally set `JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND` in the MCP
-launcher to a short site-specific wrapper such as `jstack-approve`. See the
-[external-action boundary](external-action-boundary.md).
-
-### 4. Keep The Umbrella Plugin Uninstalled
+### 3. Keep The Umbrella Plugin Uninstalled
 
 The `plugin/` directory is an alternative all-in-one distribution. Installing
 it alongside the five dedicated plugins creates duplicate command surfaces.
@@ -210,8 +189,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`,
-`~/.jstack/external-actions/`, or mastery state during a routine upgrade.
+Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
+during a routine upgrade. A v0.8.2 upgrade may leave the retired
+`~/.jstack/external-actions/` directory untouched so rollback remains
+possible; the current runtime never reads it.
 
 ## Rollback
 
@@ -222,8 +203,10 @@ unless the target release explicitly documents an incompatible migration.
 After rollback, restart Codex and rerun the installed MCP smoke test before
 resuming work.
 
-Never reuse an external-action challenge, authorization, or permit after
-upgrade, rollback, or MCP restart. They are intentionally session/version-bound.
+JStack v0.8.2 needs no action-identity configuration, signing key, challenge
+file, approval token, mailbox response, or terminal approval command. Remove
+retired `JSTACK_EXTERNAL_ACTION_*` and `JSTACK_PROGRAM_IDENTITY_CONFIG`
+environment settings from the MCP launcher after confirming the upgrade.
 
 ## Troubleshooting
 

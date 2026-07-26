@@ -75,7 +75,6 @@ def main() -> int:
         "jstack_program_next",
         "jstack_program_phase_bind",
         "jstack_program_phase_complete",
-        "jstack_program_gate_challenge",
         "jstack_program_gate_resolve",
         "jstack_program_evidence_register",
         "jstack_program_pause",
@@ -83,14 +82,11 @@ def main() -> int:
         "jstack_program_revise",
         "jstack_program_cancel",
         "jstack_program_finalize",
-        "jstack_external_action_challenge",
-        "jstack_external_action_authorize",
-        "jstack_external_action_consume",
     }
     missing = required - names
     if missing:
         raise RuntimeError(f"missing tools: {sorted(missing)}")
-    if len(names) != 53:
+    if len(names) != 49:
         raise RuntimeError(f"unexpected canonical tool count: {len(names)}")
     print("jstack MCP JSONL smoke test passed")
     return 0

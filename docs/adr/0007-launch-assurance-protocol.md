@@ -1,5 +1,8 @@
 # ADR 0007: Applicability-Aware Launch Assurance
 
+> Update: external-action authorization details in this historical decision
+> were superseded by [ADR 0008](0008-host-native-action-safety.md) in v0.8.2.
+
 - Status: accepted
 - Date: 2026-07-22
 - Decision owners: JStack maintainers

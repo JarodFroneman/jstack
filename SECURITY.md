@@ -139,36 +139,27 @@ Loop mastery Stage 9 uses a separate assessor HMAC key from
 exact capstone evaluation, artifact set, Git state, rubric, and unseen
 challenge; it is not a runtime authorization credential.
 
-A loop completion receipt is not permission to create a repository, change a
-remote, commit, push, create a pull request, merge, tag, release, deploy, alter
-production, read secrets, weaken policy, or perform destructive Git operations.
-The first eleven actions each require their own exact signed and consumed v0.7
-external-action permit; project/user approval prose is not a substitute.
+A loop completion receipt does not execute repository, Git, provider,
+deployment, production, secret-access, policy, or destructive operations.
+Those actions remain governed by the user's explicit scope and the host and
+provider's normal permissions.
 
-## External-Action Safety
+## Host-Native Action Safety
 
-The external-action protocol binds one action to exact provider, repository,
-visibility, URL, refs, full commit, environment, current Git/workspace/policy
-state, branch, remote snapshot, tool version, and MCP session. A configured
-role holder signs the canonical challenge outside Codex. Authorization and
-one-time consumption repeat state checks, require a fresh exact provider
-observation, and return a permit valid for at most 60 seconds. Expiry, replay,
-retry, mismatch, state drift, or action escalation fails closed.
-Branch pushes require the exact local branch tip at the authorized commit.
-Tag pushes instead carry the exact tag and require that local tag to peel to
-the authorized commit; neither permit authorizes the other ref kind.
+JStack v0.8.2 has no custom action-approval challenge, signer, token, mailbox,
+authorization receipt, consumption step, or terminal command. The MCP remains
+an evidence and orchestration control plane; it does not perform GitHub,
+deployment, or production operations itself.
 
-Private challenge and consumption state under `~/.jstack/external-actions` is
-permission-restricted and session-sealed. Same-session memory rejects replay
-after local state rollback; restarting the MCP invalidates every receipt. This
-protects compliant JStack workflows from accidental inference and caller-side
-tampering, not from compromise of the same OS account.
+The accountable Lead resolves exact targets, checks current state, stays within
+the user's request, and follows any ordinary Codex or provider approval UI.
+JStack readiness, audit, gate, handoff, and completion receipts are evidence;
+they do not automatically execute an operation or widen task scope.
 
-The MCP never performs the protected operation and cannot intercept a separate
+Use branch protection, protected environments, least-privilege credentials,
+provider-side review rules, host tool allowlists, and OS/container isolation
+where stronger enforcement is required. JStack cannot intercept a separate
 process that directly invokes Git, a provider API, CI/CD, or production tools.
-Use provider branch protection, environment approvals, least-privilege
-credentials, host tool allowlists, and OS/container isolation for a boundary
-that must withstand a malicious or non-compliant executor.
 
 ## Program Safety
 
@@ -187,12 +178,12 @@ Parallel phases require explicit declarations, linked worktrees from the same
 Git common directory, disjoint top-level scopes, and policy capacity. This is a
 conservative conflict check, not proof that changes are semantically mergeable.
 
-Human gates currently use the `signed-local` provider. Identity configuration
-contains role and key-environment bindings; keys must remain outside Git and
-MCP arguments. The operator signer validates and signs an exact challenge
-outside Codex. HMAC proves possession of the shared local key, not enterprise
-SSO, non-repudiation, physical presence, or safety from compromise of the same
-OS account. Codex must not run the signer for the approver.
+Human gates record an explicit decision from the active conversation with an
+approver ID, required role, decision, reference digest, contract/gate binding,
+and freshness window. This is an auditable caller-supplied record, not
+cryptographic identity proof, enterprise SSO, legal non-repudiation, or proof
+of physical presence. The Lead must never invent a decision or treat silence
+as approval.
 
 External evidence and phase outputs are bounded regular files, confined to the
 project or `~/.jstack/evidence`, hashed without following the final symlink

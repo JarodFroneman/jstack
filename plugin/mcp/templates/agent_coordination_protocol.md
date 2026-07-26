@@ -52,9 +52,9 @@ documents unresolved risk.
 
 ## Stop Conditions
 
-- missing exact signed action authorization
-- repository, Git, release, deployment, or production action implied by broad
-  task, staffing, phase, or remediation approval
+- repository, Git, provider, release, deployment, or production action outside
+  explicit user scope or normal host/provider permissions
+- staffing, phase, remediation, or evidence state used to widen scope
 - secrets exposed
 - release blocker disagreement
 - unclear failing tests

@@ -1,5 +1,8 @@
 # ADR 0002: Bounded Loop Engineering Protocol
 
+> Update: external-action authorization details in this historical decision
+> were superseded by [ADR 0008](0008-host-native-action-safety.md) in v0.8.2.
+
 - Status: Accepted
 - Date: 2026-07-15
 - Target release: 0.4.0

@@ -73,8 +73,8 @@ receipt for every discovered command, complete current and release-history
 secret scan, a current production launch receipt, environment-specific approval
 reference, rollback, and monitoring. Policy-triggering launch surfaces also
 require a release-profile audit.
-Even a ready result reports `executionAuthorized=false`; evidence is not action
-authority.
+Even a ready result reports `executionAuthorized=false`; evidence is not
+execution.
 
 ## Tools
 
@@ -85,13 +85,10 @@ audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.
 
-The external-action tools are `jstack_external_action_challenge`,
-`jstack_external_action_authorize`, and `jstack_external_action_consume`. They
-bind exactly one action to provider, owner, repository, visibility, remote,
-branch, tag, full commit, environment, current project state, policy, version,
-and MCP session. Broad task or phase approval is never accepted.
-Push targets are ref-kind exact: `tag=not-applicable` is branch-only, while an
-exact local tag is tag-only; the selected ref must resolve to the full commit.
+JStack v0.8.2 has no custom action-approval tools. It never asks for an approval
+token, signing key, challenge file, mailbox response, or terminal command.
+External operations use explicit user scope and normal host/provider
+permissions.
 
 The launch tools are `jstack_launch_assess`,
 `jstack_launch_evidence_register`, and `jstack_launch_finalize`. They select
@@ -99,9 +96,9 @@ and validate evidence only; they perform no network, provider, payment,
 deployment, or production action.
 
 Program tools add project-derived phase DAGs, exact child-loop proofs,
-signed-local human gates, external artifact evidence, pause-aware active-time
-budgets, revisions, idempotent mutations, and final integrated acceptance.
-They do not hardcode a phase count or domain roadmap.
+conversational human-gate records, external artifact evidence, pause-aware
+active-time budgets, revisions, idempotent mutations, and final integrated
+acceptance. They do not hardcode a phase count or domain roadmap.
 
 Use `tools/list` after MCP initialization for the authoritative schemas.
 The capability-specific entry points are `jstack_capability_catalog`,
@@ -123,19 +120,10 @@ installs retain the previous Codex config backup and write the
 
 Restart Codex or open a new task after installation.
 
-Human program gates additionally require a private identity configuration and
-environment-held approver keys. Use the included
-`templates/jstack.program-identities.json`; named operators sign exact
-challenges with `sign_program_approval.py` outside Codex.
-
-Protected external actions use a separate private identity configuration. Use
-`templates/jstack.external-action-identities.json`, set
-`JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG`, and have the named operator run the
-returned approval command outside Codex. The helper reviews the exact request
-interactively, writes a private response, and JStack collects it by
-authorization ID without a pasted token. Set
-`JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND` for a short site-specific wrapper.
-Never expose the signing key to Codex.
+Human program gates are resolved directly after an explicit decision in the
+active conversation. The caller supplies the named approver, required role,
+decision, and bounded reference; JStack binds and timestamps the record. No
+identity configuration, shared key, signer, token, or terminal step exists.
 
 ## Verify
 

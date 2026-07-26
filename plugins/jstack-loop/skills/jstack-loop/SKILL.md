@@ -7,21 +7,15 @@ description: Run bounded JStack goal loops or durable multi-phase programs until
 
 Use Codex Goal mode for continuation and JStack for contracts, state, evidence,
 gates, circuit breakers, and terminal decisions. JStack is not an autonomous
-agent runtime. "Until done" never removes limits, approvals, or release gates.
+agent runtime. "Until done" never removes limits, human gates, or release
+evidence.
 
-Every loop and program defaults to local-only. Repository creation, remote
-add/change, commit, push, pull-request creation, merge, tag creation, release
-creation, deployment, and production mutation remain separate protected
-actions outside loop/program authority. A phase gate, revision approval,
-completion receipt, `implement`, `finish`, `ship`, `deploy`, or `release`
-request never substitutes for the exact external-action protocol. For each
-action, the accountable Lead must create one `jstack_external_action_challenge`,
-show the exact target, digest, and returned approval command, wait for the named
-human to run it outside Codex and type `APPROVE ONCE`, authorize by ID, obtain
-a fresh exact provider observation, consume it once, and execute only the
-exact operation before permit expiry. Never run the approver command, ask for
-a pasted token, or bypass the protocol through another tool. Any failure,
-retry, drift, or next action needs a new challenge.
+JStack adds no custom approval challenge, token, signer, mailbox, or terminal
+approval step. Never ask the user to run or paste one. A loop or program may
+perform repository, Git, provider, deployment, or production actions only when
+they are within the user's explicit request, the active task scope, and normal
+Codex/provider permissions. A goal, phase, gate, revision, or completion
+receipt does not widen that scope or bypass the host's ordinary safety UI.
 
 ## Select The Orchestration Level
 
@@ -121,10 +115,9 @@ worktree. Default implementation work to `L2`.
    evidence, a passing launch receipt, and a release audit whenever the profile
    contains a policy-triggering surface.
 6. Set ceilings for phase count, parallel phases, and active minutes. These
-   are safety limits, not a target plan size. Preserve blocked release and
-   production actions plus every v0.7 protected external action. They can be
-   executed only through a separately consumed permit, never removed from the
-   program contract.
+   are safety limits, not a target plan size. Preserve explicit scope,
+   destructive-operation, production-release, secret-access, and
+   policy-weakening constraints in the program contract.
 7. Call `jstack_program_goal_readiness`. Resolve at most three returned
    questions per round. Show the exact DAG preview and readiness digest, then
    wait for the user's factual confirmation.
@@ -158,10 +151,11 @@ worktree. Default implementation work to `L2`.
 6. Never advance a phase from a summary, subagent claim, human statement, or
    caller-supplied boolean. Only current child proof plus required gates moves
    the DAG.
-7. If a before/after/final human gate is pending, call
-   `jstack_program_gate_challenge`. A configured human runs the external signer
-   and returns the signed attestation; Codex must not sign it. Resolve it with a
-   unique `operation_id`.
+7. If a before/after/final human gate is pending, show the exact gate,
+   decision, approver identity, role, and reference in the conversation. After
+   the named person explicitly decides, call `jstack_program_gate_resolve`
+   directly with a unique `operation_id`. Never invent a decision or treat
+   silence as approval; no token or terminal command is involved.
 8. For an external gate, place a bounded artifact inside the project or
    `~/.jstack/evidence`, then call `jstack_program_evidence_register`. JStack
    records its hash, provenance reference, and expiry. Replacement invalidates
@@ -190,9 +184,8 @@ release-profile audit receipt, deterministic integrated review, declared
 artifacts, and a factual completion summary. Use a new stable `operation_id`.
 
 Complete the native Goal only after finalization returns a passed current
-program completion receipt. That receipt authorizes no repository creation,
-remote add/change, commit, push, pull-request creation, merge, tag, release,
-deployment, or production mutation.
+program completion receipt. That receipt is evidence, not execution, and does
+not widen the user's task scope or bypass normal host/provider permissions.
 
 Before cancelling, stop or finalize every active child loop. Call
 `jstack_program_cancel` with a reason and operation ID; preserve the auditable

@@ -98,16 +98,11 @@ accountable humans own legal and merchant decisions. The Lead alone registers
 and finalizes the exact selection. Missing, stale, failed, incomplete, or
 drifted blocker/required launch evidence blocks synthesis. Public-web,
 commercial, payment, and regulated-data profiles also require a current
-release-profile audit receipt by default. Full-team staffing is not launch or
-external-action authority.
+release-profile audit receipt by default. Full-team staffing does not widen
+task scope.
 
-Default to local-only. Full-team approval authorizes staffing only. Repository
-creation, remote add/change, commit, push, pull-request creation, merge, tag,
-release, deployment, and production mutation each require a separate exact
-signed one-time JStack external-action permit. Only the Lead may perform
-challenge -> the human runs the returned approval command outside Codex and
-types `APPROVE ONCE` -> authorize by ID -> fresh provider
-observation -> consume, followed by one exact operation before expiry. No
-specialist may request, sign, consume, or exercise this authority, and no broad
-verb, wave/phase/remediation approval, readiness, handoff, pasted token, shell,
-or provider path may substitute for or bypass it.
+JStack never generates approval challenges, tokens, signing commands, or
+terminal approval steps. Only the Lead may perform repository, Git, provider,
+deployment, or production actions, and only within the user's explicit request
+plus normal Codex/provider permissions. Specialists remain unable to perform
+those actions. Staffing approval, readiness, and handoff do not widen scope.

@@ -20,12 +20,6 @@ FILE_MAP = {
     ROOT / "mcp" / "jstack" / "jstack_mcp_server.py": [
         ROOT / "plugin" / "mcp" / "jstack_mcp_server.py",
     ],
-    ROOT / "mcp" / "jstack" / "sign_program_approval.py": [
-        ROOT / "plugin" / "mcp" / "sign_program_approval.py",
-    ],
-    ROOT / "mcp" / "jstack" / "sign_external_action_authorization.py": [
-        ROOT / "plugin" / "mcp" / "sign_external_action_authorization.py",
-    ],
     ROOT / "prompts" / "j-stack-dev.md": [ROOT / "plugin" / "commands" / "j-stack-dev.md"],
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
@@ -56,11 +50,6 @@ for source in sorted((ROOT / "mcp" / "jstack" / "audit").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "audit")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "audit" / relative]
-
-for source in sorted((ROOT / "mcp" / "jstack" / "authorization").rglob("*")):
-    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
-        relative = source.relative_to(ROOT / "mcp" / "jstack" / "authorization")
-        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "authorization" / relative]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "capabilities").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
@@ -138,6 +127,13 @@ TREE_MIRRORS = (
         ROOT / "skills" / "jstack-loop",
         ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop",
     ),
+)
+
+RETIRED_ARTIFACTS = (
+    ROOT / "plugin" / "mcp" / "sign_external_action_authorization.py",
+    ROOT / "plugin" / "mcp" / "sign_program_approval.py",
+    ROOT / "plugin" / "mcp" / "templates" / "jstack.external-action-identities.json",
+    ROOT / "plugin" / "mcp" / "templates" / "jstack.program-identities.json",
 )
 
 
@@ -254,6 +250,13 @@ def main() -> int:
             path.write_bytes(normalized_source(path))
 
     validate_tree_mirrors(errors, args.write)
+    for retired in RETIRED_ARTIFACTS:
+        if args.write and retired.exists():
+            retired.unlink()
+        elif retired.exists():
+            errors.append(
+                f"Retired generated artifact remains: {retired.relative_to(ROOT)}"
+            )
     managed_files = managed_text_files()
     for path in managed_files:
         if path.read_bytes().startswith(b"\xef\xbb\xbf"):

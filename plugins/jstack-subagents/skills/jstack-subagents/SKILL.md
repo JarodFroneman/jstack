@@ -92,13 +92,8 @@ If multi-agent tools are unavailable, state `No subagents deployed:` with the
 concrete reason. Retain `team_mode="smart-subagents"` in planning and apply
 its evidence rubric while one Lead performs the work.
 
-Default to local-only. Team approval authorizes staffing only. Repository
-creation, remote add/change, commit, push, pull-request creation, merge, tag,
-release, deployment, and production mutation each require a separate exact
-signed one-time JStack external-action permit. Only the Lead may perform
-challenge -> the human runs the returned approval command outside Codex and
-types `APPROVE ONCE` -> authorize by ID -> fresh provider
-observation -> consume, followed by one exact operation before expiry. No
-specialist may request, sign, consume, or exercise this authority, and no broad
-verb, phase/remediation approval, readiness, handoff, pasted token, shell, or
-provider path may substitute for or bypass it.
+JStack never generates approval challenges, tokens, signing commands, or
+terminal approval steps. Only the Lead may perform repository, Git, provider,
+deployment, or production actions, and only within the user's explicit request
+plus normal Codex/provider permissions. Specialists remain unable to perform
+those actions. Staffing approval, readiness, and handoff do not widen scope.

@@ -51,13 +51,9 @@ Never describe a Git rejection as an MCP attachment failure, and never treat
 "until done" as authority to bypass scope, security, release, deployment,
 budget, or human-approval boundaries.
 
-Default the complete loop/program to local-only. Repository creation, remote
-add/change, commit, push, pull-request creation, merge, tag, release,
-deployment, and production mutation are separate actions outside loop/program
-authority. For each one, the accountable Lead must use challenge -> the human
-runs the returned approval command outside Codex and types `APPROVE ONCE` ->
-authorize by ID -> fresh provider observation -> consume,
-then execute only that exact action once before permit expiry. A goal, phase,
-gate, revision, completion receipt, or broad verb never substitutes. Never run
-the approver command, ask for a pasted token, or bypass the protocol through
-another tool.
+JStack never generates approval challenges, tokens, signing commands, or
+terminal approval steps. A loop or program may perform repository, Git,
+provider, deployment, or production actions only when they are within the
+user's explicit request and normal Codex/provider permissions. Goals, phases,
+gates, revisions, and completion receipts do not widen that scope. Keep Audit
+read-only and keep evidence/readiness separate from execution.

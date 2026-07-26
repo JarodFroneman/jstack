@@ -1,8 +1,8 @@
 """Durable enterprise program orchestration for JStack."""
 
 from .protocol import (
-    APPROVAL_ATTESTATION_SCHEMA,
     EXTERNAL_EVIDENCE_SCHEMA,
+    HUMAN_DECISION_SCHEMA,
     MAX_ACTIVE_MINUTES,
     MAX_CRITERIA,
     MAX_GATES,
@@ -25,8 +25,8 @@ from .protocol import (
 )
 
 __all__ = [
-    "APPROVAL_ATTESTATION_SCHEMA",
     "EXTERNAL_EVIDENCE_SCHEMA",
+    "HUMAN_DECISION_SCHEMA",
     "MAX_ACTIVE_MINUTES",
     "MAX_CRITERIA",
     "MAX_GATES",

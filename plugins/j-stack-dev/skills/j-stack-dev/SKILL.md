@@ -48,28 +48,16 @@ eligible required waivers must remain owned, reasoned, expiring, compensated,
 and explicit about residual risk. Pass the current launch receipt to
 `jstack_release_readiness`; public-web, commercial, payment, and regulated-data
 profiles also require a release-profile audit by default. Readiness and launch
-receipts never authorize an external action.
+receipts are evidence and do not execute an external action.
 
-## Mandatory External-Action Boundary
+## Native Action Safety
 
-Default to local-only. Repository creation, remote add/change, commit, push,
-pull-request creation, merge, tag, release, deployment, and production mutation
-are separate protected actions. Broad verbs, task/phase/remediation approval,
-readiness, and loop/program completion never authorize them. For every action,
-the Lead must call `jstack_external_action_challenge`, show the exact target,
-digest, and returned `approvalCommand`, wait for the named human to run it
-outside Codex and type `APPROVE ONCE`, call
-`jstack_external_action_authorize` with only the project path and authorization
-ID, independently re-observe the provider
-target, and consume the receipt once with `jstack_external_action_consume`.
-Execute only that exact action once before permit expiry. Never run the
-approver command, ask for a pasted token,
-retry a consumed action, reuse authority, or bypass the boundary with shell,
-Git, provider, browser, CI/CD, deployment, or production tools. If the protocol
-is unavailable or the project is artifact-only, the action remains blocked.
-For `push`, `tag=not-applicable` is branch-only and the exact local branch
-tip must match the commit; an exact tag is tag-only and the local tag must peel
-to that commit. Create, push, and release a version tag under three separate
-authorizations, with required tag CI before release publication.
+JStack never generates approval challenges, tokens, signing commands, or
+terminal approval steps. Repository, Git, provider, deployment, and production
+actions may be performed directly only when they are within the user's explicit
+request, the active task scope, and normal Codex/provider permissions. Resolve
+exact targets, re-check state before irreversible work, follow the host's
+ordinary approval UI when it appears, and do not infer permission for a
+materially different action. Audit remains read-only.
 
 This command is for substantial development work. Tiny one-line fixes may use normal Codex workflow.

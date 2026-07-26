@@ -36,7 +36,6 @@ _SERVER_DIR = Path(__file__).resolve().parent
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 import audit as audit_core
-import authorization as authorization_core
 import capabilities as capability_core
 import launch as launch_core
 import loop as loop_core
@@ -44,7 +43,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.8.1"
+SERVER_VERSION = "0.8.2"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -71,13 +70,6 @@ LAUNCH_MAX_ARTIFACT_BYTES = 100_000_000
 LAUNCH_ARTIFACT_TIMEOUT_SECONDS = 30
 LAUNCH_SESSION_MAX_AGE_SECONDS = 30 * 60
 LAUNCH_RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
-PROGRAM_IDENTITY_CONFIG_ENV = "JSTACK_PROGRAM_IDENTITY_CONFIG"
-PROGRAM_IDENTITY_CONFIG_SCHEMA = "jstack.program.identity-config.v1"
-EXTERNAL_ACTION_IDENTITY_CONFIG_ENV = "JSTACK_EXTERNAL_ACTION_IDENTITY_CONFIG"
-EXTERNAL_ACTION_IDENTITY_CONFIG_SCHEMA = "jstack.external-action.identity-config.v1"
-EXTERNAL_ACTION_APPROVER_COMMAND_ENV = "JSTACK_EXTERNAL_ACTION_APPROVER_COMMAND"
-EXTERNAL_ACTION_MAX_RECEIPT_CHARS = 100_000
-EXTERNAL_ACTION_PERMIT_MAX_AGE_SECONDS = 60
 AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 AUDIT_CAPSTONE_ATTESTATION_SCHEMA = "jstack.audit.capstone-attestation.v1"
 AUDIT_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_AUDIT_ASSESSOR_HMAC_KEY"
@@ -118,7 +110,6 @@ GIT_REQUIRED_TOOLS = [
     "jstack_program_next",
     "jstack_program_phase_bind",
     "jstack_program_phase_complete",
-    "jstack_program_gate_challenge",
     "jstack_program_gate_resolve",
     "jstack_program_evidence_register",
     "jstack_program_pause",
@@ -126,9 +117,6 @@ GIT_REQUIRED_TOOLS = [
     "jstack_program_revise",
     "jstack_program_cancel",
     "jstack_program_finalize",
-    "jstack_external_action_challenge",
-    "jstack_external_action_authorize",
-    "jstack_external_action_consume",
 ]
 ARTIFACT_ONLY_RELEASE_BLOCKER = (
     "Git-backed JStack release readiness is unavailable until the authoritative source has a committed git repository."
@@ -594,7 +582,6 @@ DEFAULT_ENTERPRISE_POLICY: dict[str, Any] = {
         "security_review_for_sensitive_work",
         "launch_assurance_for_production",
         "release_approval_for_production",
-        "exact_external_action_authorization",
         "rollback_plan_for_production",
         "post_release_monitoring_for_production",
     ],
@@ -616,15 +603,6 @@ DEFAULT_ENTERPRISE_POLICY: dict[str, Any] = {
         "requiresRollbackPlan": True,
         "requiresCanaryOrMonitoring": True,
         "requiresCleanDiffCheck": True,
-    },
-    "externalActions": {
-        "defaultMode": "local-only",
-        "requireSignedAuthorization": True,
-        "oneActionPerAuthorization": True,
-        "maxAuthorizationSeconds": authorization_core.DEFAULT_AUTHORIZATION_SECONDS,
-        "permitMaxAgeSeconds": EXTERNAL_ACTION_PERMIT_MAX_AGE_SECONDS,
-        "allowedIdentityProviders": ["signed-local"],
-        "protectedActions": list(authorization_core.ACTIONS),
     },
     "security": {
         "secretScanRequired": True,
@@ -691,10 +669,8 @@ DEFAULT_ENTERPRISE_POLICY: dict[str, Any] = {
         "maxPhases": 100,
         "maxParallelPhases": 4,
         "maxActiveMinutes": 525_600,
-        "requireSignedApprovals": True,
         "requireCurrentEvidence": True,
         "requireFinalAudit": True,
-        "allowedIdentityProviders": ["signed-local"],
     },
     "launch": {
         "requireReceiptForProduction": True,
@@ -795,6 +771,24 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
     return result
 
 
+def normalize_policy_override(
+    value: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Remove v0.7/v0.8.1 custom-approval settings during a safe upgrade."""
+    normalized = json.loads(json.dumps(value))
+    ignored: list[str] = []
+    if "externalActions" in normalized:
+        normalized.pop("externalActions")
+        ignored.append("externalActions")
+    program_policy = normalized.get("program")
+    if isinstance(program_policy, dict):
+        for field in ("requireSignedApprovals", "allowedIdentityProviders"):
+            if field in program_policy:
+                program_policy.pop(field)
+                ignored.append("program." + field)
+    return normalized, ignored
+
+
 def _string_list(value: Any, field: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
         raise ToolError(f"JStack policy field '{field}' must be an array of non-empty strings.")
@@ -820,7 +814,6 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
             _string_list(value[field], field)
     for section in (
         "release",
-        "externalActions",
         "security",
         "audit",
         "quant",
@@ -862,10 +855,8 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
         "maxPhases",
         "maxParallelPhases",
         "maxActiveMinutes",
-        "requireSignedApprovals",
         "requireCurrentEvidence",
         "requireFinalAudit",
-        "allowedIdentityProviders",
     }
     unknown_program_fields = sorted(set(program_policy) - allowed_program_fields)
     if unknown_program_fields:
@@ -890,21 +881,11 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
                     % (field, maximum)
                 )
     for field in (
-        "requireSignedApprovals",
         "requireCurrentEvidence",
         "requireFinalAudit",
     ):
         if field in program_policy and not isinstance(program_policy[field], bool):
             raise ToolError("JStack policy program.%s must be boolean." % field)
-    if "allowedIdentityProviders" in program_policy:
-        providers = _string_list(
-            program_policy["allowedIdentityProviders"],
-            "program.allowedIdentityProviders",
-        )
-        if set(providers) - {"signed-local"}:
-            raise ToolError(
-                "JStack currently supports only the signed-local program identity provider."
-            )
     launch_policy = value.get("launch") or {}
     allowed_launch_fields = {
         "requireReceiptForProduction",
@@ -979,62 +960,6 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
             "JStack policy launch.requireReleaseAuditForSurfaces contains unsupported surfaces: "
             + ", ".join(unknown_launch_surfaces)
         )
-    external_policy = value.get("externalActions") or {}
-    allowed_external_fields = {
-        "defaultMode",
-        "requireSignedAuthorization",
-        "oneActionPerAuthorization",
-        "maxAuthorizationSeconds",
-        "permitMaxAgeSeconds",
-        "allowedIdentityProviders",
-        "protectedActions",
-    }
-    unknown_external_fields = sorted(set(external_policy) - allowed_external_fields)
-    if unknown_external_fields:
-        raise ToolError(
-            "JStack policy externalActions contains unsupported fields: "
-            + ", ".join(unknown_external_fields)
-        )
-    if "defaultMode" in external_policy and external_policy["defaultMode"] != "local-only":
-        raise ToolError("JStack policy externalActions.defaultMode must be local-only.")
-    for field in ("requireSignedAuthorization", "oneActionPerAuthorization"):
-        if field in external_policy and not isinstance(external_policy[field], bool):
-            raise ToolError(f"JStack policy externalActions.{field} must be boolean.")
-    for field, maximum in (
-        ("maxAuthorizationSeconds", authorization_core.MAX_AUTHORIZATION_SECONDS),
-        ("permitMaxAgeSeconds", EXTERNAL_ACTION_PERMIT_MAX_AGE_SECONDS),
-    ):
-        if field in external_policy:
-            configured = external_policy[field]
-            if (
-                not isinstance(configured, int)
-                or isinstance(configured, bool)
-                or not 1 <= configured <= maximum
-            ):
-                raise ToolError(
-                    f"JStack policy externalActions.{field} must be an integer from 1 to {maximum}."
-                )
-    if "allowedIdentityProviders" in external_policy:
-        providers = _string_list(
-            external_policy["allowedIdentityProviders"],
-            "externalActions.allowedIdentityProviders",
-        )
-        if set(providers) - {"signed-local"}:
-            raise ToolError(
-                "JStack currently supports only the signed-local external-action identity provider."
-            )
-    if "protectedActions" in external_policy:
-        actions = _string_list(
-            external_policy["protectedActions"], "externalActions.protectedActions"
-        )
-        unsupported = sorted(set(actions) - set(authorization_core.ACTIONS))
-        if unsupported:
-            raise ToolError(
-                "JStack policy externalActions.protectedActions contains unsupported actions: "
-                + ", ".join(unsupported)
-            )
-
-
 def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str, Any]:
     """Enforce minimum controls that a repository policy cannot weaken."""
     policy["schemaVersion"] = "jstack.enterprise.v1"
@@ -1055,29 +980,6 @@ def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str,
     )
     for key in ("requiresExplicitApproval", "requiresRollbackPlan", "requiresCanaryOrMonitoring", "requiresCleanDiffCheck"):
         policy.setdefault("release", {})[key] = True
-    external_policy = policy.setdefault("externalActions", {})
-    default_external = DEFAULT_ENTERPRISE_POLICY["externalActions"]
-    external_policy["defaultMode"] = "local-only"
-    external_policy["requireSignedAuthorization"] = True
-    external_policy["oneActionPerAuthorization"] = True
-    external_policy["maxAuthorizationSeconds"] = min(
-        int(external_policy.get("maxAuthorizationSeconds", default_external["maxAuthorizationSeconds"])),
-        int(default_external["maxAuthorizationSeconds"]),
-        authorization_core.MAX_AUTHORIZATION_SECONDS,
-    )
-    external_policy["permitMaxAgeSeconds"] = min(
-        int(external_policy.get("permitMaxAgeSeconds", default_external["permitMaxAgeSeconds"])),
-        int(default_external["permitMaxAgeSeconds"]),
-        EXTERNAL_ACTION_PERMIT_MAX_AGE_SECONDS,
-    )
-    external_policy["allowedIdentityProviders"] = ["signed-local"]
-    external_policy["protectedActions"] = _merge_unique(
-        list(authorization_core.ACTIONS),
-        _string_list(
-            external_policy.get("protectedActions", []),
-            "externalActions.protectedActions",
-        ),
-    )
     policy.setdefault("security", {})["secretScanRequired"] = True
     policy["security"]["sensitiveKeywords"] = _merge_unique(
         _string_list(DEFAULT_ENTERPRISE_POLICY["security"]["sensitiveKeywords"], "security.sensitiveKeywords"),
@@ -1127,10 +1029,8 @@ def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str,
             int(default_program[field]),
             absolute,
         )
-    program_policy["requireSignedApprovals"] = True
     program_policy["requireCurrentEvidence"] = True
     program_policy["requireFinalAudit"] = True
-    program_policy["allowedIdentityProviders"] = ["signed-local"]
     launch_policy = policy.setdefault("launch", {})
     default_launch = DEFAULT_ENTERPRISE_POLICY["launch"]
     launch_policy["requireReceiptForProduction"] = True
@@ -1214,14 +1114,19 @@ def load_enterprise_policy(project_path: Path) -> dict[str, Any]:
         parsed = read_policy_file(project_path, path)
         if parsed is None:
             raise ToolError(f"Could not parse JStack policy file: {path}")
-        validate_policy_override(parsed, path)
-        policy = apply_policy_floors(deep_merge(DEFAULT_ENTERPRISE_POLICY, parsed), project_path)
+        normalized, ignored_legacy_fields = normalize_policy_override(parsed)
+        validate_policy_override(normalized, path)
+        policy = apply_policy_floors(
+            deep_merge(DEFAULT_ENTERPRISE_POLICY, normalized), project_path
+        )
         policy["_sourcePath"] = str(path)
         policy["_usingDefault"] = False
+        policy["_ignoredLegacyFields"] = ignored_legacy_fields
         return policy
     policy = apply_policy_floors(json.loads(json.dumps(DEFAULT_ENTERPRISE_POLICY)), project_path)
     policy["_sourcePath"] = None
     policy["_usingDefault"] = True
+    policy["_ignoredLegacyFields"] = []
     return policy
 
 
@@ -2840,7 +2745,7 @@ def team_blocked_actions() -> list[str]:
     return [
         "Subagents must not spawn additional subagents.",
         "Subagents must not create repositories, add/change remotes, commit, push, create pull requests, merge, tag, release, deploy, delete data, reset git state, restart production, alter DNS/SSL, or modify production systems.",
-        "Only the accountable Lead may request and consume a separate exact JStack external-action authorization; team or phase approval never grants it.",
+        "Only the accountable Lead may perform external actions, and only within explicit user scope plus the host and provider's normal safety controls.",
         "Subagents must not edit files outside their assigned write scope.",
         "Subagents must not claim completion without evidence.",
         "Subagents must not duplicate another specialist's task unless comparison is explicitly requested.",
@@ -3914,17 +3819,12 @@ def tool_runtime_status(args: dict[str, Any]) -> dict[str, Any]:
         "transport": "stdio-jsonl",
         "sessionId": SERVER_SESSION_ID,
         "projectBinding": binding,
-        "externalActionBoundary": {
-            "defaultMode": "local-only",
-            "approvalTransport": "private-local-mailbox",
-            "tokenPasteRequired": False,
-            "protectedActions": list(authorization_core.ACTIONS),
-            "authorizationTools": [
-                "jstack_external_action_challenge",
-                "jstack_external_action_authorize",
-                "jstack_external_action_consume",
-            ],
-            "rule": "Each action requires its own signed, exact, short-lived, one-time session/Git/remote/target-bound authorization.",
+        "actionSafety": {
+            "mode": "host-native",
+            "customApprovalProtocol": False,
+            "approvalTokenRequired": False,
+            "terminalApprovalRequired": False,
+            "rule": "JStack relies on explicit user scope and the host/provider's normal permissions; it never asks the user to generate or paste an approval token or terminal command.",
         },
         "diagnostic": binding["diagnostic"],
     }
@@ -4101,8 +4001,8 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
             },
             "Release": {
                 "skill": "artifact-only release boundary",
-                "purpose": "Prepare local release artifacts and direct evidence only; v0.7 external-action authorization is unavailable without an exact Git subject, so deployment remains blocked.",
-                "doneWhen": "Direct release evidence is complete and the handoff states that JStack release readiness and protected external actions remain unavailable without Git.",
+                "purpose": "Prepare local release artifacts and direct evidence only; commit-bound JStack release readiness is unavailable without an exact Git subject.",
+                "doneWhen": "Direct release evidence is complete and the handoff states that JStack release readiness remains unavailable without Git.",
             },
             "Handoff": {
                 "skill": "direct handoff + durable memory",
@@ -4169,7 +4069,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         "policy": {
             "intent": "Use gstack as an enterprise workflow router and quality gate.",
             "noArbitraryShell": "Do not execute arbitrary shell commands through this MCP.",
-            "approvalBoundary": "Default to local-only. Repository creation, remote add/change, commit, push, pull request, merge, tag, release, deployment, and production mutation each require their own exact signed one-time JStack external-action permit; task, phase, remediation, loop, or program approval never substitutes.",
+            "actionSafety": "JStack adds no custom approval tokens or terminal ceremony. Perform repository, Git, provider, deployment, and production actions only within explicit user scope and the host/provider's normal permissions.",
             "productionBar": "Do not call work production-ready if required tests, security, QA, or docs for the risk class are missing.",
             "antiSlopStandard": "No fake data, fake test results, hidden assumptions, unverifiable completion claims, unrelated churn, or unapproved production mutation.",
             "masteryStandard": "For non-trivial work, include the skill stage, learning objective, expert mental model, benchmarks, review rubric, and next drill.",
@@ -7123,8 +7023,8 @@ def tool_ship_check(args: dict[str, Any]) -> dict[str, Any]:
             "Run focused tests for touched code.",
             "Run security scan for auth, secrets and external integration changes.",
             "Review the complete diff before requesting any protected action.",
-            "Treat this check as evidence only; consume a separate exact permit for every external action.",
-            "Save context after the local handoff or separately authorized operation.",
+            "Treat this check as evidence only; perform actions only when they are within explicit user scope and normal host/provider permissions.",
+            "Save context after the local handoff or completed operation.",
         ],
     }
 
@@ -7163,14 +7063,20 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
         required_actions.append("Document data source, contract assumptions, failure modes, and reconciliation/rollback path.")
     if "ui_product" in classification_ids:
         required_actions.append("Capture browser/visual QA evidence for changed user-facing flows.")
-    external_policy = policy.get("externalActions") or {}
+    ignored_legacy_fields = list(policy.get("_ignoredLegacyFields") or [])
+    if ignored_legacy_fields:
+        warnings.append(
+            "Ignored retired custom-approval policy fields: "
+            + ", ".join(ignored_legacy_fields)
+            + ". JStack v0.8.2 uses host-native action safety."
+        )
     if goal and re.search(
         r"\b(?:implement|build|finish|ship|deploy|release|publish|phase|remediat(?:e|ion))\b",
         goal,
         re.IGNORECASE,
     ):
         warnings.append(
-            "Goal verbs and phase/remediation approval do not authorize repository creation, remote changes, commit, push, pull request, merge, tag, release, deployment, or production mutation."
+            "Keep repository, Git, provider, deployment, and production actions within the user's explicit scope and normal host/provider permissions."
         )
 
     return {
@@ -7189,22 +7095,12 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
         "requiredActions": required_actions,
         "blockers": blockers,
         "warnings": warnings,
-        "externalActionBoundary": {
-            "defaultMode": external_policy.get("defaultMode", "local-only"),
-            "protectedActions": external_policy.get(
-                "protectedActions", list(authorization_core.ACTIONS)
-            ),
-            "signedAuthorizationRequired": True,
-            "oneActionPerAuthorization": True,
-            "authorizationRequestInGoal": False,
-            "requiredProtocol": [
-                "jstack_external_action_challenge",
-                "external human signature",
-                "jstack_external_action_authorize",
-                "fresh provider observation",
-                "jstack_external_action_consume",
-                "one exact operation before permit expiry",
-            ],
+        "actionSafety": {
+            "mode": "host-native",
+            "customApprovalProtocol": False,
+            "approvalTokenRequired": False,
+            "terminalApprovalRequired": False,
+            "explicitUserScopeRequired": True,
         },
         "policy": {key: value for key, value in policy.items() if not key.startswith("_")},
     }
@@ -7674,9 +7570,10 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
             "rawArtifactContentReturned": False,
             "semanticTruthCertified": False,
         },
-        "externalActionBoundary": {
-            "assessmentIsNotAuthority": True,
-            "protectedActions": list(authorization_core.ACTIONS),
+        "actionSafety": {
+            "assessmentIsNotExecution": True,
+            "mode": "host-native",
+            "customApprovalProtocol": False,
         },
     }
 
@@ -8129,9 +8026,10 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "launchReceipt": launch_receipt,
         "expiresAt": expires.isoformat(),
         "attestationLimit": "The receipt proves current contract-bound evidence records and named attestations, not independent semantic truth or legal certification.",
-        "externalActionBoundary": {
-            "launchReadyIsNotAuthority": True,
-            "protectedActions": list(authorization_core.ACTIONS),
+        "actionSafety": {
+            "launchReadyIsNotExecution": True,
+            "mode": "host-native",
+            "customApprovalProtocol": False,
         },
     }
 
@@ -8358,7 +8256,7 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
         "warnings": warnings,
         "approval": {
             "explicitReleaseRequested": explicit_release_requested,
-            "meaning": "Request to assess readiness only; never external-action authority.",
+            "meaning": "Request to assess readiness only; actual release execution remains a separate host/provider operation.",
             "approvedBy": approved_by,
             "approvalReference": approval_reference,
             "securityReviewedBy": security_reviewed_by,
@@ -8392,17 +8290,14 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "Tests and security checks are evidenced or explicitly blocked.",
             "Applicable launch controls are resolved by current typed evidence, explicit not-applicable proof, or a bounded non-blocker waiver.",
             "Rollback and monitoring are documented before production.",
-            "Every commit, push, pull request, merge, tag, release, deployment, or production mutation separately consumes its own exact JStack external-action permit.",
+            "External actions stay within explicit user scope and normal host/provider permissions; JStack adds no approval token or terminal ceremony.",
         ],
-        "externalActionBoundary": {
-            "defaultMode": "local-only",
-            "readinessIsNotAuthority": True,
-            "protectedActions": list(authorization_core.ACTIONS),
-            "requiredTools": [
-                "jstack_external_action_challenge",
-                "jstack_external_action_authorize",
-                "jstack_external_action_consume",
-            ],
+        "actionSafety": {
+            "readinessIsNotExecution": True,
+            "mode": "host-native",
+            "customApprovalProtocol": False,
+            "approvalTokenRequired": False,
+            "terminalApprovalRequired": False,
         },
     }
 
@@ -8605,7 +8500,6 @@ def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
         "goal_readiness_receipt",
         "program_readiness_receipt",
         "loop_completion_receipt",
-        "approval_attestation",
     }
 
     def visit(value: Any, field: str) -> None:
@@ -9201,7 +9095,8 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     assessment["receiptIssued"] = True
     assessment["receiptMeaning"] = (
         "Session-local proof that the exact goal context and contract were readiness-checked "
-        "against the current project state; it authorizes no implementation or external action."
+        "against the current project state; it executes no implementation or external action "
+        "and does not widen user scope."
     )
     return assessment
 
@@ -9394,672 +9289,6 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _external_action_call(operation: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-    try:
-        return operation()
-    except authorization_core.AuthorizationError as exc:
-        raise ToolError(str(exc)) from exc
-
-
-def _external_action_service(
-    project_path: Path,
-) -> authorization_core.AuthorizationService:
-    try:
-        return authorization_core.AuthorizationService(
-            Path.home(), project_path, SERVER_SESSION_ID, _RECEIPT_SECRET
-        )
-    except authorization_core.AuthorizationError as exc:
-        raise ToolError(str(exc)) from exc
-
-
-def _external_action_approval_command(request_path: str) -> str:
-    configured = str(
-        os.environ.get(EXTERNAL_ACTION_APPROVER_COMMAND_ENV) or ""
-    ).strip()
-    if configured:
-        if len(configured) > 2_000 or any(
-            ord(character) < 32 or ord(character) == 127
-            for character in configured
-        ):
-            raise ToolError("External-action approver command is invalid.")
-        command = [configured, "--request-file", request_path]
-    else:
-        command = [
-            sys.executable,
-            str(_SERVER_DIR / "sign_external_action_authorization.py"),
-            "--request-file",
-            request_path,
-        ]
-    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
-
-
-def _external_action_identity_config() -> dict[str, dict[str, Any]]:
-    configured = str(os.environ.get(EXTERNAL_ACTION_IDENTITY_CONFIG_ENV) or "").strip()
-    if not configured:
-        raise ToolError(
-            "%s must point to a private signed-local identity configuration before an external action can be authorized."
-            % EXTERNAL_ACTION_IDENTITY_CONFIG_ENV
-        )
-    path = Path(configured).expanduser()
-    if path.is_symlink() or not path.is_file():
-        raise ToolError("External-action identity configuration is missing or unsafe.")
-    metadata = path.stat()
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1_000_000:
-        raise ToolError(
-            "External-action identity configuration must be a regular file no larger than 1 MB."
-        )
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ToolError("External-action identity configuration is malformed.") from exc
-    if (
-        not isinstance(value, dict)
-        or set(value) != {"schemaVersion", "identities"}
-        or value.get("schemaVersion") != EXTERNAL_ACTION_IDENTITY_CONFIG_SCHEMA
-        or not isinstance(value.get("identities"), dict)
-        or not 1 <= len(value["identities"]) <= 100
-    ):
-        raise ToolError("External-action identity configuration schema is invalid.")
-    supported_roles = set(authorization_core.ACTION_ROLES.values())
-    identities: dict[str, dict[str, Any]] = {}
-    for identity_id, raw in value["identities"].items():
-        if not isinstance(identity_id, str) or not re.fullmatch(
-            r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", identity_id
-        ):
-            raise ToolError("External-action identity IDs must use lowercase hyphen-case.")
-        if not isinstance(raw, dict) or set(raw) != {"roles", "hmacKeyEnv"}:
-            raise ToolError("External-action identity records have unsupported fields.")
-        roles = raw.get("roles")
-        key_env = raw.get("hmacKeyEnv")
-        if (
-            not isinstance(roles, list)
-            or not roles
-            or len(roles) > len(supported_roles)
-            or not all(isinstance(role, str) and role in supported_roles for role in roles)
-            or len(set(roles)) != len(roles)
-            or not isinstance(key_env, str)
-            or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,100}", key_env)
-        ):
-            raise ToolError(
-                "External-action identity roles or key environment binding is invalid."
-            )
-        key = str(os.environ.get(key_env) or "").encode("utf-8")
-        if len(key) < 32:
-            raise ToolError(
-                "External-action identity %s requires at least 32 bytes in %s."
-                % (identity_id, key_env)
-            )
-        identities[identity_id] = {
-            "roles": sorted(roles),
-            "key": key,
-            "keyEnv": key_env,
-        }
-    return identities
-
-
-def _external_action_git_context(project_path: Path) -> dict[str, Any]:
-    branch_result = run_complete(
-        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
-        project_path,
-        timeout=10,
-        max_bytes=100_000,
-    )
-    if not branch_result["ok"]:
-        raise ToolError(
-            "External-action authorization requires an attached exact branch; detached HEAD is ambiguous."
-        )
-    try:
-        current_branch = branch_result["stdout"].decode("utf-8", errors="strict").strip()
-    except UnicodeDecodeError as exc:
-        raise ToolError("Current Git branch is not valid UTF-8.") from exc
-    if not current_branch or "\n" in current_branch or "\r" in current_branch:
-        raise ToolError("Current Git branch is missing or ambiguous.")
-    remotes_result = run_complete(
-        ["git", "remote"], project_path, timeout=10, max_bytes=100_000
-    )
-    if not remotes_result["ok"]:
-        raise ToolError("Could not inspect Git remotes for external-action binding.")
-    try:
-        remote_names = [
-            line.strip()
-            for line in remotes_result["stdout"].decode("utf-8", errors="strict").splitlines()
-            if line.strip()
-        ]
-    except UnicodeDecodeError as exc:
-        raise ToolError("Git remote names are not valid UTF-8.") from exc
-    if len(remote_names) > 100 or len(remote_names) != len(set(remote_names)):
-        raise ToolError("Git remote inventory is too large or ambiguous.")
-    remotes: list[dict[str, Any]] = []
-    for name in sorted(remote_names):
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name):
-            raise ToolError("Git contains a remote name that cannot be represented safely.")
-        url_sets: dict[str, list[str]] = {}
-        for label, extra in (("fetchUrls", []), ("pushUrls", ["--push"])):
-            result = run_complete(
-                ["git", "remote", "get-url", *extra, "--all", name],
-                project_path,
-                timeout=10,
-                max_bytes=100_000,
-            )
-            if not result["ok"]:
-                raise ToolError(f"Could not inspect Git remote '{name}' {label}.")
-            try:
-                urls = [
-                    line.strip()
-                    for line in result["stdout"].decode("utf-8", errors="strict").splitlines()
-                    if line.strip()
-                ]
-            except UnicodeDecodeError as exc:
-                raise ToolError("Git remote URL is not valid UTF-8.") from exc
-            if not urls or len(urls) > 20 or any(len(url) > 1000 for url in urls):
-                raise ToolError(
-                    f"Git remote '{name}' has missing or ambiguous {label}."
-                )
-            url_sets[label] = urls
-        remotes.append({"name": name, **url_sets})
-    return {
-        "currentBranch": current_branch,
-        "remotes": remotes,
-        "remoteSnapshotDigest": authorization_core.digest(remotes),
-    }
-
-
-def _external_action_binding(project_path: Path) -> dict[str, Any]:
-    subject = evidence_subject(project_path)
-    git_context = _external_action_git_context(project_path)
-    return {
-        "projectPath": subject["gitRoot"],
-        "gitHead": subject["gitHead"],
-        "projectFingerprint": subject["projectFingerprint"],
-        "policyDigest": subject["policyDigest"],
-        "toolVersion": SERVER_VERSION,
-        "serverSession": SERVER_SESSION_ID,
-        "currentBranch": git_context["currentBranch"],
-        "remoteSnapshotDigest": git_context["remoteSnapshotDigest"],
-    }
-
-
-def _remote_url_identity(remote_url: str) -> dict[str, str]:
-    scp_match = re.fullmatch(r"([^/@\s]+)@([^/:\s]+):(.+)", remote_url)
-    if scp_match:
-        username, host, raw_path = scp_match.groups()
-        if username != "git":
-            raise ToolError("SCP-style remote URLs must use the non-secret git username.")
-    else:
-        parsed = urllib.parse.urlsplit(remote_url)
-        if (
-            parsed.scheme not in {"https", "ssh"}
-            or not parsed.hostname
-            or parsed.password is not None
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ToolError(
-                "External remoteUrl must use HTTPS or SSH without credentials, query data, or fragments."
-            )
-        if parsed.username not in {None, "git"}:
-            raise ToolError("External remoteUrl must not embed a user or access token.")
-        host = parsed.hostname
-        raw_path = parsed.path
-    host = host.lower().rstrip(".")
-    parts = [urllib.parse.unquote(part) for part in raw_path.strip("/").split("/") if part]
-    if not parts or any(part in {".", ".."} for part in parts):
-        raise ToolError("External remoteUrl does not contain an exact repository path.")
-    if host == "dev.azure.com" and "_git" in parts:
-        marker = parts.index("_git")
-        if marker < 1 or marker + 1 != len(parts) - 1:
-            raise ToolError("Azure DevOps remoteUrl does not contain an exact owner/repository path.")
-        owner_parts = parts[:marker]
-        repository = parts[-1]
-    else:
-        owner_parts = parts[:-1]
-        repository = parts[-1]
-    if repository.endswith(".git"):
-        repository = repository[:-4]
-    if not owner_parts or not repository:
-        raise ToolError("External remoteUrl does not contain an exact owner and repository.")
-    if host == "github.com":
-        provider = "github"
-    elif host == "bitbucket.org":
-        provider = "bitbucket"
-    elif host == "dev.azure.com" or host.endswith(".visualstudio.com"):
-        provider = "azure-devops"
-    elif host == "gitlab.com" or "gitlab" in host:
-        provider = "gitlab"
-    else:
-        provider = "other"
-    return {
-        "provider": provider,
-        "owner": "/".join(owner_parts),
-        "repository": repository,
-    }
-
-
-def _validated_external_action_target(
-    project_path: Path,
-    action: str,
-    raw_target: Any,
-) -> dict[str, Any]:
-    try:
-        target = authorization_core.normalize_target(raw_target, action)
-    except authorization_core.AuthorizationError as exc:
-        raise ToolError(str(exc)) from exc
-    git_context = _external_action_git_context(project_path)
-    commit = target["exactCommit"]
-    commit_result = run_complete(
-        ["git", "rev-parse", "--verify", f"{commit}^{{commit}}"],
-        project_path,
-        timeout=10,
-        max_bytes=10_000,
-    )
-    if not commit_result["ok"] or _git_text(commit_result).strip().lower() != commit:
-        raise ToolError("target.exactCommit does not resolve to that exact local Git commit.")
-    branch_result = run_complete(
-        ["git", "check-ref-format", "--branch", target["branch"]],
-        project_path,
-        timeout=10,
-        max_bytes=10_000,
-    )
-    if not branch_result["ok"]:
-        raise ToolError("target.branch is not an exact valid Git branch name.")
-    if action in {"commit", "repository_create", "remote_add", "remote_change"}:
-        if commit != evidence_subject(project_path)["gitHead"]:
-            raise ToolError(f"{action} must bind exactCommit to the current HEAD.")
-    if action == "commit" and target["branch"] != git_context["currentBranch"]:
-        raise ToolError("commit must bind target.branch to the current attached branch.")
-
-    remote_map = {item["name"]: item for item in git_context["remotes"]}
-    if target["provider"] == "local-git":
-        if target["owner"] != "local" or target["repository"] != project_path.name:
-            raise ToolError(
-                "local-git actions require owner=local and repository equal to the project directory name."
-            )
-    else:
-        identity = _remote_url_identity(target["remoteUrl"])
-        if any(target[field] != identity[field] for field in ("provider", "owner", "repository")):
-            raise ToolError(
-                "target provider, owner, or repository does not match the exact remoteUrl."
-            )
-        remote_name = target["remoteName"]
-        existing = remote_map.get(remote_name)
-        if action in {"repository_create", "remote_add"}:
-            if existing is not None or any(
-                target["remoteUrl"] in item["fetchUrls"] + item["pushUrls"]
-                for item in remote_map.values()
-            ):
-                raise ToolError(
-                    f"{action} requires the exact remote name and URL to be absent locally."
-                )
-        elif action == "remote_change":
-            if existing is None or len(existing["fetchUrls"]) != 1:
-                raise ToolError(
-                    "remote_change requires one unambiguous existing URL for the named remote."
-                )
-            if existing["fetchUrls"][0] == target["remoteUrl"]:
-                raise ToolError("remote_change target already matches the existing remote URL.")
-        elif action == "push":
-            if existing is None or existing["pushUrls"] != [target["remoteUrl"]]:
-                raise ToolError(
-                    "push requires the named local remote to have exactly the authorized push URL."
-                )
-        elif action in {
-            "pull_request_create",
-            "merge",
-            "release_create",
-        }:
-            if existing is None or existing["fetchUrls"] != [target["remoteUrl"]]:
-                raise ToolError(
-                    f"{action} requires the named local remote to have exactly the authorized URL."
-                )
-        elif existing is not None and (
-            existing["fetchUrls"] != [target["remoteUrl"]]
-            or existing["pushUrls"] != [target["remoteUrl"]]
-        ):
-            raise ToolError(
-                "The named remote exists but does not exactly match the deployment/production target."
-            )
-
-    if action == "push":
-        if target["tag"] == authorization_core.NOT_APPLICABLE:
-            push_ref = f"refs/heads/{target['branch']}"
-            push_ref_kind = "branch"
-        else:
-            push_ref = f"refs/tags/{target['tag']}"
-            push_ref_kind = "tag"
-        push_ref_result = run_complete(
-            ["git", "rev-parse", "--verify", f"{push_ref}^{{commit}}"],
-            project_path,
-            timeout=10,
-            max_bytes=10_000,
-        )
-        if (
-            not push_ref_result["ok"]
-            or _git_text(push_ref_result).strip().lower() != commit
-        ):
-            raise ToolError(
-                f"push requires the exact local {push_ref_kind} to resolve to exactCommit."
-            )
-
-    if action in {"tag_create", "release_create"}:
-        tag_ref = f"refs/tags/{target['tag']}"
-        tag_result = run_complete(
-            ["git", "rev-parse", "--verify", f"{tag_ref}^{{commit}}"],
-            project_path,
-            timeout=10,
-            max_bytes=10_000,
-        )
-        if action == "tag_create" and tag_result["ok"]:
-            raise ToolError("tag_create requires the exact tag to be absent.")
-        if action == "release_create" and (
-            not tag_result["ok"] or _git_text(tag_result).strip().lower() != commit
-        ):
-            raise ToolError(
-                "release_create requires the exact local tag to resolve to exactCommit."
-            )
-    return target
-
-
-def _verify_external_action_attestation(
-    token: str,
-    authorization_id: str,
-    max_seconds: int,
-) -> dict[str, Any]:
-    if (
-        not isinstance(token, str)
-        or not token
-        or len(token) > EXTERNAL_ACTION_MAX_RECEIPT_CHARS
-    ):
-        raise ToolError("approval_attestation must be one bounded signed token.")
-    try:
-        encoded, supplied_signature = token.split(".", 1)
-        raw = _b64decode(encoded)
-        payload = json.loads(raw.decode("utf-8"))
-        normalized = authorization_core.validate_attestation_payload(
-            payload, max_seconds=max_seconds
-        )
-        if raw != authorization_core.canonical(normalized):
-            raise ValueError("non-canonical payload")
-        identity = _external_action_identity_config()[normalized["approverId"]]
-        expected_signature = _b64encode(
-            hmac.new(identity["key"], encoded.encode("ascii"), hashlib.sha256).digest()
-        )
-        if not hmac.compare_digest(supplied_signature, expected_signature):
-            raise ValueError("signature")
-    except Exception as exc:
-        raise ToolError(
-            "External-action attestation is malformed, unsigned, expired, non-canonical, or not issued by a configured identity."
-        ) from exc
-    if normalized["authorizationId"] != authorization_id:
-        raise ToolError("External-action attestation belongs to a different authorization ID.")
-    if normalized["requiredRole"] not in identity["roles"]:
-        raise ToolError("Configured identity lacks the exact role required for this action.")
-    return {
-        **normalized,
-        "identityRoles": identity["roles"],
-        "attestationDigest": hashlib.sha256(token.encode("utf-8")).hexdigest(),
-    }
-
-
-def tool_external_action_challenge(args: dict[str, Any]) -> dict[str, Any]:
-    project_path = require_project_path(args.get("project_path"))
-    action = str(args.get("action") or "")
-    approver_id = str(args.get("approver_id") or "").strip()
-    approval_reference = str(args.get("approval_reference") or "").strip()
-    if not approval_reference or len(approval_reference) > 500:
-        raise ToolError("A bounded external approval reference is required.")
-    if audit_core.contains_secret_like(approval_reference):
-        raise ToolError("Approval references must not contain secret-like values.")
-    identities = _external_action_identity_config()
-    identity = identities.get(approver_id)
-    if identity is None:
-        raise ToolError("Unknown or disabled signed-local external-action identity.")
-    required_role = authorization_core.ACTION_ROLES.get(action)
-    if required_role is None or required_role not in identity["roles"]:
-        raise ToolError("The selected identity does not hold the exact role required by this action.")
-    target = _validated_external_action_target(project_path, action, args.get("target"))
-    policy = load_enterprise_policy(project_path)
-    external_policy = policy["externalActions"]
-    requested_seconds = int(
-        args.get("valid_for_seconds")
-        or external_policy["maxAuthorizationSeconds"]
-    )
-    maximum_seconds = int(external_policy["maxAuthorizationSeconds"])
-    issued = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
-    authorization_id = (
-        "authorization-"
-        + issued.strftime("%Y%m%dT%H%M%SZ")
-        + "-"
-        + secrets.token_hex(6)
-    )
-    binding = _external_action_binding(project_path)
-    try:
-        payload = authorization_core.create_attestation_payload(
-            authorization_id=authorization_id,
-            action=action,
-            target=target,
-            binding=binding,
-            approver_id=approver_id,
-            approval_reference_digest=hashlib.sha256(
-                approval_reference.encode("utf-8")
-            ).hexdigest(),
-            nonce=secrets.token_hex(16),
-            valid_for_seconds=requested_seconds,
-            issued_at=issued,
-            max_seconds=maximum_seconds,
-        )
-    except authorization_core.AuthorizationError as exc:
-        raise ToolError(str(exc)) from exc
-    service = _external_action_service(project_path)
-    challenge = _external_action_call(lambda: service.create_challenge(payload))
-    mailbox = _external_action_call(
-        lambda: service.publish_approval_request(
-            authorization_id,
-            key_environment=identity["keyEnv"],
-        )
-    )
-    encoded = _b64encode(authorization_core.canonical(payload))
-    approval_command = _external_action_approval_command(mailbox["requestPath"])
-    return {
-        "schemaVersion": authorization_core.CHALLENGE_SCHEMA,
-        "authorizationId": authorization_id,
-        "challenge": payload,
-        "challengeDigest": challenge["challengeDigest"],
-        "encodedPayload": encoded,
-        "signatureAlgorithm": "HMAC-SHA256",
-        "keyEnvironment": identity["keyEnv"],
-        "approvalTransport": {
-            "mode": "private-local-mailbox",
-            "tokenPasteRequired": False,
-            "requestFile": mailbox["requestPath"],
-            "responseFile": mailbox["responsePath"],
-            "approvalCommand": approval_command,
-        },
-        "confirmationText": (
-            "AUTHORIZE JSTACK EXTERNAL ACTION "
-            + challenge["challengeDigest"]
-            + " ONCE"
-        ),
-        "signingRule": (
-            "The named human runs approvalCommand outside Codex, reviews every exact field, and confirms APPROVE ONCE. The helper writes a private response that JStack collects automatically; no token is pasted into chat. Codex must not run the approver command or create the approval."
-        ),
-        "authorityRule": (
-            "This challenge authorizes nothing. Implement, build, finish, ship, deploy, release, phase approval, remediation approval, and loop/program completion are never substitutes for this exact signed action."
-        ),
-    }
-
-
-def tool_external_action_authorize(args: dict[str, Any]) -> dict[str, Any]:
-    project_path = require_project_path(args.get("project_path"))
-    authorization_id = str(args.get("authorization_id") or "")
-    policy = load_enterprise_policy(project_path)
-    external_policy = policy["externalActions"]
-    service = _external_action_service(project_path)
-    supplied_attestation = str(args.get("approval_attestation") or "").strip()
-    if supplied_attestation:
-        token = supplied_attestation
-        approval_transport = "inline-legacy"
-    else:
-        response = _external_action_call(
-            lambda: service.approval_response(authorization_id)
-        )
-        token = str(response["approvalAttestation"])
-        approval_transport = "private-local-mailbox"
-    attestation = _verify_external_action_attestation(
-        token,
-        authorization_id,
-        int(external_policy["maxAuthorizationSeconds"]),
-    )
-    action = attestation["actionSet"][0]
-    _validated_external_action_target(project_path, action, attestation["target"])
-    current_binding = _external_action_binding(project_path)
-    grant = _external_action_call(
-        lambda: service.authorize(
-            authorization_id,
-            {
-                key: value
-                for key, value in attestation.items()
-                if key not in {"identityRoles", "attestationDigest"}
-            },
-            attestation_digest=attestation["attestationDigest"],
-            current_binding=current_binding,
-        )
-    )
-    service.clear_approval_mailbox(authorization_id)
-    subject = evidence_subject(project_path)
-    receipt = issue_receipt(
-        {
-            "kind": "external-action-authorization",
-            "schemaVersion": "jstack.external-action.authorization-receipt.v1",
-            "expiresAt": attestation["expiresAt"],
-            "projectPath": subject["gitRoot"],
-            "gitHead": subject["gitHead"],
-            "projectFingerprint": subject["projectFingerprint"],
-            "baseRef": subject.get("baseRef"),
-            "baseCommit": subject.get("baseCommit"),
-            "policyDigest": subject["policyDigest"],
-            "toolVersion": SERVER_VERSION,
-            "authorizationId": authorization_id,
-            "actionSet": attestation["actionSet"],
-            "requiredRole": attestation["requiredRole"],
-            "target": attestation["target"],
-            "bindingDigest": authorization_core.digest(attestation["binding"]),
-            "challengeDigest": grant["challengeDigest"],
-            "attestationDigest": attestation["attestationDigest"],
-            "approverId": attestation["approverId"],
-            "approvalReferenceDigest": attestation["approvalReferenceDigest"],
-            "passed": True,
-        }
-    )
-    return {
-        "schemaVersion": authorization_core.GRANT_SCHEMA,
-        "authorized": True,
-        "authorizationId": authorization_id,
-        "action": action,
-        "target": attestation["target"],
-        "expiresAt": attestation["expiresAt"],
-        "approvalTransport": approval_transport,
-        "tokenPasteUsed": approval_transport == "inline-legacy",
-        "authorizationReceipt": receipt,
-        "receiptMeaning": (
-            "A short-lived session/Git/remote/target-bound approval awaiting one destructive consumption. It is not an execution result and cannot authorize any other action."
-        ),
-    }
-
-
-def tool_external_action_consume(args: dict[str, Any]) -> dict[str, Any]:
-    project_path = require_project_path(args.get("project_path"))
-    receipt = str(args.get("authorization_receipt") or "")
-    if not receipt or len(receipt) > EXTERNAL_ACTION_MAX_RECEIPT_CHARS:
-        raise ToolError("A bounded authorization_receipt is required.")
-    action = str(args.get("action") or "")
-    operation_id = str(args.get("operation_id") or "")
-    subject = evidence_subject(project_path)
-    verification = verify_receipt(
-        receipt,
-        "external-action-authorization",
-        subject,
-        expected_subject=subject,
-    )
-    payload = verification["payload"]
-    if (
-        not verification["valid"]
-        or payload.get("schemaVersion")
-        != "jstack.external-action.authorization-receipt.v1"
-        or payload.get("actionSet") != [action]
-    ):
-        raise ToolError(
-            "Authorization receipt is stale, mismatched, escalated, or bound to another project state/action."
-        )
-    target = _validated_external_action_target(
-        project_path, action, payload.get("target")
-    )
-    current_binding = _external_action_binding(project_path)
-    if authorization_core.digest(current_binding) != payload.get("bindingDigest"):
-        raise ToolError(
-            "Git branch or remote state drifted after authorization; obtain a fresh exact approval."
-        )
-    observation = args.get("observation")
-    if isinstance(observation, dict) and audit_core.contains_secret_like(
-        str(observation.get("source") or "")
-    ):
-        raise ToolError("Provider observation references must not contain secret-like values.")
-    receipt_digest = hashlib.sha256(receipt.encode("utf-8")).hexdigest()
-    consumption = _external_action_call(
-        lambda: _external_action_service(project_path).consume(
-            str(payload.get("authorizationId") or ""),
-            action=action,
-            operation_id=operation_id,
-            authorization_receipt_digest=receipt_digest,
-            observation=observation,
-            current_binding=current_binding,
-        )
-    )
-    policy = load_enterprise_policy(project_path)["externalActions"]
-    now_utc = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
-    authorization_expiry = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
-    permit_expiry = min(
-        authorization_expiry,
-        now_utc
-        + _dt.timedelta(seconds=int(policy["permitMaxAgeSeconds"])),
-    )
-    if permit_expiry <= now_utc:
-        raise ToolError("Authorization expired before an execution permit could be issued.")
-    permit = issue_receipt(
-        {
-            "kind": "external-action-permit",
-            "schemaVersion": "jstack.external-action.permit.v1",
-            "expiresAt": permit_expiry.isoformat(),
-            "projectPath": subject["gitRoot"],
-            "gitHead": subject["gitHead"],
-            "projectFingerprint": subject["projectFingerprint"],
-            "baseRef": subject.get("baseRef"),
-            "baseCommit": subject.get("baseCommit"),
-            "policyDigest": subject["policyDigest"],
-            "toolVersion": SERVER_VERSION,
-            "authorizationId": payload["authorizationId"],
-            "operationId": operation_id,
-            "action": action,
-            "target": target,
-            "consumptionDigest": authorization_core.digest(consumption),
-            "passed": True,
-        }
-    )
-    return {
-        "schemaVersion": authorization_core.CONSUMPTION_SCHEMA,
-        "authorized": True,
-        "consumed": True,
-        "authorizationId": payload["authorizationId"],
-        "operationId": operation_id,
-        "action": action,
-        "target": target,
-        "permitExpiresAt": permit_expiry.isoformat(),
-        "executionPermit": permit,
-        "executionRule": (
-            "Execute this one exact action at most once before permit expiry. Do not retry, widen, substitute, or continue to another action; failure or any drift requires a new signed challenge."
-        ),
-    }
-
-
 def _program_service(project_path: Path) -> program_core.ProgramService:
     return program_core.ProgramService(Path.home(), project_path)
 
@@ -10160,194 +9389,73 @@ def _program_baseline_ancestry(project_path: Path, baseline: str) -> bool:
     return result["ok"] and _git_text(result).strip() == baseline
 
 
-def _program_identity_config() -> dict[str, dict[str, Any]]:
-    configured = str(os.environ.get(PROGRAM_IDENTITY_CONFIG_ENV) or "").strip()
-    if not configured:
-        raise ToolError(
-            "%s must point to a private signed-local identity configuration before human program gates can be resolved."
-            % PROGRAM_IDENTITY_CONFIG_ENV
-        )
-    path = Path(configured).expanduser()
-    if path.is_symlink() or not path.is_file():
-        raise ToolError("Program identity configuration is missing or unsafe.")
-    metadata = path.stat()
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1_000_000:
-        raise ToolError("Program identity configuration must be a regular file no larger than 1 MB.")
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ToolError("Program identity configuration is malformed.") from exc
-    if (
-        not isinstance(value, dict)
-        or value.get("schemaVersion") != PROGRAM_IDENTITY_CONFIG_SCHEMA
-        or not isinstance(value.get("identities"), dict)
-        or not 1 <= len(value["identities"]) <= 100
-    ):
-        raise ToolError("Program identity configuration schema is invalid.")
-    result: dict[str, dict[str, Any]] = {}
-    for identity, raw in value["identities"].items():
-        if not isinstance(identity, str) or not re.fullmatch(
-            r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", identity
-        ):
-            raise ToolError("Program identity IDs must use lowercase hyphen-case.")
-        if not isinstance(raw, dict):
-            raise ToolError("Program identity records must be objects.")
-        roles = raw.get("roles")
-        key_env = raw.get("hmacKeyEnv")
-        if (
-            not isinstance(roles, list)
-            or not roles
-            or len(roles) > 20
-            or not all(
-                isinstance(role, str)
-                and re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", role)
-                for role in roles
-            )
-            or not isinstance(key_env, str)
-            or not re.fullmatch(r"[A-Z][A-Z0-9_]{2,100}", key_env)
-        ):
-            raise ToolError("Program identity roles or key environment binding is invalid.")
-        key = str(os.environ.get(key_env) or "").encode("utf-8")
-        if len(key) < 32:
-            raise ToolError(
-                "Program identity %s requires at least 32 bytes in %s."
-                % (identity, key_env)
-            )
-        result[identity] = {
-            "roles": sorted(set(roles)),
-            "key": key,
-            "keyEnv": key_env,
-        }
-    return result
+def _canonical_program_payload(value: dict[str, Any]) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
-def _program_gate_challenge(
+def _program_human_decision(
     project_path: Path,
     program_id: str,
     gate_id: str,
     approver_id: str,
+    approver_role: str,
     decision: str,
     reference: str,
     valid_for_minutes: Optional[int],
 ) -> dict[str, Any]:
-    service = _program_service(project_path)
-    context = _program_call(lambda: service.gate_context(program_id, gate_id))
+    context = _program_call(
+        lambda: _program_service(project_path).gate_context(program_id, gate_id)
+    )
     gate = context["gate"]
     if gate["type"] != "human":
-        raise ToolError("Only human program gates use signed approval challenges.")
-    identities = _program_identity_config()
-    identity = identities.get(approver_id)
-    if identity is None:
-        raise ToolError("Unknown or disabled signed-local program identity.")
-    if not set(identity["roles"]) & set(gate["requiredRoles"]):
-        raise ToolError("The selected identity does not hold a role required by this gate.")
+        raise ToolError("Only human program gates accept conversational decisions.")
+    if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", approver_id):
+        raise ToolError("approver_id must use lowercase hyphen-case.")
+    if approver_role not in gate["requiredRoles"]:
+        raise ToolError("approver_role must be one of the roles required by this gate.")
     if decision not in {"approved", "rejected"}:
         raise ToolError("Program gate decision must be approved or rejected.")
     reference = str(reference or "").strip()
     if not reference or len(reference) > 500:
-        raise ToolError("A bounded external approval reference is required.")
+        raise ToolError("A bounded approval_reference is required.")
     if audit_core.contains_secret_like(reference):
         raise ToolError("Approval references must not contain secret-like values.")
-    requested = int(valid_for_minutes or min(60, int(gate["maxAgeMinutes"])))
-    if not 1 <= requested <= int(gate["maxAgeMinutes"]):
+    requested = valid_for_minutes
+    if requested is None:
+        requested = min(60, int(gate["maxAgeMinutes"]))
+    if (
+        not isinstance(requested, int)
+        or isinstance(requested, bool)
+        or not 1 <= requested <= int(gate["maxAgeMinutes"])
+    ):
         raise ToolError(
             "valid_for_minutes must be within the gate maximum of %d."
             % gate["maxAgeMinutes"]
         )
     issued = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
-    expires = issued + _dt.timedelta(minutes=requested)
-    payload = {
-        "schemaVersion": program_core.APPROVAL_ATTESTATION_SCHEMA,
+    record = {
+        "schemaVersion": program_core.HUMAN_DECISION_SCHEMA,
         "programId": program_id,
         "gateId": gate_id,
         "contractDigest": context["contractDigest"],
         "gateDigest": context["gateDigest"],
         "approverId": approver_id,
+        "roles": [approver_role],
         "decision": decision,
         "referenceDigest": hashlib.sha256(reference.encode("utf-8")).hexdigest(),
         "issuedAt": issued.isoformat(),
-        "expiresAt": expires.isoformat(),
-        "nonce": secrets.token_hex(16),
+        "expiresAt": (issued + _dt.timedelta(minutes=requested)).isoformat(),
     }
-    encoded = _b64encode(_canonical_program_payload(payload))
-    return {
-        "schemaVersion": "jstack.program.approval-challenge.v1",
-        "challenge": payload,
-        "encodedPayload": encoded,
-        "signatureAlgorithm": "HMAC-SHA256",
-        "keyEnvironment": identity["keyEnv"],
-        "requiredRoles": gate["requiredRoles"],
-        "identityRoles": identity["roles"],
-        "signingRule": (
-            "The named human approver signs encodedPayload with the private key in keyEnvironment; "
-            "Codex must not create or claim the approval."
-        ),
-    }
-
-
-def _canonical_program_payload(value: dict[str, Any]) -> bytes:
-    return json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-
-
-def _verify_program_approval_token(
-    token: str,
-    context: dict[str, Any],
-) -> dict[str, Any]:
-    if not isinstance(token, str) or not token or len(token) > PROGRAM_MAX_RECEIPT_CHARS:
-        raise ToolError("approval_attestation must be a bounded signed token.")
-    try:
-        encoded, supplied_signature = token.split(".", 1)
-        payload = json.loads(_b64decode(encoded).decode("utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError("payload")
-        approver_id = str(payload.get("approverId") or "")
-        identities = _program_identity_config()
-        identity = identities[approver_id]
-        expected_signature = _b64encode(
-            hmac.new(identity["key"], encoded.encode("ascii"), hashlib.sha256).digest()
-        )
-        if not hmac.compare_digest(supplied_signature, expected_signature):
-            raise ValueError("signature")
-        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
-        expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
-        if issued.tzinfo is None or expires.tzinfo is None:
-            raise ValueError("timezone")
-    except Exception as exc:
-        raise ToolError(
-            "Program approval attestation is malformed, unsigned, expired, or not issued by a configured identity."
-        ) from exc
-    gate = context["gate"]
-    now = _dt.datetime.now(_dt.timezone.utc)
-    checks = {
-        "schema": payload.get("schemaVersion")
-        == program_core.APPROVAL_ATTESTATION_SCHEMA,
-        "program": payload.get("programId") == context["programId"],
-        "gate": payload.get("gateId") == gate["id"],
-        "contract": payload.get("contractDigest") == context["contractDigest"],
-        "gateDigest": payload.get("gateDigest") == context["gateDigest"],
-        "decision": payload.get("decision") in {"approved", "rejected"},
-        "reference": isinstance(payload.get("referenceDigest"), str)
-        and bool(re.fullmatch(r"[0-9a-f]{64}", payload["referenceDigest"])),
-        "nonce": isinstance(payload.get("nonce"), str)
-        and bool(re.fullmatch(r"[0-9a-f]{32}", payload["nonce"])),
-        "fresh": issued <= now < expires,
-        "bounded": 0
-        < (expires - issued).total_seconds()
-        <= int(gate["maxAgeMinutes"]) * 60,
-        "role": bool(set(identity["roles"]) & set(gate["requiredRoles"])),
-    }
-    if not all(checks.values()):
-        raise ToolError("Program approval attestation does not match the current gate contract.")
-    return {
-        **payload,
-        "roles": identity["roles"],
-        "attestationDigest": hashlib.sha256(token.encode("utf-8")).hexdigest(),
-    }
+    record["decisionDigest"] = hashlib.sha256(
+        _canonical_program_payload(record)
+    ).hexdigest()
+    return record
 
 
 def _program_artifact_path(
@@ -10796,29 +9904,22 @@ def tool_program_phase_complete(args: dict[str, Any]) -> dict[str, Any]:
     return _program_status_integrity(project_path, result)
 
 
-def tool_program_gate_challenge(args: dict[str, Any]) -> dict[str, Any]:
-    _reject_loop_secret_inputs(args)
-    project_path = require_project_path(args.get("project_path"))
-    return _program_gate_challenge(
-        project_path,
-        str(args.get("program_id") or ""),
-        str(args.get("gate_id") or ""),
-        str(args.get("approver_id") or ""),
-        str(args.get("decision") or ""),
-        str(args.get("approval_reference") or ""),
-        args.get("valid_for_minutes"),
-    )
-
-
 def tool_program_gate_resolve(args: dict[str, Any]) -> dict[str, Any]:
+    _reject_loop_secret_inputs(args)
     operation_id = _program_operation_id(args)
     project_path = require_project_path(args.get("project_path"))
     program_id = str(args.get("program_id") or "")
     gate_id = str(args.get("gate_id") or "")
     service = _program_service(project_path)
-    context = _program_call(lambda: service.gate_context(program_id, gate_id))
-    approval = _verify_program_approval_token(
-        str(args.get("approval_attestation") or ""), context
+    approval = _program_human_decision(
+        project_path,
+        program_id,
+        gate_id,
+        str(args.get("approver_id") or ""),
+        str(args.get("approver_role") or ""),
+        str(args.get("decision") or ""),
+        str(args.get("approval_reference") or ""),
+        args.get("valid_for_minutes"),
     )
     result = _program_call(
         lambda: service.resolve_gate(
@@ -10843,7 +9944,7 @@ def tool_program_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
     context = _program_call(lambda: service.gate_context(program_id, gate_id))
     gate = context["gate"]
     if gate["type"] != "external":
-        raise ToolError("Human gates require signed identity attestations.")
+        raise ToolError("Human gates require a recorded conversational decision.")
     artifact_root, artifact_relative, artifact = _program_artifact_path(
         project_path, str(args.get("artifact_path") or "")
     )
@@ -11682,58 +10783,6 @@ PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
 }
 
 
-EXTERNAL_ACTION_TARGET_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": [
-        "provider",
-        "owner",
-        "repository",
-        "visibility",
-        "remoteName",
-        "remoteUrl",
-        "branch",
-        "tag",
-        "exactCommit",
-        "targetEnvironment",
-    ],
-    "properties": {
-        "provider": {
-            "type": "string",
-            "enum": list(authorization_core.PROVIDERS),
-        },
-        "owner": {"type": "string", "minLength": 1, "maxLength": 500},
-        "repository": {"type": "string", "minLength": 1, "maxLength": 100},
-        "visibility": {
-            "type": "string",
-            "enum": list(authorization_core.VISIBILITIES),
-        },
-        "remoteName": {"type": "string", "minLength": 1, "maxLength": 64},
-        "remoteUrl": {"type": "string", "minLength": 1, "maxLength": 1000},
-        "branch": {"type": "string", "minLength": 1, "maxLength": 255},
-        "tag": {"type": "string", "minLength": 1, "maxLength": 255},
-        "exactCommit": {"type": "string", "minLength": 40, "maxLength": 64},
-        "targetEnvironment": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-        },
-    },
-}
-
-EXTERNAL_ACTION_OBSERVATION_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["target", "providerTargetExists", "source", "observedAt"],
-    "properties": {
-        "target": EXTERNAL_ACTION_TARGET_SCHEMA,
-        "providerTargetExists": {"type": "boolean"},
-        "source": {"type": "string", "minLength": 1, "maxLength": 500},
-        "observedAt": {"type": "string", "minLength": 1, "maxLength": 100},
-    },
-}
-
-
 TOOLS: dict[str, dict[str, Any]] = {
     "gstack_capability_catalog": {
         "description": "Inspect the versioned JStack specialist capability registry or deterministically route bounded capabilities to existing core roles. Capabilities never grant tools, write access, or release authority.",
@@ -11859,103 +10908,6 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": tool_specialist_handoff_check,
         "readOnlyHint": True,
     },
-    "gstack_external_action_challenge": {
-        "description": "Create one exact short-lived signed-local challenge and private local approval request for a single repository, Git, release, deployment, or production action. The challenge grants no authority, and broad task or phase approval never satisfies it.",
-        "inputSchema": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "project_path",
-                "action",
-                "target",
-                "approver_id",
-                "approval_reference",
-            ],
-            "properties": {
-                "project_path": {"type": "string"},
-                "action": {
-                    "type": "string",
-                    "enum": list(authorization_core.ACTIONS),
-                },
-                "target": EXTERNAL_ACTION_TARGET_SCHEMA,
-                "approver_id": {"type": "string", "minLength": 1, "maxLength": 64},
-                "approval_reference": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500,
-                },
-                "valid_for_seconds": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": authorization_core.MAX_AUTHORIZATION_SECONDS,
-                },
-            },
-        },
-        "handler": tool_external_action_challenge,
-        "readOnlyHint": False,
-    },
-    "gstack_external_action_authorize": {
-        "description": "Collect a private local approval response (or accept a legacy inline attestation), verify it against the exact server challenge and unchanged session, Git, policy, branch, remote, provider, target, and expiry, then issue a still-unconsumed one-action receipt.",
-        "inputSchema": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "project_path",
-                "authorization_id",
-            ],
-            "properties": {
-                "project_path": {"type": "string"},
-                "authorization_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100,
-                },
-                "approval_attestation": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": EXTERNAL_ACTION_MAX_RECEIPT_CHARS,
-                    "description": "Deprecated compatibility transport. Omit to collect the signed response from the private local approval mailbox without pasting a token.",
-                },
-            },
-        },
-        "handler": tool_external_action_authorize,
-        "readOnlyHint": False,
-    },
-    "gstack_external_action_consume": {
-        "description": "Destructively consume one exact authorization after a fresh provider observation and unchanged session/Git/policy/branch/remote checks, returning a brief single-operation permit. Replay, retry, substitution, and escalation fail closed.",
-        "inputSchema": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "project_path",
-                "authorization_receipt",
-                "action",
-                "operation_id",
-                "observation",
-            ],
-            "properties": {
-                "project_path": {"type": "string"},
-                "authorization_receipt": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": EXTERNAL_ACTION_MAX_RECEIPT_CHARS,
-                },
-                "action": {
-                    "type": "string",
-                    "enum": list(authorization_core.ACTIONS),
-                },
-                "operation_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100,
-                },
-                "observation": EXTERNAL_ACTION_OBSERVATION_SCHEMA,
-            },
-        },
-        "handler": tool_external_action_consume,
-        "readOnlyHint": False,
-        "destructiveHint": True,
-    },
     "gstack_program_goal_readiness": {
         "description": "Assess a multi-phase JStack program contract, validate its dependency DAG and policy-required final gates, ask at most three blocking questions, require exact-digest confirmation, and issue a current readiness receipt.",
         "inputSchema": {
@@ -12063,8 +11015,8 @@ TOOLS: dict[str, dict[str, Any]] = {
         "handler": tool_program_phase_complete,
         "readOnlyHint": False,
     },
-    "gstack_program_gate_challenge": {
-        "description": "Create an exact contract-bound challenge for a configured signed-local human approver. This does not approve the gate; the named person must sign it outside Codex.",
+    "gstack_program_gate_resolve": {
+        "description": "Record an explicit human gate decision made in the active conversation, bind it to the current program, gate, role, reference, and freshness window, and update quorum state without any token or terminal signer.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -12072,47 +11024,40 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "program_id",
                 "gate_id",
                 "approver_id",
+                "approver_role",
                 "decision",
                 "approval_reference",
-            ],
-            "properties": {
-                "project_path": {"type": "string"},
-                "program_id": {"type": "string", "maxLength": 100},
-                "gate_id": {"type": "string", "maxLength": 64},
-                "approver_id": {"type": "string", "maxLength": 64},
-                "decision": {
-                    "type": "string",
-                    "enum": ["approved", "rejected"],
-                },
-                "approval_reference": {"type": "string", "maxLength": 500},
-                "valid_for_minutes": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": program_core.MAX_ACTIVE_MINUTES,
-                },
-            },
-        },
-        "handler": tool_program_gate_challenge,
-        "readOnlyHint": True,
-    },
-    "gstack_program_gate_resolve": {
-        "description": "Verify a signed-local identity token against the current program, gate, role, quorum, decision, and expiry, then record only its digest-bound approval metadata.",
-        "inputSchema": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": [
-                "program_id",
-                "gate_id",
-                "approval_attestation",
                 "operation_id",
             ],
             "properties": {
                 "project_path": {"type": "string"},
                 "program_id": {"type": "string", "maxLength": 100},
                 "gate_id": {"type": "string", "maxLength": 64},
-                "approval_attestation": {
+                "approver_id": {
                     "type": "string",
-                    "maxLength": PROGRAM_MAX_RECEIPT_CHARS,
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+                },
+                "approver_role": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+                },
+                "decision": {
+                    "type": "string",
+                    "enum": ["approved", "rejected"],
+                },
+                "approval_reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                },
+                "valid_for_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": program_core.MAX_ACTIVE_MINUTES,
                 },
                 "operation_id": {
                     "type": "string",
@@ -12649,7 +11594,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "object",
                     "description": "The actual coordination packet. Its required fields, roles, and file ownership are validated.",
                 },
-                "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release-classified team planning was requested; never external-action authority."},
+                "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release-classified team planning was requested; it does not execute a release."},
             },
         },
         "handler": tool_dispatch_check,
@@ -12664,7 +11609,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "base_ref": {"type": "string", "description": "Optional comparison ref. Defaults to upstream/main/master discovery."},
                 "goal": {"type": "string"},
                 "target_environment": {"type": "string", "default": "local"},
-                "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release policy assessment was requested; never external-action authority."},
+                "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release policy assessment was requested; it does not execute a release."},
                 "protected_path_approval": {"type": "string"},
             },
         },
@@ -12680,7 +11625,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "base_ref": {"type": "string", "description": "Optional comparison ref. Defaults to upstream/main/master discovery."},
                 "goal": {"type": "string"},
                 "target_environment": {"type": "string", "default": "local"},
-                "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release preflight was requested; never external-action authority."},
+                "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release preflight was requested; it does not execute a release."},
                 "protected_path_approval": {"type": "string"},
                 "strict": {"type": "boolean", "default": True},
                 "run_secret_scan": {"type": "boolean", "default": True},
@@ -12982,7 +11927,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_launch_finalize": {
-        "description": "Finalize the selected launch controls fail-closed and issue a current release-consumable launch receipt. Blocker controls cannot be waived; readiness never authorizes an external action.",
+        "description": "Finalize the selected launch controls fail-closed and issue a current release-consumable launch receipt. Blocker controls cannot be waived; readiness executes no external action.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -13035,7 +11980,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_release_readiness": {
-        "description": "Assess production-style release evidence with strict preflight, ship check, QA, security, applicability-aware launch assurance, conditional release audit, request/reference, rollback, monitoring, and canary inputs. Even ready=true returns executionAuthorized=false and never replaces exact external-action authorization.",
+        "description": "Assess production-style release evidence with strict preflight, ship check, QA, security, applicability-aware launch assurance, conditional release audit, request/reference, rollback, monitoring, and canary inputs. A passing result remains evidence; execution uses explicit user scope and normal host/provider permissions.",
         "inputSchema": {
             "type": "object",
             "required": ["base_ref"],
