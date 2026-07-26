@@ -111,9 +111,10 @@ worktree. Default implementation work to `L2`.
    artifacts, or other non-Codex evidence. Waiting is a durable pause.
 5. Define program-level final acceptance. Enterprise policy requires current
    security and deterministic integrated-review evidence. A production outcome
-   also requires an accountable launch-surface declaration, typed launch
-   evidence, a passing launch receipt, and a release audit whenever the profile
-   contains a policy-triggering surface.
+   also requires an accountable launch-surface/risk declaration, immutable
+   deployment fingerprint, reconciled detector hints, JStack-derived structured
+   requirement evidence, a passing v2 launch receipt, and a release audit
+   whenever the profile contains a policy-triggering surface.
 6. Set ceilings for phase count, parallel phases, and active minutes. These
    are safety limits, not a target plan size. Preserve explicit scope,
    destructive-operation, production-release, secret-access, and

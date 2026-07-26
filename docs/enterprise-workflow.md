@@ -18,7 +18,9 @@
 6. Implement the smallest coherent change.
 7. Review, test, QA, and security-check proportionally to risk.
 8. On a clean committed production candidate, declare applicable product
-   surfaces, register typed launch evidence, and finalize a launch receipt.
+   surfaces, risk tier, and deployment fingerprint; reconcile detected hints,
+   register every structured launch-evidence requirement, and finalize a v2
+   launch receipt.
 9. Run release readiness when requested; it reports evidence and does not
    execute a release.
 10. Perform external actions only within explicit user scope and normal
@@ -34,8 +36,12 @@
 - diff hygiene
 - commit-bound QA receipts for every discovered command
 - complete current-tree and release-history secret evidence
-- explicit `core` plus every applicable launch surface
-- a current passing launch receipt with typed per-control evidence
+- explicit `core` plus every applicable launch surface, a non-lowerable risk
+  tier, and accountable reconciliation of detected omissions
+- an immutable deployment fingerprint and a current passing launch receipt
+  with JStack-derived per-requirement evidence
+- independent scanner evidence at high risk and scanner plus independent human
+  security review at critical risk
 - a release-profile audit for public-web, commercial, payment, and
   regulated-data profiles
 - explicit base and environment-specific approval reference

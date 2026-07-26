@@ -1,0 +1,3129 @@
+{
+  "schemaVersion": "jstack.launch.controls.v2",
+  "catalogVersion": "2.0.0",
+  "sourceProvenance": {
+    "sources": [
+      {
+        "sourceUrl": "https://nicoburkart.notion.site/e6e88fff5ddf48a09248e2c8368445d1?v=3a293082ae3e81d0b778000c94c436d0&p=3a493082ae3e819bb4f0d4e52c1cc446&pm=s",
+        "reviewedAt": "2026-07-22",
+        "purpose": "Original 37-point launch checklist adapted in JStack v0.8."
+      },
+      {
+        "sourceUrl": "https://x.com/PrajwalTomar_/status/2080974596392837123",
+        "reviewedAt": "2026-07-26",
+        "purpose": "Security, cost, data-governance, and scanner gap analysis for Launch Assurance v2."
+      }
+    ],
+    "adaptationNotice": "JStack converts source checklist concerns into provider-neutral, risk-tiered engineering controls. Product names, fixed thresholds, legal generalizations, and unsupported guarantees are not copied as policy."
+  },
+  "surfaces": [
+    {
+      "id": "core",
+      "description": "Every production software change, including services without a public browser surface.",
+      "riskFloor": "low"
+    },
+    {
+      "id": "public-web",
+      "description": "An internet-reachable website, application, API, or documentation surface.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "browser-ui",
+      "description": "A user interface rendered and operated in a web browser.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "authenticated",
+      "description": "A surface with login, authorization, entitlements, or paywall decisions.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "cookie-authenticated",
+      "description": "A browser surface that authenticates state-changing requests with cookies.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "database",
+      "description": "A change that stores or reads application data from a database.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "transactional-email",
+      "description": "A product that sends signup, account, billing, or other transactional email.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "search-indexed",
+      "description": "A public surface intended to be discovered through search engines.",
+      "riskFloor": "low"
+    },
+    {
+      "id": "performance-sensitive",
+      "description": "A user-facing surface with an explicit latency or web-performance expectation.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "analytics",
+      "description": "A product that emits analytics events or product measurement data.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "payments",
+      "description": "A product that initiates, receives, or reconciles monetary transactions.",
+      "riskFloor": "critical"
+    },
+    {
+      "id": "commercial",
+      "description": "A product offered to customers, subscribers, or paying users.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "tracking",
+      "description": "A product using cookies, recordings, advertising, or non-essential behavioral tracking.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "ai-paid-endpoints",
+      "description": "An endpoint whose abuse creates meaningful AI inference cost.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "regulated-data",
+      "description": "A product handling financial, health, identity, or otherwise regulated data.",
+      "riskFloor": "critical"
+    },
+    {
+      "id": "public-form",
+      "description": "An unauthenticated or public workflow that accepts submitted user input.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "cross-origin-api",
+      "description": "A browser-consumed API intended to accept requests from one or more other origins.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "untrusted-input",
+      "description": "A server, worker, import, upload, webhook, or tool boundary that consumes untrusted input.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "cost-bearing-endpoints",
+      "description": "An endpoint whose abuse creates material vendor, storage, compute, messaging, or operational cost.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "personal-data",
+      "description": "A product collecting or processing identifiable personal data.",
+      "riskFloor": "high"
+    },
+    {
+      "id": "licensed-assets",
+      "description": "A product shipping third-party fonts, media, datasets, models, templates, or other licensed assets.",
+      "riskFloor": "medium"
+    },
+    {
+      "id": "software-supply-chain",
+      "description": "A product built from third-party packages, containers, generated code, or vendored components.",
+      "riskFloor": "medium"
+    }
+  ],
+  "riskTiers": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "riskModel": {
+    "highSecurityControlsAreBlockers": true,
+    "criticalRequiredControlsAreBlockers": true,
+    "criticalWaiversAllowed": false,
+    "independentScannerMinimumTier": "high",
+    "criticalHumanReviewRequired": true
+  },
+  "statuses": [
+    "pass",
+    "fail",
+    "incomplete",
+    "not-applicable",
+    "waived"
+  ],
+  "evidenceKinds": [
+    "automated-test",
+    "authorization-matrix",
+    "browser-test",
+    "code-review",
+    "configuration-snapshot",
+    "cost-control-report",
+    "data-map",
+    "datastore-probe",
+    "delivery-test",
+    "human-attestation",
+    "http-security-report",
+    "legal-document",
+    "license-report",
+    "manual-test",
+    "monitoring-report",
+    "penetration-test",
+    "performance-report",
+    "provider-receipt",
+    "sbom",
+    "security-scan"
+  ],
+  "artifactFormats": [
+    "jstack-json",
+    "sarif-2.1.0",
+    "scanner-json"
+  ],
+  "controls": [
+    {
+      "id": "security-database-row-access",
+      "sequence": 1,
+      "category": "security",
+      "title": "Enforce database row-level access boundaries",
+      "objective": "Prove that anonymous and cross-tenant access cannot read or mutate protected database rows outside the intended policy.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "database"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "configuration-snapshot",
+        "datastore-probe"
+      ],
+      "verificationMethods": [
+        "Inspect effective database policies",
+        "Run negative anonymous and cross-tenant access tests",
+        "Record any privileged-service bypass boundary"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "A framework setting or migration file alone is not proof that the effective production policy denies unintended access.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "effective-policy-snapshot",
+          "description": "Capture the effective datastore authorization policy and every privileged bypass boundary.",
+          "evidenceKinds": [
+            "configuration-snapshot"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "row-policy-enforced",
+            "privileged-bypass-documented"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        {
+          "id": "cross-tenant-probe-matrix",
+          "description": "Exercise anonymous and cross-tenant read and write attempts against protected records.",
+          "evidenceKinds": [
+            "datastore-probe",
+            "automated-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "anonymous-read-denied",
+            "anonymous-write-denied",
+            "cross-tenant-read-denied",
+            "cross-tenant-write-denied"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-server-side-authz",
+      "sequence": 2,
+      "category": "security",
+      "title": "Enforce authentication and entitlements on the server",
+      "objective": "Prove that protected data and actions remain inaccessible when browser checks, routes, or client state are bypassed.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "authenticated"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "authorization-matrix"
+      ],
+      "verificationMethods": [
+        "Trace authorization at the authoritative server boundary",
+        "Run unauthenticated and wrong-role negative tests",
+        "Verify paywall or entitlement decisions cannot be client-forged"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Client-side route guards and hidden controls are usability features, not authorization evidence.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "authorization-decision-matrix",
+          "description": "Exercise protected operations as unauthenticated, wrong-role, expired-session, and forged-entitlement principals.",
+          "evidenceKinds": [
+            "authorization-matrix",
+            "automated-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "unauthenticated-denied",
+            "wrong-role-denied",
+            "expired-session-denied",
+            "entitlement-server-enforced"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-environment-route-exposure",
+      "sequence": 3,
+      "category": "security",
+      "title": "Verify environment and diagnostic routes expose no secrets",
+      "objective": "Confirm that common environment, debug, source-map, backup, and diagnostic paths reveal no configuration or credentials.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "public-web",
+          "browser-ui"
+        ]
+      },
+      "evidenceKinds": [
+        "http-security-report",
+        "security-scan"
+      ],
+      "verificationMethods": [
+        "Probe common environment and backup paths",
+        "Review production error and debug behavior",
+        "Confirm source maps and diagnostics contain no secrets"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Evidence must record status and hashes, not secret values or raw sensitive responses.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "public-exposure-probes",
+          "description": "Probe environment, backup, debug, source-map, and diagnostic paths without retaining sensitive response bodies.",
+          "evidenceKinds": [
+            "http-security-report",
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "environment-routes-denied",
+            "debug-routes-disabled",
+            "backup-artifacts-unreachable",
+            "source-maps-secret-free"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-client-secret-exposure",
+      "sequence": 4,
+      "category": "security",
+      "title": "Keep privileged secrets out of client-delivered assets",
+      "objective": "Prove that browser bundles, source maps, static assets, logs, and public configuration contain no privileged credential.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "security-scan"
+      ],
+      "verificationMethods": [
+        "Scan built client artifacts",
+        "Trace privileged configuration to server-only boundaries",
+        "Verify exposed credentials are rotated rather than merely removed"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Public client identifiers may be acceptable only when their privilege model is documented and server-side controls remain authoritative.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "secret-egress-scan",
+          "description": "Scan client bundles, source maps, public configuration, logs, traces, and model context for privileged secrets.",
+          "evidenceKinds": [
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 5,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "client-bundle-scan-complete",
+            "source-map-scan-complete",
+            "log-and-trace-scan-complete",
+            "model-context-scan-complete",
+            "privileged-secret-findings-resolved"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-https-enforcement",
+      "sequence": 5,
+      "category": "security",
+      "title": "Enforce HTTPS and validate the deployed certificate",
+      "objective": "Verify secure transport, redirect behavior, certificate validity, and the absence of mixed active content on the intended public origin.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "public-web"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "http-security-report",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Validate certificate chain and hostname",
+        "Verify HTTP redirects safely to HTTPS",
+        "Check browser-visible mixed-content failures"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "devops",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Do not weaken certificate verification in order to make a launch check pass.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "transport-verification",
+          "description": "Verify the deployed certificate, redirect behavior, mixed content, and transport policy.",
+          "evidenceKinds": [
+            "http-security-report",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "certificate-valid",
+            "http-redirect-safe",
+            "mixed-active-content-absent",
+            "transport-policy-enforced"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-expensive-endpoint-rate-limits",
+      "sequence": 6,
+      "category": "security",
+      "title": "Rate-limit endpoints that create material cost or abuse risk",
+      "objective": "Prove that expensive AI, vendor, compute, or mutation endpoints have identity-aware limits and bounded failure behavior.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "ai-paid-endpoints",
+          "cost-bearing-endpoints"
+        ]
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "cost-control-report"
+      ],
+      "verificationMethods": [
+        "Exercise burst and sustained-rate limits",
+        "Verify limits cannot be bypassed by trivial identity changes",
+        "Confirm rejection paths do not invoke the costly dependency"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "A client-side debounce or button disable is not a server-side abuse boundary.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "abuse-limit-tests",
+          "description": "Exercise burst, sustained, concurrency, payload, and trivial-identity bypass limits before the costly dependency.",
+          "evidenceKinds": [
+            "automated-test",
+            "cost-control-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 5,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "burst-limit-enforced",
+            "sustained-limit-enforced",
+            "identity-bypass-denied",
+            "payload-and-concurrency-bounded",
+            "rejected-before-cost"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "security-server-input-validation",
+      "sequence": 7,
+      "category": "security",
+      "title": "Validate untrusted input at authoritative server boundaries",
+      "objective": "Prove that malformed, oversized, injected, and type-confused input is rejected or safely encoded before it reaches privileged operations.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "untrusted-input",
+          "public-form",
+          "cross-origin-api"
+        ]
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "security-scan"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "untrusted-boundary-tests",
+          "description": "Exercise malformed, oversized, injected, encoded, and type-confused inputs at authoritative server boundaries.",
+          "evidenceKinds": [
+            "automated-test",
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "allowlist-validation-enforced",
+            "parameterized-data-access",
+            "contextual-output-encoding",
+            "payload-and-upload-limits-enforced"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Exercise malformed, oversized, injected, encoded, and type-confused inputs at authoritative server boundaries."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Generic sanitization claims are insufficient; evidence must distinguish validation, parameterization, output encoding, and intentional HTML sanitization."
+    },
+    {
+      "id": "security-error-data-minimization",
+      "sequence": 8,
+      "category": "security",
+      "title": "Prevent public errors, APIs, logs, and telemetry from leaking sensitive data",
+      "objective": "Prove that failure paths resist account enumeration and expose only the minimum data needed by the caller and operator.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "public-web",
+          "authenticated",
+          "cross-origin-api",
+          "ai-paid-endpoints"
+        ]
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "http-security-report"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "error-and-output-leak-tests",
+          "description": "Exercise public failures and inspect bounded response, log, trace, and telemetry classifications.",
+          "evidenceKinds": [
+            "automated-test",
+            "http-security-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 5,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "public-errors-nondiagnostic",
+            "account-enumeration-resistant",
+            "api-responses-data-minimized",
+            "logs-and-telemetry-secret-free",
+            "correlation-identifiers-safe"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Exercise public failures and inspect bounded response, log, trace, and telemetry classifications."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Retained evidence must classify leaks without copying secrets, tokens, personal data, or raw production payloads."
+    },
+    {
+      "id": "security-auth-failure-matrix",
+      "sequence": 9,
+      "category": "security",
+      "title": "Exercise authentication, verification, recovery, and session failure states",
+      "objective": "Prove safe behavior for nonexistent users, repeated failures, expired or reused links, duplicate signup, recovery, and session expiry.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "authenticated"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "authorization-matrix"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "authentication-failure-matrix",
+          "description": "Exercise wrong, absent, expired, reused, duplicated, throttled, recovery, and session-expiry paths.",
+          "evidenceKinds": [
+            "authorization-matrix",
+            "automated-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 7,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "nonexistent-user-response-equivalent",
+            "repeated-failure-throttled",
+            "expired-link-denied",
+            "reused-link-denied",
+            "duplicate-signup-safe",
+            "recovery-path-tested",
+            "session-expiry-enforced"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Exercise wrong, absent, expired, reused, duplicated, throttled, recovery, and session-expiry paths."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Fixed lockout counts are not universal; controls must resist enumeration and denial-of-service while preserving owned recovery."
+    },
+    {
+      "id": "security-response-headers",
+      "sequence": 10,
+      "category": "security",
+      "title": "Verify deployed browser security headers and cookie attributes",
+      "objective": "Prove that the deployed response policy constrains script, framing, transport, sniffing, referrer, browser capabilities, and authentication cookies.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "public-web"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "http-security-report"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "deployed-header-verification",
+          "description": "Inspect deployed browser security headers and cookie attributes on representative routes.",
+          "evidenceKinds": [
+            "http-security-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 7,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "content-security-policy-enforced-or-owned-exception",
+            "frame-embedding-restricted",
+            "hsts-enforced",
+            "content-type-sniffing-disabled",
+            "referrer-policy-bounded",
+            "permissions-policy-bounded",
+            "secure-cookie-attributes-enforced"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Inspect deployed browser security headers and cookie attributes on representative routes."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "A missing header may require an owned, evidence-backed exception; copying a generic header set without compatibility testing is not a pass."
+    },
+    {
+      "id": "security-cors-policy",
+      "sequence": 11,
+      "category": "security",
+      "title": "Verify cross-origin API policy with negative tests",
+      "objective": "Prove that only intended browser origins receive the configured cross-origin access and credential behavior.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "cross-origin-api"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "http-security-report"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "cors-negative-matrix",
+          "description": "Exercise trusted, untrusted, null, credentialed, and preflight origin cases.",
+          "evidenceKinds": [
+            "automated-test",
+            "http-security-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 6,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "trusted-origins-explicit",
+            "untrusted-origin-denied",
+            "null-origin-denied-or-owned",
+            "credential-wildcard-absent",
+            "preflight-policy-enforced",
+            "vary-origin-correct"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Exercise trusted, untrusted, null, credentialed, and preflight origin cases."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "CORS is not authentication or CSRF protection and cannot satisfy either control."
+    },
+    {
+      "id": "security-csrf-protection",
+      "sequence": 12,
+      "category": "security",
+      "title": "Protect cookie-authenticated state changes from cross-site requests",
+      "objective": "Prove that unsafe state-changing browser requests require an effective CSRF boundary independent of CORS.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "cookie-authenticated"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "csrf-negative-tests",
+          "description": "Exercise cross-site state changes independently of CORS behavior.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "cross-site-state-change-denied",
+            "csrf-token-or-origin-check-enforced",
+            "samesite-cookie-policy-reviewed",
+            "unsafe-methods-protected"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Exercise cross-site state changes independently of CORS behavior."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Use framework protections or validated tokens, Origin or Fetch Metadata checks, and appropriate SameSite policy for the actual architecture."
+    },
+    {
+      "id": "security-cost-abuse-controls",
+      "sequence": 13,
+      "category": "security",
+      "title": "Bound spend, resource consumption, and emergency exposure",
+      "objective": "Prove inventory, quotas, provider ceilings, alerts, anomaly response, and an owned kill switch for materially cost-bearing operations.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "cost-bearing-endpoints",
+          "ai-paid-endpoints"
+        ]
+      },
+      "evidenceKinds": [
+        "configuration-snapshot",
+        "cost-control-report",
+        "monitoring-report"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "cost-boundary-inventory",
+          "description": "Inventory cost-bearing operations and prove identity, tenant, payload, concurrency, and provider ceilings.",
+          "evidenceKinds": [
+            "configuration-snapshot",
+            "cost-control-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "cost-bearing-operations-inventoried",
+            "per-identity-or-tenant-quotas-enforced",
+            "payload-and-concurrency-ceilings-enforced",
+            "provider-hard-cap-or-equivalent-enforced"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        {
+          "id": "cost-operations-response",
+          "description": "Prove owned spend alerts, anomaly detection, and a tested emergency disable path.",
+          "evidenceKinds": [
+            "monitoring-report",
+            "cost-control-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 3,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "spend-alert-owned-and-delivered",
+            "cost-anomaly-alert-owned-and-delivered",
+            "emergency-kill-switch-tested"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Inventory cost-bearing operations and prove identity, tenant, payload, concurrency, and provider ceilings.",
+        "Prove owned spend alerts, anomaly detection, and a tested emergency disable path."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Rate limiting alone cannot satisfy this control; limits must reflect endpoint cost, tenant, payload, concurrency, and downstream provider behavior."
+    },
+    {
+      "id": "security-final-independent-scan",
+      "sequence": 14,
+      "category": "security",
+      "title": "Import independent final security evidence",
+      "objective": "Require normalized, complete, target-bound independent scanner evidence at high risk and an additional independent human review at critical risk.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "high",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "manual-test",
+        "penetration-test",
+        "security-scan"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "independent-security-scan",
+          "description": "Import a complete, target-bound independent security scan in normalized SARIF or bounded JSON.",
+          "evidenceKinds": [
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "sarif-2.1.0",
+            "scanner-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": true,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "scan-complete",
+            "scope-covered",
+            "target-bound",
+            "no-unresolved-critical",
+            "no-unresolved-high"
+          ],
+          "appliesAtRiskTiers": [
+            "high",
+            "critical"
+          ]
+        },
+        {
+          "id": "critical-human-security-review",
+          "description": "Record an independent human or penetration-test review for a critical launch.",
+          "evidenceKinds": [
+            "manual-test",
+            "penetration-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 2,
+          "independent": true,
+          "machineVerifiable": false,
+          "requiredAssertions": [
+            "critical-human-review-complete",
+            "critical-residual-risk-owned"
+          ],
+          "appliesAtRiskTiers": [
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Import a complete, target-bound independent security scan in normalized SARIF or bounded JSON.",
+        "Record an independent human or penetration-test review for a critical launch."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Untriaged scanner output does not automatically prove failure or safety; unresolved high or critical findings, stale scope, truncation, and target mismatch fail closed."
+    },
+    {
+      "id": "email-domain-authentication",
+      "sequence": 15,
+      "category": "email",
+      "title": "Configure and verify SPF, DKIM, and DMARC",
+      "objective": "Confirm that the deployed sending domain has aligned authentication records and an intentional DMARC policy.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "transactional-email"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "configuration-snapshot",
+        "delivery-test",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Inspect live DNS records",
+        "Verify message authentication headers",
+        "Confirm alignment between visible From and authenticated domains"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "devops",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Record results without storing mailbox credentials, provider keys, or full message bodies.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "configuration-snapshot",
+            "delivery-test",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "email-domain-authentication-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "email-transactional-delivery",
+      "sequence": 16,
+      "category": "email",
+      "title": "Exercise every launch-critical transactional email",
+      "objective": "Verify that required account and commercial email paths are triggered, delivered, rendered, linked, and recoverable.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "transactional-email"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "delivery-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Trigger each required template through its real event path",
+        "Verify links and expiry behavior",
+        "Confirm bounce or provider failure is observable"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Use designated test accounts and redact personal content from retained evidence.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "delivery-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "email-transactional-delivery-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "email-cross-client-delivery",
+      "sequence": 17,
+      "category": "email",
+      "title": "Verify delivery and rendering in independent mailbox providers",
+      "objective": "Confirm at least Gmail and Outlook-class clients receive and render a representative transactional message correctly.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "transactional-email"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "delivery-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Deliver to two independent mailbox providers",
+        "Inspect spam placement and rendering",
+        "Exercise primary calls to action in both clients"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "A provider API acceptance response is not evidence of inbox delivery.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "delivery-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "email-cross-client-delivery-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "email-sender-subdomain",
+      "sequence": 18,
+      "category": "email",
+      "title": "Isolate transactional sending reputation when appropriate",
+      "objective": "Document and verify the chosen sender-domain boundary so application email does not unintentionally share unrelated reputation or DNS ownership.",
+      "sourcePriority": "blocker",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "transactional-email"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "configuration-snapshot",
+        "human-attestation",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Record the sending-domain decision",
+        "Verify provider and DNS configuration match it",
+        "Confirm reply and return-path behavior"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "devops",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "A subdomain is a conditional architecture choice, not a universal requirement; not-applicable evidence must explain the equivalent isolation boundary.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "configuration-snapshot",
+            "human-attestation",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "email-sender-subdomain-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "email-reputation-score",
+      "sequence": 19,
+      "category": "email",
+      "title": "Run an independent deliverability quality check",
+      "objective": "Use a reputable diagnostic service or equivalent evidence to identify authentication, content, and reputation problems before launch.",
+      "sourcePriority": "nice-to-have",
+      "gateLevel": "advisory",
+      "applicability": {
+        "allOf": [
+          "transactional-email"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "delivery-test",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Run a bounded third-party or equivalent deliverability diagnostic",
+        "Review warnings rather than relying on a score alone"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "devops",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "No single vendor score is a release guarantee; provider-specific thresholds remain advisory.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "delivery-test",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "email-reputation-score-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-link-preview",
+      "sequence": 20,
+      "category": "findability",
+      "title": "Provide a valid social link preview",
+      "objective": "Verify that the canonical public entry point exposes a reachable preview image and coherent Open Graph metadata.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "public-web"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Fetch metadata as an unauthenticated crawler",
+        "Validate absolute image URL and dimensions",
+        "Inspect a representative rendered preview"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "product",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "The preview asset must not disclose staging URLs, private content, or user data.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "findability-link-preview-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-sitemap-submission",
+      "sequence": 21,
+      "category": "findability",
+      "title": "Publish and submit the intended sitemap",
+      "objective": "Verify that the sitemap is valid, canonical, limited to public URLs, and submitted to the intended search property.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "search-indexed"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "configuration-snapshot",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Fetch and parse the live sitemap",
+        "Check canonical production origins",
+        "Record search-console submission or equivalent"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "product",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Exclude authenticated, staging, administrative, and user-specific URLs.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "configuration-snapshot",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "findability-sitemap-submission-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-indexing-not-blocked",
+      "sequence": 22,
+      "category": "findability",
+      "title": "Confirm intended pages are not blocked from indexing",
+      "objective": "Verify production robots, headers, metadata, authentication, and canonical tags do not contradict the declared indexing intent.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "search-indexed"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "configuration-snapshot",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Inspect robots directives and X-Robots-Tag headers",
+        "Check canonical and noindex metadata",
+        "Fetch representative pages without a privileged session"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Do not make private or authenticated pages indexable merely to satisfy this control.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "configuration-snapshot",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "findability-indexing-not-blocked-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-page-metadata",
+      "sequence": 23,
+      "category": "findability",
+      "title": "Give every public page purposeful title and description metadata",
+      "objective": "Verify public routes have non-placeholder, route-appropriate titles, descriptions, and canonical identity.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "public-web"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "code-review"
+      ],
+      "verificationMethods": [
+        "Crawl public routes for missing or duplicate metadata",
+        "Inspect dynamic route fallbacks",
+        "Check canonical URLs"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "product",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Generated metadata must not expose private route parameters or personal data.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "code-review"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "findability-page-metadata-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-no-environment-leftovers",
+      "sequence": 24,
+      "category": "findability",
+      "title": "Remove localhost, staging, and placeholder references",
+      "objective": "Confirm production-visible code, metadata, manifests, links, and runtime configuration contain no unintended development or staging identity.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "public-web"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "code-review",
+        "security-scan"
+      ],
+      "verificationMethods": [
+        "Scan built and served assets for development origins",
+        "Exercise redirects and callback URLs",
+        "Inspect public manifests and metadata"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "reviewer",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Allowlisted development references must be non-production code paths with documented guards.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "code-review",
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "findability-no-environment-leftovers-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-domain-separation",
+      "sequence": 25,
+      "category": "findability",
+      "title": "Evaluate application and marketing domain separation",
+      "objective": "Record whether separating application and marketing surfaces improves security, routing, ownership, or search behavior for this product.",
+      "sourcePriority": "nice-to-have",
+      "gateLevel": "advisory",
+      "applicability": {
+        "allOf": [
+          "commercial"
+        ],
+        "anyOf": [
+          "public-web"
+        ]
+      },
+      "evidenceKinds": [
+        "code-review",
+        "human-attestation"
+      ],
+      "verificationMethods": [
+        "Document the domain topology decision",
+        "Review cookie, authentication, and canonical-URL effects"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "architect",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "Domain separation is conditional and must not be presented as a universal quality requirement.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "code-review",
+            "human-attestation"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": false,
+          "requiredAssertions": [
+            "findability-domain-separation-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "findability-crawler-policy",
+      "sequence": 26,
+      "category": "findability",
+      "title": "Publish an intentional crawler policy",
+      "objective": "Verify robots.txt accurately expresses public crawler policy; document separately whether an optional llms.txt file adds value.",
+      "sourcePriority": "nice-to-have",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "search-indexed"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "configuration-snapshot",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Fetch and parse robots.txt",
+        "Check sitemap references and protected paths",
+        "Record the optional llms.txt decision without treating it as a standard"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "product",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "llms.txt is advisory and must not replace access control, robots directives, or documented API policy.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "configuration-snapshot",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "findability-crawler-policy-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "speed-pagespeed-baseline",
+      "sequence": 27,
+      "category": "speed",
+      "title": "Capture a reproducible page-performance baseline",
+      "objective": "Measure the intended production-like pages with a declared tool, environment, sample, and actionable performance budget.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "browser-ui",
+          "performance-sensitive"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "performance-report",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Run PageSpeed Insights, Lighthouse, or a documented equivalent",
+        "Record representative routes and device profile",
+        "Compare results with an explicit budget"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "A single score is not enough; retain workload, environment, and metric evidence.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "performance-report",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "speed-pagespeed-baseline-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "speed-image-optimization",
+      "sequence": 28,
+      "category": "speed",
+      "title": "Optimize production image payloads",
+      "objective": "Verify that user-facing images are appropriately sized, compressed, encoded, and loaded for their rendered use.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "code-review",
+        "performance-report"
+      ],
+      "verificationMethods": [
+        "Inspect oversized source-to-rendered dimensions",
+        "Check compression and modern format use",
+        "Verify lazy loading does not break critical content"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "builder",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "Tool choice is not prescribed; Squoosh is one option rather than a gate dependency.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "code-review",
+            "performance-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "speed-image-optimization-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "speed-layout-stability",
+      "sequence": 29,
+      "category": "speed",
+      "title": "Prevent disruptive layout movement",
+      "objective": "Measure and review layout shifts on critical routes so late content does not move controls or primary content unexpectedly.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "browser-test",
+        "performance-report"
+      ],
+      "verificationMethods": [
+        "Capture cumulative layout shift",
+        "Exercise delayed images, fonts, banners, and dynamic content",
+        "Review critical interaction movement visually"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Do not hide content or disable accessibility features merely to improve a metric.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "browser-test",
+            "performance-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "speed-layout-stability-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "speed-unused-dependencies",
+      "sequence": 30,
+      "category": "speed",
+      "title": "Remove unused generated or inherited dependencies",
+      "objective": "Review declared and bundled dependencies for unused packages, accidental AI scaffolding, duplicate functionality, and avoidable supply-chain exposure.",
+      "sourcePriority": "nice-to-have",
+      "gateLevel": "advisory",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "code-review",
+        "security-scan"
+      ],
+      "verificationMethods": [
+        "Compare declared dependencies with imports and runtime use",
+        "Inspect bundle or package output",
+        "Re-run tests after bounded removals"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "reviewer",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "Do not remove dynamically loaded or build-time dependencies solely because a static tool reports them unused.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "code-review",
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "speed-unused-dependencies-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics-event-delivery",
+      "sequence": 31,
+      "category": "analytics",
+      "title": "Verify analytics events are delivered with the intended consent state",
+      "objective": "Confirm the production-like client or service emits the agreed events once, with valid names, properties, identity handling, and consent behavior.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "analytics"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Inspect provider debug or live-event views",
+        "Exercise consent accepted and denied states",
+        "Check duplicate and missing events on navigation"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "product",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Retained evidence must not contain raw personal identifiers, session tokens, or full event payloads.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "analytics-event-delivery-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics-web-vitals",
+      "sequence": 32,
+      "category": "analytics",
+      "title": "Collect actionable web-vitals telemetry",
+      "objective": "Verify that agreed browser-performance metrics reach an observable destination with route and release context sufficient for diagnosis.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "analytics",
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "monitoring-report",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Generate representative browser vitals",
+        "Confirm metrics reach the intended property",
+        "Verify release and route context without personal data"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "devops",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Telemetry cardinality and personal-data collection must remain bounded.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "monitoring-report",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "analytics-web-vitals-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics-bot-protection",
+      "sequence": 33,
+      "category": "analytics",
+      "title": "Protect public and authenticated entry points from basic automation abuse",
+      "objective": "Verify proportionate bot controls on signup, login, forms, and costly public actions without creating inaccessible or unreviewed lockouts.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "public-web",
+          "authenticated",
+          "public-form"
+        ]
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "security-scan"
+      ],
+      "verificationMethods": [
+        "Exercise repeated and scripted requests",
+        "Verify server-side enforcement and observable rejections",
+        "Review accessibility and false-positive recovery"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "CAPTCHA is not mandatory; the control requires a proportionate, testable abuse boundary.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "proportionate-abuse-tests",
+          "description": "Exercise the server-side abuse boundary selected for public forms and automation-prone flows.",
+          "evidenceKinds": [
+            "automated-test",
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "server-side-abuse-control-enforced",
+            "challenge-token-server-validated-if-used",
+            "challenge-replay-denied-if-used",
+            "accessible-fallback-owned"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics-conversion-funnel",
+      "sequence": 34,
+      "category": "analytics",
+      "title": "Define and verify one decision-useful conversion funnel",
+      "objective": "Confirm that a primary public or commercial journey has stable step definitions, emitted events, and a queryable funnel view.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "analytics"
+        ],
+        "anyOf": [
+          "commercial",
+          "public-web"
+        ]
+      },
+      "evidenceKinds": [
+        "human-attestation",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Document funnel step definitions",
+        "Exercise a complete journey",
+        "Confirm the completed journey appears without duplicate steps"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "product",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "A vanity dashboard is not evidence unless the funnel supports an identified product decision.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "human-attestation",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "analytics-conversion-funnel-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics-error-tracking",
+      "sequence": 35,
+      "category": "analytics",
+      "title": "Verify production error tracking and release correlation",
+      "objective": "Prove that representative handled and unhandled failures reach an owned alerting or triage surface with release context and safe redaction.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "monitoring-report",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Generate a designated test failure",
+        "Confirm capture and release correlation",
+        "Inspect redaction and ownership",
+        "Verify an actionable alert or review path"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "devops",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Do not generate uncontrolled production failures; use a safe test path or staging-equivalent evidence when production mutation is not separately authorized.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "monitoring-report",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "analytics-error-tracking-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics-session-recording-consent",
+      "sequence": 36,
+      "category": "analytics",
+      "title": "Gate session recording behind consent and redaction",
+      "objective": "If session recording is used, verify consent, masking, exclusion rules, retention, and user opt-out behavior before collection.",
+      "sourcePriority": "nice-to-have",
+      "gateLevel": "advisory",
+      "applicability": {
+        "allOf": [
+          "browser-ui",
+          "tracking"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "browser-test",
+        "configuration-snapshot",
+        "legal-document"
+      ],
+      "verificationMethods": [
+        "Exercise consent denied and accepted paths",
+        "Inspect masking of inputs and private pages",
+        "Verify retention and deletion settings"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "legal-owner",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "The control does not recommend session recording; it constrains recording when the product chooses to use it.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "browser-test",
+            "configuration-snapshot",
+            "legal-document"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "analytics-session-recording-consent-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legal-terms-privacy",
+      "sequence": 37,
+      "category": "legal",
+      "title": "Publish owned terms and privacy disclosures",
+      "objective": "Confirm applicable terms and privacy documents exist, match the actual product and data practices, are reachable, and have an accountable owner.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "public-web",
+          "commercial",
+          "analytics",
+          "tracking",
+          "personal-data",
+          "regulated-data"
+        ]
+      },
+      "evidenceKinds": [
+        "human-attestation",
+        "legal-document",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Record the accountable legal or business owner",
+        "Verify published links and version dates",
+        "Reconcile disclosed processors and data flows with the implementation"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "legal-owner",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "JStack can coordinate evidence but cannot provide legal advice or certify jurisdictional sufficiency.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "human-attestation",
+            "legal-document",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": false,
+          "requiredAssertions": [
+            "legal-terms-privacy-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legal-merchant-of-record",
+      "sequence": 38,
+      "category": "legal",
+      "title": "Identify the merchant of record and operational obligations",
+      "objective": "Record who legally sells to the customer and who owns tax, invoicing, refunds, disputes, and customer-support obligations.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "payments"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "human-attestation",
+        "legal-document",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Name the merchant of record",
+        "Reconcile checkout and receipt identity",
+        "Document refund, dispute, tax, and invoice ownership"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "business-owner",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "This is an accountable business determination; JStack must not infer or decide it from provider branding alone.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "human-attestation",
+            "legal-document",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "legal-merchant-of-record-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legal-cookie-consent",
+      "sequence": 39,
+      "category": "legal",
+      "title": "Implement the applicable tracking-consent decision",
+      "objective": "Verify the product's documented jurisdictional decision is reflected in cookie, storage, tag, withdrawal, and consent-record behavior.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "tracking"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "browser-test",
+        "human-attestation",
+        "legal-document"
+      ],
+      "verificationMethods": [
+        "Record the accountable legal decision",
+        "Exercise accept, reject, and withdraw paths",
+        "Inspect storage and network activity before consent"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "legal-owner",
+      "waivable": false,
+      "allowNotApplicable": true,
+      "safetyNotes": "JStack validates implementation against an owned decision; it does not decide which jurisdictions or legal bases apply.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "browser-test",
+            "human-attestation",
+            "legal-document"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "legal-cookie-consent-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legal-data-governance-map",
+      "sequence": 40,
+      "category": "legal",
+      "title": "Reconcile implemented data flows with accountable privacy decisions",
+      "objective": "Map collected data, systems, processors, regions, transfers, retention, deletion, export, and backups, then bind the map to an accountable jurisdictional decision.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "personal-data",
+          "regulated-data",
+          "tracking"
+        ]
+      },
+      "evidenceKinds": [
+        "data-map",
+        "human-attestation",
+        "legal-document"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "implementation-data-map",
+          "description": "Map collected data to systems, processors, regions, transfers, retention, deletion, export, and backups.",
+          "evidenceKinds": [
+            "data-map"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 6,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "data-categories-mapped",
+            "systems-and-processors-mapped",
+            "storage-regions-and-transfers-mapped",
+            "retention-and-deletion-mapped",
+            "export-and-rights-paths-mapped",
+            "backup-lifecycle-mapped"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        {
+          "id": "accountable-data-decision",
+          "description": "Record the accountable owner and jurisdiction-dependent decision used to evaluate the implemented data map.",
+          "evidenceKinds": [
+            "human-attestation",
+            "legal-document"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 2,
+          "independent": false,
+          "machineVerifiable": false,
+          "requiredAssertions": [
+            "accountable-owner-recorded",
+            "legal-scope-and-jurisdictions-recorded"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Map collected data to systems, processors, regions, transfers, retention, deletion, export, and backups.",
+        "Record the accountable owner and jurisdiction-dependent decision used to evaluate the implemented data map."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "legal-owner",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "JStack validates evidence coordination and implementation alignment; it does not provide legal advice or certify compliance."
+    },
+    {
+      "id": "legal-license-provenance",
+      "sequence": 41,
+      "category": "legal",
+      "title": "Verify software, asset, data, model, and generated-source provenance",
+      "objective": "Produce an SBOM and owned license disposition for direct and transitive components, assets, datasets, models, and generated or copied source.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "minimumRiskTier": "low",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "licensed-assets",
+          "software-supply-chain",
+          "commercial"
+        ]
+      },
+      "evidenceKinds": [
+        "license-report",
+        "sbom"
+      ],
+      "evidenceRequirements": [
+        {
+          "id": "software-bill-of-materials",
+          "description": "Produce a complete component and asset inventory bound to the release candidate.",
+          "evidenceKinds": [
+            "sbom"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 3,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "direct-components-inventoried",
+            "transitive-components-inventoried",
+            "assets-data-models-inventoried"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        {
+          "id": "license-disposition",
+          "description": "Evaluate commercial-use, attribution, copyleft, unknown-license, and generated-source provenance.",
+          "evidenceKinds": [
+            "license-report"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 5,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "license-identities-resolved",
+            "commercial-use-reviewed",
+            "attribution-obligations-recorded",
+            "copyleft-obligations-dispositioned",
+            "unknown-licenses-dispositioned"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ],
+      "verificationMethods": [
+        "Produce a complete component and asset inventory bound to the release candidate.",
+        "Evaluate commercial-use, attribution, copyleft, unknown-license, and generated-source provenance."
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "legal-owner",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "License obligations are fact-specific; JStack must not convert GPL, AI authorship, or commercial-use questions into blanket conclusions."
+    },
+    {
+      "id": "final-payment-webhook-live",
+      "sequence": 42,
+      "category": "final-test",
+      "title": "Verify live payment webhook behavior safely",
+      "objective": "Prove the intended live-mode payment event is authenticated, idempotent, reconciled, retried, and observable without duplicate fulfillment.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "payments"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "manual-test",
+        "provider-receipt"
+      ],
+      "verificationMethods": [
+        "Verify signature validation and replay handling",
+        "Exercise one approved live or provider-supported equivalent event",
+        "Confirm idempotent fulfillment and reconciliation",
+        "Inspect retry and failure visibility"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "JStack launch tools never authorize real-money actions or production mutation; any live exercise requires separate explicit authority, a bounded amount, rollback, and reconciliation plan.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "manual-test",
+            "provider-receipt"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "final-payment-webhook-live-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final-cross-browser-device",
+      "sequence": 43,
+      "category": "final-test",
+      "title": "Test an independent browser and desktop/mobile viewport",
+      "objective": "Verify critical flows in at least two independent browser engines or environments and representative desktop and mobile layouts.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Run critical paths in two browser environments",
+        "Exercise desktop and mobile breakpoints",
+        "Record unsupported combinations explicitly"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "A responsive emulator is useful evidence but does not fully replace a real device for device-specific risk.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "final-cross-browser-device-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final-mobile-core-flow",
+      "sequence": 44,
+      "category": "final-test",
+      "title": "Walk the core user flow on a phone-class device",
+      "objective": "Complete the primary user journey with touch input, mobile viewport constraints, network variability, and mobile keyboard behavior.",
+      "sourcePriority": "blocker",
+      "gateLevel": "blocker",
+      "applicability": {
+        "allOf": [
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "browser-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Complete the primary journey on a phone-class environment",
+        "Check touch targets, keyboard, overlays, and orientation",
+        "Observe failure and retry behavior on a constrained network"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": false,
+      "allowNotApplicable": false,
+      "safetyNotes": "Use designated test identities and avoid retaining screenshots containing personal or payment data.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "browser-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "final-mobile-core-flow-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final-interaction-clickthrough",
+      "sequence": 45,
+      "category": "final-test",
+      "title": "Exercise every intended link and interactive control",
+      "objective": "Crawl or manually inspect the bounded launch surface for dead links, inert controls, wrong destinations, duplicate submission, and inaccessible actions.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "browser-ui"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Crawl links and buttons within the declared surface",
+        "Exercise disabled, loading, and duplicate-click states",
+        "Verify keyboard and touch activation"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": true,
+      "allowNotApplicable": false,
+      "safetyNotes": "Automation must exclude destructive actions unless a safe test environment and explicit authority exist.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "final-interaction-clickthrough-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final-hostile-form-input",
+      "sequence": 46,
+      "category": "final-test",
+      "title": "Challenge forms with invalid, boundary, and hostile input",
+      "objective": "Verify validation, encoding, error recovery, duplicate submission, authorization, and safe logging across user-input boundaries.",
+      "sourcePriority": "first-week",
+      "gateLevel": "required",
+      "applicability": {
+        "allOf": [
+          "core"
+        ],
+        "anyOf": [
+          "browser-ui",
+          "public-form",
+          "cross-origin-api",
+          "untrusted-input"
+        ]
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "security-scan"
+      ],
+      "verificationMethods": [
+        "Test empty, oversized, malformed, Unicode, and duplicate input",
+        "Exercise server-side validation and authorization",
+        "Check error messages and logs for sensitive echo"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "security",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "Run destructive payloads only in an isolated authorized environment; never target unrelated systems.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "hostile-input-regression",
+          "description": "Exercise hostile browser and API inputs and verify authoritative rejection, safe encoding, and redacted failures.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "security-scan"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 4,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "hostile-input-rejected",
+            "stored-and-reflected-output-encoded",
+            "injection-payloads-contained",
+            "failure-output-redacted"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final-not-found-experience",
+      "sequence": 47,
+      "category": "final-test",
+      "title": "Verify safe and useful not-found behavior",
+      "objective": "Confirm unknown routes return the intended status, expose no internal detail, preserve observability, and help users recover.",
+      "sourcePriority": "nice-to-have",
+      "gateLevel": "advisory",
+      "applicability": {
+        "allOf": [
+          "public-web"
+        ],
+        "anyOf": []
+      },
+      "evidenceKinds": [
+        "automated-test",
+        "browser-test",
+        "manual-test"
+      ],
+      "verificationMethods": [
+        "Request unknown public and asset routes",
+        "Check status, content, navigation, and metadata",
+        "Verify internal paths and stack traces remain hidden"
+      ],
+      "maxAgeMinutes": 1440,
+      "ownerRole": "qa",
+      "waivable": true,
+      "allowNotApplicable": true,
+      "safetyNotes": "A branded error page must still return an appropriate HTTP status and avoid leaking internal routing detail.",
+      "minimumRiskTier": "low",
+      "evidenceRequirements": [
+        {
+          "id": "primary-verification",
+          "description": "Provide structured evidence for the complete control objective and every named verification method.",
+          "evidenceKinds": [
+            "automated-test",
+            "browser-test",
+            "manual-test"
+          ],
+          "artifactFormats": [
+            "jstack-json"
+          ],
+          "minimumCount": 1,
+          "minimumDistinctProducers": 1,
+          "minimumObservations": 1,
+          "independent": false,
+          "machineVerifiable": true,
+          "requiredAssertions": [
+            "final-not-found-experience-verified"
+          ],
+          "appliesAtRiskTiers": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        }
+      ]
+    }
+  ]
+}

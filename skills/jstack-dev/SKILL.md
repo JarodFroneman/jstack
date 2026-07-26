@@ -131,15 +131,18 @@ independently usable.
 ### Launch Assurance
 
 - For a clean committed production candidate, declare `core` plus every real
-  product surface and call `jstack_launch_assess`. Never omit a surface to
-  avoid a control or infer away unknown business and legal facts.
-- Register one bounded, current artifact per evidenced control with
-  `jstack_launch_evidence_register`. The artifact hash and named attestation
-  bind the claim; JStack does not independently certify semantic truth.
+  product surface, the risk tier, and an immutable deployment fingerprint, then
+  call `jstack_launch_assess`. Reconcile every detected-but-omitted surface with
+  an accountable evidence reference; never omit a surface to avoid a control.
+- Register every active evidence requirement with
+  `jstack_launch_evidence_register` using native structured JSON,
+  provider-neutral scanner JSON, or SARIF as permitted by the assessment.
+  Never supply or infer a prose `pass`; JStack derives the outcome from exact
+  assertions, completeness, observations, producer, target, and independence.
 - Call `jstack_launch_finalize`. Missing, stale, failed, incomplete, duplicate,
-  or drifted blocker/required evidence prevents readiness. Blockers cannot be
-  waived; eligible required waivers need owner, reason, approval reference,
-  expiry, compensating control, and residual risk.
+  contradictory, truncated, or drifted blocker/required evidence prevents
+  readiness. High-risk security requires an independent scanner; critical risk
+  also requires an independent human security review and permits no waiver.
 - Keep launch checks conditional. Email, search, browser, analytics, payment,
   tracking, legal, and regulated-data controls activate only for declared
   surfaces. Preserve existing accessibility, supply-chain, migration, backup,
@@ -165,7 +168,7 @@ independently usable.
   default.
 - Readiness requires a clean committed subject, every discovered required
   command passing for that exact fingerprint, complete security evidence,
-  applicable typed launch evidence, approver reference, rollback plan, and
+  applicable structured launch evidence, approver reference, rollback plan, and
   monitoring or canary plan.
 - Release readiness is evidence only and `executionAuthorized` remains false.
   Never equate implementation completion or readiness with deployment

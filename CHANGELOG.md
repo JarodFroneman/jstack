@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.9.0 - 2026-07-26
+
+### Added
+
+- Added Launch Assurance v2: a deterministic 47-control catalog across
+  security, email, findability, speed, analytics, legal, and final-test
+  categories, selected from 22 explicit product and risk surfaces.
+- Added four risk tiers with non-lowerable surface and policy floors. High-risk
+  security controls become blockers; critical required controls become
+  blockers; critical launches cannot use waivers.
+- Added bounded static surface-hint detection and accountable reconciliation
+  for detected-but-omitted surfaces without returning source content.
+- Added composite evidence requirements, exact deployment-fingerprint binding,
+  native structured evidence, provider-neutral scanner JSON, SARIF 2.1.0
+  normalization, and published v2 schemas.
+- Added mandatory independent scanner evidence at high risk and independent
+  scanner plus human security-review evidence at critical risk.
+
+### Changed
+
+- JStack now derives launch outcomes from required assertions. Caller-written
+  outcomes, verifier prose, summaries, READMEs, and arbitrary files can no
+  longer satisfy a launch control.
+- Database authorization now requires both effective-policy evidence and
+  anonymous/cross-tenant negative probes. Cost controls, CORS, CSRF,
+  authentication, data governance, license provenance, and hostile-input
+  checks remain distinct composite gates.
+- Launch, loop, program, and release-readiness receipts now bind the risk tier,
+  deployment fingerprint, detected surface digest, reconciliation digest, and
+  complete per-requirement result set.
+- Upgraded all five existing JStack commands without adding another command or
+  reintroducing approval tokens.
+
+### Security
+
+- External scanner parsing is audit-owned, bounded, target-matched,
+  completeness-aware, and provider-neutral. Truncated scans, wrong targets,
+  non-independent producers, and unresolved high or critical findings fail
+  closed.
+- High- and critical-risk security controls cannot be waived. Critical risk
+  requires an independently produced human security-review artifact in
+  addition to scanner output.
+- Launch receipts still prove evaluated evidence and exact subject binding, not
+  producer honesty, legal sufficiency, penetration-test completeness, or facts
+  outside the observed scope.
+
 ## 0.8.2 - 2026-07-24
 
 ### Removed

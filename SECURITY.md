@@ -51,26 +51,37 @@ scan. A broad audit result never replaces its security receipt.
 
 ## Launch-Assurance Safety
 
-The launch catalog is declarative, versioned, and selected only from an
-explicit surface profile. Assessment requires a clean committed subject and
-binds Git, base, policy, catalog, selection, target, environment, tool version,
-and server session. Omitting a known surface is a profile-integrity failure;
-JStack cannot independently discover legal, merchant, or production facts.
+The v2 launch catalog is declarative, versioned, and selected from an explicit
+surface profile plus a non-lowerable risk tier. Assessment requires a clean
+committed subject and binds Git, base, policy, catalog, selection, risk,
+deployment fingerprint, static surface-hint digest, reconciliation digest,
+target, environment, tool version, and server session. Static detection is
+bounded and returns only paths and marker labels. It cannot discover every
+legal, merchant, jurisdictional, or production fact, so the accountable
+declaration remains required.
 
-Evidence registration accepts only a bounded regular non-symlink file inside
-the project or `~/.jstack/evidence`, uses stable file-identity hashing, and
-returns no content. Verifier, reference, and summary fields reject recognized
-secret formats and are stored as bounded metadata or digests. Callers must not
-place raw secrets, personal data, mailbox credentials, payment data, prompts,
-session tokens, or unredacted telemetry in artifacts merely because JStack does
-not render them.
+Evidence registration accepts only bounded structured JSON in the project or
+`~/.jstack/evidence`, rejects symlinks, uses stable file-identity hashing, and
+returns no content. The evaluator derives status from exact required
+assertions, observations, completeness, truncation, producer, independence,
+and target metadata. Caller-written outcomes, verifier prose, summaries,
+READMEs, and arbitrary files cannot satisfy a control.
+
+Provider-neutral scanner JSON and SARIF are normalized by the read-only Audit
+subsystem without executing a scanner or uploading code. Wrong targets,
+missing scope, unsafe size, malformed metadata, truncation, non-independent
+producers, and unresolved high or critical findings fail closed. A scanner
+still cannot prove its ruleset covered every weakness or replace a
+penetration test. Critical risk therefore requires a distinct independent
+human security-review artifact.
 
 Receipts prove contract binding, artifact identity at collection, freshness,
-and the recorded verifier outcome. They do not prove semantic truth, legal
-sufficiency, provider state, or independence of the verifier. Blockers cannot
-be waived. Eligible required waivers remain unauthenticated recorded decisions
-and therefore require an external approval reference, owner, bounded expiry,
-compensating control, and residual risk; policy can disable them.
+and JStack's derived result. They do not prove producer honesty, legal
+sufficiency, provider state beyond the artifact, or facts outside scope.
+Blockers cannot be waived. High/critical security controls cannot be waived,
+and critical risk permits no waiver. Other eligible waiver records require an
+external reference, owner, bounded expiry, compensating control, and residual
+risk; policy can disable them.
 
 Launch tools make no network request or production change. Live payment,
 webhook, email, DNS, search, analytics, browser, and device exercises require a
@@ -146,7 +157,7 @@ provider's normal permissions.
 
 ## Host-Native Action Safety
 
-JStack v0.8.2 has no custom action-approval challenge, signer, token, mailbox,
+Current JStack releases have no custom action-approval challenge, signer, token, mailbox,
 authorization receipt, consumption step, or terminal command. The MCP remains
 an evidence and orchestration control plane; it does not perform GitHub,
 deployment, or production operations itself.

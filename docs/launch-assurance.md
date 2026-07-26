@@ -1,115 +1,191 @@
-# JStack Launch Assurance
+# JStack Launch Assurance v2
 
-JStack 0.8 adds an applicability-aware product-launch evidence layer to the
-five existing workflows. It does not add a sixth command. The launch layer
-turns a reviewed 37-item pre-launch checklist into versioned controls that are
-selected from declared product surfaces, resolved with typed current evidence,
-and consumed by release readiness.
+JStack 0.9 upgrades the launch-evidence layer used by all five existing
+workflows. It does not add a sixth command. Launch Assurance v2 converts the
+reviewed pre-launch checklist into a risk-tiered, target-bound verification
+contract that cannot pass from a model-written summary or caller-declared
+outcome.
 
-The canonical catalog is
-`mcp/jstack/launch/catalog.v1.json`. Its validator rejects unknown fields,
-duplicate IDs, missing sequence numbers, invalid surfaces, unsupported evidence
-kinds, weakened blocker metadata, and any catalog other than the exact 37-control
-v1 shape. The catalog and each applicability selection receive stable SHA-256
-digests.
+The canonical catalog is `mcp/jstack/launch/catalog.v2.json`. It is generated
+deterministically by `catalog_builder.py` and contains exactly 47 controls:
+14 security, 5 email, 7 findability, 4 speed, 6 analytics, 5 legal, and 6 final
+test controls. The strict registry rejects unknown fields, invalid ordering,
+unsupported evidence, weakened risk metadata, and any catalog that differs
+from the deterministic v2 contract.
 
-## Applicability profile
+The retained v1 catalog and schemas are migration references only. New
+assessments, evidence receipts, and launch receipts use v2.
 
-Every profile explicitly includes `core`, then any real product surfaces:
+## Risk and applicability
 
-| Surface | Activates evidence for |
-| --- | --- |
-| `public-web` | transport, exposed routes, metadata, crawler behavior, public legal links, and final public-flow checks |
-| `browser-ui` | client secrets, responsive interaction, images, layout stability, forms, and browser/device coverage |
-| `authenticated` | server-side authentication, authorization, entitlements, and abuse boundaries |
-| `database` | row and tenant access boundaries |
-| `transactional-email` | SPF/DKIM/DMARC, real email triggers, mailbox delivery, rendering, and sender topology |
-| `search-indexed` | sitemap, indexability, metadata, and crawler policy |
-| `performance-sensitive` | reproducible page-performance baseline and budget |
-| `analytics` | event delivery, web vitals where relevant, funnels, errors, and consent behavior |
-| `payments` | merchant ownership, legal alignment, and safe live-webhook evidence |
-| `commercial` | customer-facing domain, funnel, disclosure, and release-audit expectations |
-| `tracking` | consent, storage, withdrawal, recording, and redaction behavior |
-| `ai-paid-endpoints` | server-side cost and abuse rate limits |
-| `regulated-data` | accountable privacy/legal evidence and mandatory release audit |
+Every assessment declares `core`, every real surface, and one risk tier:
 
-JStack deliberately does not infer the final profile. Source inspection can
-suggest surfaces, but an accountable owner must declare them because merchant,
-legal, tracking, and operational facts may not be visible in code. Omitting a
-known surface to avoid a gate is a failed profile declaration.
+| Risk tier | Typical scope | Mandatory escalation |
+| --- | --- | --- |
+| `low` | Internal or contained software without a higher-risk surface | Catalog gate levels apply |
+| `medium` | Public web, browser, email, analytics, commercial, or licensed-asset changes | Cannot be declared below a surface floor |
+| `high` | Authentication, cookies, databases, tracking, untrusted input, cross-origin APIs, personal data, AI/vendor cost, or other cost-bearing endpoints | Every selected security control is a blocker; an independent scanner is mandatory |
+| `critical` | Payments or regulated data | Required controls become blockers, waivers are forbidden, and both independent scanner and independent human security review are mandatory |
 
-The catalog retains the source checklist's category and priority as provenance,
-but uses independent JStack gate levels: `blocker`, `required`, or `advisory`.
-The distribution is six security, five email, seven findability, four speed,
-six analytics, three legal, and six final-test controls.
+The project policy can raise `minimumRiskTier`; it cannot lower a surface
+floor. A caller may voluntarily choose a higher tier.
+
+The 22 surfaces are:
+
+- `core`
+- `public-web`
+- `browser-ui`
+- `authenticated`
+- `cookie-authenticated`
+- `database`
+- `transactional-email`
+- `search-indexed`
+- `performance-sensitive`
+- `analytics`
+- `payments`
+- `commercial`
+- `tracking`
+- `ai-paid-endpoints`
+- `regulated-data`
+- `public-form`
+- `cross-origin-api`
+- `untrusted-input`
+- `cost-bearing-endpoints`
+- `personal-data`
+- `licensed-assets`
+- `software-supply-chain`
+
+JStack performs a bounded, content-minimized static scan of tracked code and
+configuration. It returns only surface names, confidence, matched paths, and
+marker labels—never source content. Every detected surface must either be in
+the declaration or have an accountable `not-applicable` reconciliation owned
+by the profile owner and linked to an evidence reference. Unresolved hints
+produce no launch-session token.
+
+Static detection is a completeness aid, not the owner of business truth. Code
+cannot reliably reveal merchant structure, jurisdictions, production topology,
+data-processing agreements, or every third-party system. The accountable
+surface declaration remains mandatory.
 
 ## Protocol
 
 ### 1. Assess
 
-`jstack_launch_assess` requires a clean committed Git candidate, explicit
-pre-release `base_ref`, target environment, profile owner and reference, and
-the complete surface declaration. Production web-like targets must use a
-bounded HTTPS URL with no credentials, query text, or fragment.
+`jstack_launch_assess` requires:
 
-The response contains the complete applicable and excluded control set and a
-30-minute signed session token bound to:
+- a clean committed Git release candidate and explicit pre-release `base_ref`;
+- `core` plus every applicable surface;
+- `risk_tier`;
+- an immutable lowercase SHA-256 `deployment_fingerprint`;
+- target environment and an HTTPS URL when the selected surface requires one;
+- accountable profile owner and reference; and
+- reconciliations for any detected-but-omitted surface.
 
-- Git HEAD, workspace fingerprint, and base commit;
-- enterprise policy and JStack version;
-- catalog and selection digests;
-- surfaces, target environment, and target URL; and
-- profile owner and a digest of the external declaration reference.
+The 30-minute session binds Git HEAD, workspace fingerprint, base commit,
+policy, tool version, catalog, control selection, risk tier, deployment
+fingerprint, surface-hint digest, reconciliation digest, environment, URL, and
+profile declaration.
 
-### 2. Register evidence
+The deployment fingerprint identifies the exact build, image, package,
+artifact, or deployment revision examined by runtime evidence. A branch name,
+`latest`, mutable URL, or prose label is not a fingerprint.
 
-`jstack_launch_evidence_register` accepts one artifact and one selected control.
-The artifact must be a regular, non-symlink file no larger than 100 MB inside
-the repository or `~/.jstack/evidence`. JStack uses stable file-identity hashing
-and returns no artifact content.
+### 2. Register structured evidence
 
-Each receipt records the control, effective gate, permitted evidence kind,
-`pass`, `fail`, `incomplete`, or permitted `not-applicable` outcome, named
-verifier, digested source reference and summary, artifact identity, observation
-time, and expiry. Evidence is capped by both the catalog and policy freshness
-window. Future, already stale, foreign-session, changed-worktree, wrong-control,
-or wrong-kind evidence fails closed.
+`jstack_launch_evidence_register` accepts one selected control requirement and
+one structured artifact. The artifact must be a bounded regular non-symlink
+file inside the Git project or `~/.jstack/evidence`.
 
-A signed receipt proves what artifact and attestation were registered against
-which contract. It does not independently prove that the artifact's semantic
-claim is true. The named verifier remains accountable.
+Supported formats are:
 
-### 3. Finalize
+- `jstack-json`: `jstack.launch.artifact.v2`, containing producer identity,
+  exact target, scope, observation time, completeness, truncation, and
+  assertion records;
+- `scanner-json`: provider-neutral `jstack.scanner.result.v1`; or
+- `sarif-2.1.0`: SARIF with the required bounded JStack target, scope,
+  ruleset, completeness, truncation, time, and independence metadata.
 
-`jstack_launch_finalize` validates the session and every evidence receipt
-against the current project, policy, catalog, and selection. Duplicate outcomes
-are rejected. Missing, failed, incomplete, invalid, or stale blocker/required
-evidence prevents `ready=true`; advisory gaps remain warnings.
+The caller does not provide `pass`, `fail`, a verifier name, or a summary.
+JStack parses the artifact and derives:
 
-Blockers cannot be waived. A waivable required control needs an owner, reason,
-external approval reference, expiry within 30 days, compensating control, and
-residual risk. Projects can disable waivers. A recorded waiver is not a signed
-legal or security certification.
+- `incomplete` when required assertions are missing or unknown, observation
+  floors are unmet, or the producer reports incomplete/truncated coverage;
+- `fail` when a required or supplied assertion fails;
+- `not-applicable` only when every assertion is explicitly not applicable and
+  the control permits it; or
+- `pass` only when every required assertion and completeness constraint passes.
 
-The final receipt expires no later than 24 hours, its earliest input evidence,
-or its earliest waiver. Any Git, policy, catalog, profile, environment, target,
-or server-session change invalidates it.
+Receipts retain hashes and bounded counts, not raw artifact content. They bind
+the producer, semantic result, control requirement, Git commit, environment,
+deployment fingerprint, catalog, selection, and freshness window. Duplicate
+semantic evidence cannot be counted twice.
 
-## Release integration
+### 3. Finalize composite controls
 
-Production `jstack_release_readiness` now requires a current passing launch
-receipt in addition to QA, security, approval, rollback, and monitoring/canary
-evidence. A valid profile containing `public-web`, `commercial`, `payments`, or
-`regulated-data` also makes the repository-wide release-profile audit receipt
-mandatory by default.
+`jstack_launch_finalize` evaluates every active requirement independently.
+One configuration snapshot cannot satisfy a multi-part control.
 
-The policy section is:
+Important composite boundaries include:
+
+- database access: effective policy plus anonymous and cross-tenant read/write
+  negative probes;
+- authentication/authorization: unauthenticated, wrong-role, expired-session,
+  entitlement, recovery, replay, and throttling matrices;
+- cost exposure: abuse rate limits plus quotas, provider hard caps, spend
+  alerts, anomaly ownership, and a tested kill switch;
+- browser security: HTTPS, response headers, CORS, CSRF, server input
+  validation, and error/data minimization remain separate controls;
+- data governance: implementation data map plus accountable legal scope and
+  jurisdiction record;
+- provenance: software/asset inventory plus license disposition; and
+- high/critical security: independent scanner, with an additional independent
+  human review at critical risk.
+
+Missing, failed, incomplete, stale, contradictory, or contract-drifted
+blocker/required requirements prevent `ready=true`. Advisory gaps remain
+warnings.
+
+Catalog blockers cannot be waived. At high and critical risk, security controls
+cannot be waived. At critical risk, no control can be waived. An otherwise
+eligible waiver requires an owner, reason, external reference, expiry within 30
+days, compensating control, and residual risk; project policy can disable
+waivers entirely.
+
+The final receipt expires no later than 24 hours, its earliest evidence, or its
+earliest waiver. Git, policy, catalog, selection, risk, surface-hint,
+reconciliation, environment, deployment, target, or server-session drift
+invalidates it.
+
+## Scanner ownership
+
+Scanner parsing belongs to JStack Audit and is provider-neutral. Launch
+Assurance consumes only the normalized result. It does not execute a scanner,
+upload code, or treat a tool brand as proof.
+
+The parser rejects wrong targets, missing scope, malformed timestamps, unsafe
+or unknown fields, excess runs/findings, non-independent evidence when
+independence is required, and incomplete or truncated output. Unresolved
+critical or high findings fail their assertions. Accepted-risk findings remain
+unresolved for this gate; the scanner requirement itself cannot be waived at
+high or critical risk.
+
+An independent scan is not equivalent to a penetration test, complete
+application-security review, or proof that the ruleset covered every weakness.
+Critical systems therefore require a separate independent human security-review
+artifact as well.
+
+## Policy
+
+The v2 policy floor is:
 
 ```json
 {
   "launch": {
     "requireReceiptForProduction": true,
     "requireProfileDeclaration": true,
+    "requireSurfaceReconciliation": true,
+    "requireDeploymentFingerprint": true,
+    "minimumRiskTier": "low",
     "maxEvidenceAgeMinutes": 1440,
     "requiredControlIds": [],
     "advisoryControlIds": [],
@@ -124,20 +200,25 @@ The policy section is:
 }
 ```
 
-A repository can strengthen the floor with additional required controls,
-shorter evidence age, more audit-triggering surfaces, or disabled waivers. It
-cannot disable production receipts, remove the explicit profile, weaken the
-default audit surfaces, or waive a blocker.
+A repository can strengthen the floor with a higher minimum risk, additional
+required controls, shorter evidence age, more release-audit surfaces, or
+disabled waivers. It cannot disable production receipts, deployment binding,
+surface reconciliation, or the mandatory risk escalations.
 
-## Loop and program integration
+## Release, loop, and program integration
 
-Loops, program phases, and program final acceptance can make launch assurance a
-typed acceptance criterion:
+Production `jstack_release_readiness` requires a current passing v2 launch
+receipt in addition to QA, security, approval reference, rollback, and
+monitoring/canary evidence. A valid profile containing `public-web`,
+`commercial`, `payments`, or `regulated-data` also requires a complete
+repository-wide release-profile audit by default.
+
+Loops and programs can use launch assurance as a typed acceptance criterion:
 
 ```json
 {
   "id": "launch-ready",
-  "description": "The exact production public-web profile passes.",
+  "description": "The exact production public-web launch profile passes.",
   "verifier": {
     "type": "launch",
     "targetEnvironment": "production",
@@ -146,37 +227,31 @@ typed acceptance criterion:
 }
 ```
 
-Checkpoint and finalization calls accept `launch_receipt`. JStack verifies the
-signature and exact Git state, baseline, policy, tool version, catalog,
-applicability selection, environment, and normalized surface set. A receipt for
-a different environment or even a narrower surface set does not satisfy the
-criterion. This makes launch assurance a first-class machine gate without
-silently adding it to projects that did not declare a launch boundary.
+Checkpoint and finalization calls revalidate the signature, Git state,
+baseline, policy, catalog, applicability selection, risk, deployment
+fingerprint, detected hints, reconciliation, environment, and normalized
+surface set. A different or narrower target cannot satisfy the criterion.
 
-Because assessment requires a clean committed candidate, this criterion is a
-late release/program boundary. It is evidence and does not execute a commit,
-release, deployment, or production operation.
+## Safety and attestation limit
 
-## Safety and authority
+Launch tools make no network request and perform no provider, payment,
+deployment, or production action. Real email, DNS, browser, device, analytics,
+search-console, legal, payment, runtime, and penetration-test evidence must be
+gathered through a separately authorized safe workflow.
 
-Launch tools make no network request and perform no provider or production
-action. They only select controls, hash existing evidence, validate contracts,
-and issue session-local receipts. DNS, mailbox, browser, device, analytics,
-search-console, legal, and provider evidence must be gathered by a safe,
-separately authorized workflow.
-
-In particular, the live-payment control does not authorize a charge, refund,
-webhook replay, or production mutation. Any real-money exercise needs explicit
-production-mutation authority, bounded value, rollback, reconciliation, and
-monitoring. Every launch and release result returns
-`executionAuthorized=false`; the v0.7 exact one-action authorization boundary
-continues unchanged in v0.8.
+Every launch and release result returns `executionAuthorized=false`. A passing
+receipt proves that JStack parsed current target-bound evidence and derived
+the catalogued assertions. It does not certify producer honesty, facts outside
+the observed scope, legal sufficiency, complete vulnerability coverage, or
+production behavior not represented by the exact deployment fingerprint.
 
 ## Source adaptation
 
-The catalog adapts concepts from [Nico Burkart's 37-point pre-launch
-checklist](https://nicoburkart.notion.site/e6e88fff5ddf48a09248e2c8368445d1?v=3a293082ae3e81d0b778000c94c436d0&p=3a493082ae3e819bb4f0d4e52c1cc446&pm=s),
-reviewed on 2026-07-22. JStack paraphrases and conditions the controls instead
-of copying vendor prescriptions. Mail-tester scoring, application-domain
-separation, session recording, and `llms.txt` remain advisory or conditional;
-legal sufficiency remains an accountable human decision.
+The catalog preserves and paraphrases the relevant concepts from
+[Nico Burkart's 37-point pre-launch checklist](https://nicoburkart.notion.site/e6e88fff5ddf48a09248e2c8368445d1?v=3a293082ae3e81d0b778000c94c436d0&p=3a493082ae3e819bb4f0d4e52c1cc446&pm=s)
+and the reviewed
+[20+ year developer pre-launch article shared on X](https://x.com/PrajwalTomar_/status/2080974596392837123).
+The sources inform coverage; JStack's evidence model, risk floors, gate levels,
+and safety boundaries are independent engineering decisions. Vendor choices
+and jurisdiction-specific legal conclusions remain conditional and
+human-owned.

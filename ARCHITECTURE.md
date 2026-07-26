@@ -31,8 +31,9 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - deterministic role-bound capability routing and specialist handoff validation
 - QA command discovery and explicitly approved execution
 - current-tree and release-range secret scanning
-- applicability-aware launch profiles, typed artifact evidence, and
-  release-consumable launch finalization
+- risk-tiered launch profiles, bounded surface-hint reconciliation, structured
+  assertion evidence, audit-owned scanner normalization, and release-consumable
+  launch finalization
 - deterministic audit collection and evidence-bound finalization
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
@@ -80,19 +81,26 @@ truth or release authority.
 
 ## Launch Assurance Protocol
 
-The launch registry contains exactly 37 versioned controls across security,
-email, findability, speed, analytics, legal, and final-test categories. An
-accountable profile declares `core` plus every applicable product surface. The
-registry deterministically selects controls and hashes the catalog, target,
-environment, surfaces, and effective gate levels.
+The active launch registry contains exactly 47 versioned controls across
+security, email, findability, speed, analytics, legal, and final-test
+categories. An accountable profile declares `core`, every applicable one of 22
+surfaces, and a low, medium, high, or critical risk tier. Surface and policy
+floors cannot be lowered. Bounded static detection returns content-free hints;
+detected omissions require accountable reconciliation.
 
-Assessment requires a clean committed candidate and explicit base. Evidence
-registration accepts only a bounded regular non-symlink artifact inside the
-project or private evidence directory, hashes it with stable identity, records
-one typed outcome and named verifier, and returns no artifact content.
-Finalization revalidates every receipt against the current Git subject, policy,
-catalog, selection, environment, target, and server session. Blocker and
-required gaps fail closed; blockers cannot be waived.
+Assessment requires a clean committed candidate, explicit base, and immutable
+deployment fingerprint. Evidence registration accepts only bounded structured
+v2 JSON, provider-neutral scanner JSON, or SARIF 2.1.0 inside the project or
+private evidence directory. The evaluator derives outcomes from required
+assertions and returns no raw artifact content. Arbitrary files, prose, and
+caller-written outcomes cannot pass.
+
+Controls can contain multiple risk-active evidence requirements. Finalization
+revalidates each receipt against Git, policy, catalog, selection, risk,
+deployment, surface-hint, reconciliation, environment, target, and server
+session. High-risk security controls are blockers and require an independent
+scanner. Critical risk additionally requires independent human security review
+and permits no waiver.
 
 Production release readiness consumes the passing launch receipt. Public-web,
 commercial, payment, and regulated-data profiles elevate a repository-wide
