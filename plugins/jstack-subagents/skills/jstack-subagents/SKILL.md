@@ -77,16 +77,17 @@ cleanly, use one Builder. The Lead Engineer resolves conflicts using evidence,
 reproduction, project rules, and safety gates.
 
 For production/release work, the Lead declares `core` plus every applicable
-product surface with `jstack_launch_assess` on the clean integrated candidate.
-Assign evidence collection to existing roles: Security owns security controls,
-QA owns interaction/device/delivery checks, DevOps owns transport and
+product surface, risk tier, and immutable deployment fingerprint with
+`jstack_launch_assess` on the clean integrated candidate, then reconciles
+detected omissions. Security owns security requirements, QA owns
+interaction/device/delivery assertions, DevOps owns transport and
 observability, Product owns findability/analytics semantics, and accountable
-humans own legal and business facts. Specialists return bounded artifacts and
-attestations; only the Lead registers and finalizes the exact selection.
-Missing or failed blocker/required launch evidence blocks handoff. Public-web,
-commercial, payment, and regulated-data profiles also require the current
-release-profile audit receipt by default. This is a capability of the existing
-team, not a new role or staffing command.
+humans own legal and business facts. Specialists return bounded structured
+artifacts; only the Lead registers and finalizes the exact requirements. JStack
+derives outcomes. High-risk security requires an independent scanner; critical
+risk also requires independent human review and permits no waiver. Missing or
+failed blocker/required evidence blocks handoff. Public-web, commercial,
+payment, and regulated-data profiles also require a release-profile audit.
 
 If multi-agent tools are unavailable, state `No subagents deployed:` with the
 concrete reason. Retain `team_mode="smart-subagents"` in planning and apply

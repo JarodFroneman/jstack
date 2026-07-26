@@ -67,6 +67,9 @@
   "launch": {
     "requireReceiptForProduction": true,
     "requireProfileDeclaration": true,
+    "requireSurfaceReconciliation": true,
+    "requireDeploymentFingerprint": true,
+    "minimumRiskTier": "low",
     "maxEvidenceAgeMinutes": 1440,
     "requiredControlIds": [],
     "advisoryControlIds": [],

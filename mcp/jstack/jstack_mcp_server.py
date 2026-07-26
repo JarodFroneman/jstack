@@ -43,7 +43,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.8.2"
+SERVER_VERSION = "0.9.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -64,12 +64,15 @@ SPECIALIST_MAX_HANDOFF_BYTES = 2_500_000
 PROGRAM_MAX_RECEIPT_CHARS = 100_000
 PROGRAM_MAX_ARTIFACT_BYTES = 100_000_000
 PROGRAM_ARTIFACT_TIMEOUT_SECONDS = 30
-LAUNCH_MAX_RECEIPTS = 100
+LAUNCH_MAX_RECEIPTS = 300
 LAUNCH_MAX_RECEIPT_CHARS = 100_000
 LAUNCH_MAX_ARTIFACT_BYTES = 100_000_000
 LAUNCH_ARTIFACT_TIMEOUT_SECONDS = 30
 LAUNCH_SESSION_MAX_AGE_SECONDS = 30 * 60
 LAUNCH_RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
+LAUNCH_HINT_MAX_FILES = 5_000
+LAUNCH_HINT_MAX_FILE_BYTES = 256_000
+LAUNCH_HINT_MAX_TOTAL_BYTES = 8_000_000
 AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 AUDIT_CAPSTONE_ATTESTATION_SCHEMA = "jstack.audit.capstone-attestation.v1"
 AUDIT_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_AUDIT_ASSESSOR_HMAC_KEY"
@@ -675,6 +678,9 @@ DEFAULT_ENTERPRISE_POLICY: dict[str, Any] = {
     "launch": {
         "requireReceiptForProduction": True,
         "requireProfileDeclaration": True,
+        "requireSurfaceReconciliation": True,
+        "requireDeploymentFingerprint": True,
+        "minimumRiskTier": "low",
         "maxEvidenceAgeMinutes": 1440,
         "requiredControlIds": [],
         "advisoryControlIds": [],
@@ -890,6 +896,9 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
     allowed_launch_fields = {
         "requireReceiptForProduction",
         "requireProfileDeclaration",
+        "requireSurfaceReconciliation",
+        "requireDeploymentFingerprint",
+        "minimumRiskTier",
         "maxEvidenceAgeMinutes",
         "requiredControlIds",
         "advisoryControlIds",
@@ -905,10 +914,20 @@ def validate_policy_override(value: dict[str, Any], path: Path) -> None:
     for field in (
         "requireReceiptForProduction",
         "requireProfileDeclaration",
+        "requireSurfaceReconciliation",
+        "requireDeploymentFingerprint",
         "allowWaivers",
     ):
         if field in launch_policy and not isinstance(launch_policy[field], bool):
             raise ToolError(f"JStack policy launch.{field} must be boolean.")
+    if "minimumRiskTier" in launch_policy:
+        try:
+            launch_core.normalize_risk_tier(
+                launch_policy["minimumRiskTier"],
+                "launch.minimumRiskTier",
+            )
+        except launch_core.LaunchError as exc:
+            raise ToolError(str(exc)) from exc
     if "maxEvidenceAgeMinutes" in launch_policy:
         configured_age = launch_policy["maxEvidenceAgeMinutes"]
         if (
@@ -1035,6 +1054,18 @@ def apply_policy_floors(policy: dict[str, Any], project_path: Path) -> dict[str,
     default_launch = DEFAULT_ENTERPRISE_POLICY["launch"]
     launch_policy["requireReceiptForProduction"] = True
     launch_policy["requireProfileDeclaration"] = True
+    launch_policy["requireSurfaceReconciliation"] = True
+    launch_policy["requireDeploymentFingerprint"] = True
+    configured_risk_floor = str(
+        launch_policy.get(
+            "minimumRiskTier",
+            default_launch["minimumRiskTier"],
+        )
+    )
+    launch_policy["minimumRiskTier"] = launch_core.normalize_risk_tier(
+        configured_risk_floor,
+        "launch.minimumRiskTier",
+    )
     launch_policy["maxEvidenceAgeMinutes"] = min(
         int(
             launch_policy.get(
@@ -7068,7 +7099,7 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
         warnings.append(
             "Ignored retired custom-approval policy fields: "
             + ", ".join(ignored_legacy_fields)
-            + ". JStack v0.8.2 uses host-native action safety."
+            + ". Current JStack releases use host-native action safety."
         )
     if goal and re.search(
         r"\b(?:implement|build|finish|ship|deploy|release|publish|phase|remediat(?:e|ion))\b",
@@ -7276,6 +7307,130 @@ def _launch_target_url(
     return urllib.parse.urlunsplit((parsed.scheme.lower(), host, path, "", ""))
 
 
+_LAUNCH_HINT_TEXT_SUFFIXES = frozenset(
+    {
+        ".c",
+        ".cc",
+        ".conf",
+        ".cpp",
+        ".cs",
+        ".css",
+        ".go",
+        ".graphql",
+        ".h",
+        ".html",
+        ".java",
+        ".js",
+        ".json",
+        ".jsx",
+        ".kt",
+        ".mjs",
+        ".php",
+        ".prisma",
+        ".py",
+        ".rb",
+        ".rs",
+        ".sh",
+        ".sql",
+        ".svelte",
+        ".toml",
+        ".ts",
+        ".tsx",
+        ".vue",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
+)
+_LAUNCH_HINT_TEXT_NAMES = frozenset(
+    {
+        "dockerfile",
+        "go.mod",
+        "go.sum",
+        "package-lock.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "requirements.txt",
+        "yarn.lock",
+    }
+)
+_LAUNCH_HINT_SKIPPED_PREFIXES = (
+    "docs/",
+    "test/",
+    "tests/",
+    "fixtures/",
+    "vendor/",
+    "node_modules/",
+    "dist/",
+    "build/",
+    "coverage/",
+)
+
+
+def _launch_surface_detection(project_path: Path) -> dict[str, Any]:
+    """Read a bounded code/config corpus and return content-free surface hints."""
+    paths = audit_git_inventory_paths(project_path)
+    documents: list[tuple[str, str]] = []
+    scanned_files = 0
+    scanned_bytes = 0
+    for relative in paths:
+        normalized = relative.replace("\\", "/")
+        lowered = normalized.lower()
+        if lowered.startswith(_LAUNCH_HINT_SKIPPED_PREFIXES):
+            continue
+        candidate = project_path / normalized
+        suffix = candidate.suffix.lower()
+        name = candidate.name.lower()
+        text = ""
+        should_read = suffix in _LAUNCH_HINT_TEXT_SUFFIXES or name in _LAUNCH_HINT_TEXT_NAMES
+        if should_read:
+            if scanned_files >= LAUNCH_HINT_MAX_FILES:
+                raise ToolError(
+                    "Launch surface detection exceeded its 5000-file completeness limit."
+                )
+            try:
+                metadata = candidate.stat()
+            except OSError as exc:
+                raise ToolError(
+                    "Launch surface detection encountered an inaccessible project file."
+                ) from exc
+            if metadata.st_size > LAUNCH_HINT_MAX_FILE_BYTES:
+                raise ToolError(
+                    f"Launch surface detection requires an explicit disposition for oversized source/config file: {normalized}"
+                )
+            if scanned_bytes + metadata.st_size > LAUNCH_HINT_MAX_TOTAL_BYTES:
+                raise ToolError(
+                    "Launch surface detection exceeded its 8 MB completeness limit."
+                )
+            try:
+                content = audit_core.read_repository_file(
+                    project_path,
+                    normalized,
+                    max_bytes=LAUNCH_HINT_MAX_FILE_BYTES,
+                    max_seconds=10,
+                )
+                text = content.decode("utf-8-sig", errors="replace")
+            except (audit_core.AuditError, UnicodeError) as exc:
+                raise ToolError(
+                    f"Launch surface detection could not safely read source/config file: {normalized}"
+                ) from exc
+            scanned_files += 1
+            scanned_bytes += metadata.st_size
+        documents.append((normalized, text))
+    hints = _launch_call(lambda: launch_core.detect_surface_hints(documents))
+    hints = _launch_call(lambda: launch_core.normalize_surface_hints(hints))
+    return {
+        "schemaVersion": "jstack.launch.surface-hints.v1",
+        "hints": hints,
+        "hintDigest": launch_core.surface_hint_digest(hints),
+        "scannedFiles": scanned_files,
+        "scannedBytes": scanned_bytes,
+        "complete": True,
+        "sourceContentReturned": False,
+    }
+
+
 def _launch_artifact_path(
     project_path: Path,
     raw_path: str,
@@ -7369,6 +7524,10 @@ def _launch_selection(
     surfaces: list[str],
     target_environment: str,
     target_url: Optional[str],
+    risk_tier: str,
+    deployment_fingerprint: str,
+    surface_hint_digest_value: str,
+    reconciliation_digest_value: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     policy = load_enterprise_policy(project_path)
     launch_policy = policy.get("launch", {})
@@ -7377,11 +7536,60 @@ def _launch_selection(
             surfaces,
             target_environment=target_environment,
             target_url=target_url,
+            risk_tier=risk_tier,
+            deployment_fingerprint=deployment_fingerprint,
+            surface_hint_digest_value=surface_hint_digest_value,
+            reconciliation_digest_value=reconciliation_digest_value,
+            minimum_risk_tier=launch_policy.get("minimumRiskTier", "low"),
             required_control_ids=launch_policy.get("requiredControlIds", []),
             advisory_control_ids=launch_policy.get("advisoryControlIds", []),
         )
     )
     return policy, selection
+
+
+def _launch_selected_contract(selection: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": control["id"],
+            "gateLevel": control["effectiveGateLevel"],
+            "requirementIds": [
+                requirement["id"]
+                for requirement in control["activeEvidenceRequirements"]
+            ],
+        }
+        for control in selection["selectedControls"]
+    ]
+
+
+def _launch_reconciliation_input(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > len(launch_core.SURFACE_IDS):
+        raise ToolError("surface_reconciliation must be a bounded array.")
+    expected = {
+        "surface",
+        "decision",
+        "owner",
+        "rationale",
+        "evidence_reference",
+    }
+    result: list[dict[str, Any]] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict) or set(raw) != expected:
+            raise ToolError(
+                f"surface_reconciliation[{index}] must contain exactly surface, decision, owner, rationale, and evidence_reference."
+            )
+        result.append(
+            {
+                "surface": raw["surface"],
+                "decision": raw["decision"],
+                "owner": raw["owner"],
+                "rationale": raw["rationale"],
+                "evidenceReference": raw["evidence_reference"],
+            }
+        )
+    return result
 
 
 def _launch_session_payload(
@@ -7413,20 +7621,33 @@ def _launch_session_payload(
         expected_subject=subject,
         require_passed=False,
     )
+    current_detection = _launch_surface_detection(project_path)
     policy, selection = _launch_selection(
         project_path,
         list(payload.get("surfaces") or []),
         str(payload.get("targetEnvironment") or ""),
         payload.get("targetUrl"),
+        str(payload.get("riskTier") or ""),
+        str(payload.get("deploymentFingerprint") or ""),
+        current_detection["hintDigest"],
+        str(payload.get("surfaceReconciliationDigest") or ""),
     )
-    selected_contract = [
-        {"id": control["id"], "gateLevel": control["effectiveGateLevel"]}
-        for control in selection["selectedControls"]
+    selected_contract = _launch_selected_contract(selection)
+    reconciled_surfaces = {
+        str(record.get("surface") or "")
+        for record in payload.get("surfaceReconciliation", [])
+        if isinstance(record, dict)
+    }
+    unresolved_current_hints = [
+        hint["surface"]
+        for hint in current_detection["hints"]
+        if hint["surface"] not in set(selection["surfaces"])
+        and hint["surface"] not in reconciled_surfaces
     ]
     checks = {
         "receipt": verification["valid"],
         "schemaVersion": payload.get("schemaVersion")
-        == "jstack.launch.session.v1",
+        == "jstack.launch.session.v2",
         "catalogVersion": payload.get("catalogVersion")
         == selection["catalogVersion"],
         "catalogDigest": payload.get("catalogDigest")
@@ -7439,6 +7660,14 @@ def _launch_session_payload(
         == selection["targetEnvironment"],
         "targetUrl": payload.get("targetUrl") == selection["targetUrl"],
         "surfaces": payload.get("surfaces") == selection["surfaces"],
+        "riskTier": payload.get("riskTier") == selection["riskTier"],
+        "deploymentFingerprint": payload.get("deploymentFingerprint")
+        == selection["deploymentFingerprint"],
+        "surfaceHintsCurrent": payload.get("surfaceHintDigest")
+        == current_detection["hintDigest"],
+        "surfaceReconciliation": payload.get("surfaceReconciliationDigest")
+        == selection["surfaceReconciliationDigest"],
+        "surfaceReconciliationComplete": not unresolved_current_hints,
     }
     if not all(checks.values()):
         raise ToolError(
@@ -7467,6 +7696,14 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_surfaces, list):
         raise ToolError("surfaces must be an explicit array that includes 'core'.")
     surfaces = _launch_call(lambda: launch_core.normalize_surfaces(raw_surfaces))
+    risk_tier = _launch_call(
+        lambda: launch_core.normalize_risk_tier(args.get("risk_tier"))
+    )
+    deployment_fingerprint = _launch_call(
+        lambda: launch_core.normalize_deployment_fingerprint(
+            args.get("deployment_fingerprint")
+        )
+    )
     target_environment = _launch_environment(args.get("target_environment"))
     target_url = _launch_target_url(
         args.get("target_url"),
@@ -7495,26 +7732,62 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
             if str(raw_reference or "").strip()
             else "not-required-for-non-production"
         )
+    detection = _launch_surface_detection(project_path)
+    reconciled = _launch_call(
+        lambda: launch_core.reconcile_surface_hints(
+            detection["hints"],
+            surfaces,
+            _launch_reconciliation_input(args.get("surface_reconciliation")),
+            profile_owner=profile_owner,
+        )
+    )
     policy, selection = _launch_selection(
         project_path,
         surfaces,
         target_environment,
         target_url,
+        risk_tier,
+        deployment_fingerprint,
+        reconciled["hintDigest"],
+        reconciled["reconciliationDigest"],
     )
     if policy.get("launch", {}).get("requireProfileDeclaration") and not profile_owner:
         raise ToolError("Launch policy requires an accountable profile owner.")
+    if reconciled["unresolvedHints"]:
+        return {
+            "schemaVersion": "jstack.launch.assessment.v2",
+            "projectPath": str(project_path),
+            "baseRef": subject["baseRef"],
+            "targetEnvironment": target_environment,
+            "targetUrl": target_url,
+            "riskTier": selection["riskTier"],
+            "derivedRiskFloor": selection["derivedRiskFloor"],
+            "deploymentFingerprint": deployment_fingerprint,
+            "profile": {
+                "owner": profile_owner,
+                "surfaces": selection["surfaces"],
+                "declarationIsInference": False,
+            },
+            "surfaceDetection": detection,
+            "surfaceReconciliation": reconciled["records"],
+            "readyToCollect": False,
+            "blockers": [
+                "Detected surface hint requires inclusion or an accountable not-applicable reconciliation: "
+                + str(hint["surface"])
+                for hint in reconciled["unresolvedHints"]
+            ],
+            "launchSessionToken": None,
+            "executionAuthorized": False,
+        }
     expires = (
         _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
         + _dt.timedelta(seconds=LAUNCH_SESSION_MAX_AGE_SECONDS)
     ).isoformat()
-    selected_contract = [
-        {"id": control["id"], "gateLevel": control["effectiveGateLevel"]}
-        for control in selection["selectedControls"]
-    ]
+    selected_contract = _launch_selected_contract(selection)
     token = issue_receipt(
         {
             "kind": "launch-session",
-            "schemaVersion": "jstack.launch.session.v1",
+            "schemaVersion": "jstack.launch.session.v2",
             "projectPath": subject["gitRoot"],
             "gitHead": subject["gitHead"],
             "projectFingerprint": subject["projectFingerprint"],
@@ -7526,6 +7799,15 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
             "catalogDigest": selection["catalogDigest"],
             "selectionDigest": selection["selectionDigest"],
             "surfaces": selection["surfaces"],
+            "riskTier": selection["riskTier"],
+            "derivedRiskFloor": selection["derivedRiskFloor"],
+            "policyRiskFloor": selection["policyRiskFloor"],
+            "deploymentFingerprint": selection["deploymentFingerprint"],
+            "surfaceHintDigest": reconciled["hintDigest"],
+            "surfaceReconciliationDigest": reconciled[
+                "reconciliationDigest"
+            ],
+            "surfaceReconciliation": reconciled["records"],
             "targetEnvironment": target_environment,
             "targetUrl": target_url,
             "selectedControls": selected_contract,
@@ -7538,11 +7820,15 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return {
-        "schemaVersion": "jstack.launch.assessment.v1",
+        "schemaVersion": "jstack.launch.assessment.v2",
         "projectPath": str(project_path),
         "baseRef": subject["baseRef"],
         "targetEnvironment": target_environment,
         "targetUrl": target_url,
+        "riskTier": selection["riskTier"],
+        "derivedRiskFloor": selection["derivedRiskFloor"],
+        "policyRiskFloor": selection["policyRiskFloor"],
+        "deploymentFingerprint": selection["deploymentFingerprint"],
         "profile": {
             "owner": profile_owner,
             "referenceDigest": hashlib.sha256(
@@ -7551,6 +7837,8 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
             "surfaces": selection["surfaces"],
             "declarationIsInference": False,
         },
+        "surfaceDetection": detection,
+        "surfaceReconciliation": reconciled["records"],
         "catalog": {
             "schemaVersion": launch_core.CATALOG_SCHEMA_VERSION,
             "version": selection["catalogVersion"],
@@ -7565,10 +7853,13 @@ def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
         "evidenceContract": {
             "statuses": list(launch_core.FINAL_STATUSES),
             "evidenceKinds": list(launch_core.EVIDENCE_KINDS),
+            "artifactFormats": list(launch_core.ARTIFACT_FORMATS),
             "artifactRoots": [str(project_path), "~/.jstack/evidence"],
             "artifactMaximumBytes": LAUNCH_MAX_ARTIFACT_BYTES,
             "rawArtifactContentReturned": False,
             "semanticTruthCertified": False,
+            "outcomesDerivedByJStack": True,
+            "proseOrArbitraryFilesAccepted": False,
         },
         "actionSafety": {
             "assessmentIsNotExecution": True,
@@ -7594,32 +7885,32 @@ def tool_launch_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
             "control_id is not selected by the current launch applicability contract."
         )
     control = selected[control_id]
+    requirement_id = str(args.get("requirement_id") or "").strip()
+    requirements = {
+        str(requirement["id"]): requirement
+        for requirement in control["activeEvidenceRequirements"]
+    }
+    if requirement_id not in requirements:
+        raise ToolError(
+            "requirement_id is not active for this control and launch risk tier."
+        )
+    requirement = requirements[requirement_id]
     evidence_kind = str(args.get("evidence_kind") or "").strip()
-    if evidence_kind not in control["evidenceKinds"]:
+    if evidence_kind not in requirement["evidenceKinds"]:
         raise ToolError(
-            "evidence_kind is not permitted for this launch control; use one of: "
-            + ", ".join(control["evidenceKinds"])
+            "evidence_kind is not permitted for this evidence requirement; use one of: "
+            + ", ".join(requirement["evidenceKinds"])
         )
-    outcome = str(args.get("outcome") or "").strip().lower()
-    if outcome not in {"pass", "fail", "incomplete", "not-applicable"}:
+    artifact_format = str(args.get("artifact_format") or "").strip()
+    if artifact_format not in requirement["artifactFormats"]:
         raise ToolError(
-            "outcome must be pass, fail, incomplete, or not-applicable."
+            "artifact_format is not permitted for this evidence requirement; use one of: "
+            + ", ".join(requirement["artifactFormats"])
         )
-    if outcome == "not-applicable" and not control["allowNotApplicable"]:
-        raise ToolError(
-            "This selected launch control does not permit a not-applicable outcome. Correct the surface declaration or provide pass/fail evidence."
-        )
-    verifier = _launch_safe_text(args.get("verifier"), "verifier", maximum=200)
     source_reference = _launch_safe_text(
         args.get("source_reference"),
         "source_reference",
         maximum=500,
-    )
-    summary = _launch_safe_text(
-        args.get("summary"),
-        "summary",
-        minimum=10,
-        maximum=2_000,
     )
     artifact_root, artifact_relative, artifact, artifact_root_kind = (
         _launch_artifact_path(
@@ -7631,19 +7922,63 @@ def tool_launch_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
         artifact_root,
         artifact_relative,
     )
+    try:
+        artifact_content = audit_core.read_repository_file(
+            artifact_root,
+            artifact_relative,
+            max_bytes=LAUNCH_MAX_ARTIFACT_BYTES,
+            max_seconds=LAUNCH_ARTIFACT_TIMEOUT_SECONDS,
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(
+            "Launch evidence artifact could not be read with stable bounded identity."
+        ) from exc
+    if (
+        len(artifact_content) != artifact_size
+        or hashlib.sha256(artifact_content).hexdigest() != artifact_digest
+    ):
+        raise ToolError("Launch evidence artifact changed while it was being evaluated.")
+    expected_target = {
+        "gitHead": subject["gitHead"],
+        "targetEnvironment": session["targetEnvironment"],
+        "deploymentFingerprint": session["deploymentFingerprint"],
+    }
+    try:
+        normalized = launch_core.parse_artifact_bytes(
+            artifact_content,
+            artifact_format=artifact_format,
+            control_id=control_id,
+            requirement_id=requirement_id,
+            expected_target=expected_target,
+        )
+        evaluation = launch_core.evaluate_requirement(
+            normalized,
+            requirement,
+        )
+    except launch_core.EvidenceError as exc:
+        raise ToolError(str(exc)) from exc
+    if requirement["independent"] and not evaluation["producerIndependent"]:
+        raise ToolError(
+            "This evidence requirement requires an independent producer."
+        )
+    outcome = str(evaluation["derivedOutcome"])
+    if outcome == "not-applicable" and not control["allowNotApplicable"]:
+        raise ToolError(
+            "This selected launch control does not permit a not-applicable outcome."
+        )
     max_age_minutes = min(
         int(control["maxAgeMinutes"]),
         int(policy.get("launch", {}).get("maxEvidenceAgeMinutes", 1440)),
     )
     observed, expires = _launch_observed_at(
-        args.get("observed_at"),
+        evaluation["observedAt"],
         max_age_minutes=max_age_minutes,
     )
     session_digest = hashlib.sha256(session_token.encode("utf-8")).hexdigest()
     receipt = issue_receipt(
         {
             "kind": "launch-evidence",
-            "schemaVersion": "jstack.launch.evidence.v1",
+            "schemaVersion": "jstack.launch.evidence.v2",
             "projectPath": subject["gitRoot"],
             "gitHead": subject["gitHead"],
             "projectFingerprint": subject["projectFingerprint"],
@@ -7654,16 +7989,28 @@ def tool_launch_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
             "catalogDigest": selection["catalogDigest"],
             "selectionDigest": selection["selectionDigest"],
             "launchSessionDigest": session_digest,
+            "riskTier": selection["riskTier"],
+            "deploymentFingerprint": selection["deploymentFingerprint"],
             "controlId": control_id,
+            "requirementId": requirement_id,
             "category": control["category"],
             "gateLevel": control["effectiveGateLevel"],
             "evidenceKind": evidence_kind,
-            "outcome": outcome,
-            "verifier": verifier,
+            "artifactFormat": artifact_format,
+            "derivedOutcome": outcome,
+            "machineEvaluated": evaluation["machineEvaluated"],
+            "producerFingerprint": evaluation["producerFingerprint"],
+            "producerIndependent": evaluation["producerIndependent"],
+            "semanticDigest": evaluation["semanticDigest"],
+            "assertionCount": evaluation["assertionCount"],
+            "requiredAssertionCount": evaluation["requiredAssertionCount"],
+            "observationCount": evaluation["observationCount"],
+            "complete": evaluation["complete"],
+            "truncated": evaluation["truncated"],
+            "findingCounts": evaluation["findingCounts"],
             "sourceReferenceDigest": hashlib.sha256(
                 source_reference.encode("utf-8")
             ).hexdigest(),
-            "summaryDigest": hashlib.sha256(summary.encode("utf-8")).hexdigest(),
             "artifactSha256": artifact_digest,
             "artifactSize": artifact_size,
             "artifactPathDigest": hashlib.sha256(
@@ -7676,13 +8023,16 @@ def tool_launch_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return {
-        "schemaVersion": "jstack.launch.evidence-registration.v1",
+        "schemaVersion": "jstack.launch.evidence-registration.v2",
         "control": {
             "id": control_id,
+            "requirementId": requirement_id,
             "category": control["category"],
             "gateLevel": control["effectiveGateLevel"],
             "evidenceKind": evidence_kind,
-            "outcome": outcome,
+            "artifactFormat": artifact_format,
+            "derivedOutcome": outcome,
+            "machineEvaluated": evaluation["machineEvaluated"],
         },
         "artifact": {
             "sha256": artifact_digest,
@@ -7695,7 +8045,12 @@ def tool_launch_evidence_register(args: dict[str, Any]) -> dict[str, Any]:
         "expiresAt": expires.isoformat(),
         "launchEvidenceReceipt": receipt,
         "executionAuthorized": False,
-        "attestationLimit": "JStack verified bounded artifact identity, freshness, and contract binding. The named verifier remains accountable for the semantic outcome.",
+        "attestationLimit": (
+            "JStack parsed the bounded artifact, derived its outcome from the selected "
+            "assertion contract, and bound it to the exact Git/environment/deployment "
+            "target. JStack does not certify producer honesty, legal conclusions, or "
+            "facts that the evidence source did not independently observe."
+        ),
     }
 
 
@@ -7704,13 +8059,18 @@ def _launch_waivers(
     *,
     selected: dict[str, dict[str, Any]],
     policy: dict[str, Any],
+    risk_tier: str,
 ) -> dict[str, dict[str, Any]]:
     if values is None:
         return {}
     if not isinstance(values, list) or len(values) > LAUNCH_MAX_RECEIPTS:
-        raise ToolError("waivers must be an array of at most 100 records.")
+        raise ToolError(
+            f"waivers must be an array of at most {LAUNCH_MAX_RECEIPTS} records."
+        )
     if values and not policy.get("launch", {}).get("allowWaivers", True):
         raise ToolError("Enterprise launch policy disables waivers.")
+    if values and risk_tier == "critical":
+        raise ToolError("Critical-risk launch controls may not be waived.")
     expected_fields = {
         "control_id",
         "owner",
@@ -7733,6 +8093,13 @@ def _launch_waivers(
         if control_id in result:
             raise ToolError(f"Duplicate waiver for launch control: {control_id}")
         control = selected[control_id]
+        if (
+            risk_tier in {"high", "critical"}
+            and control["category"] == "security"
+        ):
+            raise ToolError(
+                f"High- and critical-risk security control '{control_id}' may not be waived."
+            )
         if control["effectiveGateLevel"] == "blocker" or not control["waivable"]:
             raise ToolError(f"Launch control '{control_id}' may not be waived.")
         owner = _launch_safe_text(raw.get("owner"), f"waivers[{index}].owner", maximum=200)
@@ -7807,7 +8174,9 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
     )
     raw_receipts = args.get("evidence_receipts")
     if not isinstance(raw_receipts, list) or len(raw_receipts) > LAUNCH_MAX_RECEIPTS:
-        raise ToolError("evidence_receipts must be an array of at most 100 receipts.")
+        raise ToolError(
+            f"evidence_receipts must be an array of at most {LAUNCH_MAX_RECEIPTS} receipts."
+        )
     if any(
         not isinstance(receipt, str)
         or not receipt
@@ -7820,19 +8189,30 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
     selected = {
         str(control["id"]): control for control in selection["selectedControls"]
     }
+    requirements_by_control = {
+        control_id: {
+            str(requirement["id"]): requirement
+            for requirement in control["activeEvidenceRequirements"]
+        }
+        for control_id, control in selected.items()
+    }
     waivers = _launch_waivers(
         args.get("waivers"),
         selected=selected,
         policy=policy,
+        risk_tier=selection["riskTier"],
     )
-    evidence_by_control: dict[str, dict[str, Any]] = {}
-    evidence_receipt_digests: dict[str, str] = {}
+    evidence_by_requirement: dict[
+        tuple[str, str],
+        list[tuple[dict[str, Any], str]],
+    ] = {}
     receipt_verification: list[dict[str, Any]] = []
     blockers: list[str] = []
     warnings: list[str] = []
     session_digest = hashlib.sha256(session_token.encode("utf-8")).hexdigest()
     now = _dt.datetime.now(_dt.timezone.utc)
     evidence_expiries: list[_dt.datetime] = []
+    seen_semantic_evidence: set[tuple[str, str, str]] = set()
     for index, receipt in enumerate(raw_receipts):
         try:
             verification = verify_receipt(
@@ -7847,12 +8227,15 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
             continue
         payload = verification["payload"]
         control_id = str(payload.get("controlId") or "")
+        requirement_id = str(payload.get("requirementId") or "")
         control = selected.get(control_id)
+        requirement = requirements_by_control.get(control_id, {}).get(requirement_id)
         contract_checks = {
             "receipt": verification["valid"],
             "schemaVersion": payload.get("schemaVersion")
-            == "jstack.launch.evidence.v1",
+            == "jstack.launch.evidence.v2",
             "selectedControl": control is not None,
+            "selectedRequirement": requirement is not None,
             "catalogVersion": payload.get("catalogVersion")
             == selection["catalogVersion"],
             "catalogDigest": payload.get("catalogDigest")
@@ -7860,102 +8243,236 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "selectionDigest": payload.get("selectionDigest")
             == selection["selectionDigest"],
             "session": payload.get("launchSessionDigest") == session_digest,
+            "riskTier": payload.get("riskTier") == selection["riskTier"],
+            "deploymentFingerprint": payload.get("deploymentFingerprint")
+            == selection["deploymentFingerprint"],
         }
-        if control is not None:
+        if control is not None and requirement is not None:
             contract_checks.update(
                 {
                     "category": payload.get("category") == control["category"],
                     "gateLevel": payload.get("gateLevel")
                     == control["effectiveGateLevel"],
                     "evidenceKind": payload.get("evidenceKind")
-                    in control["evidenceKinds"],
-                    "outcome": payload.get("outcome")
+                    in requirement["evidenceKinds"],
+                    "artifactFormat": payload.get("artifactFormat")
+                    in requirement["artifactFormats"],
+                    "outcome": payload.get("derivedOutcome")
                     in {"pass", "fail", "incomplete", "not-applicable"},
-                    "notApplicableAllowed": payload.get("outcome")
+                    "notApplicableAllowed": payload.get("derivedOutcome")
                     != "not-applicable"
                     or control["allowNotApplicable"],
+                    "machineEvaluation": payload.get("machineEvaluated")
+                    is requirement["machineVerifiable"],
+                    "independence": not requirement["independent"]
+                    or payload.get("producerIndependent") is True,
                 }
             )
-        artifact_shape = (
+        contract_checks["artifactIdentity"] = bool(
             isinstance(payload.get("artifactSha256"), str)
-            and bool(re.fullmatch(r"[0-9a-f]{64}", payload["artifactSha256"]))
+            and re.fullmatch(r"[0-9a-f]{64}", payload["artifactSha256"])
             and isinstance(payload.get("artifactSize"), int)
             and not isinstance(payload.get("artifactSize"), bool)
             and 0 <= payload["artifactSize"] <= LAUNCH_MAX_ARTIFACT_BYTES
         )
-        contract_checks["artifactIdentity"] = artifact_shape
+        contract_checks["semanticIdentity"] = bool(
+            isinstance(payload.get("semanticDigest"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", payload["semanticDigest"])
+            and isinstance(payload.get("producerFingerprint"), str)
+            and re.fullmatch(r"[0-9a-f]{64}", payload["producerFingerprint"])
+            and isinstance(payload.get("observationCount"), int)
+            and not isinstance(payload.get("observationCount"), bool)
+            and payload["observationCount"] >= 0
+            and isinstance(payload.get("complete"), bool)
+            and isinstance(payload.get("truncated"), bool)
+        )
         valid = all(contract_checks.values())
         receipt_verification.append(
             {
                 "index": index,
                 "controlId": control_id or None,
+                "requirementId": requirement_id or None,
                 "valid": valid,
                 "checks": contract_checks,
             }
         )
         if not valid:
             blockers.append(
-                f"Launch evidence receipt {index + 1} does not match the current launch contract."
+                f"Launch evidence receipt {index + 1} does not match the current v2 launch contract."
             )
             continue
-        if control_id in evidence_by_control:
+        semantic_key = (
+            control_id,
+            requirement_id,
+            str(payload["semanticDigest"]),
+        )
+        if semantic_key in seen_semantic_evidence:
             blockers.append(
-                f"Multiple launch evidence receipts target control '{control_id}'; provide exactly one current outcome."
+                f"Duplicate semantic evidence targets '{control_id}/{requirement_id}'."
             )
             continue
-        evidence_by_control[control_id] = payload
-        evidence_receipt_digests[control_id] = hashlib.sha256(
-            receipt.encode("utf-8")
-        ).hexdigest()
+        seen_semantic_evidence.add(semantic_key)
+        receipt_digest = hashlib.sha256(receipt.encode("utf-8")).hexdigest()
+        evidence_by_requirement.setdefault(
+            (control_id, requirement_id),
+            [],
+        ).append((payload, receipt_digest))
         try:
             evidence_expiry = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
             if evidence_expiry.tzinfo is None:
                 raise ValueError("timezone")
             evidence_expiries.append(evidence_expiry.astimezone(_dt.timezone.utc))
         except (KeyError, ValueError):
-            blockers.append(f"Launch evidence for '{control_id}' has no valid expiry.")
+            blockers.append(
+                f"Launch evidence for '{control_id}/{requirement_id}' has no valid expiry."
+            )
 
     control_results: list[dict[str, Any]] = []
     for control in selection["selectedControls"]:
         control_id = str(control["id"])
         gate_level = str(control["effectiveGateLevel"])
-        evidence = evidence_by_control.get(control_id)
         waiver = waivers.get(control_id)
         if waiver:
-            status = "waived"
             control_results.append(
                 {
                     "controlId": control_id,
                     "sequence": control["sequence"],
                     "category": control["category"],
                     "gateLevel": gate_level,
-                    "status": status,
-                    "evidenceReceiptDigest": evidence_receipt_digests.get(
-                        control_id
-                    ),
+                    "status": "waived",
+                    "evidenceReceiptDigests": [],
+                    "requirementResults": [],
                     "waiverDigest": waiver["recordDigest"],
                 }
             )
             continue
-        if evidence is None:
+        requirement_results: list[dict[str, Any]] = []
+        requirement_statuses: list[str] = []
+        control_evidence_digests: list[str] = []
+        passing_producers_by_requirement: dict[str, set[str]] = {}
+        for requirement in control["activeEvidenceRequirements"]:
+            requirement_id = str(requirement["id"])
+            records = evidence_by_requirement.get(
+                (control_id, requirement_id),
+                [],
+            )
+            receipt_digests = sorted(record[1] for record in records)
+            control_evidence_digests.extend(receipt_digests)
+            outcomes = [str(record[0]["derivedOutcome"]) for record in records]
+            pass_count = outcomes.count("pass")
+            producers = {
+                str(record[0]["producerFingerprint"])
+                for record in records
+                if record[0].get("derivedOutcome") == "pass"
+            }
+            passing_producers_by_requirement[requirement_id] = producers
+            independent_passes = [
+                record
+                for record in records
+                if record[0].get("derivedOutcome") == "pass"
+                and record[0].get("producerIndependent") is True
+            ]
+            if not records:
+                requirement_status = "incomplete"
+                detail = "no current evidence"
+            elif "fail" in outcomes:
+                requirement_status = "fail"
+                detail = "at least one structured evidence result failed"
+                if len(set(outcomes)) > 1:
+                    blockers.append(
+                        f"Contradictory evidence targets '{control_id}/{requirement_id}'."
+                    )
+            elif "incomplete" in outcomes:
+                requirement_status = "incomplete"
+                detail = "at least one evidence result is incomplete or truncated"
+            elif "not-applicable" in outcomes and "pass" in outcomes:
+                requirement_status = "incomplete"
+                detail = "pass and not-applicable outcomes conflict"
+            elif outcomes and set(outcomes) == {"not-applicable"}:
+                requirement_status = (
+                    "not-applicable"
+                    if control["allowNotApplicable"]
+                    else "fail"
+                )
+                detail = (
+                    "accountable not-applicable evidence"
+                    if control["allowNotApplicable"]
+                    else "not-applicable is forbidden for this control"
+                )
+            elif pass_count < int(requirement["minimumCount"]):
+                requirement_status = "incomplete"
+                detail = "minimum evidence count is not met"
+            elif len(producers) < int(requirement["minimumDistinctProducers"]):
+                requirement_status = "incomplete"
+                detail = "minimum distinct producer count is not met"
+            elif requirement["independent"] and not independent_passes:
+                requirement_status = "incomplete"
+                detail = "independent producer evidence is absent"
+            else:
+                requirement_status = "pass"
+                detail = "structured requirement contract passed"
+            requirement_statuses.append(requirement_status)
+            requirement_results.append(
+                {
+                    "requirementId": requirement_id,
+                    "status": requirement_status,
+                    "evidenceCount": len(records),
+                    "passingEvidenceCount": pass_count,
+                    "distinctProducerCount": len(producers),
+                    "independentEvidencePresent": bool(independent_passes),
+                    "evidenceReceiptDigests": receipt_digests,
+                    "detail": detail,
+                }
+            )
+        if (
+            selection["riskTier"] == "critical"
+            and control_id == "security-final-independent-scan"
+        ):
+            scanner_producers = passing_producers_by_requirement.get(
+                "independent-security-scan",
+                set(),
+            )
+            human_producers = passing_producers_by_requirement.get(
+                "critical-human-security-review",
+                set(),
+            )
+            if scanner_producers & human_producers:
+                for result in requirement_results:
+                    if (
+                        result["requirementId"]
+                        == "critical-human-security-review"
+                    ):
+                        result["status"] = "incomplete"
+                        result["detail"] = (
+                            "critical human review must use a producer distinct "
+                            "from the independent scanner"
+                        )
+                blockers.append(
+                    "Critical security review and scanner evidence must come "
+                    "from distinct producers."
+                )
+                requirement_statuses = [
+                    str(result["status"])
+                    for result in requirement_results
+                ]
+        if "fail" in requirement_statuses:
+            status = "fail"
+        elif "incomplete" in requirement_statuses:
             status = "incomplete"
-            message = f"Launch control '{control_id}' has no current evidence."
+        elif "not-applicable" in requirement_statuses and "pass" in requirement_statuses:
+            status = "incomplete"
+        elif requirement_statuses and set(requirement_statuses) == {"not-applicable"}:
+            status = "not-applicable"
+        elif requirement_statuses and set(requirement_statuses) == {"pass"}:
+            status = "pass"
+        else:
+            status = "incomplete"
+        if status in {"fail", "incomplete"}:
+            message = f"Launch control '{control_id}' has derived outcome '{status}'."
             if gate_level in {"blocker", "required"}:
                 blockers.append(message)
             else:
                 warnings.append(message)
-            evidence_digest = None
-        else:
-            status = str(evidence["outcome"])
-            evidence_digest = evidence_receipt_digests[control_id]
-            if status in {"fail", "incomplete"}:
-                message = (
-                    f"Launch control '{control_id}' has outcome '{status}'."
-                )
-                if gate_level in {"blocker", "required"}:
-                    blockers.append(message)
-                else:
-                    warnings.append(message)
         control_results.append(
             {
                 "controlId": control_id,
@@ -7963,7 +8480,8 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
                 "category": control["category"],
                 "gateLevel": gate_level,
                 "status": status,
-                "evidenceReceiptDigest": evidence_digest,
+                "evidenceReceiptDigests": sorted(set(control_evidence_digests)),
+                "requirementResults": requirement_results,
                 "waiverDigest": None,
             }
         )
@@ -7985,7 +8503,7 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
     launch_receipt = issue_receipt(
         {
             "kind": "launch",
-            "schemaVersion": "jstack.launch.receipt.v1",
+            "schemaVersion": "jstack.launch.receipt.v2",
             "projectPath": subject["gitRoot"],
             "gitHead": subject["gitHead"],
             "projectFingerprint": subject["projectFingerprint"],
@@ -7996,6 +8514,14 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "catalogVersion": selection["catalogVersion"],
             "catalogDigest": selection["catalogDigest"],
             "selectionDigest": selection["selectionDigest"],
+            "riskTier": selection["riskTier"],
+            "derivedRiskFloor": selection["derivedRiskFloor"],
+            "policyRiskFloor": selection["policyRiskFloor"],
+            "deploymentFingerprint": selection["deploymentFingerprint"],
+            "surfaceHintDigest": selection["surfaceHintDigest"],
+            "surfaceReconciliationDigest": selection[
+                "surfaceReconciliationDigest"
+            ],
             "targetEnvironment": session["targetEnvironment"],
             "targetUrl": session.get("targetUrl"),
             "surfaces": selection["surfaces"],
@@ -8009,11 +8535,14 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return {
-        "schemaVersion": "jstack.launch.finalization.v1",
+        "schemaVersion": "jstack.launch.finalization.v2",
         "projectPath": str(project_path),
         "targetEnvironment": session["targetEnvironment"],
         "targetUrl": session.get("targetUrl"),
         "surfaces": selection["surfaces"],
+        "riskTier": selection["riskTier"],
+        "derivedRiskFloor": selection["derivedRiskFloor"],
+        "deploymentFingerprint": selection["deploymentFingerprint"],
         "ready": ready,
         "complete": ready,
         "passed": ready,
@@ -8025,7 +8554,12 @@ def tool_launch_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "receiptVerification": receipt_verification,
         "launchReceipt": launch_receipt,
         "expiresAt": expires.isoformat(),
-        "attestationLimit": "The receipt proves current contract-bound evidence records and named attestations, not independent semantic truth or legal certification.",
+        "attestationLimit": (
+            "The receipt proves that JStack parsed current target-bound evidence and "
+            "derived every control status from the catalogued assertion contract. It "
+            "does not certify producer honesty, facts outside the observed scope, or "
+            "jurisdiction-dependent legal conclusions."
+        ),
         "actionSafety": {
             "launchReadyIsNotExecution": True,
             "mode": "host-native",
@@ -8122,20 +8656,19 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
         )
         launch_payload = verified_launch.get("payload") or {}
         try:
-            receipt_selection = _launch_call(
-                lambda: launch_core.select_controls(
-                    list(launch_payload.get("surfaces") or []),
-                    target_environment=str(
-                        launch_payload.get("targetEnvironment") or ""
-                    ),
-                    target_url=launch_payload.get("targetUrl"),
-                    required_control_ids=launch_policy.get(
-                        "requiredControlIds", []
-                    ),
-                    advisory_control_ids=launch_policy.get(
-                        "advisoryControlIds", []
-                    ),
-                )
+            current_detection = _launch_surface_detection(project_path)
+            _, receipt_selection = _launch_selection(
+                project_path,
+                list(launch_payload.get("surfaces") or []),
+                str(launch_payload.get("targetEnvironment") or ""),
+                launch_payload.get("targetUrl"),
+                str(launch_payload.get("riskTier") or ""),
+                str(launch_payload.get("deploymentFingerprint") or ""),
+                current_detection["hintDigest"],
+                str(
+                    launch_payload.get("surfaceReconciliationDigest")
+                    or ""
+                ),
             )
             launch_contract_current = (
                 launch_payload.get("catalogVersion")
@@ -8146,6 +8679,12 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
                 == receipt_selection["selectionDigest"]
                 and launch_payload.get("surfaces")
                 == receipt_selection["surfaces"]
+                and launch_payload.get("riskTier")
+                == receipt_selection["riskTier"]
+                and launch_payload.get("deploymentFingerprint")
+                == receipt_selection["deploymentFingerprint"]
+                and launch_payload.get("surfaceHintDigest")
+                == current_detection["hintDigest"]
             )
         except ToolError:
             receipt_selection = None
@@ -8153,7 +8692,7 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
         launch_passes_release = (
             verified_launch["valid"]
             and launch_payload.get("schemaVersion")
-            == "jstack.launch.receipt.v1"
+            == "jstack.launch.receipt.v2"
             and launch_payload.get("complete") is True
             and launch_payload.get("passed") is True
             and launch_payload.get("targetEnvironment") == target_environment
@@ -8662,10 +9201,8 @@ def _loop_receipt_evidence(
             )
         else:
             payload = verification["payload"]
-            launch_policy = load_enterprise_policy(
-                Path(subject["gitRoot"])
-            ).get("launch", {})
             try:
+                project_path = Path(subject["gitRoot"])
                 environment = _launch_environment(
                     payload.get("targetEnvironment")
                 )
@@ -8674,27 +9211,33 @@ def _loop_receipt_evidence(
                         list(payload.get("surfaces") or [])
                     )
                 )
-                selection = _launch_call(
-                    lambda: launch_core.select_controls(
-                        surfaces,
-                        target_environment=environment,
-                        target_url=payload.get("targetUrl"),
-                        required_control_ids=launch_policy.get(
-                            "requiredControlIds", []
-                        ),
-                        advisory_control_ids=launch_policy.get(
-                            "advisoryControlIds", []
-                        ),
-                    )
+                current_detection = _launch_surface_detection(project_path)
+                _, selection = _launch_selection(
+                    project_path,
+                    surfaces,
+                    environment,
+                    payload.get("targetUrl"),
+                    str(payload.get("riskTier") or ""),
+                    str(payload.get("deploymentFingerprint") or ""),
+                    current_detection["hintDigest"],
+                    str(payload.get("surfaceReconciliationDigest") or ""),
                 )
                 contract_checks = {
                     "schemaVersion": payload.get("schemaVersion")
-                    == "jstack.launch.receipt.v1",
+                    == "jstack.launch.receipt.v2",
                     "complete": payload.get("complete") is True,
                     "passed": payload.get("passed") is True,
                     "targetEnvironment": payload.get("targetEnvironment")
                     == environment,
                     "surfaces": payload.get("surfaces") == surfaces,
+                    "riskTier": payload.get("riskTier")
+                    == selection["riskTier"],
+                    "deploymentFingerprint": payload.get(
+                        "deploymentFingerprint"
+                    )
+                    == selection["deploymentFingerprint"],
+                    "surfaceHintDigest": payload.get("surfaceHintDigest")
+                    == current_detection["hintDigest"],
                     "catalogVersion": payload.get("catalogVersion")
                     == selection["catalogVersion"],
                     "catalogDigest": payload.get("catalogDigest")
@@ -8713,6 +9256,10 @@ def _loop_receipt_evidence(
                     "receiptDigest": digest,
                     "targetEnvironment": environment,
                     "surfaces": surfaces,
+                    "riskTier": selection["riskTier"],
+                    "deploymentFingerprint": selection[
+                        "deploymentFingerprint"
+                    ],
                     "selectionDigest": selection["selectionDigest"],
                     "complete": True,
                     "passed": True,
@@ -11813,13 +12360,15 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_launch_assess": {
-        "description": "Create a commit-bound, applicability-aware launch contract from the versioned 37-control catalogue. This assessment performs no network request or external action.",
+        "description": "Create a commit-, environment-, deployment-, risk-, and surface-bound Launch Assurance v2 contract from the versioned 47-control catalogue. Static surface hints must be included or reconciled by an accountable owner. This assessment performs no network request or external action.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
             "required": [
                 "base_ref",
                 "surfaces",
+                "risk_tier",
+                "deployment_fingerprint",
                 "target_environment",
                 "profile_owner",
             ],
@@ -11839,6 +12388,16 @@ TOOLS: dict[str, dict[str, Any]] = {
                         "enum": list(launch_core.SURFACE_IDS),
                     },
                 },
+                "risk_tier": {
+                    "type": "string",
+                    "enum": list(launch_core.RISK_TIERS),
+                    "description": "Declared launch risk tier. JStack rejects a tier below the surface- or policy-derived floor.",
+                },
+                "deployment_fingerprint": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": "Exact immutable deployment, build, image, or artifact fingerprint being assessed.",
+                },
                 "target_environment": {
                     "type": "string",
                     "minLength": 2,
@@ -11857,25 +12416,65 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "maxLength": 500,
                 },
+                "surface_reconciliation": {
+                    "type": "array",
+                    "maxItems": len(launch_core.SURFACE_IDS),
+                    "description": "Accountable include or not-applicable decisions for statically detected surface hints.",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "surface",
+                            "decision",
+                            "owner",
+                            "rationale",
+                            "evidence_reference",
+                        ],
+                        "properties": {
+                            "surface": {
+                                "type": "string",
+                                "enum": list(launch_core.SURFACE_IDS),
+                            },
+                            "decision": {
+                                "type": "string",
+                                "enum": ["not-applicable"],
+                            },
+                            "owner": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200,
+                            },
+                            "rationale": {
+                                "type": "string",
+                                "minLength": 10,
+                                "maxLength": 1000,
+                            },
+                            "evidence_reference": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500,
+                            },
+                        },
+                    },
+                },
             },
         },
         "handler": tool_launch_assess,
         "readOnlyHint": True,
     },
     "gstack_launch_evidence_register": {
-        "description": "Hash and register one bounded launch-evidence artifact against an exact selected control. JStack does not return artifact content or independently certify the named verifier's semantic claim.",
+        "description": "Parse, evaluate, hash, and register one bounded structured evidence artifact against an exact selected control requirement. JStack derives the outcome from required assertions; prose and arbitrary files cannot satisfy a control.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
             "required": [
                 "launch_session_token",
                 "control_id",
+                "requirement_id",
                 "evidence_kind",
-                "outcome",
+                "artifact_format",
                 "artifact_path",
-                "verifier",
                 "source_reference",
-                "summary",
             ],
             "properties": {
                 "project_path": {"type": "string"},
@@ -11889,37 +12488,28 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "minLength": 3,
                     "maxLength": 80,
                 },
+                "requirement_id": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 120,
+                },
                 "evidence_kind": {
                     "type": "string",
                     "enum": list(launch_core.EVIDENCE_KINDS),
                 },
-                "outcome": {
+                "artifact_format": {
                     "type": "string",
-                    "enum": ["pass", "fail", "incomplete", "not-applicable"],
+                    "enum": list(launch_core.ARTIFACT_FORMATS),
                 },
                 "artifact_path": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 2000,
                 },
-                "verifier": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200,
-                },
                 "source_reference": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 500,
-                },
-                "summary": {
-                    "type": "string",
-                    "minLength": 10,
-                    "maxLength": 2000,
-                },
-                "observed_at": {
-                    "type": "string",
-                    "maxLength": 100,
                 },
             },
         },
@@ -11927,7 +12517,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_launch_finalize": {
-        "description": "Finalize the selected launch controls fail-closed and issue a current release-consumable launch receipt. Blocker controls cannot be waived; readiness executes no external action.",
+        "description": "Evaluate composite per-control evidence requirements fail-closed and issue a current release-consumable Launch Assurance v2 receipt. Critical controls and high/critical security controls cannot be waived; readiness executes no external action.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,

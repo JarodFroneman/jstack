@@ -11,10 +11,9 @@ evidence, launch assurance, release readiness, and mastery progression.
 - It does not create repositories, change remotes, commit, push, create pull
   requests, merge, tag, release, deploy, restart production, mutate external
   systems, or expose an arbitrary shell tool.
-- Every such action defaults to blocked and requires its own independently
-  signed exact challenge, unchanged Git/policy/branch/remote state, fresh
-  provider observation, destructive one-time consumption, and short-lived
-  permit. The MCP issues the permit but never executes the action.
+- Those actions remain separate from readiness evidence and may be performed
+  only within explicit user scope plus ordinary host/provider permissions.
+  JStack issues no custom challenge, token, signer command, or execution permit.
 - Static audit collection and finalization are read-only and perform no network
   work. They expose curated adapter discovery and exact-subject approved fixed
   execution, never caller-defined commands. Approved adapters are trusted-code
@@ -62,11 +61,14 @@ Git state. A specialist handoff receipt requires complete current role coverage
 and resolved contradictions. These receipts attest validation and binding, not
 semantic truth or release permission.
 
-Launch sessions bind the accountable surface declaration, catalog and selection
-digests, target environment, and bounded target URL. Per-control evidence
-receipts add a permitted evidence kind, verifier attestation, outcome, artifact
-hash, and expiry without returning artifact content. Final launch receipts
-require all blocker/required controls to resolve and cannot waive blockers.
+Launch v2 sessions bind the accountable surface/risk declaration, static hint
+and reconciliation digests, catalog and selection, target environment, bounded
+URL, and immutable deployment fingerprint. Per-requirement evidence receipts
+bind structured assertions, producer identity/independence, completeness,
+truncation, semantic digest, artifact hash, and JStack-derived outcome without
+returning content. Final receipts require every blocker/required composite
+requirement. High risk requires an independent scanner; critical risk also
+requires independent human security review and permits no waiver.
 
 Release readiness requires an explicit base, clean commit, current passing
 receipt for every discovered command, complete current and release-history
@@ -85,7 +87,7 @@ audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.
 
-JStack v0.8.2 has no custom action-approval tools. It never asks for an approval
+Current JStack releases have no custom action-approval tools. JStack never asks for an approval
 token, signing key, challenge file, mailbox response, or terminal command.
 External operations use explicit user scope and normal host/provider
 permissions.

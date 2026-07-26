@@ -190,7 +190,7 @@ Expected dedicated layout:
    JSON-RPC smoke test.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
-during a routine upgrade. A v0.8.2 upgrade may leave the retired
+during a routine upgrade. An upgrade from v0.8.1 or earlier may leave the retired
 `~/.jstack/external-actions/` directory untouched so rollback remains
 possible; the current runtime never reads it.
 
@@ -203,7 +203,7 @@ unless the target release explicitly documents an incompatible migration.
 After rollback, restart Codex and rerun the installed MCP smoke test before
 resuming work.
 
-JStack v0.8.2 needs no action-identity configuration, signing key, challenge
+Current JStack releases need no action-identity configuration, signing key, challenge
 file, approval token, mailbox response, or terminal approval command. Remove
 retired `JSTACK_EXTERNAL_ACTION_*` and `JSTACK_PROGRAM_IDENTITY_CONFIG`
 environment settings from the MCP launcher after confirming the upgrade.

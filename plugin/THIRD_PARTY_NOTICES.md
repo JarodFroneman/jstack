@@ -1,5 +1,19 @@
 # Third-Party Notices
 
+## Pre-Launch Checklist Sources
+
+JStack Launch Assurance adapts and paraphrases engineering concerns from:
+
+- Nico Burkart's reviewed 37-point pre-launch checklist:
+  https://nicoburkart.notion.site/e6e88fff5ddf48a09248e2c8368445d1
+- Prajwal Tomar's shared pre-launch article:
+  https://x.com/PrajwalTomar_/status/2080974596392837123
+
+JStack does not reproduce either article. It converts the reviewed concerns
+into its own provider-neutral controls, risk floors, structured evidence
+requirements, and safety boundaries. Vendor prescriptions and
+jurisdiction-specific legal conclusions are not adopted as universal policy.
+
 ## Agency Agents
 
 JStack's specialist capability catalog adapts selected ideas and workflow

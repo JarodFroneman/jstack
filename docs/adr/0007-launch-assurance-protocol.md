@@ -1,5 +1,8 @@
 # ADR 0007: Applicability-Aware Launch Assurance
 
+> Historical decision: the v1 caller-attested evidence model was superseded by
+> [ADR 0009](0009-launch-assurance-v2.md) in v0.9.0.
+
 > Update: external-action authorization details in this historical decision
 > were superseded by [ADR 0008](0008-host-native-action-safety.md) in v0.8.2.
 

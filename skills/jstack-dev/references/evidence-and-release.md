@@ -71,13 +71,13 @@ inconclusive evidence is not a pass.
 Readiness is evidence, not execution. Its result always reports
 `executionAuthorized=false`.
 
-Use [launch-assurance.md](launch-assurance.md) for profile declaration,
-per-control evidence, not-applicable rules, waivers, freshness, and the
+Use [launch-assurance.md](launch-assurance.md) for risk/profile declaration,
+per-requirement evidence, surface reconciliation, waivers, freshness, and the
 live-provider safety boundary.
 
 ## Host-Native Action Safety
 
-JStack v0.8.2 has no approval challenge, token, signer, mailbox, or terminal
+Current JStack releases have no approval challenge, token, signer, mailbox, or terminal
 approval step. Repository, Git, provider, deployment, and production actions
 use the user's explicit request and normal Codex/provider permissions.
 

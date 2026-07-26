@@ -55,7 +55,7 @@ JStack makes those controls explicit.
 | "Tests passed" exists only as prose | QA and security receipts tied to the exact Git revision, workspace, policy, and command |
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
 | A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
-| A web/email/payment launch checklist is forgotten or applied to the wrong project | Explicit product surfaces select a versioned 37-control catalog and require fresh typed launch evidence |
+| A launch checklist is incomplete, under-scoped, or “passed” with prose | Risk floors and detected surface hints select 47 controls; JStack derives results from structured, target-bound assertions |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
 | Release confidence or a broad phase request silently triggers publication | Evidence remains separate from execution; external actions stay within explicit user scope and normal host/provider permissions, with no JStack token or terminal ceremony |
@@ -80,7 +80,7 @@ not edit project code.
 
 ### Specialist capabilities inside the five commands
 
-JStack v0.8 upgrades the existing commands rather than adding a sixth command.
+JStack upgrades the existing commands rather than adding a sixth command.
 The selected delivery mode still decides who works and who may edit; a
 deterministic capability plan then decides which task-specific methods each
 selected role must apply. For example, an API change can route contract and
@@ -124,14 +124,14 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.8.2
+## What Ships In v0.9.0
 
 | Capability | What it provides |
 | --- | --- |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
-| Launch assurance | Explicit surface profiles, a versioned 37-control catalog, bounded typed evidence, fail-closed finalization, and a mandatory production launch receipt |
+| Launch assurance | 22 explicit surfaces, four non-lowerable risk tiers, a versioned 47-control catalog, static hint reconciliation, composite structured evidence, independent high-risk scanning, and fail-closed production receipts |
 | Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the existing five commands |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
 | Audit system | Read-only quick, standard, deep, and release profiles with deterministic finalization and SARIF output |
@@ -347,7 +347,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
 | [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |
-| [Launch assurance](docs/launch-assurance.md) | [v0.8 migration guide](docs/migration-0.8.md) |
+| [Launch assurance](docs/launch-assurance.md) | [v0.9 migration guide](docs/migration-0.9.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |
 | [v0.8.2 migration guide](docs/migration-0.8.2.md) | [Host-native action safety](docs/action-safety.md) |

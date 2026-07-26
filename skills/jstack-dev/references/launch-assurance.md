@@ -1,81 +1,74 @@
 # Launch Assurance
 
-Use launch assurance for a clean, committed release candidate. It adds a
-typed product-launch gate to QA, security, audit, rollback, and monitoring; it
-does not replace any of them.
+Use Launch Assurance v2 for a clean, committed release candidate. It adds a
+risk-tiered product-launch gate to QA, security, audit, rollback, and
+monitoring; it does not replace any of them.
 
-## Declare applicability
+## Assess exact applicability
 
-Call `jstack_launch_assess` with an explicit `base_ref`, target environment,
-accountable profile owner, reference, and every applicable surface:
+Call `jstack_launch_assess` with:
 
-- `core`: always required.
-- `public-web`: internet-reachable web, API, or documentation surface.
-- `browser-ui`: browser-operated user interface.
-- `authenticated`: login, authorization, entitlements, or paywall.
-- `database`: application data stored or read from a database.
-- `transactional-email`: account, billing, or other product email.
-- `search-indexed`: public pages intended for search discovery.
-- `performance-sensitive`: explicit latency or web-performance expectation.
-- `analytics`: analytics events or product measurement.
-- `payments`: monetary transaction or reconciliation behavior.
-- `commercial`: customer, subscriber, or paid product.
-- `tracking`: cookies, recordings, advertising, or non-essential tracking.
-- `ai-paid-endpoints`: abuse can create material AI, vendor, or compute cost.
-- `regulated-data`: personal, financial, health, or regulated data.
+- explicit `base_ref`;
+- `core` plus every applicable surface returned by the active catalog;
+- `risk_tier`;
+- immutable lowercase SHA-256 `deployment_fingerprint`;
+- target environment and URL where required;
+- accountable profile owner and reference; and
+- `surface_reconciliation` for every detected-but-omitted hint.
 
-Do not omit a surface to avoid a control. JStack intentionally does not infer
-the profile because inference can silently miss business and legal facts. A
-production web-like target requires a bounded HTTPS URL without credentials,
-query text, or a fragment.
+Surface and project-policy risk floors cannot be lowered. Static detection is a
+completeness aid, not authority over business/legal facts. An unresolved hint
+returns no session token. Production web-like targets require bounded HTTPS
+URLs without credentials, query text, or fragments.
 
-## Collect typed evidence
+## Register every structured requirement
 
-For every selected blocker and required control, create a bounded evidence
-artifact inside the Git project or `~/.jstack/evidence`, then call
-`jstack_launch_evidence_register`. Use the control's permitted evidence kind
-and one honest outcome: `pass`, `fail`, `incomplete`, or `not-applicable`.
+Read `selection.selectedControls[].activeEvidenceRequirements`. For each
+blocker and required control, register every active requirement using its exact:
 
-JStack hashes the artifact, path identity, verifier, reference, and summary;
-it does not return artifact content. Keep raw secrets, personal data, payment
-data, mailbox credentials, full email bodies, session tokens, prompts, and
-unredacted telemetry out of evidence. The named verifier remains accountable
-for semantic truth. A hash proves which artifact was attested, not that the
-artifact's claim is correct.
+- `requirement_id`;
+- permitted `evidence_kind`;
+- permitted `artifact_format`; and
+- assertion and observation contract.
 
-`not-applicable` is allowed only on controls whose catalog metadata permits it
-and still requires current evidence. Changing the commit, policy, catalog,
-surface declaration, environment, or target invalidates affected receipts.
+Supported artifacts are native `jstack.launch.artifact.v2`, provider-neutral
+`jstack.scanner.result.v1`, or SARIF 2.1.0 with required JStack metadata. Keep
+them inside the project or `~/.jstack/evidence`. Never use a README, prose
+summary, arbitrary file, raw secret, personal/payment data, mailbox credential,
+prompt, session token, or unredacted telemetry as evidence.
+
+Do not provide an outcome, verifier, summary, or observation time in the tool
+call. JStack reads the artifact and derives `pass`, `fail`, `incomplete`, or
+permitted `not-applicable` from exact target binding, required assertions,
+observations, completeness, truncation, and producer constraints.
 
 ## Finalize fail-closed
 
-Call `jstack_launch_finalize` with exactly one current receipt per evidenced
-control. Missing, failed, incomplete, malformed, stale, duplicate, or
-contract-drifted blocker/required evidence prevents readiness. Missing or
-failed advisory evidence remains a warning.
+Call `jstack_launch_finalize` with all current evidence receipts. One artifact
+does not satisfy multiple requirements unless the catalog explicitly models it
+that way. Missing, failed, incomplete, malformed, stale, duplicate,
+contradictory, truncated, or contract-drifted blocker/required evidence blocks
+readiness.
 
-Blockers cannot be waived. A required control can be waived only when both the
-catalog and policy allow it, and the record names an owner, reason, external
-approval reference, expiry within 30 days, compensating control, and residual
-risk. A waiver is a structured recorded decision, not an authenticated legal
-or security certification.
+High risk promotes all selected security controls to blockers and requires an
+independent external scan. Critical risk promotes required controls to
+blockers, requires both independent scanner and independent human
+security-review evidence, and forbids all waivers. High/critical security
+controls cannot be waived. Other eligible waivers require owner, reason,
+external reference, bounded expiry, compensating control, and residual risk.
 
 ## Consume at release readiness
 
-Production `jstack_release_readiness` requires the current passing
-`launchReceipt`. A profile containing `public-web`, `commercial`, `payments`,
-or `regulated-data` also requires a current complete repository-wide
-release-profile audit receipt by default. Projects may strengthen the policy
-with additional required controls, shorter evidence age, more audit-triggering
-surfaces, or disabled waivers.
+Production `jstack_release_readiness` requires the current passing v2
+`launchReceipt`. Public-web, commercial, payments, and regulated-data profiles
+also require a current complete repository-wide release-profile audit by
+default.
 
 Launch tools perform no web requests, payments, deployments, or production
-mutations. Live payment, email, DNS, search-console, analytics, browser, legal,
-and device checks are performed through separately authorized safe workflows;
-JStack only registers their bounded evidence. A launch or release-readiness
-receipt always has `executionAuthorized=false` and never authorizes commit,
-push, pull request, merge, tag, release, deployment, or production mutation.
+mutations. They parse and bind evidence only. Every launch and release result
+has `executionAuthorized=false`.
 
-The 37-control v1 catalog adapts Nico Burkart's pre-launch checklist into
-conditional JStack engineering controls. Source priorities are retained only
-as provenance; JStack's gate levels and safety rules are independent judgments.
+The active 47-control v2 catalog adapts the reviewed pre-launch sources into
+provider-neutral engineering controls. JStack's risk floors, evidence model,
+and gates are independent judgments; legal sufficiency, producer honesty, and
+facts outside observed scope remain human-owned uncertainty.

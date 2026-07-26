@@ -72,6 +72,10 @@ from .models import (
 )
 from .redaction import REDACTED, contains_secret_like, deep_redact, redact_text
 from .sarif import to_sarif
+from .external_scanner import (
+    ExternalScannerError,
+    normalize_external_scan,
+)
 from .scope import (
     digest_repository_file,
     inventory_repository,
@@ -137,6 +141,8 @@ __all__ = [
     "score_benchmark",
     "score_benchmark_evaluation",
     "to_sarif",
+    "ExternalScannerError",
+    "normalize_external_scan",
     "validate_adapter_approval",
     "validate_adapter_request",
     "validate_benchmark_submission",

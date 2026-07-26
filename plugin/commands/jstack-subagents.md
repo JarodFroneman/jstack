@@ -92,12 +92,15 @@ For an active multi-agent JStack loop, pass the current validated
 `specialist_handoff_receipt` to every checkpoint and finalization.
 
 For production/release work, the Lead declares `core` plus every applicable
-surface on the clean integrated candidate. Route selected launch-control
-evidence through existing Security, QA, DevOps, Product, Reviewer, and
-accountable human owners; only the Lead registers and finalizes it. Missing or
-failed blocker/required evidence blocks handoff. Public-web, commercial,
-payment, and regulated-data profiles also require a release-profile audit by
-default. This adds capability packs, not a sixth command or new role.
+surface, risk tier, and immutable deployment fingerprint on the clean
+integrated candidate, then reconciles detected omissions. Route every active
+structured requirement through existing Security, QA, DevOps, Product,
+Reviewer, and accountable human owners; only the Lead registers and finalizes
+it. JStack derives outcomes from assertions. High-risk security requires an
+independent scanner; critical risk also requires independent human review and
+permits no waiver. Missing or failed blocker/required evidence blocks handoff.
+Public-web, commercial, payment, and regulated-data profiles also require a
+release-profile audit by default. This adds no sixth command or new role.
 
 JStack never generates approval challenges, tokens, signing commands, or
 terminal approval steps. Only the accountable Lead may perform repository,

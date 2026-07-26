@@ -56,8 +56,9 @@ For a release-profile audit, identify observable product surfaces and launch
 risks, but never silently declare the accountable launch profile. When the
 surrounding task supplies a current `jstack_launch_assess` selection, map cited
 audit evidence and findings to its applicable controls and keep uncovered
-controls explicit. Register a launch-control artifact only when the Audit Lead
-actually verified that bounded claim and can be named as its verifier.
+requirements explicit. Produce a launch artifact only when the Audit Lead
+actually observed every required assertion, exact deployment target, scope,
+completeness, and truncation field. JStack—not the audit prose—derives status.
 
 An audit receipt and a launch receipt are separate evidence layers. Neither
 substitutes for the other. Production profiles containing `public-web`,

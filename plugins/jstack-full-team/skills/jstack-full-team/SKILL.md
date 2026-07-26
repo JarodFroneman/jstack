@@ -91,15 +91,16 @@ Pass the current validated `specialist_handoff_receipt` to every checkpoint
 and finalization; the loop owns convergence and terminal status.
 
 For production/release work, the Lead declares `core` plus every applicable
-product surface with `jstack_launch_assess` on the clean integrated candidate.
-Route selected controls through the existing roster: Security, QA, DevOps,
-Product, Reviewer, Architect, and Documentation collect their bounded evidence;
-accountable humans own legal and merchant decisions. The Lead alone registers
-and finalizes the exact selection. Missing, stale, failed, incomplete, or
-drifted blocker/required launch evidence blocks synthesis. Public-web,
-commercial, payment, and regulated-data profiles also require a current
-release-profile audit receipt by default. Full-team staffing does not widen
-task scope.
+product surface, risk tier, and immutable deployment fingerprint with
+`jstack_launch_assess` on the clean integrated candidate, then reconciles
+detected omissions. Security, QA, DevOps, Product, Reviewer, Architect, and
+Documentation collect bounded structured requirement evidence; accountable
+humans own legal and merchant decisions. The Lead alone registers and
+finalizes. JStack derives outcomes. High-risk security requires an independent
+scanner; critical risk also requires independent human review and permits no
+waiver. Missing, stale, failed, incomplete, truncated, or drifted evidence
+blocks synthesis. Public-web, commercial, payment, and regulated-data profiles
+also require a current release-profile audit.
 
 JStack never generates approval challenges, tokens, signing commands, or
 terminal approval steps. Only the Lead may perform repository, Git, provider,

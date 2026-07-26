@@ -107,35 +107,91 @@ def launch_receipt(
     target_url: Optional[str] = None,
 ) -> dict:
     selected_surfaces = surfaces or ["core"]
+    deployment = hashlib.sha256(
+        ("test-deployment:" + git(repo, "rev-parse", "HEAD")).encode("utf-8")
+    ).hexdigest()
     assessment = server.tool_launch_assess(
         {
             "project_path": str(repo),
             "base_ref": base_ref,
             "surfaces": selected_surfaces,
+            "risk_tier": server.launch_core.derive_risk_floor(
+                selected_surfaces
+            ),
+            "deployment_fingerprint": deployment,
             "target_environment": "production",
             "target_url": target_url,
             "profile_owner": "test-launch-owner",
             "profile_reference": "TEST-LAUNCH-PROFILE",
+            "surface_reconciliation": [],
         }
     )
     evidence_receipts = []
+    evidence_root = repo / "__pycache__" / "launch-evidence"
+    evidence_root.mkdir(parents=True, exist_ok=True)
     for control in assessment["selection"]["selectedControls"]:
         if control["effectiveGateLevel"] == "advisory":
             continue
-        evidence = server.tool_launch_evidence_register(
-            {
-                "project_path": str(repo),
-                "launch_session_token": assessment["launchSessionToken"],
-                "control_id": control["id"],
-                "evidence_kind": control["evidenceKinds"][0],
-                "outcome": "pass",
-                "artifact_path": "README.md",
-                "verifier": "test-launch-verifier",
-                "source_reference": f"TEST-LAUNCH-{control['sequence']}",
-                "summary": "The test fixture records a bounded passing launch-control attestation.",
+        for requirement in control["activeEvidenceRequirements"]:
+            assertions = [
+                {
+                    "id": assertion_id,
+                    "status": "pass",
+                    "observations": (
+                        int(requirement["minimumObservations"])
+                        if index == 0
+                        else 1
+                    ),
+                }
+                for index, assertion_id in enumerate(
+                    requirement["requiredAssertions"]
+                )
+            ]
+            artifact = {
+                "schemaVersion": "jstack.launch.artifact.v2",
+                "controlId": control["id"],
+                "requirementId": requirement["id"],
+                "producer": {
+                    "name": (
+                        f"test-{control['id']}-{requirement['id']}"
+                    ),
+                    "version": "1.0.0",
+                    "independent": bool(requirement["independent"]),
+                },
+                "target": {
+                    "gitHead": git(repo, "rev-parse", "HEAD"),
+                    "targetEnvironment": "production",
+                    "deploymentFingerprint": deployment,
+                    "scope": ["."],
+                },
+                "observedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "complete": True,
+                "truncated": False,
+                "assertions": assertions,
             }
-        )
-        evidence_receipts.append(evidence["launchEvidenceReceipt"])
+            artifact_path = (
+                evidence_root
+                / f"{control['sequence']}-{requirement['id']}.json"
+            )
+            write_json(artifact_path, artifact)
+            evidence = server.tool_launch_evidence_register(
+                {
+                    "project_path": str(repo),
+                    "launch_session_token": assessment[
+                        "launchSessionToken"
+                    ],
+                    "control_id": control["id"],
+                    "requirement_id": requirement["id"],
+                    "evidence_kind": requirement["evidenceKinds"][0],
+                    "artifact_format": "jstack-json",
+                    "artifact_path": str(artifact_path),
+                    "source_reference": (
+                        f"TEST-LAUNCH-{control['sequence']}-"
+                        f"{requirement['id']}"
+                    ),
+                }
+            )
+            evidence_receipts.append(evidence["launchEvidenceReceipt"])
     return server.tool_launch_finalize(
         {
             "project_path": str(repo),
