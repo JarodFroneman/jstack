@@ -45,7 +45,9 @@ flowchart TD
 
 ## Tool Families
 
-- Intake: `jstack_program_goal_readiness`, `jstack_program_start`
+- Intake: `jstack_program_goal_readiness`, `jstack_program_start`. Readiness
+  asks at most three material questions per round, each with a reason and
+  recommended default, after repository inspection.
 - Recovery: `jstack_program_status`, `jstack_program_next`
 - Child proof: `jstack_program_phase_bind`,
   `jstack_program_phase_complete`

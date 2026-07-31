@@ -6,6 +6,7 @@ Canonical sources live in:
 
 - `mcp/jstack/jstack_mcp_server.py`
 - `mcp/jstack/capabilities/`
+- `mcp/jstack/context_readiness/`
 - `mcp/jstack/audit/`
 - `mcp/jstack/launch/`
 - `mcp/jstack/loop/`
@@ -26,6 +27,8 @@ JSON, and version mismatch.
 The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 
 - command/risk routing and enterprise gates
+- inspect-first adaptive context readiness with source attribution,
+  assumption disclosure, bounded questions, and stale-state planning receipts
 - project and policy inspection
 - team planning and coordination validation
 - deterministic role-bound capability routing and specialist handoff validation
@@ -48,6 +51,31 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 The MCP never spawns platform subagents and never performs repository, Git,
 provider, deployment, or production actions. Codex's platform tools perform
 real dispatch and action execution only after the applicable JStack boundary.
+
+## Adaptive Context Protocol
+
+`jstack_context_readiness` is a shared read-only intake contract for Dev,
+Subagents, Full Team, and Audit. It accepts structured facts tagged as user,
+repository, policy, external evidence, or inference; assumptions remain a
+separate list. The tool returns `ready`, `proceed_with_assumptions`,
+`needs_context`, or `needs_confirmation`, with no more than three material
+questions per round and a reason plus recommended default for each.
+
+Ready receipts contain only digests and binding metadata. Callers pass the
+separate bounded `normalizedBrief` into planning, where its digest, goal,
+workflow, and risk are verified so facts and assumptions stay visible without
+being embedded in the receipt. Audit briefs additionally bind every explicitly
+supplied profile, scope, focus, and base selector. Git-backed receipts
+bind HEAD and the complete project fingerprint; artifact-only receipts bind the
+resolved project path and explicit evidence limitation. Any material goal,
+workflow, tool-version, project, or Git-state change invalidates the receipt.
+High-risk defaults fail closed without explicit conversational confirmation.
+
+Loop and Program retain their stronger semantic contracts as the orchestration
+variant of the same gate. They reuse source-attributed context and bounded
+questions rather than creating a second user-visible intake round. The protocol
+adds no command, role, write permission, raw conversation storage, approval
+token, or terminal ceremony.
 
 ## Specialist Capability Protocol
 

@@ -17,14 +17,27 @@ Default behavior:
 4. Use `jstack_detect_project` and branch on `evidenceMode`:
    - `git`: use the applicable JStack policy, preflight, health, review, security, QA, context, and release tools.
    - `artifact-only`: state `MCP mounted; project binding is artifact-only.`, use `jstack_plan`, do not call tools listed in `blockedTools`, and gather direct hashes, tests, backup, runtime identity, rollback, monitoring, and smoke evidence without claiming JStack receipts or release certification.
-5. Resolve learning mode from an explicit `off`, `coach`, or `assessment`
+5. Inspect project instructions, stack, relevant files, and durable context,
+   then call `jstack_context_readiness` with
+   `workflow_mode="j-stack-dev"`. Supply source-attributed facts, separate
+   assumptions, and only material open questions. If it returns questions, ask
+   no more than three in normal chat, explain why each matters, and show its
+   recommended default. Clear prompts ask nothing. Reuse answers, never repeat
+   unchanged questions, and never request a token or terminal paste. Low-risk
+   recommended defaults may proceed as disclosed assumptions; high-risk
+   material defaults require explicit conversational confirmation. Confirm only
+   already displayed assumptions and never apply a new default batch in the
+   same call.
+6. Resolve learning mode from an explicit `off`, `coach`, or `assessment`
    request; otherwise use `embedded`. Call `jstack_plan` with
-   `team_mode="single-lead"` and that resolved mode. Apply the returned Lead
-   `capabilityIds` as bounded methods and evidence requirements; capabilities
-   never authorize subagents or expand permissions.
-6. Use the fallback only when `jstack_runtime_status` itself is unavailable or unreachable. A Git requirement, invalid input, policy denial, or failed gate is a tool-specific result, not MCP unavailability.
-7. Respect project `AGENTS.md`, safety rules, branch/deploy rules, and explicit user approvals.
-8. When an active JStack loop supplies a `loopId`, execute only the current
+   `team_mode="single-lead"`, that resolved mode, and the returned
+   `context_readiness_receipt` plus matching `normalizedBrief` as
+   `context_brief`. Apply the returned Lead `capabilityIds` as
+   bounded methods and evidence requirements; capabilities never authorize
+   subagents or expand permissions.
+7. Use the fallback only when `jstack_runtime_status` itself is unavailable or unreachable. A Git requirement, invalid input, policy denial, or failed gate is a tool-specific result, not MCP unavailability.
+8. Respect project `AGENTS.md`, safety rules, branch/deploy rules, and explicit user approvals.
+9. When an active JStack loop supplies a `loopId`, execute only the current
    single-lead iteration. Let `jstack_loop_checkpoint` and
    `jstack_loop_finalize` own convergence and terminal status.
 

@@ -51,6 +51,7 @@ JStack makes those controls explicit.
 
 | Common failure mode | JStack control |
 | --- | --- |
+| A short prompt leaves the model to invent users, constraints, or "done" | Inspect-first Adaptive Context Gate with source attribution, disclosed assumptions, and at most three material questions with recommended defaults |
 | A prompt drifts away from the real goal | Versioned goal contracts, non-goals, policy floors, and exact-digest confirmation |
 | "Tests passed" exists only as prose | QA and security receipts tied to the exact Git revision, workspace, policy, and command |
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
@@ -96,11 +97,29 @@ when every expected role is present, current, capability-matched, and free of
 unresolved contradictions. See the
 [specialist capability system](docs/specialist-capabilities.md).
 
+### Adaptive context inside the five commands
+
+JStack v0.9.1 inspects the repository and relevant durable context before it
+asks the user anything. Clear, specific prompts continue immediately. When an
+answer could materially change scope, architecture, acceptance evidence, or
+safety, JStack asks at most three questions in a round, explains why each
+matters, and provides a recommended default. Repository-answerable questions
+are forbidden.
+
+Facts remain tagged as user, repository, policy, external evidence, or
+inference; assumptions stay visible in the plan and handoff. Low-risk work may
+continue on accepted defaults. High-risk security, financial, legal,
+destructive, migration, or production gaps remain blocked until explicit
+in-conversation confirmation. This is normal chat—not an approval token,
+digest-paste, signer, mailbox, or terminal flow. See the
+[v0.9.1 migration guide](docs/migration-0.9.1.md).
+
 ## How It Works
 
 ```mermaid
 flowchart LR
-    A[Goal and context] --> B[Readiness and policy]
+    A[Goal and inspected context] --> Q[Adaptive Context Gate]
+    Q --> B[Readiness and policy]
     B --> C[Selected delivery mode]
     C --> K[Role-bound capability plan]
     K --> D[Structured specialist, QA, security, launch, review, and audit evidence]
@@ -124,10 +143,11 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.9.0
+## What Ships In v0.9.1
 
 | Capability | What it provides |
 | --- | --- |
+| Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
@@ -141,11 +161,17 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, transactional installers, and cross-platform CI |
 
-The MCP exposes 49 canonical `jstack_*` tools, including 13 generic
+The MCP exposes 50 canonical `jstack_*` tools, including the shared
+`jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
 protocol, in addition to the delivery, audit, loop, continuity,
 specialist-review, and mastery families. Legacy `gstack_*` aliases remain
 available for compatibility.
+
+The four shared-gate workflows pass the gate's `readinessReceipt` and exact
+`normalizedBrief` forward as `context_readiness_receipt` and `context_brief`.
+Planning verifies the pair so sourced facts, disclosed assumptions, and exact
+Audit selectors cannot be silently changed after intake.
 
 ## Host Compatibility
 
@@ -246,6 +272,8 @@ artifacts before release.
 ### Control Layers
 
 - **Project binding** distinguishes Git-backed and artifact-only workspaces.
+- **Adaptive context** distinguishes sourced facts, assumptions, material gaps,
+  and safe defaults before planning or audit execution.
 - **Policy** defines non-overridable floors, trusted commands, protected paths,
   and release requirements.
 - **Delivery** owns plans, staffing, permissions, scopes, and implementation.
@@ -347,6 +375,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
 | [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |
+| [v0.9.1 migration guide](docs/migration-0.9.1.md) | [Adaptive Context Gate decision](docs/adr/0010-adaptive-context-gate.md) |
 | [Launch assurance](docs/launch-assurance.md) | [v0.9 migration guide](docs/migration-0.9.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |
 | [Engineering mastery](docs/mastery-system.md) | [Loop mastery](docs/loop-mastery-system.md) |

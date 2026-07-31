@@ -1,6 +1,6 @@
 {
   "name": "jstack-audit",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Top-level JStack command for evidence-bound read-only repository audits.",
   "author": {
     "name": "Jarod Froneman",
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "JStack Audit",
     "shortDescription": "Evidence-bound read-only repository audits",
-    "longDescription": "Top-level Codex workflow for bounded repository audits across correctness, security, architecture, maintainability, performance, supply chain, tests, compatibility, data integrity, operations, and applicable launch risk. Task-specific capability routing may strengthen required audit domains while preserving the read-only boundary; findings remain evidence-bound.",
+    "longDescription": "Top-level Codex workflow for bounded repository audits across correctness, security, architecture, maintainability, performance, supply chain, tests, compatibility, data integrity, operations, and applicable launch risk. Its lightweight Adaptive Context Gate uses safe audit defaults and asks only when subject, base, profile, or focus is materially ambiguous. The read-only boundary and evidence-bound findings remain unchanged.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

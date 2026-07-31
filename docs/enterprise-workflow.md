@@ -12,20 +12,25 @@
 
 1. Classify task risk.
 2. Restore context and read project instructions.
-3. Create an enterprise plan.
-4. Build a team plan and coordination packet when risk justifies specialists.
-5. Run policy and preflight checks.
-6. Implement the smallest coherent change.
-7. Review, test, QA, and security-check proportionally to risk.
-8. On a clean committed production candidate, declare applicable product
+3. Run the Adaptive Context Gate: separate sourced facts from assumptions,
+   resolve only material gaps, and ask at most three questions per round with
+   reasons and recommended defaults. Clear prompts ask nothing; high-risk
+   material defaults require explicit in-conversation confirmation.
+4. Create an enterprise plan bound to the current context-readiness receipt and
+   its digest-verified normalized brief so facts and assumptions stay visible.
+5. Build a team plan and coordination packet when risk justifies specialists.
+6. Run policy and preflight checks.
+7. Implement the smallest coherent change.
+8. Review, test, QA, and security-check proportionally to risk.
+9. On a clean committed production candidate, declare applicable product
    surfaces, risk tier, and deployment fingerprint; reconcile detected hints,
    register every structured launch-evidence requirement, and finalize a v2
    launch receipt.
-9. Run release readiness when requested; it reports evidence and does not
+10. Run release readiness when requested; it reports evidence and does not
    execute a release.
-10. Perform external actions only within explicit user scope and normal
+11. Perform external actions only within explicit user scope and normal
    Codex/provider permissions. JStack adds no token or terminal ceremony.
-11. Save handoff context and document residual risk.
+12. Save handoff context and document residual risk.
 
 ## Production Controls
 
