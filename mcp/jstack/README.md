@@ -25,6 +25,11 @@ evidence, launch assurance, release readiness, and mastery progression.
   HOME are hardening, not an OS sandbox.
 - Context and mastery records are atomically written under `~/.jstack` with
   private file permissions.
+- `jstack_context_readiness` is read-only. It inspects a structured brief,
+  returns at most three material questions with recommended defaults, and
+  stores no raw conversation or source content in its session receipt. The
+  returned normalized brief is separately digest-verified by planning so facts,
+  assumptions, and audit selectors stay visible and cannot be changed silently.
 - Program state is stored privately under `~/.jstack/programs`; the live
   manifest never mounts into the project repository.
 - `jstack_runtime_status`, `jstack_detect_project`, and `jstack_plan` can
@@ -48,6 +53,10 @@ QA, security, audit, and launch receipts are HMAC-signed for one server session 
 - policy digest and JStack version
 - check/command identity and outcome
 - issue time and server session
+
+Context-readiness receipts additionally bind the normalized goal and brief
+digests, workflow, risk tier, project mode, tool version, and current Git state
+when available. They are planning evidence only and never authorize actions.
 
 Audit receipts additionally bind controls, profile, scope, required domains,
 adapter inventory, inspected-input manifest, coverage, findings, server
@@ -80,8 +89,9 @@ execution.
 
 ## Tools
 
-The server exposes `jstack_*` tools for runtime status, project detection,
-planning, capability routing, specialist result/handoff validation, team
+The server exposes 50 canonical `jstack_*` tools for runtime status, project
+detection, adaptive context readiness, planning, capability routing,
+specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack

@@ -936,6 +936,8 @@ def _goal_readiness_questions(
                         "category": "blocking-unknown",
                         "priority": "blocking",
                         "question": raw["question"].strip(),
+                        "why": "The goal context marks this unknown as material to a correct or safe contract.",
+                        "recommendedDefault": "Use the narrowest repository-supported interpretation and keep the goal blocked if no safe evidence-backed default exists.",
                         "resolves": [
                             f"goal_context.open_questions.{str(raw.get('id') or 'unresolved').strip()}"
                         ],
@@ -961,6 +963,8 @@ def _goal_readiness_questions(
                     "Which JStack execution mode, autonomy level, and risk tier are authorized, "
                     "and what explicit approval supports any elevated mode or risk?"
                 ),
+                "why": "Staffing, write autonomy, and risk determine the safety boundary and required evidence.",
+                "recommendedDefault": "Use single-lead, supervised L2 writes, and the highest risk tier supported by inspected project surfaces.",
                 "resolves": classification_gaps,
             }
         )
@@ -984,6 +988,8 @@ def _goal_readiness_questions(
                     "What domain and stakeholders does this affect, what is true now, and what "
                     "observable end state must be true when the goal is complete?"
                 ),
+                "why": "A source-backed current state and observable outcome prevent the loop from optimizing toward an invented finish line.",
+                "recommendedDefault": "Use the current repository behavior as the baseline and the user's narrowest stated outcome as the target.",
                 "resolves": outcome_gaps,
             }
         )
@@ -1000,6 +1006,8 @@ def _goal_readiness_questions(
                     "What is explicitly out of scope, which repository paths may change, and which "
                     "compatibility, time, policy, or operational constraints must be preserved?"
                 ),
+                "why": "Explicit boundaries keep repeated iterations from expanding scope or blast radius.",
+                "recommendedDefault": "Use the smallest relevant path set, preserve backward compatibility, and block destructive or external actions.",
                 "resolves": boundary_gaps,
             }
         )
@@ -1030,6 +1038,8 @@ def _goal_readiness_questions(
                 "category": "domain-and-evidence",
                 "priority": "blocking",
                 "question": question,
+                "why": "The loop may finish only against authoritative context and observable evidence for the actual domain.",
+                "recommendedDefault": "Use existing repository checks plus focused QA and security evidence for the changed surface; do not invent unavailable external proof.",
                 "resolves": evidence_gaps,
             }
         )
@@ -1191,6 +1201,8 @@ def assess_goal_readiness(
                         "Please confirm the exact goal, context, scope, evidence, staffing, autonomy, "
                         "risk, and limits represented by this readiness digest."
                     ),
+                    "why": "The preview contains material assumptions, elevated risk, or authority choices that must remain user-owned.",
+                    "recommendedDefault": "Confirm only if the preview is accurate; otherwise revise the incorrect fields before starting.",
                     "resolves": ["goal_contract_confirmation"],
                 }
             ],

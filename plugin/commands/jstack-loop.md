@@ -12,6 +12,15 @@ the actual goal before selecting one bounded loop or a multi-phase program.
 Derive phase count and dependencies from independently verifiable project
 outcomes. Never assume a fixed phase count or any domain-specific roadmap.
 
+Treat `jstack_loop_goal_readiness` or `jstack_program_goal_readiness` as this
+command's stronger Adaptive Context Gate; do not run a duplicate general intake
+round. Inspect repository-answerable context first, keep facts source-attributed
+and assumptions explicit, then ask only the returned questions—at most three
+per round—with their reasons and recommended defaults. Reuse answers and never
+repeat unchanged questions. Clear, complete contracts ask nothing. Any required
+confirmation happens in normal chat; never ask for a token, signer, or terminal
+paste.
+
 Default phase execution to `single-lead` and supervised writes to `L2`. Use
 JStack Subagents or JStack Full Team only when the user explicitly authorizes
 that mode; never infer staffing or L3 autonomy from project size.

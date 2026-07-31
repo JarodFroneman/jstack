@@ -21,16 +21,32 @@ reasoned work.
 2. Return usage only for `help`, `--help`, or `?`; do not inspect a repository.
 3. Read project instructions and relevant durable context.
 4. Call `jstack_runtime_status`, then `jstack_detect_project`.
-5. Call `jstack_audit` to bind the subject, controls, profile, scope manifest,
+5. Apply the Adaptive Context Gate after inspection. Call
+   `jstack_context_readiness` with `workflow_mode="jstack-audit"`, the exact
+   audit goal, source-attributed facts, assumptions, and only material open
+   questions. Include every explicitly supplied `profile`, `scope`, `focus`,
+   and `base_ref` under `workflow_parameters`; omit selectors that will be
+   omitted from `jstack_audit`. An ordinary "audit this repository" request uses the parsed
+   defaults and normally asks nothing. If subject, base, profile, or focus is
+   materially ambiguous, ask only the returned questions (at most three) in
+   normal chat with reasons and recommended defaults. Reuse answers and never
+   repeat unchanged questions. A high-risk confirmation call confirms only
+   assumptions already shown and never applies a new default batch. No token,
+   digest, signer, or terminal paste is
+   part of this gate.
+6. Call `jstack_audit` with the exact `context_goal`, current
+   `context_readiness_receipt`, and matching `normalizedBrief` as
+   `context_brief` to bind the subject, controls, profile, scope
+   manifest,
    adapter inventory, review evidence, existing secret-scan evidence, and the
    focus-routed `specialistCapabilityPlan`. Its capability audit domains may
    strengthen required coverage but may never remove profile or policy domains.
-6. Generate candidate findings from cited source evidence, then run a separate
+7. Generate candidate findings from cited source evidence, then run a separate
    challenge pass that looks for guards, callers, tests, reachability limits,
    and mitigating controls.
-7. Call `jstack_audit_finalize` with the coverage manifest, surviving findings,
+8. Call `jstack_audit_finalize` with the coverage manifest, surviving findings,
    accepted-risk records, and requested formats.
-8. Report the result, coverage, findings, blockers, residual risk, and next
+9. Report the result, coverage, findings, blockers, residual risk, and next
    action. Never translate `incomplete` or `error` into a clean result.
 
 Use [audit-methodology.md](references/audit-methodology.md) for profiles,
@@ -110,8 +126,10 @@ specialist edits audited code. The Audit Lead owns the final evidence decision.
 Capability packs specialize the existing audit roles; they do not create a new
 command or grant tools, writes, delegation, approval, or release authority.
 Use the exact catalog and selection digests returned by `jstack_audit`. If a
-specialist team is deployed, first obtain the matching `jstack_team_plan`, give
-each read-only role only its routed capability subset, and require structured
+specialist team is deployed, first obtain the matching `jstack_team_plan` with
+`context_workflow_mode="jstack-audit"` and the current context readiness
+receipt. Give each read-only role only its routed capability subset and require
+structured
 specialist results plus privacy-safe telemetry. Validate them through
 `jstack_specialist_result` and `jstack_specialist_handoff_check` before Audit
 Lead synthesis. Never store raw prompts, messages, tool arguments, command or

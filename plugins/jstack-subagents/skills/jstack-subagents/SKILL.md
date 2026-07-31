@@ -35,8 +35,10 @@ Before dispatch, require a coordination packet:
 
 Pass the actual packet object to `jstack_dispatch_check`; a boolean packet
 claim is invalid. Use `jstack_plan` with
-`team_mode="smart-subagents"` and the resolved learning mode: explicit
-`off`, `coach`, or `assessment`, otherwise `embedded`.
+`team_mode="smart-subagents"`, the current `context_readiness_receipt`, and
+its matching `normalizedBrief` as `context_brief`, plus the resolved learning
+mode: explicit `off`, `coach`, or `assessment`, otherwise `embedded`. Pass the
+same receipt and brief to `jstack_team_plan`.
 The MCP plans and validates; platform multi-agent tools perform actual
 dispatch, collection, and closure.
 
@@ -61,6 +63,17 @@ team planning and dispatch validation, do not call tools listed in
 receipts or release certification. Only use the MCP fallback when
 `jstack_runtime_status` itself is unavailable or unreachable; never relabel a
 Git requirement or failed gate as an MCP attachment failure.
+
+Before team planning or dispatch, inspect repository-answerable context and
+call `jstack_context_readiness` with `workflow_mode="jstack-subagents"`,
+source-attributed facts, separate assumptions, and only material open
+questions. Ask no more than the returned three questions in normal chat, with
+the reason and recommended default for each. Clear prompts ask nothing. Reuse
+answers and do not repeat unchanged questions. Low-risk defaults may continue
+as disclosed assumptions; high-risk material defaults need explicit
+conversational confirmation. Confirm only already displayed assumptions and
+never apply a new default batch in the same call. This gate never asks for a token, signer, digest,
+or terminal paste.
 
 The Lead may implement. If a specialist edits implementation, it must be the
 Builder with an explicit disjoint scope. If more than three specialists are

@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.9.1 - 2026-07-31
+
+### Added
+
+- Added the Adaptive Context Gate across all five existing JStack workflows.
+  It inspects project context first, separates sourced facts from assumptions,
+  asks at most three material questions per round, and includes a reason and
+  recommended default for every question.
+- Added `jstack_context_readiness` and the
+  `jstack.context-readiness.v1` schema. Ready results issue privacy-minimized,
+  session-local planning receipts bound to the exact goal, workflow, project,
+  tool version, and current Git state when available.
+- Added adversarial coverage for clear prompts, vague product prompts,
+  high-risk defaults, source attribution, artifact-only planning, audit-safe
+  defaults, privacy minimization, stale Git state, and Loop compatibility.
+
+### Changed
+
+- Dev, Subagents, Full Team, and Audit now pass the context-readiness receipt
+  plus its digest-verified normalized brief into their planning or audit
+  contracts, keeping sourced facts and assumptions visible. Loop and Program reuse their stronger
+  goal-readiness contracts and now include reasons and recommended defaults in
+  their bounded questions rather than running a duplicate intake round.
+- Low-risk work can continue with visibly disclosed recommended assumptions.
+  Security, financial, legal, destructive, migration, and production-critical
+  material defaults remain fail-closed until explicit in-conversation
+  confirmation.
+- Increased the canonical MCP inventory from 49 to 50 tools without adding a
+  sixth slash command or changing staffing authority.
+
+### Security
+
+- Context receipts store only structured digests and binding metadata, never
+  raw prompts, messages, source contents, user answers, or secrets.
+- Caller-supplied risk tiers cannot lower a goal below its derived floor;
+  high-risk material assumptions and inferred facts fail closed. Audit receipts
+  bind explicitly supplied profile, scope, focus, and base selectors.
+- The gate uses normal conversation only. It adds no approval challenge,
+  signer, token, digest-paste request, mailbox, or terminal command.
+
 ## 0.9.0 - 2026-07-26
 
 ### Added

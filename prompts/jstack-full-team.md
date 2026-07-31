@@ -26,6 +26,17 @@ receipts or release certification. Only use the MCP fallback when
 `jstack_runtime_status` itself is unavailable or unreachable; never relabel a
 Git requirement or failed gate as an MCP attachment failure.
 
+Before team planning or dispatch, inspect repository-answerable context and
+call `jstack_context_readiness(workflow_mode="jstack-full-team")` with
+source-attributed facts, separate assumptions, and only material open
+questions. Ask at most the returned three questions in normal chat, with the
+reason and recommended default for each. Clear prompts ask nothing. Reuse
+answers and never repeat unchanged questions. Low-risk defaults may proceed as
+disclosed assumptions; high-risk material defaults require explicit
+conversational confirmation. A confirmation call may confirm only assumptions
+already shown and must not apply a new default batch. Never request a token, signer, digest, or terminal
+paste.
+
 Use the full 11-role roster:
 
 1. Lead Engineer
@@ -65,10 +76,14 @@ Before dispatching, create a coordination packet with:
 - `verificationGate`
 - `handoffGate`
 
-Use `jstack_team_plan` with `team_mode="full-team"` and
+Use `jstack_team_plan` with `team_mode="full-team"`, the current
+`context_readiness_receipt`, and its matching `normalizedBrief` as
+`context_brief`, and
 `jstack_dispatch_check` with `team_mode="full-team"` and
 the actual `coordination_packet` object when available. Also use
-`jstack_plan(team_mode="full-team", learning_mode=resolved_learning_mode)`. The MCP
+`jstack_plan(team_mode="full-team", learning_mode=resolved_learning_mode,
+context_readiness_receipt=current_receipt,
+context_brief=current_normalized_brief)`. The MCP
 plans and validates the team; platform multi-agent tools perform real dispatch.
 If multi-agent tools are unavailable, write `No subagents deployed:` and give
 the concrete reason. Retain `team_mode="full-team"` in planning and apply

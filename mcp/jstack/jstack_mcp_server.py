@@ -37,13 +37,14 @@ if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 import audit as audit_core
 import capabilities as capability_core
+import context_readiness as context_readiness_core
 import launch as launch_core
 import loop as loop_core
 import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.9.0"
+SERVER_VERSION = "0.9.1"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -1457,7 +1458,7 @@ def verify_signed_session_token(token: str, expected_kind: str) -> dict[str, Any
             raise ValueError("timezone-aware timestamps required")
     except Exception as exc:
         raise ToolError(
-            "Audit session token is malformed, expired, or was not issued by this JStack server session."
+            "Session token is malformed, expired, or was not issued by this JStack server session."
         ) from exc
     now = _dt.datetime.now(_dt.timezone.utc)
     checks = {
@@ -1467,7 +1468,7 @@ def verify_signed_session_token(token: str, expected_kind: str) -> dict[str, Any
         "boundedExpiry": 0 < (expires - issued).total_seconds() <= RECEIPT_MAX_AGE_SECONDS,
     }
     if not all(checks.values()):
-        raise ToolError("Audit session token is stale or does not match this JStack server session.")
+        raise ToolError("Session token is stale or does not match this JStack server session.")
     return payload
 
 
@@ -3925,6 +3926,190 @@ def tool_read_skill(args: dict[str, Any]) -> dict[str, Any]:
     raise ToolError(f"Unknown upstream gstack skill: {skill_name}. Use jstack_list_skills first.")
 
 
+def context_goal_digest(goal: str) -> str:
+    normalized = " ".join(goal.split())
+    return context_readiness_core.canonical_digest({"goal": normalized})
+
+
+def context_workflow_for_team_mode(team_mode: str) -> str:
+    return {
+        "single-lead": "j-stack-dev",
+        "smart-subagents": "jstack-subagents",
+        "full-team": "jstack-full-team",
+    }.get(team_mode, "j-stack-dev")
+
+
+def context_risk_tier(goal: str, requested: Any = None) -> str:
+    value = str(requested or "").strip().lower()
+    if value:
+        if value not in {"low", "medium", "high", "critical"}:
+            raise ToolError("risk_tier must be low, medium, high, or critical.")
+    requested_tier = value or "low"
+    classification_ids = {str(item["id"]) for item in classify_work(goal)}
+    if classification_ids & {"security_compliance", "data_financial", "production_release"}:
+        derived_tier = "high"
+    elif classification_ids & {"architecture", "ui_product"}:
+        derived_tier = "medium"
+    else:
+        derived_tier = "low"
+    tiers = list(context_readiness_core.RISK_TIERS)
+    return tiers[max(tiers.index(requested_tier), tiers.index(derived_tier))]
+
+
+def context_payload(args: dict[str, Any]) -> dict[str, Any]:
+    value = args.get("context") or {}
+    if not isinstance(value, dict):
+        raise ToolError("context must be an object.")
+    return value
+
+
+def context_project_inspection(binding: dict[str, Any]) -> dict[str, Any]:
+    detected = tool_detect_project({"project_path": binding["requestedPath"]})
+    return {
+        "projectPath": detected.get("projectPath"),
+        "gitRoot": detected.get("gitRoot"),
+        "evidenceMode": detected.get("evidenceMode"),
+        "projectConfig": detected.get("projectConfig") or [],
+        "testCommands": detected.get("testCommands") or [],
+        "jstackInstalled": bool(detected.get("jstackInstalled")),
+        "inspectionRule": "Inspect repository instructions, configuration, stack, and relevant files before asking the user.",
+    }
+
+
+def tool_context_readiness(args: dict[str, Any]) -> dict[str, Any]:
+    goal = str(args.get("goal") or "").strip()
+    if not goal:
+        raise ToolError("goal is required.")
+    workflow_mode = str(args.get("workflow_mode") or "j-stack-dev").strip()
+    if workflow_mode not in context_readiness_core.WORKFLOW_MODES:
+        raise ToolError(
+            "workflow_mode must be j-stack-dev, jstack-subagents, jstack-full-team, jstack-audit, or jstack-loop."
+        )
+    binding = resolve_project_binding(args.get("project_path"))
+    context = context_payload(args)
+    try:
+        result = context_readiness_core.assess_context(
+            goal=goal,
+            workflow_mode=workflow_mode,
+            risk_tier=context_risk_tier(goal, args.get("risk_tier")),
+            facts=context.get("facts") or [],
+            assumptions=context.get("assumptions") or [],
+            open_questions=context.get("open_questions") or [],
+            workflow_parameters=args.get("workflow_parameters") or {},
+            use_recommended_defaults=bool(args.get("use_recommended_defaults", False)),
+            confirm_material_inferences=bool(args.get("confirm_material_inferences", False)),
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+    result["projectBinding"] = binding
+    result["projectInspection"] = context_project_inspection(binding)
+    if result["readyForPlanning"]:
+        expires = (
+            _dt.datetime.now(_dt.timezone.utc)
+            + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+        ).replace(microsecond=0)
+        receipt_payload: dict[str, Any] = {
+            "kind": "context-readiness",
+            "schemaVersion": context_readiness_core.CONTEXT_READINESS_SCHEMA,
+            "expiresAt": expires.isoformat(),
+            "goalDigest": context_goal_digest(goal),
+            "briefDigest": result["briefDigest"],
+            "workflowMode": workflow_mode,
+            "riskTier": result["riskTier"],
+            "state": result["state"],
+            "evidenceMode": binding["evidenceMode"],
+            "projectPath": binding["projectPath"],
+            "toolVersion": SERVER_VERSION,
+        }
+        if binding["evidenceMode"] == "git":
+            state = project_state(Path(binding["gitRoot"]))
+            receipt_payload.update(
+                {
+                    "gitHead": state["gitHead"],
+                    "projectFingerprint": state["projectFingerprint"],
+                }
+            )
+        result["readinessReceipt"] = issue_receipt(receipt_payload)
+    return result
+
+
+def verify_context_readiness_receipt(
+    receipt: str,
+    *,
+    goal: str,
+    workflow_mode: str,
+    binding: dict[str, Any],
+    context_brief: Any,
+) -> dict[str, Any]:
+    if not isinstance(context_brief, dict):
+        raise ToolError(
+            "context_brief returned by jstack_context_readiness is required with a context readiness receipt."
+        )
+    try:
+        validate_schema_value(context_brief, CONTEXT_NORMALIZED_BRIEF_SCHEMA)
+    except InputError as exc:
+        raise ToolError(f"context_brief is invalid: {exc}") from exc
+    payload = verify_signed_session_token(receipt, "context-readiness")
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == context_readiness_core.CONTEXT_READINESS_SCHEMA,
+        "goalDigest": payload.get("goalDigest") == context_goal_digest(goal),
+        "workflowMode": payload.get("workflowMode") == workflow_mode,
+        "evidenceMode": payload.get("evidenceMode") == binding["evidenceMode"],
+        "projectPath": payload.get("projectPath") == binding["projectPath"],
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "readyState": payload.get("state") in {"ready", "proceed_with_assumptions"},
+        "briefDigest": payload.get("briefDigest")
+        == context_readiness_core.canonical_digest(context_brief),
+        "briefGoal": context_brief.get("goal") == " ".join(goal.split()),
+        "briefWorkflowMode": context_brief.get("workflowMode") == workflow_mode,
+        "briefRiskTier": context_brief.get("riskTier") == payload.get("riskTier"),
+    }
+    if binding["evidenceMode"] == "git":
+        state = project_state(Path(binding["gitRoot"]))
+        checks["gitHead"] = payload.get("gitHead") == state["gitHead"]
+        checks["projectFingerprint"] = (
+            payload.get("projectFingerprint") == state["projectFingerprint"]
+        )
+    if not all(checks.values()):
+        raise ToolError(
+            "Context readiness receipt is stale or does not match the current goal, workflow, project, or repository state. Re-run jstack_context_readiness."
+        )
+    return {
+        "verified": True,
+        "schemaVersion": payload["schemaVersion"],
+        "state": payload["state"],
+        "briefDigest": payload["briefDigest"],
+        "riskTier": payload["riskTier"],
+        "workflowMode": payload["workflowMode"],
+        "normalizedBrief": context_brief,
+        "checks": checks,
+    }
+
+
+def audit_context_workflow_parameters(args: dict[str, Any]) -> dict[str, Any]:
+    raw: dict[str, Any] = {}
+    profile = str(args.get("profile") or "").strip()
+    if profile:
+        raw["profile"] = profile
+    scope = args.get("scope")
+    if isinstance(scope, list) and scope:
+        raw["scope"] = scope
+    focus = str(args.get("focus") or "").strip()
+    if focus:
+        raw["focus"] = focus
+    base_ref = str(args.get("base_ref") or "").strip()
+    if base_ref:
+        raw["base_ref"] = base_ref
+    try:
+        return context_readiness_core.normalize_workflow_parameters(
+            "jstack-audit", raw
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
 def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     goal = str(args.get("goal") or "").strip()
     if not goal:
@@ -3940,6 +4125,20 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     if not mastery_mode:
         learning_mode = "off"
     team_mode = normalize_team_mode(args.get("team_mode") or "single-lead")
+    workflow_mode = str(
+        args.get("context_workflow_mode") or context_workflow_for_team_mode(team_mode)
+    ).strip()
+    if workflow_mode not in context_readiness_core.WORKFLOW_MODES:
+        raise ToolError("context_workflow_mode is not supported.")
+    context_readiness = None
+    if args.get("context_readiness_receipt"):
+        context_readiness = verify_context_readiness_receipt(
+            str(args["context_readiness_receipt"]),
+            goal=goal,
+            workflow_mode=workflow_mode,
+            binding=binding,
+            context_brief=args.get("context_brief"),
+        )
     capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
     selected = choose_skills(goal, quality_level=quality_level)
@@ -4078,6 +4277,12 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         "masteryMode": mastery_mode,
         "learningMode": learning_mode,
         "teamMode": team_mode,
+        "contextGate": {
+            "requiredByJStackWorkflow": True,
+            "receiptBound": context_readiness is not None,
+            "readiness": context_readiness,
+            "instruction": "Run jstack_context_readiness after inspecting project context, or use the stronger loop/program goal-readiness contract when it owns orchestration, before executing this plan.",
+        },
         "classifications": classifications,
         "project": detected,
         "projectBinding": binding,
@@ -4117,12 +4322,34 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
     if quality_level not in {"standard", "enterprise"}:
         raise ToolError("quality_level must be 'standard' or 'enterprise'.")
     team_mode = normalize_team_mode(args.get("team_mode"))
+    binding = None
+    workflow_mode = str(
+        args.get("context_workflow_mode") or context_workflow_for_team_mode(team_mode)
+    ).strip()
+    if workflow_mode not in context_readiness_core.WORKFLOW_MODES:
+        raise ToolError("context_workflow_mode is not supported.")
+    context_readiness = None
+    if args.get("context_readiness_receipt"):
+        binding = resolve_project_binding(args.get("project_path"))
+        context_readiness = verify_context_readiness_receipt(
+            str(args["context_readiness_receipt"]),
+            goal=goal,
+            workflow_mode=workflow_mode,
+            binding=binding,
+            context_brief=args.get("context_brief"),
+        )
     capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
     return {
         "goal": goal,
         "qualityLevel": quality_level,
         "teamMode": team_mode,
+        "contextGate": {
+            "requiredByJStackWorkflow": True,
+            "receiptBound": context_readiness is not None,
+            "readiness": context_readiness,
+            "instruction": "Run jstack_context_readiness after inspecting project context and before dispatching this team.",
+        },
         "classifications": classifications,
         "team": choose_agent_team(
             goal,
@@ -6079,6 +6306,28 @@ def audit_effective_required_domains(
 def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
     binding = resolve_project_binding(args.get("project_path"))
     project_path = Path(binding["projectPath"]).resolve()
+    context_readiness = None
+    if args.get("context_readiness_receipt"):
+        context_goal = str(args.get("context_goal") or "").strip()
+        if not context_goal:
+            raise ToolError(
+                "context_goal is required when context_readiness_receipt is supplied."
+            )
+        context_readiness = verify_context_readiness_receipt(
+            str(args["context_readiness_receipt"]),
+            goal=context_goal,
+            workflow_mode="jstack-audit",
+            binding=binding,
+            context_brief=args.get("context_brief"),
+        )
+        expected_parameters = context_readiness["normalizedBrief"].get(
+            "workflowParameters", {}
+        )
+        actual_parameters = audit_context_workflow_parameters(args)
+        if expected_parameters != actual_parameters:
+            raise ToolError(
+                "Audit profile, scope, focus, or base_ref does not match the context-readiness brief. Re-run jstack_context_readiness with the exact audit workflow_parameters."
+            )
     policy, _ = audit_public_policy(project_path)
     audit_policy = policy.get("audit", {})
     profile = str(args.get("profile") or audit_policy.get("defaultProfile") or "standard").strip().lower()
@@ -6238,11 +6487,19 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
         and requested_scope == ["."]
         and inventory.get("complete") is True,
         "toolVersion": SERVER_VERSION,
+        "contextBriefDigest": context_readiness.get("briefDigest")
+        if context_readiness
+        else None,
     }
     audit_session_token = issue_receipt(token_payload)
     return {
         "schemaVersion": "jstack.audit.session-response.v1",
         "projectBinding": binding,
+        "contextGate": {
+            "requiredByJStackWorkflow": True,
+            "receiptBound": context_readiness is not None,
+            "readiness": context_readiness,
+        },
         "profile": profile,
         "failOn": fail_on,
         "subject": subject,
@@ -6827,6 +7084,7 @@ def tool_audit_finalize(args: dict[str, Any]) -> dict[str, Any]:
                 "capabilityCatalogDigest": token_payload.get("capabilityCatalogDigest"),
                 "capabilitySelectionDigest": token_payload.get("capabilitySelectionDigest"),
                 "capabilityIds": token_payload.get("capabilityIds", []),
+                "contextBriefDigest": token_payload.get("contextBriefDigest"),
                 "toolVersion": SERVER_VERSION,
                 "adapterVersions": token_payload.get("adapterInventory", []),
                 "profile": profile,
@@ -6870,6 +7128,7 @@ def tool_audit_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "selectionDigest": token_payload.get("capabilitySelectionDigest"),
             "capabilityIds": token_payload.get("capabilityIds", []),
         },
+        "contextBriefDigest": token_payload.get("contextBriefDigest"),
         "receiptMeaning": "Attests deterministic scope, coverage, finding/result digests, and state binding; it does not prove semantic finding truth.",
     }
     if "json" in requested_formats:
@@ -9875,6 +10134,8 @@ def _program_policy_gaps(args: dict[str, Any], policy: dict[str, Any]) -> list[d
             {
                 "id": "final-release-audit",
                 "question": "Add a final audit criterion using the release profile so program completion has complete current audit coverage.",
+                "why": "Enterprise program policy requires repository-wide release-audit evidence before the complete program can be certified.",
+                "recommendedDefault": "Add a final acceptance criterion with verifier type audit and profile release.",
             }
         )
     if program_policy.get("requireCurrentEvidence") is True and not any(
@@ -9884,6 +10145,8 @@ def _program_policy_gaps(args: dict[str, Any], policy: dict[str, Any]) -> list[d
             {
                 "id": "final-security",
                 "question": "Add a final security criterion backed by a current JStack security receipt.",
+                "why": "Phase-level checks do not prove that the final integrated program state satisfies the current security policy.",
+                "recommendedDefault": "Add a final acceptance criterion with verifier type security.",
             }
         )
     if program_policy.get("requireCurrentEvidence") is True and not any(
@@ -9893,6 +10156,8 @@ def _program_policy_gaps(args: dict[str, Any], policy: dict[str, Any]) -> list[d
             {
                 "id": "final-review",
                 "question": "Add a final deterministic review criterion for the complete integrated program delta.",
+                "why": "A final review catches integration defects and scope drift that isolated phase evidence can miss.",
+                "recommendedDefault": "Add a final acceptance criterion with verifier type review.",
             }
         )
     return gaps
@@ -10199,7 +10464,13 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "ready": False,
             "gaps": [item["id"] for item in policy_gaps],
             "questions": [
-                {"id": item["id"], "question": item["question"], "blocking": True}
+                {
+                    "id": item["id"],
+                    "question": item["question"],
+                    "why": item["why"],
+                    "recommendedDefault": item["recommendedDefault"],
+                    "blocking": True,
+                }
                 for item in policy_gaps[:3]
             ],
             "receiptIssued": False,
@@ -11330,7 +11601,200 @@ PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
 }
 
 
+CONTEXT_FACT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["field", "value", "source_kind", "source_reference"],
+    "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "source_kind": {
+            "type": "string",
+            "enum": list(context_readiness_core.SOURCE_KINDS),
+        },
+        "source_reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+        },
+    },
+}
+
+CONTEXT_ASSUMPTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["field", "value"],
+    "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "rationale": {"type": "string", "maxLength": 1000},
+        "material": {"type": "boolean", "default": False},
+    },
+}
+
+CONTEXT_QUESTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["question", "why", "recommended_default"],
+    "properties": {
+        "id": {"type": "string", "maxLength": 100},
+        "resolves": {"type": "string", "maxLength": 100},
+        "question": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "why": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "recommended_default": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+        },
+        "material": {"type": "boolean", "default": True},
+    },
+}
+
+CONTEXT_PAYLOAD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "facts": {
+            "type": "array",
+            "maxItems": 100,
+            "items": CONTEXT_FACT_SCHEMA,
+        },
+        "assumptions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": CONTEXT_ASSUMPTION_SCHEMA,
+        },
+        "open_questions": {
+            "type": "array",
+            "maxItems": 20,
+            "items": CONTEXT_QUESTION_SCHEMA,
+        },
+    },
+}
+
+CONTEXT_WORKFLOW_PARAMETERS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "profile": {
+            "type": "string",
+            "enum": ["quick", "standard", "deep", "release"],
+        },
+        "scope": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+        },
+        "focus": {"type": "string", "minLength": 1, "maxLength": 4000},
+        "base_ref": {"type": "string", "minLength": 1, "maxLength": 500},
+    },
+}
+
+CONTEXT_NORMALIZED_FACT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["field", "value", "sourceKind", "sourceReference"],
+    "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "sourceKind": {
+            "type": "string",
+            "enum": list(context_readiness_core.SOURCE_KINDS),
+        },
+        "sourceReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+        },
+    },
+}
+
+CONTEXT_NORMALIZED_ASSUMPTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["field", "value", "rationale", "material"],
+    "properties": {
+        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "material": {"type": "boolean"},
+    },
+}
+
+CONTEXT_NORMALIZED_BRIEF_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "goal",
+        "workflowMode",
+        "riskTier",
+        "facts",
+        "assumptions",
+        "workflowParameters",
+    ],
+    "properties": {
+        "goal": {"type": "string", "minLength": 1, "maxLength": 20000},
+        "workflowMode": {
+            "type": "string",
+            "enum": list(context_readiness_core.WORKFLOW_MODES),
+        },
+        "riskTier": {
+            "type": "string",
+            "enum": list(context_readiness_core.RISK_TIERS),
+        },
+        "facts": {
+            "type": "array",
+            "maxItems": 100,
+            "items": CONTEXT_NORMALIZED_FACT_SCHEMA,
+        },
+        "assumptions": {
+            "type": "array",
+            "maxItems": 100,
+            "items": CONTEXT_NORMALIZED_ASSUMPTION_SCHEMA,
+        },
+        "workflowParameters": CONTEXT_WORKFLOW_PARAMETERS_SCHEMA,
+    },
+}
+
+
 TOOLS: dict[str, dict[str, Any]] = {
+    "gstack_context_readiness": {
+        "description": "Run JStack's Adaptive Context Gate after inspecting the project: separate sourced facts from assumptions, ask at most three material questions with recommended defaults, fail closed for high-risk gaps, and issue a short-lived planning receipt without terminal approval ceremony.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["goal", "workflow_mode"],
+            "properties": {
+                "project_path": {"type": "string"},
+                "goal": {"type": "string", "minLength": 1, "maxLength": 20000},
+                "workflow_mode": {
+                    "type": "string",
+                    "enum": list(context_readiness_core.WORKFLOW_MODES),
+                },
+                "risk_tier": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high", "critical"],
+                },
+                "context": CONTEXT_PAYLOAD_SCHEMA,
+                "workflow_parameters": {
+                    **CONTEXT_WORKFLOW_PARAMETERS_SCHEMA,
+                    "description": "Exact audit profile, scope, focus, and base_ref selectors to bind into a jstack-audit readiness receipt. Omit for other workflows.",
+                },
+                "use_recommended_defaults": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Apply the displayed defaults. High-risk material defaults still require confirm_material_inferences.",
+                },
+                "confirm_material_inferences": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Records explicit in-conversation confirmation of high-risk material defaults; no token or terminal paste is used.",
+                },
+            },
+        },
+        "handler": tool_context_readiness,
+        "readOnlyHint": True,
+    },
     "gstack_capability_catalog": {
         "description": "Inspect the versioned JStack specialist capability registry or deterministically route bounded capabilities to existing core roles. Capabilities never grant tools, write access, or release authority.",
         "inputSchema": {
@@ -12095,6 +12559,20 @@ TOOLS: dict[str, dict[str, Any]] = {
                 },
                 "mastery_mode": {"type": "boolean", "default": True, "description": "When true, include staged training objectives, benchmarks, anti-slop checklist, review rubric, and next drill."},
                 "learning_mode": {"type": "string", "enum": ["off", "embedded", "coach", "assessment"], "default": "embedded"},
+                "context_readiness_receipt": {
+                    "type": "string",
+                    "maxLength": 100000,
+                    "description": "Optional short-lived receipt from jstack_context_readiness. Official JStack workflows provide it after the Adaptive Context Gate passes.",
+                },
+                "context_brief": {
+                    **CONTEXT_NORMALIZED_BRIEF_SCHEMA,
+                    "description": "The normalizedBrief returned with context_readiness_receipt; its digest and binding are verified before planning.",
+                },
+                "context_workflow_mode": {
+                    "type": "string",
+                    "enum": list(context_readiness_core.WORKFLOW_MODES),
+                    "description": "Override only for an audit or loop that owns this plan; normal commands derive it from team_mode.",
+                },
             },
         },
         "handler": tool_plan,
@@ -12107,6 +12585,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "required": ["goal"],
             "properties": {
                 "goal": {"type": "string"},
+                "project_path": {"type": "string"},
                 "quality_level": {"type": "string", "enum": ["standard", "enterprise"], "default": "enterprise"},
                 "team_mode": {"type": "string", "enum": ["auto", "single-lead", "smart-subagents", "full-team"], "default": "auto"},
                 "capability_ids": {
@@ -12114,6 +12593,20 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "maxItems": 14,
                     "items": {"type": "string", "maxLength": 64},
                     "description": "Optional explicit capability ids to add when allowed for the selected roles.",
+                },
+                "context_readiness_receipt": {
+                    "type": "string",
+                    "maxLength": 100000,
+                    "description": "Optional short-lived receipt from jstack_context_readiness. Official JStack workflows provide it before team dispatch.",
+                },
+                "context_brief": {
+                    **CONTEXT_NORMALIZED_BRIEF_SCHEMA,
+                    "description": "The normalizedBrief returned with context_readiness_receipt; its digest and binding are verified before dispatch.",
+                },
+                "context_workflow_mode": {
+                    "type": "string",
+                    "enum": list(context_readiness_core.WORKFLOW_MODES),
+                    "description": "Override for an audit-owned specialist plan; normal development commands derive it from team_mode.",
                 },
             },
         },
@@ -12227,6 +12720,20 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "project_path": {"type": "string"},
+                "context_goal": {
+                    "type": "string",
+                    "maxLength": 20000,
+                    "description": "Exact user-facing audit goal used by jstack_context_readiness.",
+                },
+                "context_readiness_receipt": {
+                    "type": "string",
+                    "maxLength": 100000,
+                    "description": "Optional short-lived jstack-audit context readiness receipt.",
+                },
+                "context_brief": {
+                    **CONTEXT_NORMALIZED_BRIEF_SCHEMA,
+                    "description": "The normalizedBrief returned with context_readiness_receipt. Its audit workflowParameters must match profile, scope, focus, and base_ref exactly.",
+                },
                 "profile": {
                     "type": "string",
                     "enum": ["quick", "standard", "deep", "release"],

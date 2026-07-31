@@ -175,8 +175,9 @@ Expected dedicated layout:
 - all five dedicated plugins are installed and enabled;
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
-- the MCP initialize response reports the expected JStack release;
-- `tools/list` includes the expected `jstack_*` inventory.
+- the MCP initialize response reports JStack `0.9.1`;
+- `tools/list` includes 50 canonical `jstack_*` tools, including
+  `jstack_context_readiness`.
 
 ## Upgrade
 

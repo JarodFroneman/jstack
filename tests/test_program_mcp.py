@@ -198,6 +198,26 @@ def start_child_loop(
 
 
 class ProgramMcpTests(unittest.TestCase):
+    def test_policy_gap_questions_include_reason_and_recommended_default(self) -> None:
+        gaps = server._program_policy_gaps(
+            {"final_acceptance_criteria": []},
+            {
+                "program": {
+                    "requireFinalAudit": True,
+                    "requireCurrentEvidence": True,
+                }
+            },
+        )
+        self.assertEqual(3, len(gaps))
+        self.assertTrue(
+            all(
+                item["question"]
+                and item["why"]
+                and item["recommendedDefault"]
+                for item in gaps
+            )
+        )
+
     def test_program_tools_are_registered_under_current_and_legacy_names(self) -> None:
         canonical = {name for name in server.TOOLS if name.startswith("jstack_program_")}
         legacy = {name for name in server.TOOLS if name.startswith("gstack_program_")}

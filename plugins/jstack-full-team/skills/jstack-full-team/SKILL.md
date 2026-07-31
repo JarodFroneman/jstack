@@ -36,9 +36,11 @@ Operating rules:
 5. If concurrency limits prevent all specialists from running at once, dispatch them in waves.
 6. Before dispatch, require a coordination packet.
 7. Pass the actual packet to `jstack_dispatch_check` and call
-   `jstack_plan` with `team_mode="full-team"` and
+   `jstack_plan` with `team_mode="full-team"`, the current
+   `context_readiness_receipt`, its matching `normalizedBrief` as
+   `context_brief`, and
    the resolved learning mode: explicit `off`, `coach`, or `assessment`,
-   otherwise `embedded`.
+   otherwise `embedded`. Pass the same receipt and brief to `jstack_team_plan`.
 8. The MCP plans and validates; platform multi-agent tools perform actual
    dispatch, collection, and closure.
 9. Call `jstack_runtime_status` before project tools. A successful call proves
@@ -50,6 +52,17 @@ Operating rules:
    certification. Only use the MCP fallback when `jstack_runtime_status`
    itself is unavailable or unreachable; never relabel a Git requirement or
    failed gate as an MCP attachment failure.
+10. Before team planning or dispatch, inspect repository-answerable context and
+    call `jstack_context_readiness` with
+    `workflow_mode="jstack-full-team"`, source-attributed facts, separate
+    assumptions, and only material open questions. Ask at most the returned
+    three questions in normal chat, each with its reason and recommended
+    default. Clear prompts ask nothing. Reuse answers and never repeat unchanged
+    questions. Low-risk defaults may proceed as disclosed assumptions;
+    high-risk material defaults need explicit conversational confirmation.
+    Confirm only already displayed assumptions and never apply a new default
+    batch in the same call. No
+    token, signer, digest, or terminal paste is part of this gate.
 
 Coordination packet:
 

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/context-readiness.v1.schema.json",
+  "title": "JStack Adaptive Context Readiness v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "state",
+    "readyForPlanning",
+    "requiresUserResponse",
+    "workflowMode",
+    "riskTier",
+    "normalizedBrief",
+    "briefDigest",
+    "sourceMap",
+    "assumptions",
+    "questions",
+    "questionCount",
+    "remainingQuestionCount",
+    "materialGapCount",
+    "defaultsApplied",
+    "policy"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "jstack.context-readiness.v1" },
+    "state": {
+      "enum": ["ready", "proceed_with_assumptions", "needs_context", "needs_confirmation"]
+    },
+    "readyForPlanning": { "type": "boolean" },
+    "requiresUserResponse": { "type": "boolean" },
+    "workflowMode": {
+      "enum": ["j-stack-dev", "jstack-subagents", "jstack-full-team", "jstack-audit", "jstack-loop"]
+    },
+    "riskTier": { "enum": ["low", "medium", "high", "critical"] },
+    "normalizedBrief": { "$ref": "#/$defs/brief" },
+    "briefDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "sourceMap": { "type": "array", "items": { "$ref": "#/$defs/fact" } },
+    "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
+    "questions": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/question" }
+    },
+    "questionCount": { "type": "integer", "minimum": 0, "maximum": 3 },
+    "remainingQuestionCount": { "type": "integer", "minimum": 0 },
+    "materialGapCount": { "type": "integer", "minimum": 0 },
+    "defaultsApplied": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
+    "policy": { "type": "object" },
+    "readinessReceipt": { "type": "string" },
+    "projectBinding": { "type": "object" },
+    "projectInspection": { "type": "object" }
+  },
+  "$defs": {
+    "brief": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal", "workflowMode", "riskTier", "facts", "assumptions", "workflowParameters"],
+      "properties": {
+        "goal": { "type": "string" },
+        "workflowMode": {
+          "enum": ["j-stack-dev", "jstack-subagents", "jstack-full-team", "jstack-audit", "jstack-loop"]
+        },
+        "riskTier": { "enum": ["low", "medium", "high", "critical"] },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/fact" } },
+        "assumptions": { "type": "array", "items": { "$ref": "#/$defs/assumption" } },
+        "workflowParameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": { "enum": ["quick", "standard", "deep", "release"] },
+            "scope": { "type": "array", "items": { "type": "string" } },
+            "focus": { "type": "string" },
+            "base_ref": { "type": "string" }
+          }
+        }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "value", "sourceKind", "sourceReference"],
+      "properties": {
+        "field": { "type": "string" },
+        "value": { "type": "string" },
+        "sourceKind": {
+          "enum": ["user", "repository", "policy", "external-evidence", "inferred"]
+        },
+        "sourceReference": { "type": "string" }
+      }
+    },
+    "assumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "value", "rationale", "material"],
+      "properties": {
+        "field": { "type": "string" },
+        "value": { "type": "string" },
+        "rationale": { "type": "string" },
+        "material": { "type": "boolean" }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "question", "why", "recommendedDefault", "material"],
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string" },
+        "why": { "type": "string" },
+        "recommendedDefault": { "type": "string" },
+        "material": { "type": "boolean" }
+      }
+    }
+  }
+}

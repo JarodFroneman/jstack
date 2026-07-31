@@ -26,6 +26,17 @@ receipts or release certification. Only use the MCP fallback when
 `jstack_runtime_status` itself is unavailable or unreachable; never relabel a
 Git requirement or failed gate as an MCP attachment failure.
 
+Before team planning or dispatch, inspect repository-answerable context and
+call `jstack_context_readiness(workflow_mode="jstack-subagents")` with
+source-attributed facts, separate assumptions, and only material open
+questions. Ask at most the returned three questions in normal chat, with the
+reason and recommended default for each. Clear prompts ask nothing. Reuse
+answers and never repeat unchanged questions. Low-risk defaults may proceed as
+disclosed assumptions; high-risk material defaults require explicit
+conversational confirmation. A confirmation call may confirm only assumptions
+already shown and must not apply a new default batch. Never request a token, signer, digest, or terminal
+paste.
+
 Use the Lead Engineer plus the right specialist team, normally 2-3 specialists:
 
 - For normal feature/bug work: Code Investigator + Reviewer.
@@ -57,10 +68,14 @@ coordination packet:
 - `verificationGate`
 - `handoffGate`
 
-Use `jstack_team_plan` with `team_mode="smart-subagents"` and
+Use `jstack_team_plan` with `team_mode="smart-subagents"`, the current
+`context_readiness_receipt`, and its matching `normalizedBrief` as
+`context_brief`, and
 `jstack_dispatch_check` with `team_mode="smart-subagents"` and
 the actual `coordination_packet` object when available. Also use
-`jstack_plan(team_mode="smart-subagents", learning_mode=resolved_learning_mode)`.
+`jstack_plan(team_mode="smart-subagents", learning_mode=resolved_learning_mode,
+context_readiness_receipt=current_receipt,
+context_brief=current_normalized_brief)`.
 Specialists are read-only by default. The Lead may implement. If an editing
 specialist is used, only a Builder may edit implementation, and only inside an
 explicitly assigned disjoint write scope.

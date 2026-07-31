@@ -33,19 +33,34 @@ even though development workflows use normal host-native action safety.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`.
-3. Call `jstack_audit` to bind the profile, scope, repository state, policy,
+3. After inspection, call
+   `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
+   audit goal, source-attributed facts, separate assumptions, and only material
+   open questions. Include the exact explicitly requested `profile`, `scope`,
+   `focus`, and `base_ref` in `workflow_parameters`; omit selectors that will
+   be omitted from `jstack_audit`. The ordinary "audit this repository" request uses safe
+   defaults and normally asks nothing. If subject, base, profile, or focus is
+   materially ambiguous, ask at most the returned three questions in normal
+   chat, with reasons and recommended defaults. Reuse answers and never repeat
+   unchanged questions. A high-risk confirmation call confirms only assumptions
+   already shown and never applies a new default batch. Never request a token,
+   signer, digest, or terminal
+   paste.
+4. Call `jstack_audit` with the exact `context_goal`, current
+   `context_readiness_receipt`, and matching `normalizedBrief` as
+   `context_brief` to bind the profile, scope, repository state, policy,
    control digest, scope-manifest digest, adapters, review evidence, and
    existing `jstack_security_audit` evidence. Pass the parsed focus and apply
    the returned versioned `specialistCapabilityPlan`; selected capability
    domains may strengthen coverage but may never remove profile/policy domains.
-4. Perform candidate generation and a separate challenge pass. Cite exact
+5. Perform candidate generation and a separate challenge pass. Cite exact
    source locations and classify evidence honestly.
-5. Execute no repository-controlled code by default. Quick never executes it.
+6. Execute no repository-controlled code by default. Quick never executes it.
    For other profiles, `--verify` permits only a curated adapter after exact
    approval and subject binding; offline flags are not an OS firewall.
-6. Call `jstack_audit_finalize` with structured coverage, surviving findings,
+7. Call `jstack_audit_finalize` with structured coverage, surviving findings,
    accepted-risk records, and requested output formats.
-7. Report status, coverage, severity-ordered findings, blockers, residual risk,
+8. Report status, coverage, severity-ordered findings, blockers, residual risk,
    and next action. Never turn missing evidence into a pass.
 
 For a release-profile audit, identify observable launch surfaces and risks but
@@ -57,7 +72,8 @@ the repository-wide release-profile audit by default. Legal, live-provider,
 mailbox, device, and merchant facts remain external or human evidence.
 
 If the requested audit team mode deploys platform specialists, obtain the
-matching `jstack_team_plan`, keep every role read-only, validate each exact
+matching `jstack_team_plan` with `context_workflow_mode="jstack-audit"` and the
+current context receipt, keep every role read-only, validate each exact
 role/capability result and metadata-only telemetry through
 `jstack_specialist_result`, and require `jstack_specialist_handoff_check`
 before Audit Lead synthesis. Store no raw prompts, messages, tool arguments,

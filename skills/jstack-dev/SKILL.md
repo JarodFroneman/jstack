@@ -49,20 +49,36 @@ the contract's fixed delivery mode. Let `jstack_loop_checkpoint` and
 4. For `git`, inspect status, branch, project boundaries, stack, and checks,
    then use `jstack_policy_check` with the task goal and comparison `base_ref`
    when known.
-5. For `artifact-only`, state
+5. Run the Adaptive Context Gate before planning. After inspecting all
+   repository-answerable context, call `jstack_context_readiness` with the exact
+   command workflow mode, source-attributed facts, disclosed assumptions, and
+   only material open questions. Ask the returned questions in normal chat,
+   never more than three per round, each with its reason and recommended
+   default. Clear prompts continue with zero questions. Pass the resulting
+   `readinessReceipt` and matching `normalizedBrief` to planning as
+   `context_readiness_receipt` and `context_brief`. High-risk material defaults require explicit
+   in-conversation confirmation; no token, digest, signer, or terminal paste is
+   allowed. A confirmation call confirms only assumptions already shown: carry
+   those assumptions forward, set `use_recommended_defaults=false`, and never
+   apply a new default batch in the same call. Reuse answered facts and never
+   repeat an unchanged question.
+6. For `artifact-only`, state
    `MCP mounted; project binding is artifact-only.`, identify the authoritative
    source and deployment boundary, and do not call tools listed in
    `blockedTools`. Capture direct hashes, test output, backup, immutable runtime
    identity, rollback, monitoring, and public smoke evidence without claiming
    commit-bound JStack receipts or release certification.
-6. Use `jstack_plan` with the exact command `team_mode`,
-   `quality_level="enterprise"`, and the requested `learning_mode`. Treat its
-   versioned `capabilityPlan` as part of the execution contract; do not invent,
-   rename, or silently drop routed capability IDs.
-7. For specialist modes, use `jstack_team_plan`, build the actual coordination
-   packet including `capabilityPlan`, and pass that object plus the exact
-   per-role `capabilityIds` to `jstack_dispatch_check`.
-8. In `git` mode, use `jstack_preflight` before substantial implementation and
+7. Use `jstack_plan` with the exact command `team_mode`,
+   `quality_level="enterprise"`, requested `learning_mode`, and the current
+   `context_readiness_receipt` plus matching `context_brief`. Treat its versioned `capabilityPlan` as part of
+   the execution contract; do not invent, rename, or silently drop routed
+   capability IDs.
+8. For specialist modes, use `jstack_team_plan` with the same readiness receipt
+   and normalized brief,
+   build the actual coordination packet including `capabilityPlan`, and pass
+   that object plus the exact per-role `capabilityIds` to
+   `jstack_dispatch_check`.
+9. In `git` mode, use `jstack_preflight` before substantial implementation and
    before handoff.
 
 Use the normal-Codex fallback only when `jstack_runtime_status` itself is
@@ -78,6 +94,10 @@ independently usable.
 - Restore saved context when resuming.
 - Load only task-relevant durable memory.
 - Distinguish source truth, generated artifacts, and installed copies.
+- Keep user, repository, policy, external-evidence, and inferred facts
+  distinguishable. Disclose assumptions and their effect on the plan.
+- Ask only material questions after inspection, at most three per round, and
+  include a recommended default. Never turn this into terminal approval work.
 
 ### Plan
 
@@ -277,3 +297,6 @@ changing policy, QA execution, evidence receipts, installers, or release gates.
 Read [launch-assurance.md](references/launch-assurance.md) before declaring a
 production surface profile, registering launch evidence, or finalizing release
 readiness.
+Read [adaptive-context-gate.md](references/adaptive-context-gate.md) before
+changing intake, clarification, assumptions, planning receipts, or any of the
+five command entry workflows.

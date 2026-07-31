@@ -668,14 +668,40 @@ def program_contract_input_digest(contract: dict[str, Any]) -> str:
 
 def _readiness_questions(gaps: list[str]) -> list[dict[str, Any]]:
     prompts = {
-        "goal": "What exact program outcome must be achieved?",
-        "owner": "Who owns the program-level acceptance decision?",
-        "stakeholders": "Which stakeholders or accountable roles must supervise this program?",
-        "phases": "Provide the ordered phases and their dependency relationships.",
-        "final_acceptance_criteria": "Which current machine-verifiable evidence must pass before the whole program completes?",
+        "goal": (
+            "What exact program outcome must be achieved?",
+            "The phase graph needs one observable integrated outcome.",
+            "Use the user's narrowest stated business or product outcome as the program goal.",
+        ),
+        "owner": (
+            "Who owns the program-level acceptance decision?",
+            "A durable program needs one accountable final decision owner.",
+            "Use the requesting repository or product owner; do not invent a third-party approver.",
+        ),
+        "stakeholders": (
+            "Which stakeholders or accountable roles must supervise this program?",
+            "Material phase and gate decisions must route to known accountable people or roles.",
+            "Use the owner plus only stakeholders evidenced by project instructions and affected surfaces.",
+        ),
+        "phases": (
+            "Provide the ordered phases and their dependency relationships.",
+            "The scheduler cannot safely infer deliverables, dependencies, or parallelism from a vague roadmap.",
+            "Derive the smallest independently verifiable phase DAG from repository architecture and acceptance boundaries.",
+        ),
+        "final_acceptance_criteria": (
+            "Which current machine-verifiable evidence must pass before the whole program completes?",
+            "Program completion requires an integrated finish line beyond individual phase claims.",
+            "Require the repository's relevant tests plus integrated QA, security, and release evidence for the declared outcome.",
+        ),
     }
     return [
-        {"id": "program-" + gap.replace("_", "-"), "question": prompts[gap], "blocking": True}
+        {
+            "id": "program-" + gap.replace("_", "-"),
+            "question": prompts[gap][0],
+            "why": prompts[gap][1],
+            "recommendedDefault": prompts[gap][2],
+            "blocking": True,
+        }
         for gap in gaps[:3]
     ]
 
@@ -769,7 +795,15 @@ def assess_program_readiness(
             "status": "needs_confirmation",
             "ready": False,
             "gaps": [],
-            "questions": [],
+            "questions": [
+                {
+                    "id": "program-contract-confirmation",
+                    "question": "Does this exact phase DAG, staffing, risk, and final acceptance preview match the program you want JStack to run?",
+                    "why": "A multi-phase or elevated-risk program makes material scheduling and authority choices that must remain user-owned.",
+                    "recommendedDefault": "Confirm only when the preview is accurate; otherwise revise the affected phase, dependency, risk, or acceptance field.",
+                    "blocking": True,
+                }
+            ],
             "confirmationRequired": True,
             "confirmationReasons": [
                 "Multi-phase programs require confirmation of the exact DAG, execution modes, risk, and final acceptance boundary."

@@ -48,8 +48,10 @@ implicit escalation.
 
 `jstack_loop_goal_readiness` accepts a partial or complete candidate contract.
 It reports every missing field but asks at most three targeted questions per
-round. Codex should answer from inspected repository/runtime evidence first and
-ask the user only for unresolved intent, authority, or domain facts.
+round. Every question includes why it matters and a recommended default. Codex
+should answer from inspected repository/runtime evidence first, reuse prior
+answers, and ask the user only for unresolved intent, authority, or domain
+facts; it does not run a duplicate general intake round.
 
 Complete context is tailored to the task's niche. Financial/data goals require
 authoritative sources, calculation definitions, horizons, and tolerances;

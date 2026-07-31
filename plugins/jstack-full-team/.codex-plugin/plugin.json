@@ -1,6 +1,6 @@
 {
   "name": "jstack-full-team",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Top-level JStack command that deploys the full 11-role team.",
   "author": {
     "name": "Jarod Froneman",
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "JStack Full Team",
     "shortDescription": "Deploy the full 11-role JStack team",
-    "longDescription": "Top-level Codex command for full JStack team mode. This command is explicit approval to deploy the full 11-role team when multi-agent tools are available, with deterministic capability assignments, applicability-aware launch evidence, and signed result handoffs, or to apply the full-team review rubric manually when they are not.",
+    "longDescription": "Top-level Codex command for full JStack team mode. An inspect-first Adaptive Context Gate resolves material requirements before dispatch, asking at most three questions with recommended defaults. The command then deploys the full 11-role team when available, with deterministic capability assignments, launch evidence, and signed result handoffs.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

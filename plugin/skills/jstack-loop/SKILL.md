@@ -17,6 +17,13 @@ they are within the user's explicit request, the active task scope, and normal
 Codex/provider permissions. A goal, phase, gate, revision, or completion
 receipt does not widen that scope or bypass the host's ordinary safety UI.
 
+The loop and program goal-readiness tools are this command's stronger Adaptive
+Context Gate. Inspect the repository and durable context first; do not also run
+a duplicate general intake round. Keep facts source-attributed, assumptions and
+material inference explicit, and ask only the returned questions—at most three
+per round—with their reasons and recommended defaults. Reuse prior answers and
+never repeat an unchanged question. Clear, complete contracts ask nothing.
+
 ## Select The Orchestration Level
 
 Call `jstack_runtime_status`, `jstack_detect_project`, and `jstack_plan` before
@@ -68,9 +75,11 @@ worktree. Default implementation work to `L2`.
    actions, iterations, active time,
    failures, and changed files. Never supply arbitrary shell commands.
 3. Call `jstack_loop_goal_readiness`. Resolve `needs_context` from inspected
-   evidence first, asking only returned blocking questions. For
+   evidence first, asking only returned blocking questions and showing each
+   question's reason and recommended default. For
    `needs_confirmation`, show the preview and exact digest and wait for real
-   confirmation. Never fabricate a confirmation reference.
+   in-conversation confirmation. Never fabricate a confirmation reference or
+   ask the user for a token, signer, or terminal paste.
    Pass any explicitly requested `capability_ids` on every readiness, start,
    and material revision call. The returned preview binds catalog, selection,
    exact team-role assignments, audit domains, loop controls, and the
@@ -120,8 +129,9 @@ worktree. Default implementation work to `L2`.
    destructive-operation, production-release, secret-access, and
    policy-weakening constraints in the program contract.
 7. Call `jstack_program_goal_readiness`. Resolve at most three returned
-   questions per round. Show the exact DAG preview and readiness digest, then
-   wait for the user's factual confirmation.
+   questions per round, with reasons and recommended defaults. Show the exact
+   DAG preview and readiness digest, then wait for the user's factual
+   in-conversation confirmation. Reuse answers from earlier rounds.
 8. Generate one stable unique `operation_id` for the start call and reuse it
    only when retrying that exact payload. Pass the readiness receipt unchanged
    to `jstack_program_start`.
