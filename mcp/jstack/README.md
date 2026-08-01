@@ -25,6 +25,10 @@ evidence, launch assurance, release readiness, and mastery progression.
   HOME are hardening, not an OS sandbox.
 - Context and mastery records are atomically written under `~/.jstack` with
   private file permissions.
+- Audit mastery Stage 0 uses only two synthetic inert scenarios. It executes no
+  repository code, accesses no network or secrets, permits only declared
+  `.jstack-training/` artifacts, and grants no remediation or production
+  authority.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The

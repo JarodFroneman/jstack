@@ -38,6 +38,8 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   assertion evidence, audit-owned scanner normalization, and release-consumable
   launch finalization
 - deterministic audit collection and evidence-bound finalization
+- deterministic audit-mastery Stage 0 classification for CIA, authorization,
+  hostile-repository, execution, disclosure, and non-authority boundaries
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -225,6 +227,14 @@ does not claim to perform semantic model reasoning.
 The audit command uses a two-pass agent boundary: candidate generation followed
 by challenge and verification. Artifact-only audits are advisory and cannot
 issue a Git-bound receipt or a formal release-ready result.
+
+Audit mastery Stage 0 is separate from an audit session. It accepts one hashed
+closed-schema `security-orientation.json` from `.jstack-training/`, validates
+it against an exact built-in scenario contract, and records only failure codes
+plus an evaluation digest. Its two inert scenarios perform no repository
+execution or network operation and grant no remediation or production
+authority. Advancement requires both distinct scenario IDs as the latest two
+eligible independent attempts.
 
 ## Project Binding
 

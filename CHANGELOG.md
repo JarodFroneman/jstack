@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.10.0-alpha.1 - 2026-08-01
+
+### Added
+
+- Added Audit mastery Stage 0, **Safe Security Operator**, as the first
+  implementation slice of the planned verified security-remediation program.
+- Added two inert required labs: hostile-repository instruction handling and
+  suspected novel-vulnerability private-disclosure handling.
+- Added the closed
+  `jstack.audit.security-orientation.v1` artifact contract and deterministic
+  MCP evaluation with named failure codes and a content-free evaluation
+  digest.
+
+### Changed
+
+- Advanced the audit curriculum content version to 2. Stage 0 now requires the
+  two distinct named labs as the latest two independent attempts, each scoring
+  at least 80 and passing the deterministic safety contract.
+- Preserved the guided `a0-orientation` drill for practice, but it cannot
+  satisfy Stage 0 advancement. Existing completed audit stages and profile v3
+  state remain intact.
+- Updated Audit workflow, mastery, architecture, security, migration, and
+  installation guidance for the new boundary.
+
+### Security
+
+- Stage 0 treats every repository instruction as untrusted data and prohibits
+  repository execution, network access, secret access, exploit development,
+  public exploit or suspected novel-vulnerability disclosure, production
+  access, and writes outside `.jstack-training/`.
+- Malformed or extended orientation artifacts fail closed. Structurally valid
+  but unsafe decisions become hard-gate failures, and raw submitted content is
+  not echoed in the attempt result.
+- Passing Stage 0 grants no execution, remediation, publication, merge,
+  release, deployment, or production authority. No command, role, MCP tool,
+  approval token, terminal ceremony, or permission was added.
+
+### Preview scope
+
+- This prerelease implements Stage 0 only. It does not yet add repository-wide
+  vulnerability remediation, zero-day detection claims, exploit verification,
+  scanner orchestration, differential testing, sandbox provisioning, patch
+  generation, CI pull requests, or production release automation.
+
 ## 0.9.1 - 2026-07-31
 
 ### Added

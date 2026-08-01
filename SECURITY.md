@@ -49,6 +49,22 @@ server time and rechecked when release readiness consumes the receipt.
 The original `jstack_security_audit` remains a bounded heuristic credential
 scan. A broad audit result never replaces its security receipt.
 
+### Audit mastery Stage 0
+
+Audit mastery Stage 0 uses only synthetic inert local scenarios. Repository
+instructions are untrusted data and cannot override system, developer, user,
+host, policy, or authorization boundaries. Both required labs deny repository
+execution, network access, secret access, exploit development, public exploit
+or suspected novel-vulnerability disclosure, production access, and writes
+outside `.jstack-training/`.
+
+The MCP loads the hashed `security-orientation.json` through descriptor-confined
+bounded reads and checks an exact closed-field contract. Malformed or unknown
+fields fail closed; wrong values become hard-gate failures. Attempt output
+contains evaluation metadata and a digest, not the raw submitted artifact.
+Passing is orientation evidence only. It grants no audit execution,
+remediation, publication, merge, release, deployment, or production authority.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

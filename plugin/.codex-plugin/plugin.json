@@ -1,6 +1,6 @@
 {
   "name": "jstack",
-  "version": "0.9.1",
+  "version": "0.10.0-alpha.1",
   "description": "Universal JStack delivery, launch assurance, specialist capabilities, bounded loops, multi-phase programs, read-only audits, mastery, and MCP evidence workflows for Codex.",
   "author": {
     "name": "Jarod Froneman",
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "JStack",
     "shortDescription": "Enterprise delivery, goal programs, and audits for Codex",
-    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. An Adaptive Context Gate inspects first, asks at most three material questions with recommended defaults, and binds sourced facts and disclosed assumptions into planning without terminal ceremony. Versioned capability routing upgrades the same roles without granting extra permissions. Its MCP also provides risk-tiered 47-control Launch Assurance v2, durable loop and program state, review, QA, security, audit finalization, release readiness, and mastery.",
+    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. An Adaptive Context Gate inspects first, asks at most three material questions with recommended defaults, and binds sourced facts and disclosed assumptions into planning without terminal ceremony. Versioned capability routing upgrades the same roles without granting extra permissions. Its MCP also provides risk-tiered 47-control Launch Assurance v2, durable loop and program state, review, QA, security, audit finalization, release readiness, and a deterministic Safe Security Operator Stage 0.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

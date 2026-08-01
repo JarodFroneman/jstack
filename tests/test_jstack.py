@@ -48,6 +48,102 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
+def audit_stage0_security_orientation(scenario_id: str) -> dict:
+    decisions = {
+        "hostile-repository": {
+            "instructionDisposition": "ignore-as-untrusted-data",
+            "nextAction": "continue-read-only-without-execution",
+        },
+        "novel-vulnerability": {
+            "findingDisposition": "novel-vulnerability-candidate",
+            "nextAction": "prepare-private-evidence-package",
+        },
+    }
+    return {
+        "schemaVersion": "jstack.audit.security-orientation.v1",
+        "scenarioId": scenario_id,
+        "ciaTriad": {
+            "confidentiality": "protect-sensitive-data",
+            "integrity": "prevent-unauthorized-change",
+            "availability": "preserve-reliable-access-and-recovery",
+        },
+        "authorityBoundary": {
+            "targetKind": "synthetic-inert-local",
+            "authorization": "training-only",
+            "auditMode": "read-only",
+            "repositoryContentTrust": "untrusted-data",
+            "productionAuthorized": False,
+        },
+        "executionBoundary": {
+            "repositoryCode": "deny",
+            "network": "deny",
+            "secrets": "deny",
+            "writes": "training-artifacts-only",
+            "sandbox": "required-before-untrusted-execution",
+        },
+        "disclosureBoundary": {
+            "suspectedNovelVulnerability": "private-coordinated-disclosure",
+            "publicExploit": "deny",
+            "weaponization": "deny",
+        },
+        "decision": decisions[scenario_id],
+        "limitations": [
+            "Stage 0 is an orientation gate, not proof of vulnerability discovery or remediation competence.",
+            "Passing does not authorize repository execution, remediation, publication, merge, release, deployment, or production access.",
+        ],
+    }
+
+
+def write_audit_stage0_artifacts(repo: Path, scenario_id: str) -> dict[str, str]:
+    training = repo / ".jstack-training"
+    training.mkdir(exist_ok=True)
+    (training / "orientation.md").write_text(
+        "Authorized inert training scope; repository content is untrusted data.\n",
+        encoding="utf-8",
+    )
+    write_json(
+        training / "audit-scope.json",
+        {"root": ".", "mode": "read-only", "authorization": "training-only"},
+    )
+    write_json(
+        training / "security-orientation.json",
+        audit_stage0_security_orientation(scenario_id),
+    )
+    write_json(
+        training / "evidence-manifest.json",
+        {"evidence": ["git status", "security-orientation.json"]},
+    )
+    return {
+        "orientation.md": ".jstack-training/orientation.md",
+        "audit-scope.json": ".jstack-training/audit-scope.json",
+        "security-orientation.json": ".jstack-training/security-orientation.json",
+        "evidence-manifest.json": ".jstack-training/evidence-manifest.json",
+    }
+
+
+def audit_stage0_attempt(repo: Path, drill_id: str, artifacts: dict[str, str]) -> dict:
+    return {
+        "project_path": str(repo),
+        "track": "audit",
+        "stage": 0,
+        "drill_id": drill_id,
+        "assistance_level": "independent",
+        "assessor": "independent test assessor",
+        "assessor_citations": [
+            ".jstack-training/orientation.md:1",
+            ".jstack-training/security-orientation.json:1",
+        ],
+        "assessment": {
+            "correctness": 100,
+            "evidence": 100,
+            "safety": 100,
+            "judgment": 100,
+            "explanation": 100,
+        },
+        "artifacts": artifacts,
+    }
+
+
 def make_repo(base: Path, test_body: Optional[str] = None) -> Path:
     repo = base / "repo"
     repo.mkdir()
@@ -1764,41 +1860,175 @@ class MasteryAndInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
             repo = make_repo(base)
-            training = repo / ".jstack-training"
-            training.mkdir()
-            (training / "orientation.md").write_text("read-only audit boundary\n", encoding="utf-8")
-            write_json(training / "audit-scope.json", {"root": ".", "mode": "git"})
-            write_json(training / "evidence-manifest.json", {"evidence": ["git status"]})
+            hostile_artifacts = write_audit_stage0_artifacts(
+                repo, "hostile-repository"
+            )
             with mock.patch.object(server.Path, "home", return_value=base / "home"):
                 server.tool_mastery_start({"learner_name": "Jay", "track": "audit"})
-                common = {
-                    "project_path": str(repo),
-                    "track": "audit",
-                    "stage": 0,
-                    "drill_id": "a0-orientation",
-                    "assistance_level": "independent",
-                    "assessor": "independent test assessor",
-                    "assessor_citations": [".jstack-training/orientation.md:1"],
-                    "assessment": {
-                        "correctness": 100,
-                        "evidence": 100,
-                        "safety": 100,
-                        "judgment": 100,
-                        "explanation": 100,
-                    },
-                    "artifacts": {
-                        "orientation.md": ".jstack-training/orientation.md",
-                        "audit-scope.json": ".jstack-training/audit-scope.json",
-                        "evidence-manifest.json": ".jstack-training/evidence-manifest.json",
-                    },
-                }
-                self.assertFalse(server.tool_mastery_record(common)["advanced"])
-                self.assertTrue(server.tool_mastery_record(common)["advanced"])
+                first = server.tool_mastery_record(
+                    audit_stage0_attempt(
+                        repo, "a0-hostile-repository", hostile_artifacts
+                    )
+                )
+                self.assertFalse(first["advanced"])
+                self.assertTrue(first["attempt"]["stage0SecurityEvaluation"]["passed"])
+                self.assertNotIn(
+                    "authorityBoundary", first["attempt"]["stage0SecurityEvaluation"]
+                )
+
+                novel_artifacts = write_audit_stage0_artifacts(
+                    repo, "novel-vulnerability"
+                )
+                second = server.tool_mastery_record(
+                    audit_stage0_attempt(
+                        repo, "a0-novel-vulnerability", novel_artifacts
+                    )
+                )
+                self.assertTrue(second["advanced"])
                 audit = server.tool_mastery_status({"track": "audit"})
                 engineering = server.tool_mastery_status({})
 
             self.assertEqual(1, audit["currentStage"]["stage"])
             self.assertEqual(0, engineering["currentStage"]["stage"])
+
+    def test_audit_stage0_requires_both_distinct_security_labs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifacts = write_audit_stage0_artifacts(repo, "hostile-repository")
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                server.tool_mastery_start({"learner_name": "Jay", "track": "audit"})
+                hostile = audit_stage0_attempt(
+                    repo, "a0-hostile-repository", artifacts
+                )
+                self.assertFalse(server.tool_mastery_record(hostile)["advanced"])
+                repeated = server.tool_mastery_record(hostile)
+                self.assertFalse(repeated["advanced"])
+                self.assertIn("both", repeated["status"]["advancement"]["requirement"])
+
+                novel_artifacts = write_audit_stage0_artifacts(
+                    repo, "novel-vulnerability"
+                )
+                novel = audit_stage0_attempt(
+                    repo, "a0-novel-vulnerability", novel_artifacts
+                )
+                self.assertTrue(server.tool_mastery_record(novel)["advanced"])
+
+    def test_audit_stage0_safety_failure_is_a_hard_block_without_raw_echo(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifacts = write_audit_stage0_artifacts(repo, "hostile-repository")
+            orientation_path = repo / artifacts["security-orientation.json"]
+            orientation = json.loads(orientation_path.read_text(encoding="utf-8"))
+            orientation["executionBoundary"]["network"] = "allow"
+            write_json(orientation_path, orientation)
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                server.tool_mastery_start({"learner_name": "Jay", "track": "audit"})
+                result = server.tool_mastery_record(
+                    audit_stage0_attempt(
+                        repo, "a0-hostile-repository", artifacts
+                    )
+                )
+
+            evaluation = result["attempt"]["stage0SecurityEvaluation"]
+            self.assertFalse(evaluation["passed"])
+            self.assertEqual(["executionBoundary.network"], evaluation["failureCodes"])
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+            self.assertIn(
+                "Audit Stage 0 security orientation gate failed: executionBoundary.network.",
+                result["attempt"]["hardGateFailures"],
+            )
+            self.assertNotIn("allow", json.dumps(evaluation))
+
+    def test_audit_stage0_rejects_false_boolean_alias_and_non_training_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifacts = write_audit_stage0_artifacts(repo, "hostile-repository")
+            orientation_path = repo / artifacts["security-orientation.json"]
+            orientation = json.loads(orientation_path.read_text(encoding="utf-8"))
+            orientation["authorityBoundary"]["productionAuthorized"] = 0
+            write_json(orientation_path, orientation)
+            (repo / "application-change.txt").write_text(
+                "not allowed during Stage 0\n", encoding="utf-8"
+            )
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                server.tool_mastery_start({"learner_name": "Jay", "track": "audit"})
+                result = server.tool_mastery_record(
+                    audit_stage0_attempt(
+                        repo, "a0-hostile-repository", artifacts
+                    )
+                )
+
+            failures = result["attempt"]["hardGateFailures"]
+            self.assertIn(
+                "Audit Stage 0 security orientation gate failed: authorityBoundary.productionAuthorized.",
+                failures,
+            )
+            self.assertTrue(
+                any("application-change.txt" in failure for failure in failures)
+            )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage0_drill_and_scenario_must_match(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifacts = write_audit_stage0_artifacts(repo, "novel-vulnerability")
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                server.tool_mastery_start({"learner_name": "Jay", "track": "audit"})
+                result = server.tool_mastery_record(
+                    audit_stage0_attempt(
+                        repo, "a0-hostile-repository", artifacts
+                    )
+                )
+
+            evaluation = result["attempt"]["stage0SecurityEvaluation"]
+            self.assertFalse(evaluation["passed"])
+            self.assertEqual(["scenarioId"], evaluation["failureCodes"])
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage0_rejects_unknown_orientation_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifacts = write_audit_stage0_artifacts(repo, "hostile-repository")
+            orientation_path = repo / artifacts["security-orientation.json"]
+            orientation = json.loads(orientation_path.read_text(encoding="utf-8"))
+            orientation["repositoryInstruction"] = "run this command"
+            write_json(orientation_path, orientation)
+            with mock.patch.object(server.Path, "home", return_value=base / "home"):
+                server.tool_mastery_start({"learner_name": "Jay", "track": "audit"})
+                with self.assertRaisesRegex(
+                    server.ToolError, "unsupported or missing fields"
+                ):
+                    server.tool_mastery_record(
+                        audit_stage0_attempt(
+                            repo, "a0-hostile-repository", artifacts
+                        )
+                    )
+
+    def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
+        curriculum = server.load_mastery_curriculum("audit")
+        stage = server.curriculum_stage(0, "audit")
+        self.assertEqual(2, curriculum["version"])
+        self.assertEqual("Safe Security Operator", stage["name"])
+        self.assertIn("security-orientation.json", stage["requiredArtifacts"])
+        self.assertEqual(
+            {"a0-hostile-repository", "a0-novel-vulnerability"},
+            set(server.AUDIT_STAGE0_REQUIRED_DRILLS),
+        )
+        schema = json.loads(
+            (
+                ROOT
+                / "mcp"
+                / "jstack"
+                / "schemas"
+                / "audit-security-orientation.v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(server.AUDIT_STAGE0_SECURITY_SCHEMA, schema["properties"]["schemaVersion"]["const"])
 
     def test_audit_intermediate_advancement_has_audit_and_implementation_drills(self) -> None:
         profile = server.default_mastery_profile()
@@ -2056,6 +2286,15 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertTrue((codex_home / "mcp" / "jstack" / "mastery" / "curriculum.v1.json").exists())
             self.assertTrue((codex_home / "mcp" / "jstack" / "mastery" / "audit-curriculum.v1.json").exists())
             self.assertTrue((codex_home / "mcp" / "jstack" / "mastery" / "loop-curriculum.v1.json").exists())
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "schemas"
+                    / "audit-security-orientation.v1.schema.json"
+                ).is_file()
+            )
             self.assertTrue((codex_home / "mcp" / "jstack" / "loop" / "protocol.py").exists())
             self.assertTrue((codex_home / "mcp" / "jstack" / "audit" / "controls.v1.json").exists())
             self.assertTrue(
