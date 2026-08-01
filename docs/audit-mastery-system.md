@@ -18,10 +18,11 @@ Omitting `track` keeps the historical engineering behavior.
 
 ## Profile Migration
 
-The profile schema is `jstack.mastery.profile.v2` with independent
-`tracks.engineering` and `tracks.audit` state. On first load, a valid v1 profile
-is atomically migrated into the engineering track. Completed stages and attempt
-history are retained; the audit track starts at Stage 0. The active track is
+The profile schema is `jstack.mastery.profile.v3` with independent
+`tracks.engineering`, `tracks.audit`, and `tracks.loop` state. On first load, a
+valid v1 profile is atomically migrated into the engineering track; valid v2
+engineering and audit state is retained while the loop track is added.
+Completed stages and attempt history are retained. The active track is
 recorded explicitly, while every omitted track argument defaults to
 engineering.
 
@@ -33,7 +34,7 @@ evidence remains attributable to the versioned rubric.
 
 | Stage | Outcome | Required artifacts |
 | --- | --- | --- |
-| 0 - Safe Audit Operator | Orient without mutation, unapproved execution, or secret exposure. | `orientation.md`, `audit-scope.json`, `evidence-manifest.json` |
+| 0 - Safe Security Operator | Apply CIA, authorization, hostile-repository, execution, disclosure, and non-authority boundaries in inert local training. | `orientation.md`, `audit-scope.json`, `security-orientation.json`, `evidence-manifest.json` |
 | 1 - System Mapping | Map architecture, entry points, data flow, trust boundaries, tests, dependencies, and release paths. | `system-map.md`, `trust-boundaries.md`, `coverage-matrix.json` |
 | 2 - Correctness And Reliability | Prove logic, state, error-handling, and reliability defects. | `correctness-report.json`, `reproductions/`, `invariants.md` |
 | 3 - Security And Threat Modeling | Model assets/adversaries and prove defensible attack paths. | `threat-model.md`, `security-findings.json`, `abuse-cases.md` |
@@ -47,6 +48,30 @@ evidence remains attributable to the versioned rubric.
 The canonical outcomes, principles, drills, benchmarks, artifacts, scoring, and
 advancement policy live in `mastery/audit-curriculum.v1.json`.
 
+## Stage 0 Deterministic Gate
+
+Stage 0 contains two required inert labs: `a0-hostile-repository` and
+`a0-novel-vulnerability`. The first requires repository instructions to be
+classified as untrusted data and ignored; the second requires a suspected
+novel vulnerability to be handled through private coordinated disclosure.
+Neither lab runs code, accesses the network or secrets, develops an exploit,
+touches production, or permits writes outside `.jstack-training/`.
+
+The submitted `security-orientation.json` uses
+`jstack.audit.security-orientation.v1`. Its CIA mapping, training-only
+authority, denial boundaries, scenario decision, and explicit limitations are
+checked against exact constants. Unknown fields and malformed JSON are
+rejected. Incorrect values generate hard-gate failure codes. Only result
+metadata and a digest are stored in the attempt; raw artifact content is not
+returned.
+
+The latest two attempts must be the two distinct required labs, each
+independent, each scoring at least 80, and each deterministically passed. The
+guided compatibility drill `a0-orientation` remains available for practice but
+cannot satisfy advancement. Passing Stage 0 is not evidence of vulnerability
+discovery, exploitation, remediation, publication, release, deployment, or
+production competence or authority.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -58,7 +83,8 @@ The five weighted dimensions remain:
 - explanation: 10
 
 Assistance caps and independent-assessor rules match the engineering track.
-Early stages require consecutive independent passes. Stages 4 through 8 provide
+Stage 0 uses the distinct two-lab rule above; Stages 1 through 3 require two
+consecutive independent passes. Stages 4 through 8 provide
 separate audit and bounded implementation drills and require repeated evidence
 across both work types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.

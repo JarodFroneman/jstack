@@ -99,7 +99,7 @@ unresolved contradictions. See the
 
 ### Adaptive context inside the five commands
 
-JStack v0.9.1 inspects the repository and relevant durable context before it
+JStack v0.9.1 introduced repository and durable-context inspection before it
 asks the user anything. Clear, specific prompts continue immediately. When an
 answer could materially change scope, architecture, acceptance evidence, or
 safety, JStack asks at most three questions in a round, explains why each
@@ -143,10 +143,11 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.9.1
+## What Ships In v0.10.0-alpha.1
 
 | Capability | What it provides |
 | --- | --- |
+| Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
@@ -332,6 +333,9 @@ Release readiness is evidence only: its result always includes
   separation of duties belongs in host and provider controls.
 - Audit receipts prove the collected scope, validated structure, and result
   calculation. They do not make every model-authored semantic finding true.
+- Audit mastery Stage 0 uses only inert local scenarios and writes only declared
+  training artifacts under `.jstack-training/`; passing it grants no execution,
+  remediation, publication, release, deployment, or production authority.
 - Artifact-only projects can use planning and direct operator evidence, but
   cannot receive commit-bound JStack release receipts.
 
@@ -375,6 +379,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
 | [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |
+| [v0.10.0-alpha.1 migration guide](docs/migration-0.10.0-alpha.1.md) | [Safe Security Operator decision](docs/adr/0011-safe-security-operator-stage0.md) |
 | [v0.9.1 migration guide](docs/migration-0.9.1.md) | [Adaptive Context Gate decision](docs/adr/0010-adaptive-context-gate.md) |
 | [Launch assurance](docs/launch-assurance.md) | [v0.9 migration guide](docs/migration-0.9.md) |
 | [Loop system](docs/loop-system.md) | [Program system](docs/program-system.md) |

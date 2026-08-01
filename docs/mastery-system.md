@@ -8,13 +8,15 @@ difficulty. Raw rubric score measures the work; assistance separately caps the
 demonstrated level and advancement eligibility.
 
 The canonical engineering curriculum is `mastery/curriculum.v1.json`; the
-separate audit curriculum is `mastery/audit-curriculum.v1.json`. The local
-profile is stored privately and atomically under
-`~/.jstack/mastery/profile.json` using `jstack.mastery.profile.v2`.
+separate audit and loop curricula are `mastery/audit-curriculum.v1.json` and
+`mastery/loop-curriculum.v1.json`. The local profile is stored privately and
+atomically under `~/.jstack/mastery/profile.json` using
+`jstack.mastery.profile.v3`.
 
-The profile has independent `engineering` and `audit` tracks. Existing v1 data
-migrates atomically into `tracks.engineering`. Engineering remains the default
-when the optional `track` argument is omitted.
+The profile has independent `engineering`, `audit`, and `loop` tracks. Existing
+v1 data migrates atomically into `tracks.engineering`; v2 retains engineering
+and audit data while adding loop state. Engineering remains the default when
+the optional `track` argument is omitted.
 
 ## Stages
 
@@ -109,9 +111,17 @@ final score.
 
 ## Advancement
 
-Stages 0-3 require two consecutive independent attempts scoring at least 80.
+Engineering Stages 0-3 require two consecutive independent attempts scoring at
+least 80.
 Any guided, failed, hard-blocked, or otherwise ineligible intervening attempt
 resets that streak because the server evaluates the latest two.
+
+Audit Stage 0 is a stricter exception: its latest two attempts must be the
+distinct inert `a0-hostile-repository` and `a0-novel-vulnerability` labs. Each
+must score at least 80, be independently assessed, and pass the deterministic
+CIA, authority, execution, disclosure, and non-authority contract. Passing
+grants no execution, remediation, publication, release, deployment, or
+production authority.
 
 Stages 4-8 require three independent attempts:
 

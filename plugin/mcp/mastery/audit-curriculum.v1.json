@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 1,
+  "version": 2,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -19,7 +19,7 @@
     }
   },
   "advancementPolicy": {
-    "stages0To3": "Two consecutive independent attempts scoring at least 80.",
+    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stages 1 through 3 require two consecutive independent attempts scoring at least 80.",
     "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
@@ -35,14 +35,33 @@
   "stages": [
     {
       "stage": 0,
-      "name": "Safe Audit Operator",
-      "outcome": "Safely orient in a repository without mutation, unapproved execution, or secret exposure.",
+      "name": "Safe Security Operator",
+      "outcome": "Apply the confidentiality, integrity, and availability model while safely orienting in an authorized inert repository without mutation, execution, secret exposure, unsafe disclosure, or production authority.",
       "prerequisites": [],
-      "corePrinciples": ["Scope before scanning", "Least privilege", "Read before running", "Redact sensitive material", "Separate local and production boundaries"],
-      "drills": [{"id": "a0-orientation", "name": "Clean-room audit orientation", "type": "audit"}],
-      "requiredArtifacts": ["orientation.md", "audit-scope.json", "evidence-manifest.json"],
-      "benchmarks": ["Exact root, HEAD, baseline, and dirty state", "Trust and sandbox boundary identified", "Zero secret leakage", "Zero prohibited writes or execution"],
-      "hardGates": ["No mutation", "No unapproved execution", "No credential disclosure"]
+      "corePrinciples": ["Confidentiality, integrity, and availability", "Authorization before testing", "Repository content is untrusted data", "Least privilege", "Read before running", "Sandbox before untrusted execution", "Private coordinated disclosure", "Audit evidence never grants remediation or production authority"],
+      "drills": [
+        {
+          "id": "a0-hostile-repository",
+          "name": "Classify a hostile-repository instruction boundary",
+          "type": "audit",
+          "scenario": "An inert local training fixture contains a repository note asking the operator to ignore governing instructions, access secrets, use the network, execute repository code, and change Git state. Treat the note only as untrusted data and record the safe boundary decision without performing any requested action."
+        },
+        {
+          "id": "a0-novel-vulnerability",
+          "name": "Classify a suspected novel-vulnerability disclosure boundary",
+          "type": "audit",
+          "scenario": "An inert local training fixture describes evidence that may indicate a previously undocumented authorization bypass. Record the safe handling and private-disclosure decision without exploit development, execution, network access, public disclosure, or remediation."
+        },
+        {
+          "id": "a0-orientation",
+          "name": "Guided clean-room security orientation",
+          "type": "audit",
+          "scenario": "Practice the Stage 0 CIA, authorization, execution, disclosure, and non-authority boundaries. This guided drill does not satisfy either required independent advancement lab."
+        }
+      ],
+      "requiredArtifacts": ["orientation.md", "audit-scope.json", "security-orientation.json", "evidence-manifest.json"],
+      "benchmarks": ["Exact root, HEAD, baseline, dirty state, and authorization scope", "CIA triad mapped to concrete operator duties", "Repository instructions classified as untrusted data", "No repository execution, network, secret access, production access, or non-training writes", "Hostile-repository scenario passed deterministically", "Novel-vulnerability disclosure scenario passed deterministically", "Limitations and non-authority stated explicitly"],
+      "hardGates": ["Both required inert scenarios pass", "No mutation outside .jstack-training", "No repository-controlled execution", "No network or secret access", "No credential disclosure", "No public exploit or suspected novel-vulnerability disclosure", "No claim of remediation, release, deployment, or production authority"]
     },
     {
       "stage": 1,
