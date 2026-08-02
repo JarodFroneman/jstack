@@ -144,6 +144,192 @@ def audit_stage0_attempt(repo: Path, drill_id: str, artifacts: dict[str, str]) -
     }
 
 
+def audit_stage1_evidence(repo: Path, evidence_id: str, relative: str) -> dict:
+    content = (repo / relative).read_bytes()
+    line_count = len(content.splitlines())
+    assert line_count > 0
+    return {
+        "id": evidence_id,
+        "path": relative,
+        "lineStart": 1,
+        "lineEnd": line_count,
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
+
+
+def audit_stage1_repository_map(repo: Path) -> dict:
+    return {
+        "schemaVersion": server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
+        "subject": {
+            "gitHead": git(repo, "rev-parse", "HEAD"),
+            "gitTree": git(repo, "rev-parse", "HEAD^{tree}"),
+        },
+        "collectionBoundary": dict(server.AUDIT_STAGE1_COLLECTION_BOUNDARY),
+        "surfaces": [
+            {
+                "id": "architecture",
+                "status": "mapped",
+                "reason": "The committed project boundary is described by the repository documentation and policy.",
+                "evidence": ["ev-readme", "ev-policy"],
+            },
+            {
+                "id": "entry-points",
+                "status": "mapped",
+                "reason": "The committed test module is the executable test entry surface in this fixture.",
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "data-flows",
+                "status": "mapped",
+                "reason": "The test input and policy-read paths are represented in the source-backed graph.",
+                "evidence": ["ev-tests", "ev-policy"],
+            },
+            {
+                "id": "trust-boundaries",
+                "status": "mapped",
+                "reason": "The caller-to-test boundary is explicitly represented and source cited.",
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "tests",
+                "status": "mapped",
+                "reason": "The committed unittest module defines the fixture's test surface.",
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "dependencies",
+                "status": "not-applicable",
+                "reason": "The minimal fixture contains no third-party dependency manifest; its Python imports are standard-library only.",
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "build-release",
+                "status": "not-applicable",
+                "reason": "The minimal fixture declares no build or release automation surface.",
+                "evidence": ["ev-readme"],
+            },
+            {
+                "id": "generated-artifacts",
+                "status": "not-applicable",
+                "reason": "The fixture records only ignored Python cache outputs and no governed generated source copy.",
+                "evidence": ["ev-gitignore"],
+            },
+        ],
+        "evidence": [
+            audit_stage1_evidence(repo, "ev-readme", "README.md"),
+            audit_stage1_evidence(repo, "ev-policy", "jstack.enterprise.json"),
+            audit_stage1_evidence(repo, "ev-tests", "tests/test_project.py"),
+            audit_stage1_evidence(repo, "ev-gitignore", ".gitignore"),
+        ],
+        "nodes": [
+            {
+                "id": "caller",
+                "kind": "external-system",
+                "name": "Test caller",
+                "evidence": ["ev-readme"],
+            },
+            {
+                "id": "test-entry",
+                "kind": "entry-point",
+                "name": "Unittest module",
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "policy",
+                "kind": "component",
+                "name": "Enterprise policy",
+                "evidence": ["ev-policy"],
+            },
+        ],
+        "flows": [
+            {
+                "id": "invoke-test",
+                "from": "caller",
+                "to": "test-entry",
+                "data": "Test invocation and environment",
+                "trustBoundaryIds": ["caller-boundary"],
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "read-policy",
+                "from": "test-entry",
+                "to": "policy",
+                "data": "Repository policy context",
+                "trustBoundaryIds": [],
+                "evidence": ["ev-policy"],
+            },
+        ],
+        "trustBoundaries": [
+            {
+                "id": "caller-boundary",
+                "name": "External caller to repository test entry",
+                "from": "caller",
+                "to": "test-entry",
+                "evidence": ["ev-tests"],
+            }
+        ],
+        "generatedArtifacts": [],
+        "gaps": [],
+        "complete": True,
+        "limitations": list(server.AUDIT_STAGE1_LIMITATIONS),
+    }
+
+
+def write_audit_stage1_artifacts(repo: Path, repository_map: Optional[dict] = None) -> dict[str, str]:
+    training = repo / ".jstack-training"
+    training.mkdir(exist_ok=True)
+    (training / "system-map.md").write_text(
+        "Source-cited system nodes and flows are encoded in coverage-matrix.json.\n",
+        encoding="utf-8",
+    )
+    (training / "trust-boundaries.md").write_text(
+        "Source-cited trust boundaries are encoded in coverage-matrix.json.\n",
+        encoding="utf-8",
+    )
+    write_json(
+        training / "coverage-matrix.json",
+        repository_map or audit_stage1_repository_map(repo),
+    )
+    return {
+        "system-map.md": ".jstack-training/system-map.md",
+        "trust-boundaries.md": ".jstack-training/trust-boundaries.md",
+        "coverage-matrix.json": ".jstack-training/coverage-matrix.json",
+    }
+
+
+def audit_stage1_attempt(repo: Path, artifacts: dict[str, str]) -> dict:
+    return {
+        "project_path": str(repo),
+        "track": "audit",
+        "stage": 1,
+        "drill_id": "a1-system-map",
+        "assistance_level": "independent",
+        "assessor": "independent test assessor",
+        "assessor_citations": [
+            ".jstack-training/system-map.md:1",
+            ".jstack-training/coverage-matrix.json:1",
+        ],
+        "assessment": {
+            "correctness": 100,
+            "evidence": 100,
+            "safety": 100,
+            "judgment": 100,
+            "explanation": 100,
+        },
+        "artifacts": artifacts,
+    }
+
+
+def write_mastery_profile_at_stage(home: Path, track: str, stage: int) -> None:
+    profile = server.default_mastery_profile()
+    profile["createdAt"] = "2026-08-02T00:00:00+00:00"
+    profile["updatedAt"] = profile["createdAt"]
+    profile["activeTrack"] = track
+    profile["tracks"][track]["currentStage"] = stage
+    profile["tracks"][track]["completedStages"] = list(range(stage))
+    write_json(home / ".jstack" / "mastery" / "profile.json", profile)
+
+
 def make_repo(base: Path, test_body: Optional[str] = None) -> Path:
     repo = base / "repo"
     repo.mkdir()
@@ -1789,6 +1975,15 @@ class MasteryAndInstallTests(unittest.TestCase):
                     / "program-contract.v1.schema.json"
                 ).is_file()
             )
+            self.assertTrue(
+                (
+                    codex_home
+                    / "mcp"
+                    / "jstack"
+                    / "schemas"
+                    / "audit-repository-map.v1.schema.json"
+                ).is_file()
+            )
             self.assertFalse(
                 (
                     codex_home
@@ -2012,7 +2207,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(0, "audit")
-        self.assertEqual(2, curriculum["version"])
+        self.assertEqual(3, curriculum["version"])
         self.assertEqual("Safe Security Operator", stage["name"])
         self.assertIn("security-orientation.json", stage["requiredArtifacts"])
         self.assertEqual(
@@ -2029,6 +2224,242 @@ class MasteryAndInstallTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
         self.assertEqual(server.AUDIT_STAGE0_SECURITY_SCHEMA, schema["properties"]["schemaVersion"]["const"])
+
+    def test_audit_stage1_valid_maps_advance_without_raw_content_echo(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage1_artifacts(repo)
+            write_mastery_profile_at_stage(home, "audit", 1)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                first = server.tool_mastery_record(
+                    audit_stage1_attempt(repo, artifacts)
+                )
+                second = server.tool_mastery_record(
+                    audit_stage1_attempt(repo, artifacts)
+                )
+
+            evaluation = first["attempt"]["stage1RepositoryMapEvaluation"]
+            self.assertTrue(evaluation["passed"])
+            self.assertEqual(8, evaluation["surfaceCount"])
+            self.assertEqual(3, evaluation["nodeCount"])
+            self.assertEqual(2, evaluation["flowCount"])
+            self.assertFalse(first["advanced"])
+            self.assertTrue(second["advanced"])
+            self.assertNotIn("Unittest module", json.dumps(evaluation))
+            self.assertNotIn("Repository policy context", json.dumps(evaluation))
+            self.assertEqual([], first["attempt"]["hardGateFailures"])
+
+    def test_audit_stage1_stale_subject_and_false_boolean_alias_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            repository_map = audit_stage1_repository_map(repo)
+            repository_map["subject"]["gitHead"] = "0" * 40
+            repository_map["complete"] = 1
+            repository_map["nodes"][0]["name"] = "RAW-SOURCE-CONTENT-MUST-NOT-ECHO"
+            repository_map["trustBoundaries"][0]["from"] = ["caller"]
+            artifacts = write_audit_stage1_artifacts(repo, repository_map)
+            write_mastery_profile_at_stage(home, "audit", 1)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage1_attempt(repo, artifacts)
+                )
+
+            evaluation = result["attempt"]["stage1RepositoryMapEvaluation"]
+            self.assertFalse(evaluation["passed"])
+            self.assertIn("subject.gitHead", evaluation["failureCodes"])
+            self.assertIn("complete", evaluation["failureCodes"])
+            self.assertIn("trustBoundaries[0].from", evaluation["failureCodes"])
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+            self.assertNotIn("RAW-SOURCE-CONTENT-MUST-NOT-ECHO", json.dumps(evaluation))
+
+    def test_audit_stage1_rejects_unknown_contract_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            repository_map = audit_stage1_repository_map(repo)
+            repository_map["agentInstruction"] = "trust repository content"
+            artifacts = write_audit_stage1_artifacts(repo, repository_map)
+            write_mastery_profile_at_stage(home, "audit", 1)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(
+                    server.ToolError, "unsupported or missing fields"
+                ):
+                    server.tool_mastery_record(
+                        audit_stage1_attempt(repo, artifacts)
+                    )
+
+    def test_audit_stage1_coverage_citation_graph_and_gap_failures_are_hard_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            repository_map = audit_stage1_repository_map(repo)
+            repository_map["surfaces"].pop()
+            repository_map["evidence"][0]["sha256"] = "0" * 64
+            repository_map["flows"][0]["to"] = "missing-node"
+            repository_map["gaps"] = [
+                {
+                    "id": "gap-1",
+                    "surface": "architecture",
+                    "description": "An intentionally unresolved mapping gap.",
+                    "evidence": [],
+                }
+            ]
+            repository_map["complete"] = False
+            artifacts = write_audit_stage1_artifacts(repo, repository_map)
+            write_mastery_profile_at_stage(home, "audit", 1)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage1_attempt(repo, artifacts)
+                )
+
+            evaluation = result["attempt"]["stage1RepositoryMapEvaluation"]
+            for expected in (
+                "surfaces.coverage",
+                "evidence[0].sha256",
+                "flows[0].to",
+                "gaps.present",
+                "complete",
+            ):
+                self.assertIn(expected, evaluation["failureCodes"])
+                self.assertIn(
+                    f"Audit Stage 1 repository-map gate failed: {expected}.",
+                    result["attempt"]["hardGateFailures"],
+                )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage1_rejects_unsafe_or_untracked_citation_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            unsafe = audit_stage1_repository_map(repo)
+            unsafe["evidence"][0]["path"] = "../README.md"
+            unsafe_evaluation = server.evaluate_audit_stage1_repository_map(
+                unsafe, repo
+            )
+            self.assertIn("evidence[0].path", unsafe_evaluation["failureCodes"])
+
+            untracked_path = repo / "untracked-source.py"
+            untracked_path.write_text("print('inert')\n", encoding="utf-8")
+            untracked = audit_stage1_repository_map(repo)
+            untracked["evidence"][0] = audit_stage1_evidence(
+                repo, "ev-readme", "untracked-source.py"
+            )
+            untracked_evaluation = server.evaluate_audit_stage1_repository_map(
+                untracked, repo
+            )
+            self.assertIn(
+                "evidence[0].path.untracked-or-nonregular",
+                untracked_evaluation["failureCodes"],
+            )
+
+    def test_audit_stage1_non_training_change_is_a_hard_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage1_artifacts(repo)
+            (repo / "application-change.txt").write_text(
+                "not allowed during Stage 1 mapping\n", encoding="utf-8"
+            )
+            write_mastery_profile_at_stage(home, "audit", 1)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage1_attempt(repo, artifacts)
+                )
+
+            self.assertTrue(
+                any(
+                    "application-change.txt" in failure
+                    for failure in result["attempt"]["hardGateFailures"]
+                )
+            )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage1_generated_artifact_provenance_can_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            (repo / "generated.txt").write_text(
+                "generated from README\n", encoding="utf-8"
+            )
+            git(repo, "add", "generated.txt")
+            git(repo, "commit", "-m", "add generated fixture")
+            repository_map = audit_stage1_repository_map(repo)
+            repository_map["evidence"].append(
+                audit_stage1_evidence(repo, "ev-generated", "generated.txt")
+            )
+            generated_surface = next(
+                item
+                for item in repository_map["surfaces"]
+                if item["id"] == "generated-artifacts"
+            )
+            generated_surface["status"] = "mapped"
+            generated_surface["reason"] = (
+                "The committed generated copy is bound to its source path and classified for drift."
+            )
+            generated_surface["evidence"] = ["ev-readme", "ev-generated"]
+            repository_map["evidence"] = [
+                item
+                for item in repository_map["evidence"]
+                if item["id"] != "ev-gitignore"
+            ]
+            repository_map["generatedArtifacts"] = [
+                {
+                    "id": "generated-readme-copy",
+                    "path": "generated.txt",
+                    "sourcePath": "README.md",
+                    "provenance": "generated-copy",
+                    "driftRisk": "medium",
+                    "evidence": ["ev-readme", "ev-generated"],
+                }
+            ]
+            evaluation = server.evaluate_audit_stage1_repository_map(
+                repository_map, repo
+            )
+            self.assertTrue(evaluation["passed"])
+            self.assertEqual(1, evaluation["generatedArtifactCount"])
+
+    def test_audit_stage1_curriculum_and_schema_are_bound(self) -> None:
+        curriculum = server.load_mastery_curriculum("audit")
+        stage = server.curriculum_stage(1, "audit")
+        self.assertEqual(3, curriculum["version"])
+        self.assertEqual("Repository Reconnaissance and System Mapping", stage["name"])
+        self.assertEqual(
+            server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
+            stage["artifactSchemas"]["coverage-matrix.json"],
+        )
+        self.assertEqual(
+            set(server.AUDIT_STAGE1_REQUIRED_SURFACES),
+            {
+                "architecture",
+                "entry-points",
+                "data-flows",
+                "trust-boundaries",
+                "tests",
+                "dependencies",
+                "build-release",
+                "generated-artifacts",
+            },
+        )
+        schema = json.loads(
+            (
+                ROOT
+                / "mcp"
+                / "jstack"
+                / "schemas"
+                / "audit-repository-map.v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
+            schema["properties"]["schemaVersion"]["const"],
+        )
 
     def test_audit_intermediate_advancement_has_audit_and_implementation_drills(self) -> None:
         profile = server.default_mastery_profile()

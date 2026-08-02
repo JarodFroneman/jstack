@@ -1,6 +1,6 @@
 {
   "name": "jstack-audit",
-  "version": "0.10.0-alpha.1",
+  "version": "0.10.0-alpha.2",
   "description": "Top-level JStack command for evidence-bound read-only repository audits.",
   "author": {
     "name": "Jarod Froneman",
@@ -20,7 +20,7 @@
   "interface": {
     "displayName": "JStack Audit",
     "shortDescription": "Evidence-bound read-only repository audits",
-    "longDescription": "Top-level Codex workflow for bounded repository audits across correctness, security, architecture, maintainability, performance, supply chain, tests, compatibility, data integrity, operations, and applicable launch risk. Its lightweight Adaptive Context Gate uses safe audit defaults and asks only when subject, base, profile, or focus is materially ambiguous. Safe Security Operator Stage 0 verifies CIA, authorization, hostile-repository, execution, and private-disclosure boundaries using inert deterministic labs. The read-only boundary and evidence-bound findings remain unchanged.",
+    "longDescription": "Top-level Codex workflow for bounded repository audits across correctness, security, architecture, maintainability, performance, supply chain, tests, compatibility, data integrity, operations, and applicable launch risk. Its lightweight Adaptive Context Gate uses safe audit defaults and asks only when subject, base, profile, or focus is materially ambiguous. Safe Security Operator Stage 0 verifies authority boundaries; Repository Reconnaissance Stage 1 verifies exact Git binding, complete surface coverage, source citations, graph integrity, trust boundaries, and generated-artifact provenance. The read-only boundary remains unchanged.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

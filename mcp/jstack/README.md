@@ -29,6 +29,12 @@ evidence, launch assurance, release readiness, and mastery progression.
   repository code, accesses no network or secrets, permits only declared
   `.jstack-training/` artifacts, and grants no remediation or production
   authority.
+- Audit mastery Stage 1 statically validates an exact-Git-bound repository map,
+  source-line citation hashes, complete surface coverage, graph/trust-boundary
+  integrity, and generated-artifact provenance. It performs no scan or
+  execution, returns no raw source content, permits only three declared
+  `.jstack-training/` artifacts, and grants no remediation or production
+  authority.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The

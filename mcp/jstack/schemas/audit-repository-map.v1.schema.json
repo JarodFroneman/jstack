@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-repository-map.v1.schema.json",
+  "title": "JStack Audit Stage 1 Repository Map",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!\\.git(?:/|$))(?!\\.jstack-training(?:/|$))(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "subject",
+    "collectionBoundary",
+    "surfaces",
+    "evidence",
+    "nodes",
+    "flows",
+    "trustBoundaries",
+    "generatedArtifacts",
+    "gaps",
+    "complete",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.audit.repository-map.v1"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitHead", "gitTree"],
+      "properties": {
+        "gitHead": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "gitTree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40,64}$"
+        }
+      }
+    },
+    "collectionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "repositoryContentTrust",
+        "repositoryCode",
+        "network",
+        "secrets",
+        "writes"
+      ],
+      "properties": {
+        "mode": {"const": "static-read-only"},
+        "repositoryContentTrust": {"const": "untrusted-data"},
+        "repositoryCode": {"const": "not-executed"},
+        "network": {"const": "not-used"},
+        "secrets": {"const": "not-accessed"},
+        "writes": {"const": "training-artifacts-only"}
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "reason", "evidence"],
+        "properties": {
+          "id": {
+            "enum": [
+              "architecture",
+              "entry-points",
+              "data-flows",
+              "trust-boundaries",
+              "tests",
+              "dependencies",
+              "build-release",
+              "generated-artifacts"
+            ]
+          },
+          "status": {
+            "enum": ["mapped", "not-applicable", "unsupported"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence": {
+            "$ref": "#/$defs/evidenceRefs"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "lineStart", "lineEnd", "sha256"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "path": {"$ref": "#/$defs/relativePath"},
+          "lineStart": {"type": "integer", "minimum": 1},
+          "lineEnd": {"type": "integer", "minimum": 1},
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "name", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "kind": {
+            "enum": [
+              "entry-point",
+              "component",
+              "data-store",
+              "external-system",
+              "test-surface",
+              "build-release",
+              "dependency",
+              "generated-artifact"
+            ]
+          },
+          "name": {"type": "string", "minLength": 1, "maxLength": 200},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "from",
+          "to",
+          "data",
+          "trustBoundaryIds",
+          "evidence"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "from": {"$ref": "#/$defs/identifier"},
+          "to": {"$ref": "#/$defs/identifier"},
+          "data": {"type": "string", "minLength": 1, "maxLength": 500},
+          "trustBoundaryIds": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/identifier"}
+          },
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "trustBoundaries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "from", "to", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 200},
+          "from": {"$ref": "#/$defs/identifier"},
+          "to": {"$ref": "#/$defs/identifier"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "generatedArtifacts": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path",
+          "sourcePath",
+          "provenance",
+          "driftRisk",
+          "evidence"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "path": {"$ref": "#/$defs/relativePath"},
+          "sourcePath": {"$ref": "#/$defs/relativePath"},
+          "provenance": {
+            "enum": ["generated-copy", "vendored", "build-output"]
+          },
+          "driftRisk": {"enum": ["low", "medium", "high"]},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "description", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "surface": {
+            "enum": [
+              "architecture",
+              "entry-points",
+              "data-flows",
+              "trust-boundaries",
+              "tests",
+              "dependencies",
+              "build-release",
+              "generated-artifacts"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/identifier"}
+          }
+        }
+      }
+    },
+    "complete": {"const": true},
+    "limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "Stage 1 proves bounded repository structure and citation integrity, not semantic completeness or vulnerability absence."
+        },
+        {
+          "const": "Passing does not authorize repository execution, network access, secret access, remediation, publication, merge, release, deployment, or production access."
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

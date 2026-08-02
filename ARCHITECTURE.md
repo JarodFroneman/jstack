@@ -40,6 +40,10 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - deterministic audit collection and evidence-bound finalization
 - deterministic audit-mastery Stage 0 classification for CIA, authorization,
   hostile-repository, execution, disclosure, and non-authority boundaries
+- deterministic audit-mastery Stage 1 validation for exact Git source binding,
+  eight-surface coverage, hash-verified source-line citations, graph and trust-
+  boundary integrity, generated-artifact provenance, explicit gaps, and
+  non-authority limitations
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -235,6 +239,25 @@ plus an evaluation digest. Its two inert scenarios perform no repository
 execution or network operation and grant no remediation or production
 authority. Advancement requires both distinct scenario IDs as the latest two
 eligible independent attempts.
+
+Audit mastery Stage 1 is also separate from an audit session. The operator
+produces `system-map.md`, `trust-boundaries.md`, and a closed-schema
+`coverage-matrix.json` under `.jstack-training/` without executing repository
+code, using the network, accessing secrets, or changing the mapped source.
+The machine-readable map binds to the current Git HEAD and tree; enumerates
+architecture, entry points, data flows, trust boundaries, tests, dependencies,
+build/release paths, and generated artifacts; and cites current tracked regular
+files by line range and SHA-256. The evaluator validates unique identifiers,
+node/flow/boundary references, generated source provenance and drift risk,
+complete coverage, empty gaps, and exact limitations. It returns only counts,
+failure codes, immutable subject metadata, and an evaluation digest. Two
+consecutive independent passing attempts are required for advancement.
+
+The Stage 1 Git tree is the immutable source subject. The full project
+fingerprint is recorded separately with each attempt; it intentionally includes
+the training artifacts and therefore is not embedded self-referentially inside
+`coverage-matrix.json`. Any change outside `.jstack-training/` hard-blocks the
+attempt.
 
 ## Project Binding
 

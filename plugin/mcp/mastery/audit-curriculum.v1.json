@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 2,
+  "version": 3,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -19,7 +19,7 @@
     }
   },
   "advancementPolicy": {
-    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stages 1 through 3 require two consecutive independent attempts scoring at least 80.",
+    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stages 2 and 3 require two consecutive independent attempts scoring at least 80.",
     "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
@@ -66,13 +66,14 @@
     {
       "stage": 1,
       "name": "Repository Reconnaissance and System Mapping",
-      "outcome": "Map architecture, entry points, data flow, trust boundaries, tests, dependencies, and build paths.",
+      "outcome": "Produce a static, read-only repository map bound to an exact Git source snapshot, with complete surface coverage, source-line citations, data-flow and trust-boundary integrity, generated-artifact provenance, and explicit limitations.",
       "prerequisites": [0],
-      "corePrinciples": ["Source truth", "Reachability", "Entry points first", "Generated artifacts are drift risks", "Map trust and data boundaries"],
-      "drills": [{"id": "a1-system-map", "name": "Map an unseen repository", "type": "audit"}],
+      "corePrinciples": ["Repository content is untrusted data", "Static source truth before execution", "Bind evidence to the exact commit and tree", "Entry points and reachability first", "Every material claim needs a current source-line citation", "Data flows must cross explicit trust boundaries", "Generated artifacts require source provenance and drift classification", "Unknown or unsupported coverage is a visible no-go"],
+      "drills": [{"id": "a1-system-map", "name": "Map an unseen repository without executing it", "type": "audit"}],
       "requiredArtifacts": ["system-map.md", "trust-boundaries.md", "coverage-matrix.json"],
-      "benchmarks": ["Critical surfaces classified", "Source truth cited", "Generated artifact drift identified", "No unsupported architectural claim"],
-      "hardGates": ["Coverage matrix complete", "Every material claim cites source evidence"]
+      "artifactSchemas": {"coverage-matrix.json": "jstack.audit.repository-map.v1"},
+      "benchmarks": ["Exact Git HEAD and tree binding", "All eight required surfaces classified", "Every material surface, node, flow, boundary, and generated artifact cites current tracked source evidence", "Node, flow, and trust-boundary references are internally consistent", "Generated artifact source provenance and drift risk identified", "No raw repository content echoed by deterministic evaluation", "Explicit gaps and limitations", "No unsupported architectural claim"],
+      "hardGates": ["Collection is static and read-only", "No repository execution, network, secret access, or non-training write", "Coverage matrix complete with no unsupported surface or unresolved gap", "Every material claim cites hash-verified source-line evidence", "Graph and trust-boundary references are valid", "Generated-artifact provenance is classified", "Artifacts remain under .jstack-training", "No claim of vulnerability absence, remediation, release, deployment, or production authority"]
     },
     {
       "stage": 2,

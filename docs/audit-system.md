@@ -51,6 +51,14 @@ normal host/provider permissions. JStack Audit itself remains read-only.
 `--fail-on` cannot weaken the enterprise `high` floor; weaker requests,
 including `critical` and `none`, are clamped to the effective policy threshold.
 
+An explicitly requested Audit mastery assessment is a separate training path,
+not an audit session. Stage 0 may write its four inert orientation artifacts
+and Stage 1 may write `system-map.md`, `trust-boundaries.md`, and
+`coverage-matrix.json`, only beneath `.jstack-training/`. Stage 1 statically
+binds the current Git tree, validates complete system-map coverage and exact
+source citations, and grants no scanner, remediation, release, deployment, or
+production authority. See [JStack Audit Mastery](audit-mastery-system.md).
+
 ## Profiles
 
 | Profile | Scope and evidence contract |
