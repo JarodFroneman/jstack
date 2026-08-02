@@ -65,6 +65,31 @@ contains evaluation metadata and a digest, not the raw submitted artifact.
 Passing is orientation evidence only. It grants no audit execution,
 remediation, publication, merge, release, deployment, or production authority.
 
+### Audit mastery Stage 1
+
+Audit mastery Stage 1 treats every repository file and instruction as
+untrusted data. Collection is static and read-only: no repository-controlled
+code, build, test, analyzer, hook, network operation, credential access, or
+production action is permitted. The only repository writes are the declared
+`system-map.md`, `trust-boundaries.md`, and `coverage-matrix.json` training
+artifacts beneath `.jstack-training/`; any other dirty path hard-blocks the
+attempt.
+
+The MCP descriptor-confines and bounds every cited source read. Citations must
+name tracked regular files outside `.git` and `.jstack-training`, include valid
+line ranges, and match the current SHA-256. The map also binds the exact Git
+HEAD and tree, rejects unknown or duplicate fields, caps all collections and
+read bytes, validates graph references, requires every evidence record to be
+used, and fails closed on unsupported surfaces, unresolved gaps, incomplete
+coverage, or unclassified generated-artifact provenance.
+
+Evaluation returns only immutable subject metadata, counts, failure codes, and
+a digest; it never returns cited source, map prose, node names, flow data, or
+raw artifact content. A pass proves only that the submitted structural map met
+the deterministic contract. It is not proof of semantic completeness,
+vulnerability absence, zero-day detection, exploitability, remediation
+competence, release readiness, deployment safety, or production authority.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.10.0-alpha.2 - 2026-08-02
+
+### Added
+
+- Implemented Audit mastery Stage 1, Repository Reconnaissance and System
+  Mapping, as the second bounded security-remediation foundation phase.
+- Added the closed `jstack.audit.repository-map.v1` contract and published
+  JSON Schema for exact Git HEAD/tree binding, eight-surface coverage,
+  hash-verified source-line evidence, nodes, flows, trust boundaries,
+  generated-artifact provenance and drift risk, gaps, completeness, and exact
+  limitations.
+- Added deterministic Stage 1 evaluation metadata, failure codes, counts, and
+  evaluation digests without returning raw map or repository content.
+- Added adversarial coverage for stale subjects, non-boolean aliases, unknown
+  fields, missing surfaces, stale hashes, dangling graph references, explicit
+  gaps, unsafe and untracked citations, non-training changes, generated-copy
+  provenance, advancement, installation, and curriculum/schema binding.
+
+### Changed
+
+- Audit curriculum content version is now 3. Stage 1 advancement requires two
+  consecutive independent attempts scoring at least 80 and passing every
+  deterministic repository-map gate.
+- Audit mastery may write only the three declared Stage 1 artifacts beneath
+  `.jstack-training/`; any other changed path hard-blocks the attempt.
+- Updated the Audit skill, prompt, architecture, security policy, mastery
+  guide, plugin metadata, installer expectations, and migration guidance for
+  `v0.10.0-alpha.2`.
+- Preserved the five commands, 50 canonical MCP tools, mastery profile v3,
+  Python 3.9+ standard-library runtime, and token-free host-native action
+  boundary.
+
+### Security
+
+- Stage 1 treats repository content as untrusted data and permits no
+  repository execution, network access, secret access, Git mutation,
+  remediation, external action, or production access.
+- Evidence reads are descriptor-confined and capped. Citations must reference
+  tracked regular files outside `.git` and `.jstack-training`, fit valid line
+  ranges, and match the current SHA-256.
+- Unsupported coverage, unresolved gaps, incomplete maps, stale bindings,
+  unused evidence, malformed fields, graph inconsistencies, and missing
+  generated-artifact provenance fail closed.
+- A Stage 1 pass proves structural and citation-contract compliance only; it
+  does not prove semantic completeness, vulnerability absence, zero-day
+  detection, exploitability, remediation, or production readiness.
+
 ## 0.10.0-alpha.1 - 2026-08-01
 
 ### Added

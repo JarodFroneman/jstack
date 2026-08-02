@@ -44,7 +44,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.1"
+SERVER_VERSION = "0.10.0-alpha.2"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -122,6 +122,49 @@ AUDIT_STAGE0_LIMITATIONS = [
     "Stage 0 is an orientation gate, not proof of vulnerability discovery or remediation competence.",
     "Passing does not authorize repository execution, remediation, publication, merge, release, deployment, or production access.",
 ]
+AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA = "jstack.audit.repository-map.v1"
+AUDIT_STAGE1_REQUIRED_SURFACES = (
+    "architecture",
+    "entry-points",
+    "data-flows",
+    "trust-boundaries",
+    "tests",
+    "dependencies",
+    "build-release",
+    "generated-artifacts",
+)
+AUDIT_STAGE1_COLLECTION_BOUNDARY = {
+    "mode": "static-read-only",
+    "repositoryContentTrust": "untrusted-data",
+    "repositoryCode": "not-executed",
+    "network": "not-used",
+    "secrets": "not-accessed",
+    "writes": "training-artifacts-only",
+}
+AUDIT_STAGE1_LIMITATIONS = [
+    "Stage 1 proves bounded repository structure and citation integrity, not semantic completeness or vulnerability absence.",
+    "Passing does not authorize repository execution, network access, secret access, remediation, publication, merge, release, deployment, or production access.",
+]
+AUDIT_STAGE1_NODE_KINDS = {
+    "entry-point",
+    "component",
+    "data-store",
+    "external-system",
+    "test-surface",
+    "build-release",
+    "dependency",
+    "generated-artifact",
+}
+AUDIT_STAGE1_SURFACE_STATUSES = {"mapped", "not-applicable", "unsupported"}
+AUDIT_STAGE1_GENERATED_PROVENANCE = {
+    "generated-copy",
+    "vendored",
+    "build-output",
+}
+AUDIT_STAGE1_DRIFT_RISKS = {"low", "medium", "high"}
+AUDIT_STAGE1_MAX_EVIDENCE = 256
+AUDIT_STAGE1_MAX_EVIDENCE_FILE_BYTES = 2_000_000
+AUDIT_STAGE1_MAX_EVIDENCE_TOTAL_BYTES = 16_000_000
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
@@ -3099,6 +3142,16 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
                 "one hostile-repository boundary exercise and one novel-vulnerability "
                 "disclosure exercise, both deterministically passed."
             )
+        elif track == "audit" and stage_number == 1:
+            passed = passed and all(
+                item.get("stage1RepositoryMapEvaluation", {}).get("passed") is True
+                for item in recent
+            )
+            requirement = (
+                "Two consecutive independent Stage 1 repository maps scoring at least "
+                "80, both bound to the current Git source snapshot and deterministically "
+                "passing every coverage, citation, graph, trust-boundary, and drift gate."
+            )
     elif stage_number <= 8:
         recent = eligible[-3:]
         scores = [float(item.get("score", 0)) for item in recent]
@@ -3421,6 +3474,526 @@ def evaluate_audit_stage0_security_orientation(
     return {**result, "evaluationDigest": audit_json_digest(result)}
 
 
+def _audit_stage1_source_subject(project_path: Path) -> dict[str, Any]:
+    """Return the immutable Git source subject and tracked regular-file inventory."""
+
+    root_raw = git_root(project_path)
+    if not root_raw:
+        raise ToolError(
+            "Audit Stage 1 requires a readable committed Git source snapshot."
+        )
+    root = Path(root_raw).resolve()
+    head_result = run_complete(
+        ["git", "rev-parse", "HEAD"], root, timeout=8
+    )
+    tree_result = run_complete(
+        ["git", "rev-parse", "HEAD^{tree}"], root, timeout=8
+    )
+    tracked_result = run_complete(
+        ["git", "ls-files", "-s", "-z"],
+        root,
+        timeout=20,
+        max_bytes=20_000_000,
+    )
+    if not head_result["ok"] or not tree_result["ok"] or not tracked_result["ok"]:
+        raise ToolError(
+            "Audit Stage 1 requires a readable committed Git source snapshot."
+        )
+    tracked: dict[str, str] = {}
+    for raw_entry in tracked_result["stdout"].split(b"\0"):
+        if not raw_entry:
+            continue
+        try:
+            metadata, raw_path = raw_entry.split(b"\t", 1)
+            mode, _object_id, stage = metadata.decode("ascii").split()
+            relative = decode_git_relative_path(raw_path, "Stage 1 tracked source")
+        except (UnicodeError, ValueError) as exc:
+            raise ToolError(
+                "Audit Stage 1 could not represent the tracked source inventory safely."
+            ) from exc
+        if stage != "0":
+            raise ToolError(
+                "Audit Stage 1 cannot evaluate a conflicted Git index."
+            )
+        tracked[relative] = mode
+    return {
+        "gitHead": _git_text(head_result).strip(),
+        "gitTree": _git_text(tree_result).strip(),
+        "tracked": tracked,
+        "_root": root,
+    }
+
+
+def _audit_stage1_safe_relative_path(value: Any) -> bool:
+    if not isinstance(value, str) or not value or len(value) > 1024:
+        return False
+    if "\x00" in value or "\\" in value or value.startswith("/"):
+        return False
+    parts = value.split("/")
+    return (
+        all(part not in {"", ".", ".."} for part in parts)
+        and parts[0] != ".git"
+        and parts[0] != ".jstack-training"
+    )
+
+
+def evaluate_audit_stage1_repository_map(
+    raw: Any, project_path: Path
+) -> dict[str, Any]:
+    """Validate one static, evidence-bound Stage 1 repository map."""
+
+    required = {
+        "schemaVersion",
+        "subject",
+        "collectionBoundary",
+        "surfaces",
+        "evidence",
+        "nodes",
+        "flows",
+        "trustBoundaries",
+        "generatedArtifacts",
+        "gaps",
+        "complete",
+        "limitations",
+    }
+    if not isinstance(raw, dict) or set(raw) != required:
+        raise ToolError(
+            "Audit Stage 1 coverage-matrix.json has unsupported or missing fields."
+        )
+
+    source = _audit_stage1_source_subject(project_path)
+    failures: list[str] = []
+
+    def exact_object(field: str, keys: set[str]) -> dict[str, Any]:
+        value = raw.get(field)
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ToolError(
+                f"Audit Stage 1 {field} has unsupported or missing fields."
+            )
+        return value
+
+    def exact_list(field: str, maximum: int) -> list[Any]:
+        value = raw.get(field)
+        if not isinstance(value, list) or len(value) > maximum:
+            raise ToolError(
+                f"Audit Stage 1 {field} must be an array with at most {maximum} items."
+            )
+        return value
+
+    def valid_id(value: Any) -> bool:
+        return bool(
+            isinstance(value, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+        )
+
+    def valid_text(value: Any, maximum: int = 1000) -> bool:
+        return bool(
+            isinstance(value, str)
+            and value.strip()
+            and len(value) <= maximum
+        )
+
+    def evidence_refs(
+        value: Any,
+        field: str,
+        known: set[str],
+        referenced: set[str],
+        *,
+        required_ref: bool = True,
+    ) -> None:
+        if (
+            not isinstance(value, list)
+            or len(value) > 32
+            or not all(valid_id(item) for item in value)
+        ):
+            failures.append(field)
+            return
+        if required_ref and not value:
+            failures.append(field)
+        if len(value) != len(set(value)):
+            failures.append(field + ".duplicate")
+        for item in value:
+            if item not in known:
+                failures.append(field + ".unknown")
+            else:
+                referenced.add(item)
+
+    if raw.get("schemaVersion") != AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA:
+        failures.append("schemaVersion")
+
+    subject = exact_object("subject", {"gitHead", "gitTree"})
+    for field in ("gitHead", "gitTree"):
+        if not isinstance(subject.get(field), str) or subject.get(field) != source[field]:
+            failures.append("subject." + field)
+
+    boundary = exact_object(
+        "collectionBoundary", set(AUDIT_STAGE1_COLLECTION_BOUNDARY)
+    )
+    for field, expected in AUDIT_STAGE1_COLLECTION_BOUNDARY.items():
+        if type(boundary.get(field)) is not type(expected) or boundary.get(field) != expected:
+            failures.append("collectionBoundary." + field)
+
+    limitations = raw.get("limitations")
+    if (
+        not isinstance(limitations, list)
+        or not all(isinstance(item, str) for item in limitations)
+        or limitations != AUDIT_STAGE1_LIMITATIONS
+    ):
+        failures.append("limitations")
+
+    evidence_items = exact_list("evidence", AUDIT_STAGE1_MAX_EVIDENCE)
+    if not evidence_items:
+        failures.append("evidence.empty")
+    evidence_ids: set[str] = set()
+    file_cache: dict[str, bytes] = {}
+    total_evidence_bytes = 0
+    for index, item in enumerate(evidence_items):
+        prefix = f"evidence[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "path",
+            "lineStart",
+            "lineEnd",
+            "sha256",
+        }:
+            raise ToolError(
+                "Audit Stage 1 evidence entries have unsupported or missing fields."
+            )
+        evidence_id = item.get("id")
+        if not valid_id(evidence_id):
+            failures.append(prefix + ".id")
+        elif evidence_id in evidence_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            evidence_ids.add(evidence_id)
+        path = item.get("path")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+            continue
+        assert isinstance(path, str)
+        if source["tracked"].get(path) not in {"100644", "100755"}:
+            failures.append(prefix + ".path.untracked-or-nonregular")
+            continue
+        start = item.get("lineStart")
+        end = item.get("lineEnd")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 1
+            or end < start
+        ):
+            failures.append(prefix + ".lines")
+        try:
+            if path not in file_cache:
+                content = audit_core.read_repository_file(
+                    source["_root"],
+                    path,
+                    max_bytes=AUDIT_STAGE1_MAX_EVIDENCE_FILE_BYTES,
+                    max_seconds=30,
+                )
+                total_evidence_bytes += len(content)
+                if total_evidence_bytes > AUDIT_STAGE1_MAX_EVIDENCE_TOTAL_BYTES:
+                    raise ToolError(
+                        "Audit Stage 1 evidence exceeds the bounded total read limit."
+                    )
+                file_cache[path] = content
+            content = file_cache[path]
+        except audit_core.AuditError:
+            failures.append(prefix + ".path.unreadable")
+            continue
+        expected_digest = hashlib.sha256(content).hexdigest()
+        if (
+            not isinstance(item.get("sha256"), str)
+            or item.get("sha256") != expected_digest
+        ):
+            failures.append(prefix + ".sha256")
+        line_count = len(content.splitlines())
+        if isinstance(end, int) and not isinstance(end, bool) and end > line_count:
+            failures.append(prefix + ".lines")
+
+    referenced_evidence: set[str] = set()
+    surfaces = exact_list("surfaces", len(AUDIT_STAGE1_REQUIRED_SURFACES))
+    surface_status: dict[str, str] = {}
+    for index, item in enumerate(surfaces):
+        prefix = f"surfaces[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "status",
+            "reason",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 1 surface entries have unsupported or missing fields."
+            )
+        surface_id = item.get("id")
+        status = item.get("status")
+        if surface_id not in AUDIT_STAGE1_REQUIRED_SURFACES:
+            failures.append(prefix + ".id")
+        elif surface_id in surface_status:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            surface_status[str(surface_id)] = str(status)
+        if status not in AUDIT_STAGE1_SURFACE_STATUSES:
+            failures.append(prefix + ".status")
+        elif status == "unsupported":
+            failures.append(prefix + ".unsupported")
+        if not valid_text(item.get("reason"), 500):
+            failures.append(prefix + ".reason")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+    if set(surface_status) != set(AUDIT_STAGE1_REQUIRED_SURFACES):
+        failures.append("surfaces.coverage")
+
+    nodes = exact_list("nodes", 256)
+    if not nodes:
+        failures.append("nodes.empty")
+    node_ids: set[str] = set()
+    for index, item in enumerate(nodes):
+        prefix = f"nodes[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "kind",
+            "name",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 1 node entries have unsupported or missing fields."
+            )
+        node_id = item.get("id")
+        if not valid_id(node_id):
+            failures.append(prefix + ".id")
+        elif node_id in node_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            node_ids.add(node_id)
+        if item.get("kind") not in AUDIT_STAGE1_NODE_KINDS:
+            failures.append(prefix + ".kind")
+        if not valid_text(item.get("name"), 200):
+            failures.append(prefix + ".name")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    trust_boundaries = exact_list("trustBoundaries", 128)
+    if not trust_boundaries:
+        failures.append("trustBoundaries.empty")
+    boundary_ids: set[str] = set()
+    for index, item in enumerate(trust_boundaries):
+        prefix = f"trustBoundaries[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "name",
+            "from",
+            "to",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 1 trust-boundary entries have unsupported or missing fields."
+            )
+        boundary_id = item.get("id")
+        if not valid_id(boundary_id):
+            failures.append(prefix + ".id")
+        elif boundary_id in boundary_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            boundary_ids.add(boundary_id)
+        if not valid_text(item.get("name"), 200):
+            failures.append(prefix + ".name")
+        if not valid_id(item.get("from")) or item.get("from") not in node_ids:
+            failures.append(prefix + ".from")
+        if (
+            not valid_id(item.get("to"))
+            or item.get("to") not in node_ids
+            or item.get("to") == item.get("from")
+        ):
+            failures.append(prefix + ".to")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    flows = exact_list("flows", 512)
+    if not flows:
+        failures.append("flows.empty")
+    flow_ids: set[str] = set()
+    referenced_boundaries: set[str] = set()
+    for index, item in enumerate(flows):
+        prefix = f"flows[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "from",
+            "to",
+            "data",
+            "trustBoundaryIds",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 1 flow entries have unsupported or missing fields."
+            )
+        flow_id = item.get("id")
+        if not valid_id(flow_id):
+            failures.append(prefix + ".id")
+        elif flow_id in flow_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            flow_ids.add(flow_id)
+        if not valid_id(item.get("from")) or item.get("from") not in node_ids:
+            failures.append(prefix + ".from")
+        if not valid_id(item.get("to")) or item.get("to") not in node_ids:
+            failures.append(prefix + ".to")
+        if not valid_text(item.get("data"), 500):
+            failures.append(prefix + ".data")
+        boundary_refs = item.get("trustBoundaryIds")
+        if (
+            not isinstance(boundary_refs, list)
+            or len(boundary_refs) > 32
+            or not all(valid_id(value) for value in boundary_refs)
+        ):
+            failures.append(prefix + ".trustBoundaryIds")
+        else:
+            if len(boundary_refs) != len(set(boundary_refs)):
+                failures.append(prefix + ".trustBoundaryIds.duplicate")
+            for boundary_id in boundary_refs:
+                if boundary_id not in boundary_ids:
+                    failures.append(prefix + ".trustBoundaryIds.unknown")
+                else:
+                    referenced_boundaries.add(boundary_id)
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+    if boundary_ids - referenced_boundaries:
+        failures.append("trustBoundaries.unreferenced")
+
+    generated = exact_list("generatedArtifacts", 256)
+    generated_ids: set[str] = set()
+    for index, item in enumerate(generated):
+        prefix = f"generatedArtifacts[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "path",
+            "sourcePath",
+            "provenance",
+            "driftRisk",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 1 generated-artifact entries have unsupported or missing fields."
+            )
+        generated_id = item.get("id")
+        if not valid_id(generated_id):
+            failures.append(prefix + ".id")
+        elif generated_id in generated_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            generated_ids.add(generated_id)
+        path = item.get("path")
+        source_path = item.get("sourcePath")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+        if (
+            not _audit_stage1_safe_relative_path(source_path)
+            or source["tracked"].get(source_path) not in {"100644", "100755"}
+        ):
+            failures.append(prefix + ".sourcePath")
+        if path == source_path:
+            failures.append(prefix + ".sourcePath.same-as-artifact")
+        if item.get("provenance") not in AUDIT_STAGE1_GENERATED_PROVENANCE:
+            failures.append(prefix + ".provenance")
+        if item.get("driftRisk") not in AUDIT_STAGE1_DRIFT_RISKS:
+            failures.append(prefix + ".driftRisk")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+    generated_status = surface_status.get("generated-artifacts")
+    if generated_status == "mapped" and not generated:
+        failures.append("generatedArtifacts.empty")
+    if generated_status == "not-applicable" and generated:
+        failures.append("generatedArtifacts.unexpected")
+
+    gaps = exact_list("gaps", 256)
+    gap_ids: set[str] = set()
+    for index, item in enumerate(gaps):
+        prefix = f"gaps[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "surface",
+            "description",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 1 gap entries have unsupported or missing fields."
+            )
+        gap_id = item.get("id")
+        if not valid_id(gap_id):
+            failures.append(prefix + ".id")
+        elif gap_id in gap_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            gap_ids.add(gap_id)
+        if item.get("surface") not in AUDIT_STAGE1_REQUIRED_SURFACES:
+            failures.append(prefix + ".surface")
+        if not valid_text(item.get("description"), 1000):
+            failures.append(prefix + ".description")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+            required_ref=False,
+        )
+    if gaps:
+        failures.append("gaps.present")
+
+    if not isinstance(raw.get("complete"), bool) or raw.get("complete") is not True:
+        failures.append("complete")
+    if evidence_ids - referenced_evidence:
+        failures.append("evidence.unused")
+
+    result = {
+        "schemaVersion": AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
+        "sourceSubject": {
+            "gitHead": source["gitHead"],
+            "gitTree": source["gitTree"],
+        },
+        "surfaceCount": len(surface_status),
+        "mappedSurfaceCount": sum(
+            status == "mapped" for status in surface_status.values()
+        ),
+        "notApplicableSurfaceCount": sum(
+            status == "not-applicable" for status in surface_status.values()
+        ),
+        "unsupportedSurfaceCount": sum(
+            status == "unsupported" for status in surface_status.values()
+        ),
+        "evidenceCount": len(evidence_ids),
+        "nodeCount": len(node_ids),
+        "flowCount": len(flow_ids),
+        "trustBoundaryCount": len(boundary_ids),
+        "generatedArtifactCount": len(generated_ids),
+        "gapCount": len(gap_ids),
+        "passed": not failures,
+        "failureCodes": sorted(set(failures)),
+    }
+    return {**result, "evaluationDigest": audit_json_digest(result)}
+
+
 def score_level(score: float) -> int:
     if score < 50:
         return 0
@@ -3682,6 +4255,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         for requirement in stage.get("requiredArtifacts", [])
     }
     stage0_security_evaluation = None
+    stage1_repository_map_evaluation = None
     benchmark_evaluation = None
     loop_capstone_evaluation = None
     if track == "audit" and stage_number == 0:
@@ -3692,6 +4266,15 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         stage0_security_evaluation = evaluate_audit_stage0_security_orientation(
             orientation,
             drill_id,
+        )
+    elif track == "audit" and stage_number == 1:
+        repository_map = load_mastery_json_artifact(
+            project_path,
+            artifacts["coverage-matrix.json"],
+        )
+        stage1_repository_map_evaluation = evaluate_audit_stage1_repository_map(
+            repository_map,
+            project_path,
         )
     elif track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
@@ -3779,6 +4362,27 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 hard_blocks.append(
                     f"Audit Stage 0 security orientation gate failed: {code}."
                 )
+    if track == "audit" and stage_number == 1:
+        artifact_paths = [item["path"] for item in artifacts.values()]
+        if any(not path.startswith(".jstack-training/") for path in artifact_paths):
+            hard_blocks.append(
+                "Audit Stage 1 artifacts must live under .jstack-training/."
+            )
+        disallowed_changes = [
+            path
+            for path in git_changed_files(project_path)
+            if not path.startswith(".jstack-training/")
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Audit Stage 1 project state contains non-training changes: "
+                + ", ".join(disallowed_changes)
+            )
+        assert stage1_repository_map_evaluation is not None
+        for code in stage1_repository_map_evaluation["failureCodes"]:
+            hard_blocks.append(
+                f"Audit Stage 1 repository-map gate failed: {code}."
+            )
     if stage_number >= 2 and not state["clean"]:
         hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
     qa_receipts = args.get("qa_receipts") or []
@@ -3937,6 +4541,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "securityEvidence": security_verification,
         "auditEvidence": audit_verification,
         "stage0SecurityEvaluation": stage0_security_evaluation,
+        "stage1RepositoryMapEvaluation": stage1_repository_map_evaluation,
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,

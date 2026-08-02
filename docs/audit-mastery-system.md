@@ -35,7 +35,7 @@ evidence remains attributable to the versioned rubric.
 | Stage | Outcome | Required artifacts |
 | --- | --- | --- |
 | 0 - Safe Security Operator | Apply CIA, authorization, hostile-repository, execution, disclosure, and non-authority boundaries in inert local training. | `orientation.md`, `audit-scope.json`, `security-orientation.json`, `evidence-manifest.json` |
-| 1 - System Mapping | Map architecture, entry points, data flow, trust boundaries, tests, dependencies, and release paths. | `system-map.md`, `trust-boundaries.md`, `coverage-matrix.json` |
+| 1 - Repository Reconnaissance And System Mapping | Produce an exact-Git-bound static map with complete surface coverage, source-line citations, graph/trust integrity, and generated-artifact provenance. | `system-map.md`, `trust-boundaries.md`, `coverage-matrix.json` |
 | 2 - Correctness And Reliability | Prove logic, state, error-handling, and reliability defects. | `correctness-report.json`, `reproductions/`, `invariants.md` |
 | 3 - Security And Threat Modeling | Model assets/adversaries and prove defensible attack paths. | `threat-model.md`, `security-findings.json`, `abuse-cases.md` |
 | 4 - Maintainability And Architecture | Find structural risks with material change or defect cost. | `architecture-map.md`, `maintainability-report.json`, `migration-outline.md` |
@@ -72,6 +72,36 @@ cannot satisfy advancement. Passing Stage 0 is not evidence of vulnerability
 discovery, exploitation, remediation, publication, release, deployment, or
 production competence or authority.
 
+## Stage 1 Deterministic Gate
+
+Stage 1 maps an unseen Git repository without executing it. The only permitted
+writes are `system-map.md`, `trust-boundaries.md`, and `coverage-matrix.json`
+under `.jstack-training/`. Repository content remains untrusted data; network,
+secret, build, test, analyzer, Git-state, remediation, and production actions
+are prohibited.
+
+`coverage-matrix.json` conforms to `jstack.audit.repository-map.v1` and binds
+the current Git HEAD and tree. It must classify exactly these surfaces:
+architecture, entry points, data flows, trust boundaries, tests, dependencies,
+build/release, and generated artifacts. `mapped` and evidence-backed
+`not-applicable` are complete classifications; `unsupported`, an explicit gap,
+or `complete: false` is a deterministic no-go.
+
+Every surface, system node, data flow, trust boundary, and generated-artifact
+record cites one or more evidence IDs. Each evidence record names a tracked
+regular repository file, a valid source-line range, and the exact current
+SHA-256. The evaluator rejects stale subjects and hashes, unsafe or untracked
+paths, duplicate or unknown IDs, dangling graph endpoints, unreferenced trust
+boundaries, unused evidence, unknown fields, oversized inputs, non-training
+changes, and missing provenance or drift risk.
+
+The attempt stores only artifact hashes, subject metadata, counts, failure
+codes, and an evaluation digest—not source or map content. Advancement requires
+two consecutive independent attempts scoring at least 80 and deterministically
+passing the complete Stage 1 contract. A pass is structural reconnaissance
+evidence only; it does not prove semantic completeness, vulnerability absence,
+scanner coverage, remediation, release, deployment, or production authority.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -83,8 +113,9 @@ The five weighted dimensions remain:
 - explanation: 10
 
 Assistance caps and independent-assessor rules match the engineering track.
-Stage 0 uses the distinct two-lab rule above; Stages 1 through 3 require two
-consecutive independent passes. Stages 4 through 8 provide
+Stage 0 uses the distinct two-lab rule above; Stage 1 uses the deterministic
+repository-map rule above; Stages 2 and 3 require two consecutive independent
+passes. Stages 4 through 8 provide
 separate audit and bounded implementation drills and require repeated evidence
 across both work types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.
