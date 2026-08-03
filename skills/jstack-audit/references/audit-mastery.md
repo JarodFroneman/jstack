@@ -95,6 +95,49 @@ contract compliance. It does not prove semantic completeness, vulnerability
 absence, zero-day detection, exploitability, remediation, release, deployment,
 or production authority.
 
+## Stage 2: Correctness And Reliability Auditor
+
+Stage 2 is an evidence gate for logic, state-transition, error-handling, and
+reliability findings. It does not patch the repository, claim vulnerability
+absence, or authorize Git, network, release, deployment, or production action.
+Create only these exact paths beneath `.jstack-training/`:
+
+- `correctness-report.json`
+- `invariants.md`
+- `reproductions/manifest.json`
+
+The JSON files must conform to
+`mcp/jstack/schemas/audit-correctness-report.v1.schema.json` and
+`mcp/jstack/schemas/audit-correctness-reproductions.v1.schema.json`. Bind both
+subjects and the report's reproduction-manifest digest to the current
+committed Git HEAD and tree. Cite only tracked regular files outside `.git`
+and `.jstack-training/`, with bounded line ranges and current SHA-256 hashes.
+Cover exactly `logic`, `state-transitions`, `error-handling`, and
+`reliability`; unsupported coverage, explicit gaps, or `complete: false`
+cannot pass.
+
+Each finding separates symptom, trigger, root cause, and impact and references
+one or more violated invariants. Every blocker or high/critical claim must be
+verified, high-confidence, and reachable or conditional. It must have a
+reciprocal reproduction case and a complete regression plan. Speculative
+high-severity claims fail rather than being silently downgraded.
+
+A `static-invariant` reproduction records a source-proven counterexample and
+requires no repository execution. A `jstack-qa` reproduction must reference a
+passing QA receipt issued for the same current revision and must match the
+discovered command key, command fingerprint, profile, and return code. Do not
+store raw command output or add files beside `manifest.json`. JStack QA uses a
+scrubbed environment and isolated HOME but is not an OS or network sandbox;
+use an externally enforced container or VM before executing untrusted code.
+
+Call `jstack_mastery_record(track="audit", stage=2, ...)` only after the three
+artifacts exist and no non-training path is dirty. The evaluator verifies the
+artifact hashes, exact source subject, evidence citations, reciprocal IDs,
+reproduction receipts, regression coverage, limitations, and completeness.
+It records only counts, failure codes, immutable subject metadata, and a
+digest. Advancement requires two consecutive independent attempts scoring at
+least 80 and passing this deterministic contract.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

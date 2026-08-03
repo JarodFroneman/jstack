@@ -36,7 +36,7 @@ evidence remains attributable to the versioned rubric.
 | --- | --- | --- |
 | 0 - Safe Security Operator | Apply CIA, authorization, hostile-repository, execution, disclosure, and non-authority boundaries in inert local training. | `orientation.md`, `audit-scope.json`, `security-orientation.json`, `evidence-manifest.json` |
 | 1 - Repository Reconnaissance And System Mapping | Produce an exact-Git-bound static map with complete surface coverage, source-line citations, graph/trust integrity, and generated-artifact provenance. | `system-map.md`, `trust-boundaries.md`, `coverage-matrix.json` |
-| 2 - Correctness And Reliability | Prove logic, state, error-handling, and reliability defects. | `correctness-report.json`, `reproductions/`, `invariants.md` |
+| 2 - Correctness And Reliability | Prove exact-revision logic, state-transition, error-handling, and reliability defects with reciprocal invariant/reproduction evidence and regression plans. | `correctness-report.json`, `reproductions/manifest.json`, `invariants.md` |
 | 3 - Security And Threat Modeling | Model assets/adversaries and prove defensible attack paths. | `threat-model.md`, `security-findings.json`, `abuse-cases.md` |
 | 4 - Maintainability And Architecture | Find structural risks with material change or defect cost. | `architecture-map.md`, `maintainability-report.json`, `migration-outline.md` |
 | 5 - Performance And Resources | Establish measurable CPU, memory, I/O, latency, query, or contention findings. | `benchmark-plan.md`, `baseline-results.json`, `performance-findings.json` |
@@ -102,6 +102,41 @@ passing the complete Stage 1 contract. A pass is structural reconnaissance
 evidence only; it does not prove semantic completeness, vulnerability absence,
 scanner coverage, remediation, release, deployment, or production authority.
 
+## Stage 2 Deterministic Gate
+
+Stage 2 evaluates correctness evidence against the current committed Git HEAD
+and tree. Its only permitted writes are `correctness-report.json`,
+`invariants.md`, and `reproductions/manifest.json` under `.jstack-training/`.
+Any other dirty path hard-blocks recording. The report and manifest use the
+closed `jstack.audit.correctness-report.v1` and
+`jstack.audit.correctness-reproductions.v1` contracts and are digest-bound to
+each other.
+
+The report must cover exactly logic, state transitions, error handling, and
+reliability. Every finding cites a tracked regular source file by bounded line
+range and current SHA-256 and separates symptom, trigger, root cause, and
+impact. A blocker or high/critical claim is eligible only when verified,
+high-confidence, reachable or conditional, and linked to both a violated
+invariant and a reciprocal reproduction. Speculative high-severity findings
+fail closed.
+
+Static invariant counterexamples prove a contradiction without executing the
+repository. Executed cases are accepted only when their command key,
+fingerprint, QA profile, passing return code, and receipt match a current
+exact-revision `jstack_qa` result. Only `manifest.json` may exist in the
+reproduction directory, so raw outputs are not retained or returned. JStack
+QA provides environment hardening, not OS or network isolation; untrusted code
+still requires an externally enforced container or VM.
+
+Every verified finding requires a regression plan covering before-fix failure,
+after-fix success, unrelated behavior, and failure-state behavior. Unsupported
+coverage, gaps, incomplete status, stale evidence, unused citations or cases,
+invalid references, secret-like values, or malformed fields block completion.
+Attempt records contain hashes, counts, subject metadata, failure codes, and an
+evaluation digest—not source, report, invariant, or reproduction content.
+Advancement requires two consecutive independent attempts scoring at least 80
+and passing the deterministic evaluator.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -114,8 +149,9 @@ The five weighted dimensions remain:
 
 Assistance caps and independent-assessor rules match the engineering track.
 Stage 0 uses the distinct two-lab rule above; Stage 1 uses the deterministic
-repository-map rule above; Stages 2 and 3 require two consecutive independent
-passes. Stages 4 through 8 provide
+repository-map rule above; Stage 2 uses the deterministic correctness-evidence
+rule above; Stage 3 requires two consecutive independent passes. Stages 4
+through 8 provide
 separate audit and bounded implementation drills and require repeated evidence
 across both work types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.

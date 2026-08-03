@@ -35,6 +35,12 @@ evidence, launch assurance, release readiness, and mastery progression.
   execution, returns no raw source content, permits only three declared
   `.jstack-training/` artifacts, and grants no remediation or production
   authority.
+- Audit mastery Stage 2 validates exact-Git-bound correctness reports across
+  logic, state transitions, error handling, and reliability. Strong claims need
+  hash-verified source citations, violated invariants, reciprocal static or
+  exact-QA reproductions, and complete regression plans. It returns metadata,
+  not raw source or reproduction output; allows only three declared training
+  artifacts; and grants no remediation or production authority.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The

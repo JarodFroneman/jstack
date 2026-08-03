@@ -90,6 +90,30 @@ the deterministic contract. It is not proof of semantic completeness,
 vulnerability absence, zero-day detection, exploitability, remediation
 competence, release readiness, deployment safety, or production authority.
 
+### Audit mastery Stage 2
+
+Audit mastery Stage 2 permits only `correctness-report.json`, `invariants.md`,
+and `reproductions/manifest.json` beneath `.jstack-training/`; any other dirty
+path blocks the attempt. Both closed-schema JSON documents bind the exact Git
+HEAD/tree, the report binds the manifest digest, and every cited source range
+must resolve to a tracked regular file with a matching current SHA-256.
+
+All four correctness surfaces are mandatory. Blocker and high/critical claims
+must be verified, high-confidence, reachable or conditional, and linked to a
+violated invariant, a reciprocal reproduction, and a complete regression plan.
+Speculative high-severity claims, unresolved gaps, unused evidence, stale
+bindings, malformed or secret-like values, fabricated QA receipts, and raw
+reproduction files fail closed.
+
+Static invariant cases do not execute repository code. Executed cases require
+a current passing `jstack_qa` receipt whose command key, command fingerprint,
+profile, and return code exactly match the manifest. JStack QA's scrubbed
+environment and isolated HOME do not provide OS or network isolation; execute
+untrusted code only in an externally enforced container or VM. Evaluation
+returns metadata and digests, not raw source, report, or reproduction content.
+Passing Stage 2 grants no remediation, Git, release, deployment, or production
+authority.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

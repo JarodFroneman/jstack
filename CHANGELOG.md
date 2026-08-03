@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.10.0-alpha.3 - 2026-08-03
+
+### Added
+
+- Implemented Audit mastery Stage 2, Correctness and Reliability Auditor, as
+  the third bounded foundation phase.
+- Added closed `jstack.audit.correctness-report.v1` and
+  `jstack.audit.correctness-reproductions.v1` contracts for exact Git
+  HEAD/tree binding, four-surface coverage, current source-line evidence,
+  invariants, findings, reproductions, regression plans, gaps, completeness,
+  exact boundaries, and limitations.
+- Added deterministic validation for static invariant counterexamples and for
+  executed reproductions backed by a passing current exact-revision
+  `jstack_qa` receipt with matching command identity and return code.
+- Added adversarial tests for stale subjects, false boolean aliases, unknown
+  fields, missing coverage, stale hashes, gaps, incomplete packages,
+  unverified or speculative blockers, fabricated QA bindings, raw output or
+  extra reproduction files, unsafe/untracked citations, non-training changes,
+  advancement, and curriculum/schema binding.
+
+### Changed
+
+- Audit curriculum content version is now 4. Stage 2 advancement requires two
+  consecutive independent attempts scoring at least 80 and passing every
+  deterministic correctness-evidence gate.
+- Audit mastery Stage 2 may write only `correctness-report.json`,
+  `invariants.md`, and `reproductions/manifest.json` under
+  `.jstack-training/`; any other dirty path hard-blocks the attempt.
+- Every verified finding requires a regression plan covering before-fix,
+  after-fix, unrelated-behavior, and failure-state checks. Every blocker or
+  high/critical claim must also be verified, high-confidence, reachable or
+  conditional, and linked reciprocally to a violated invariant and a
+  reproduction.
+- Preserved the five commands, 50 canonical MCP tools, read-only Audit
+  boundary, mastery profile v3, Python 3.9+ standard-library runtime,
+  cross-platform packaging, and token-free host-native action boundary.
+
+### Security
+
+- Stage 2 binds both evidence documents and every source citation to the exact
+  committed subject and rejects stale, malformed, secret-like, unused,
+  unsupported, incomplete, or fabricated evidence without echoing raw source
+  or reproduction content.
+- Static proofs avoid repository execution. Executed cases must reuse current
+  JStack QA evidence; JStack QA remains environment hardening rather than an OS
+  or network sandbox, so untrusted execution still requires an externally
+  enforced container or VM.
+- A Stage 2 pass proves deterministic evidence-contract compliance only. It
+  grants no remediation, Git, release, deployment, production, vulnerability-
+  absence, zero-day-detection, or semantic-completeness claim.
+
 ## 0.10.0-alpha.2 - 2026-08-02
 
 ### Added
