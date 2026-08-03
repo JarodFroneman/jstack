@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 3,
+  "version": 4,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -19,7 +19,7 @@
     }
   },
   "advancementPolicy": {
-    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stages 2 and 3 require two consecutive independent attempts scoring at least 80.",
+    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two consecutive independent attempts scoring at least 80.",
     "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
@@ -78,13 +78,14 @@
     {
       "stage": 2,
       "name": "Correctness and Reliability Auditor",
-      "outcome": "Find and prove logic, state, error-handling, and reliability defects.",
+      "outcome": "Find and prove logic, state-transition, error-handling, and reliability defects against an exact Git source snapshot using hash-verified citations, violated invariants, reciprocal reproductions, and complete regression plans without speculative blocker claims.",
       "prerequisites": [1],
-      "corePrinciples": ["Reproduce before claiming", "Define invariants", "Separate symptom from cause", "Analyze failure states", "Retain regression evidence"],
+      "corePrinciples": ["Reproduce or prove the invariant counterexample before claiming", "Bind evidence to the exact commit and tree", "Separate symptom, trigger, root cause, and impact", "Executed reproductions require a current exact-revision JStack QA receipt", "Static invariant proofs avoid untrusted execution", "Every blocker is reachable, verified, and regression-planned", "JStack QA is not an OS or network sandbox", "Audit evidence never grants remediation or production authority"],
       "drills": [{"id": "a2-correctness", "name": "Audit seeded correctness defects", "type": "audit"}],
       "requiredArtifacts": ["correctness-report.json", "reproductions", "invariants.md"],
-      "benchmarks": ["All seeded critical correctness defects", "Reproduction or invariant proof for blockers", "Regression plan", "No speculative high-severity finding"],
-      "hardGates": ["Every blocker is verified", "No fabricated reproduction"]
+      "artifactSchemas": {"correctness-report.json": "jstack.audit.correctness-report.v1", "reproductions/manifest.json": "jstack.audit.correctness-reproductions.v1"},
+      "benchmarks": ["Exact Git HEAD and tree binding", "Logic, state-transition, error-handling, and reliability surfaces all covered", "Every material finding cites current tracked source evidence with verified line hashes", "Every blocker or high/critical claim is verified, high-confidence, reachable or conditional, and linked to both a violated invariant and a reciprocal reproduction", "Executed reproductions match a current exact-revision JStack QA receipt", "Static invariant counterexamples require no repository execution", "Every verified finding has a complete before-fix, after-fix, unrelated-behavior, and failure-state regression plan", "Evaluation returns metadata and failure codes without echoing raw repository or reproduction content", "Gaps and limitations are explicit", "No speculative high-severity finding"],
+      "hardGates": ["Only the three exact Stage 2 training artifacts may be written", "No non-training mutation, secret access, network authority, or production action", "Unsupported coverage, unresolved gaps, malformed artifacts, stale evidence, or unused evidence block completion", "No fabricated or mismatched QA receipt", "Every blocker or high/critical claim is verified, high-confidence, reachable or conditional", "No speculative high-severity claim", "Every verified finding has a complete regression plan", "Artifacts remain at the exact .jstack-training Stage 2 paths", "No claim of remediation, release, deployment, or production authority"]
     },
     {
       "stage": 3,

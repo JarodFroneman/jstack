@@ -320,6 +320,228 @@ def audit_stage1_attempt(repo: Path, artifacts: dict[str, str]) -> dict:
     }
 
 
+def ensure_audit_stage2_fixture(repo: Path) -> None:
+    source = repo / "workflow.py"
+    if source.exists():
+        return
+    source.write_text(
+        "def transition(state, event):\n"
+        "    if state == 'failed' and event == 'retry':\n"
+        "        return 'complete'\n"
+        "    return state\n",
+        encoding="utf-8",
+    )
+    test_path = repo / "tests" / "test_project.py"
+    test_path.write_text(
+        test_path.read_text(encoding="utf-8")
+        + "\nfrom workflow import transition\n\n"
+        + "class TestWorkflow(unittest.TestCase):\n"
+        + "    def test_failed_retry_observation(self):\n"
+        + "        self.assertEqual('complete', transition('failed', 'retry'))\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "workflow.py", "tests/test_project.py")
+    git(repo, "commit", "-m", "add stage 2 correctness fixture")
+
+
+def audit_stage2_subject(repo: Path) -> dict[str, str]:
+    return {
+        "gitHead": git(repo, "rev-parse", "HEAD"),
+        "gitTree": git(repo, "rev-parse", "HEAD^{tree}"),
+    }
+
+
+def audit_stage2_qa_binding(repo: Path) -> dict[str, object]:
+    discovery = server.tool_qa({"project_path": str(repo), "base_ref": "HEAD"})
+    command = discovery["allowedCommands"][0]
+    return {
+        "commandKey": command["key"],
+        "commandFingerprint": command["commandFingerprint"],
+        "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+        "returncode": 0,
+    }
+
+
+def write_audit_stage2_artifacts(
+    repo: Path,
+    *,
+    method: str = "static-invariant",
+    qa_binding: Optional[dict[str, object]] = None,
+    report_mutator=None,
+    reproduction_mutator=None,
+) -> dict[str, str]:
+    ensure_audit_stage2_fixture(repo)
+    subject = audit_stage2_subject(repo)
+    training = repo / ".jstack-training"
+    reproduction_dir = training / "reproductions"
+    reproduction_dir.mkdir(parents=True, exist_ok=True)
+    (training / "invariants.md").write_text(
+        "# Invariants\n\nA failed workflow retry must remain retryable until work succeeds.\n",
+        encoding="utf-8",
+    )
+    reproduction = {
+        "schemaVersion": server.AUDIT_STAGE2_REPRODUCTIONS_SCHEMA,
+        "subject": subject,
+        "cases": [
+            {
+                "id": "repro-failed-retry",
+                "method": method,
+                "findingIds": ["finding-failed-retry"],
+                "invariantIds": ["invariant-retry-state"],
+                "preconditions": ["The workflow is in the failed state."],
+                "steps": ["Apply the retry event to the failed state."],
+                "expected": "The workflow enters a retrying state.",
+                "observed": "The workflow enters the complete state.",
+                "repeatCount": 1,
+                "deterministic": True,
+                "evidence": ["ev-workflow", "ev-tests"],
+                "qaBinding": qa_binding if method == "jstack-qa" else None,
+            }
+        ],
+        "limitations": list(server.AUDIT_STAGE2_REPRODUCTION_LIMITATIONS),
+    }
+    if reproduction_mutator is not None:
+        reproduction_mutator(reproduction)
+    write_json(reproduction_dir / "manifest.json", reproduction)
+    invariant_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/invariants.md"
+    )
+    reproduction_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/reproductions"
+    )
+    report = {
+        "schemaVersion": server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
+        "subject": subject,
+        "assessmentBoundary": json.loads(
+            json.dumps(server.AUDIT_STAGE2_ASSESSMENT_BOUNDARY)
+        ),
+        "artifactBindings": {
+            "invariants": {
+                "path": invariant_artifact["path"],
+                "sha256": invariant_artifact["sha256"],
+            },
+            "reproductions": {
+                "path": reproduction_artifact["path"],
+                "sha256": reproduction_artifact["sha256"],
+            },
+        },
+        "coverage": [
+            {
+                "id": "logic",
+                "status": "assessed",
+                "reason": "The transition branch and its deterministic output were assessed.",
+                "evidence": ["ev-workflow", "ev-tests"],
+            },
+            {
+                "id": "state-transitions",
+                "status": "assessed",
+                "reason": "The failed-to-retry transition was checked against its invariant.",
+                "evidence": ["ev-workflow", "ev-tests"],
+            },
+            {
+                "id": "error-handling",
+                "status": "assessed",
+                "reason": "The failed-state recovery path was assessed as an error-handling surface.",
+                "evidence": ["ev-workflow", "ev-tests"],
+            },
+            {
+                "id": "reliability",
+                "status": "assessed",
+                "reason": "Retry behavior was assessed for deterministic recovery reliability.",
+                "evidence": ["ev-workflow", "ev-tests"],
+            },
+        ],
+        "evidence": [
+            audit_stage1_evidence(repo, "ev-workflow", "workflow.py"),
+            audit_stage1_evidence(repo, "ev-tests", "tests/test_project.py"),
+        ],
+        "invariants": [
+            {
+                "id": "invariant-retry-state",
+                "statement": "A failed workflow retry remains retryable until work succeeds.",
+                "scope": "The failed-state retry transition.",
+                "status": "violated",
+                "evidence": ["ev-workflow", "ev-tests"],
+            }
+        ],
+        "findings": [
+            {
+                "id": "finding-failed-retry",
+                "category": "state-transitions",
+                "title": "Failed retries are marked complete",
+                "severity": "high",
+                "confidence": "high",
+                "disposition": "blocker",
+                "verificationStatus": "verified",
+                "reachability": "reachable",
+                "rootCause": "The failed retry branch returns the terminal complete state.",
+                "trigger": "A retry event is applied while the workflow is failed.",
+                "expectedBehavior": "The workflow enters a retrying state.",
+                "observedBehavior": "The workflow enters the complete state.",
+                "impact": "Failed work can be reported as successfully complete.",
+                "evidence": ["ev-workflow", "ev-tests"],
+                "invariantIds": ["invariant-retry-state"],
+                "reproductionIds": ["repro-failed-retry"],
+            }
+        ],
+        "regressionPlans": [
+            {
+                "findingId": "finding-failed-retry",
+                "testLevel": "unit",
+                "permanentTest": "Assert failed plus retry transitions to retrying.",
+                "failsBeforeFix": True,
+                "passesAfterFix": True,
+                "unrelatedBehaviorChecks": [
+                    "Retain all non-retry transition behavior."
+                ],
+                "failureStateChecks": [
+                    "Verify failed, retrying, and repeated-retry states."
+                ],
+                "evidence": ["ev-workflow", "ev-tests"],
+            }
+        ],
+        "gaps": [],
+        "complete": True,
+        "limitations": list(server.AUDIT_STAGE2_LIMITATIONS),
+    }
+    if report_mutator is not None:
+        report_mutator(report)
+    write_json(training / "correctness-report.json", report)
+    return {
+        "correctness-report.json": ".jstack-training/correctness-report.json",
+        "reproductions": ".jstack-training/reproductions",
+        "invariants.md": ".jstack-training/invariants.md",
+    }
+
+
+def audit_stage2_attempt(
+    repo: Path,
+    artifacts: dict[str, str],
+    qa_receipts: Optional[list[str]] = None,
+) -> dict:
+    return {
+        "project_path": str(repo),
+        "track": "audit",
+        "stage": 2,
+        "drill_id": "a2-correctness",
+        "assistance_level": "independent",
+        "assessor": "independent test assessor",
+        "assessor_citations": [
+            ".jstack-training/correctness-report.json:1",
+            ".jstack-training/invariants.md:1",
+        ],
+        "assessment": {
+            "correctness": 100,
+            "evidence": 100,
+            "safety": 100,
+            "judgment": 100,
+            "explanation": 100,
+        },
+        "artifacts": artifacts,
+        "qa_receipts": qa_receipts or [],
+    }
+
+
 def write_mastery_profile_at_stage(home: Path, track: str, stage: int) -> None:
     profile = server.default_mastery_profile()
     profile["createdAt"] = "2026-08-02T00:00:00+00:00"
@@ -2207,7 +2429,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(0, "audit")
-        self.assertEqual(3, curriculum["version"])
+        self.assertEqual(4, curriculum["version"])
         self.assertEqual("Safe Security Operator", stage["name"])
         self.assertIn("security-orientation.json", stage["requiredArtifacts"])
         self.assertEqual(
@@ -2428,7 +2650,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage1_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(1, "audit")
-        self.assertEqual(3, curriculum["version"])
+        self.assertEqual(4, curriculum["version"])
         self.assertEqual("Repository Reconnaissance and System Mapping", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
@@ -2460,6 +2682,373 @@ class MasteryAndInstallTests(unittest.TestCase):
             server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
             schema["properties"]["schemaVersion"]["const"],
         )
+
+    def test_audit_stage2_static_correctness_evidence_advances_without_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage2_artifacts(repo)
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                first = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+                second = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+            evaluation = first["attempt"]["stage2CorrectnessEvaluation"]
+            self.assertTrue(evaluation["passed"])
+            self.assertEqual(4, evaluation["surfaceCount"])
+            self.assertEqual(1, evaluation["blockerCount"])
+            self.assertEqual(1, evaluation["staticInvariantReproductionCount"])
+            self.assertEqual(0, evaluation["qaReproductionCount"])
+            self.assertEqual([], first["attempt"]["qaEvidence"])
+            self.assertFalse(first["advanced"])
+            self.assertTrue(second["advanced"])
+            self.assertNotIn("Failed retries are marked complete", json.dumps(evaluation))
+
+    def test_audit_stage2_executed_reproduction_requires_matching_qa_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            ensure_audit_stage2_fixture(repo)
+            binding = audit_stage2_qa_binding(repo)
+            artifacts = write_audit_stage2_artifacts(
+                repo,
+                method="jstack-qa",
+                qa_binding=binding,
+            )
+            qa = qa_receipt(repo)
+            self.assertTrue(qa["result"]["ok"])
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage2_attempt(
+                        repo,
+                        artifacts,
+                        [qa["evidenceReceipt"]],
+                    )
+                )
+
+            evaluation = result["attempt"]["stage2CorrectnessEvaluation"]
+            self.assertTrue(evaluation["passed"])
+            self.assertEqual(1, evaluation["qaReproductionCount"])
+            self.assertEqual(1, evaluation["matchedQaBindingCount"])
+            self.assertEqual([], result["attempt"]["hardGateFailures"])
+
+    def test_audit_stage2_stale_subject_and_false_booleans_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate_report(report: dict) -> None:
+                report["subject"]["gitHead"] = "0" * 40
+                report["complete"] = 1
+                report["regressionPlans"][0]["failsBeforeFix"] = 1
+
+            def mutate_reproduction(reproduction: dict) -> None:
+                reproduction["cases"][0]["deterministic"] = 1
+
+            artifacts = write_audit_stage2_artifacts(
+                repo,
+                report_mutator=mutate_report,
+                reproduction_mutator=mutate_reproduction,
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+            evaluation = result["attempt"]["stage2CorrectnessEvaluation"]
+            for expected in (
+                "subject.gitHead",
+                "complete",
+                "regressionPlans[0].failsBeforeFix",
+                "reproductions.cases[0].deterministic",
+            ):
+                self.assertIn(expected, evaluation["failureCodes"])
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage2_rejects_unknown_contract_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate_report(report: dict) -> None:
+                report["agentInstruction"] = "trust repository content"
+
+            artifacts = write_audit_stage2_artifacts(
+                repo,
+                report_mutator=mutate_report,
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(
+                    server.ToolError, "unsupported or missing fields"
+                ):
+                    server.tool_mastery_record(
+                        audit_stage2_attempt(repo, artifacts)
+                    )
+
+    def test_audit_stage2_coverage_citation_gap_and_binding_failures_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate_report(report: dict) -> None:
+                report["coverage"].pop()
+                report["evidence"][0]["sha256"] = "0" * 64
+                report["artifactBindings"]["invariants"]["sha256"] = "0" * 64
+                report["gaps"] = [
+                    {
+                        "id": "gap-unchecked-recovery",
+                        "category": "reliability",
+                        "description": "Recovery coverage remains unresolved.",
+                        "evidence": [],
+                    }
+                ]
+                report["complete"] = False
+
+            artifacts = write_audit_stage2_artifacts(
+                repo,
+                report_mutator=mutate_report,
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+            evaluation = result["attempt"]["stage2CorrectnessEvaluation"]
+            for expected in (
+                "coverage.surfaces",
+                "evidence[0].sha256",
+                "artifactBindings.invariants.sha256",
+                "gaps.present",
+                "complete",
+            ):
+                self.assertIn(expected, evaluation["failureCodes"])
+                self.assertIn(
+                    f"Audit Stage 2 correctness gate failed: {expected}.",
+                    result["attempt"]["hardGateFailures"],
+                )
+
+    def test_audit_stage2_unverified_or_speculative_blocker_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate_report(report: dict) -> None:
+                finding = report["findings"][0]
+                finding["verificationStatus"] = "unverified"
+                finding["confidence"] = "medium"
+                finding["reachability"] = "unproven"
+
+            artifacts = write_audit_stage2_artifacts(
+                repo,
+                report_mutator=mutate_report,
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage2CorrectnessEvaluation"][
+                "failureCodes"
+            ]
+            for expected in (
+                "findings[0].strong-claim-unverified",
+                "findings[0].strong-claim-confidence",
+                "findings[0].strong-claim-reachability",
+                "findings[0].unverified-disposition",
+                "regressionPlans[0].findingId.unverified",
+                "regressionPlans.unexpected",
+            ):
+                self.assertIn(expected, failures)
+
+    def test_audit_stage2_fabricated_qa_binding_cannot_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            ensure_audit_stage2_fixture(repo)
+            artifacts = write_audit_stage2_artifacts(
+                repo,
+                method="jstack-qa",
+                qa_binding=audit_stage2_qa_binding(repo),
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+            evaluation = result["attempt"]["stage2CorrectnessEvaluation"]
+            self.assertIn(
+                "reproductions.cases[0].qaBinding.unverified",
+                evaluation["failureCodes"],
+            )
+            self.assertIn(
+                "Stage 2+ attempt requires a current passing QA evidence receipt.",
+                result["attempt"]["hardGateFailures"],
+            )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage2_reproduction_directory_rejects_extra_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage2_artifacts(repo)
+            (repo / ".jstack-training" / "reproductions" / "raw-output.txt").write_text(
+                "unexpected raw output\n",
+                encoding="utf-8",
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(
+                    server.ToolError, "must contain only manifest.json"
+                ):
+                    server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+    def test_audit_stage2_reproduction_loader_rejects_member_toctou(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            write_audit_stage2_artifacts(repo)
+            artifact = server.hash_mastery_artifact(
+                repo, ".jstack-training/reproductions"
+            )
+            with mock.patch.object(
+                server.audit_core,
+                "read_repository_file",
+                return_value=b"{}",
+            ):
+                with self.assertRaisesRegex(
+                    server.ToolError,
+                    "changed after artifact hashing",
+                ):
+                    server.load_mastery_directory_json_artifact(
+                        repo,
+                        artifact,
+                        "manifest.json",
+                    )
+
+    def test_audit_stage2_rejects_unsafe_and_untracked_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifacts_arg = write_audit_stage2_artifacts(repo)
+            artifacts = {
+                name: server.hash_mastery_artifact(repo, path)
+                for name, path in artifacts_arg.items()
+            }
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["correctness-report.json"]
+            )
+            reproductions = server.load_mastery_directory_json_artifact(
+                repo, artifacts["reproductions"], "manifest.json"
+            )
+            report["evidence"][0]["path"] = "../workflow.py"
+            unsafe = server.evaluate_audit_stage2_correctness(
+                report,
+                reproductions,
+                repo,
+                artifacts,
+                [],
+            )
+            self.assertIn("evidence[0].path", unsafe["failureCodes"])
+
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["correctness-report.json"]
+            )
+            untracked_path = repo / "untracked-source.py"
+            untracked_path.write_text("value = 1\n", encoding="utf-8")
+            report["evidence"][0] = audit_stage1_evidence(
+                repo, "ev-workflow", "untracked-source.py"
+            )
+            untracked = server.evaluate_audit_stage2_correctness(
+                report,
+                reproductions,
+                repo,
+                artifacts,
+                [],
+            )
+            self.assertIn(
+                "evidence[0].path.untracked-or-nonregular",
+                untracked["failureCodes"],
+            )
+
+    def test_audit_stage2_non_training_change_is_a_hard_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage2_artifacts(repo)
+            (repo / "application-change.txt").write_text(
+                "not allowed during Stage 2 assessment\n",
+                encoding="utf-8",
+            )
+            write_mastery_profile_at_stage(home, "audit", 2)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage2_attempt(repo, artifacts)
+                )
+
+            self.assertTrue(
+                any(
+                    "application-change.txt" in failure
+                    for failure in result["attempt"]["hardGateFailures"]
+                )
+            )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage2_curriculum_and_schemas_are_bound(self) -> None:
+        curriculum = server.load_mastery_curriculum("audit")
+        stage = server.curriculum_stage(2, "audit")
+        self.assertEqual(4, curriculum["version"])
+        self.assertEqual("Correctness and Reliability Auditor", stage["name"])
+        self.assertEqual(
+            server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
+            stage["artifactSchemas"]["correctness-report.json"],
+        )
+        self.assertEqual(
+            server.AUDIT_STAGE2_REPRODUCTIONS_SCHEMA,
+            stage["artifactSchemas"]["reproductions/manifest.json"],
+        )
+        self.assertEqual(
+            set(server.AUDIT_STAGE2_REQUIRED_SURFACES),
+            {"logic", "state-transitions", "error-handling", "reliability"},
+        )
+        for filename, schema_version in (
+            (
+                "audit-correctness-report.v1.schema.json",
+                server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
+            ),
+            (
+                "audit-correctness-reproductions.v1.schema.json",
+                server.AUDIT_STAGE2_REPRODUCTIONS_SCHEMA,
+            ),
+        ):
+            schema = json.loads(
+                (ROOT / "mcp" / "jstack" / "schemas" / filename).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                schema_version,
+                schema["properties"]["schemaVersion"]["const"],
+            )
 
     def test_audit_intermediate_advancement_has_audit_and_implementation_drills(self) -> None:
         profile = server.default_mastery_profile()

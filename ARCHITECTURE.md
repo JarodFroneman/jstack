@@ -44,6 +44,10 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   eight-surface coverage, hash-verified source-line citations, graph and trust-
   boundary integrity, generated-artifact provenance, explicit gaps, and
   non-authority limitations
+- deterministic audit-mastery Stage 2 validation for exact Git source binding,
+  four correctness surfaces, hash-verified citations, invariant and
+  reproduction reciprocity, exact-QA receipt matching, regression completeness,
+  and non-authority limitations
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -258,6 +262,24 @@ fingerprint is recorded separately with each attempt; it intentionally includes
 the training artifacts and therefore is not embedded self-referentially inside
 `coverage-matrix.json`. Any change outside `.jstack-training/` hard-blocks the
 attempt.
+
+Audit mastery Stage 2 is a separate correctness-evidence assessment. The
+operator produces closed-schema `correctness-report.json` and
+`reproductions/manifest.json` plus `invariants.md` under `.jstack-training/`.
+Both JSON documents bind to the current Git HEAD/tree, and the report binds the
+manifest digest. The evaluator verifies four required surfaces, tracked-source
+line hashes, finding/invariant/case reciprocity, strong-claim reachability and
+confidence, and complete regression plans. Static counterexamples require no
+execution; executed cases must match a passing current `jstack_qa` receipt by
+receipt, command key, fingerprint, profile, and return code. Raw reproduction
+output and extra files are rejected.
+
+The immutable Git tree is the Stage 2 source subject while the full project
+fingerprint is retained separately. Only the three exact Stage 2 artifacts may
+be dirty when an attempt is recorded. The evaluator returns counts, failure
+codes, subject metadata, and a digest without returning source or artifact
+content. Its pass proves evidence-contract compliance, not that the diagnosis
+is semantically complete or that remediation is safe.
 
 ## Project Binding
 

@@ -31,11 +31,14 @@ Audit scope, release-profile results, findings, and remediation plans do not
 authorize writes or external actions. JStack Audit remains strictly read-only
 even though development workflows use normal host-native action safety.
 The only exception is an explicitly requested mastery assessment: Audit Stage
-0 may write only its four declared artifacts and Audit Stage 1 may write only
-`system-map.md`, `trust-boundaries.md`, and `coverage-matrix.json` beneath
-`.jstack-training/`. Neither stage may perform repository execution, network
-access, secret access, exploit development, public disclosure, remediation,
-Git change, or production action.
+0 may write only its four declared artifacts; Audit Stage 1 may write only
+`system-map.md`, `trust-boundaries.md`, and `coverage-matrix.json`; and Audit
+Stage 2 may write only `correctness-report.json`, `invariants.md`, and
+`reproductions/manifest.json` beneath `.jstack-training/`. None may perform
+network or secret access, exploit development, public disclosure, remediation,
+Git change, release, deployment, or production action. Stage 2 may reference a
+separately issued current `jstack_qa` receipt but grants no arbitrary execution
+authority and does not make JStack QA an OS or network sandbox.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -49,7 +52,14 @@ Git change, or production action.
    tracked source lines and hashes, validate nodes/flows/trust boundaries,
    classify generated-artifact provenance and drift, and expose every gap.
    Two independent deterministic passes are required; Stage 1 performs no
-   scanning or remediation and proves no vulnerability absence.
+   scanning or remediation and proves no vulnerability absence. At Stage 2,
+   bind both closed-schema JSON artifacts to the same exact HEAD/tree, cover
+   logic, state transitions, error handling, and reliability, cite current
+   tracked source hashes, and link every verified finding to violated
+   invariants, a reciprocal static or exact-QA reproduction, and a complete
+   regression plan. Fail on unresolved gaps, unused evidence, fabricated QA,
+   raw reproduction output, or speculative high severity. Two independent
+   deterministic passes are required.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
    audit goal, source-attributed facts, separate assumptions, and only material

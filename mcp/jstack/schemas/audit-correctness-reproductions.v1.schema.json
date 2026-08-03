@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-correctness-reproductions.v1.schema.json",
+  "title": "JStack Audit Stage 2 Reproduction Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "identifierRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "textList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    }
+  },
+  "required": ["schemaVersion", "subject", "cases", "limitations"],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.audit.correctness-reproductions.v1"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitHead", "gitTree"],
+      "properties": {
+        "gitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "gitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "method",
+          "findingIds",
+          "invariantIds",
+          "preconditions",
+          "steps",
+          "expected",
+          "observed",
+          "repeatCount",
+          "deterministic",
+          "evidence",
+          "qaBinding"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "method": {"enum": ["static-invariant", "jstack-qa"]},
+          "findingIds": {"$ref": "#/$defs/identifierRefs"},
+          "invariantIds": {"$ref": "#/$defs/identifierRefs"},
+          "preconditions": {"$ref": "#/$defs/textList"},
+          "steps": {"$ref": "#/$defs/textList"},
+          "expected": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "observed": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "repeatCount": {"type": "integer", "minimum": 1, "maximum": 100},
+          "deterministic": {"const": true},
+          "evidence": {"$ref": "#/$defs/identifierRefs"},
+          "qaBinding": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "commandKey",
+                  "commandFingerprint",
+                  "executionProfile",
+                  "returncode"
+                ],
+                "properties": {
+                  "commandKey": {"type": "string", "minLength": 1, "maxLength": 200},
+                  "commandFingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                  "executionProfile": {"const": "local-scrubbed-no-os-sandbox-v1"},
+                  "returncode": {"const": 0}
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "Reproduction metadata proves binding and protocol consistency, not semantic truth or defect universality."
+        },
+        {
+          "const": "Executed cases require a current passing JStack QA receipt; JStack QA is not an OS or network sandbox."
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}
