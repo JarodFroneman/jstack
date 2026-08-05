@@ -114,6 +114,36 @@ returns metadata and digests, not raw source, report, or reproduction content.
 Passing Stage 2 grants no remediation, Git, release, deployment, or production
 authority.
 
+### Audit mastery Stage 3
+
+Audit mastery Stage 3 permits only `threat-model.md`,
+`security-findings.json`, and `abuse-cases.md` at their exact
+`.jstack-training/` paths. Any other dirty path blocks the attempt. The closed
+JSON contract binds the exact Git HEAD/tree and both narrative hashes. Every
+source citation is descriptor-confined, bounded, outside `.git` and
+`.jstack-training`, tracked as a regular file, and verified against its current
+SHA-256.
+
+The assessment is static and treats repository content as untrusted data. It
+does not execute repository code, probe live targets, access the network or
+secrets, retain exploit payloads, remediate, publish, release, deploy, or touch
+production. The two narratives must be non-empty UTF-8 and are rejected with
+the structured report if recognized secret-like values are present.
+
+Complete STRIDE classification is mandatory. Every asset, adversary, trust
+boundary, control, abuse case, attack path, finding, and standards mapping must
+be cited, internally valid, and used. Abuse cases and attack paths, plus
+findings and mappings, must be reciprocal. Blockers require verified reachable
+paths and may not be speculative; the seeded drill requires a critical
+blocker. Standards identifiers are pinned to MITRE CWE 4.20, NIST SP 800-218
+v1.1, OWASP ASVS 5.0.0, or OWASP Top 10:2025.
+
+Evaluation returns only metadata, counts, failure codes, and a digest. Passing
+Stage 3 proves that the submitted package met the deterministic evidence
+contract. It does not prove vulnerability absence, exploitability, zero-day
+detection, semantic correctness of model-authored findings, standards
+compliance, remediation safety, release readiness, or production security.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

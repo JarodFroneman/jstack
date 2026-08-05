@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-security-findings.v1.schema.json",
+  "title": "JStack Audit Stage 3 Security Findings",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "sourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!\\.git(?:/|$))(?!\\.jstack-training(?:/|$))(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "identifierRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "optionalIdentifierRefs": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "shortText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "textList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/text"}
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "subject",
+    "assessmentBoundary",
+    "methodology",
+    "artifactBindings",
+    "coverage",
+    "evidence",
+    "assets",
+    "adversaries",
+    "trustBoundaries",
+    "controls",
+    "abuseCases",
+    "attackPaths",
+    "findings",
+    "standardsMappings",
+    "gaps",
+    "complete",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.audit.security-findings.v1"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitHead", "gitTree"],
+      "properties": {
+        "gitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "gitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    },
+    "assessmentBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryContentTrust",
+        "collectionMode",
+        "repositoryCode",
+        "liveExploitation",
+        "exploitPayloads",
+        "networkAuthority",
+        "secrets",
+        "writes",
+        "remediation",
+        "disclosure",
+        "productionAuthority"
+      ],
+      "properties": {
+        "repositoryContentTrust": {"const": "untrusted-data"},
+        "collectionMode": {"const": "static-read-only"},
+        "repositoryCode": {"const": "not-executed"},
+        "liveExploitation": {"const": "prohibited"},
+        "exploitPayloads": {"const": "not-retained"},
+        "networkAuthority": {"const": "none"},
+        "secrets": {"const": "not-accessed"},
+        "writes": {"const": "training-artifacts-only"},
+        "remediation": {"const": "not-authorized"},
+        "disclosure": {"const": "private-coordinated-only"},
+        "productionAuthority": {"const": "none"}
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["framework", "threatTaxonomy", "analysisMode"],
+      "properties": {
+        "framework": {"const": "OWASP-Four-Question"},
+        "threatTaxonomy": {"const": "STRIDE"},
+        "analysisMode": {"const": "static-source-evidence"}
+      }
+    },
+    "artifactBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threatModel", "abuseCases"],
+      "properties": {
+        "threatModel": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactBinding"},
+            {"properties": {"path": {"const": ".jstack-training/threat-model.md"}}}
+          ]
+        },
+        "abuseCases": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactBinding"},
+            {"properties": {"path": {"const": ".jstack-training/abuse-cases.md"}}}
+          ]
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "reason", "evidence"],
+        "properties": {
+          "id": {
+            "enum": [
+              "spoofing",
+              "tampering",
+              "repudiation",
+              "information-disclosure",
+              "denial-of-service",
+              "elevation-of-privilege"
+            ]
+          },
+          "status": {"enum": ["assessed", "not-applicable", "unsupported"]},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "lineStart", "lineEnd", "sha256"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "path": {"$ref": "#/$defs/sourcePath"},
+          "lineStart": {"type": "integer", "minimum": 1},
+          "lineEnd": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "type", "securityObjectives", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"$ref": "#/$defs/shortText"},
+          "type": {
+            "enum": [
+              "credential",
+              "identity",
+              "personal-data",
+              "financial-data",
+              "business-data",
+              "service-availability",
+              "security-boundary",
+              "software-integrity",
+              "audit-data",
+              "other"
+            ]
+          },
+          "securityObjectives": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {"enum": ["confidentiality", "integrity", "availability"]}
+          },
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "adversaries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "type", "access", "capabilities", "constraints", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"$ref": "#/$defs/shortText"},
+          "type": {"enum": ["external", "insider", "compromised-service", "supply-chain"]},
+          "access": {"enum": ["unauthenticated", "authenticated", "privileged", "repository-write", "dependency-publisher"]},
+          "capabilities": {"$ref": "#/$defs/textList"},
+          "constraints": {"$ref": "#/$defs/textList"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "trustBoundaries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "fromZone", "toZone", "dataFlows", "authentication", "authorization", "authenticationControlIds", "authorizationControlIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"$ref": "#/$defs/shortText"},
+          "fromZone": {"$ref": "#/$defs/shortText"},
+          "toZone": {"$ref": "#/$defs/shortText"},
+          "dataFlows": {"$ref": "#/$defs/textList"},
+          "authentication": {"enum": ["present", "absent", "unverified"]},
+          "authorization": {"enum": ["present", "absent", "unverified"]},
+          "authenticationControlIds": {"$ref": "#/$defs/identifierRefs"},
+          "authorizationControlIds": {"$ref": "#/$defs/identifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "type", "implementationStatus", "effectiveness", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"$ref": "#/$defs/shortText"},
+          "type": {"enum": ["preventive", "detective", "corrective", "recovery"]},
+          "implementationStatus": {"enum": ["implemented", "partial", "absent", "unverified"]},
+          "effectiveness": {"enum": ["effective", "partial", "ineffective", "unverified"]},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "abuseCases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "adversaryIds", "assetIds", "goal", "preconditions", "boundaryIds", "controlIds", "attackPathIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "title": {"$ref": "#/$defs/shortText"},
+          "adversaryIds": {"$ref": "#/$defs/identifierRefs"},
+          "assetIds": {"$ref": "#/$defs/identifierRefs"},
+          "goal": {"$ref": "#/$defs/text"},
+          "preconditions": {"$ref": "#/$defs/textList"},
+          "boundaryIds": {"$ref": "#/$defs/identifierRefs"},
+          "controlIds": {"$ref": "#/$defs/identifierRefs"},
+          "attackPathIds": {"$ref": "#/$defs/identifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "attackPaths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "category", "adversaryId", "assetIds", "abuseCaseIds", "source", "sink", "preconditions", "impact", "boundaryIds", "controlIds", "controlAssessment", "reachability", "verificationStatus", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "title": {"$ref": "#/$defs/shortText"},
+          "category": {"enum": ["spoofing", "tampering", "repudiation", "information-disclosure", "denial-of-service", "elevation-of-privilege"]},
+          "adversaryId": {"$ref": "#/$defs/identifier"},
+          "assetIds": {"$ref": "#/$defs/identifierRefs"},
+          "abuseCaseIds": {"$ref": "#/$defs/identifierRefs"},
+          "source": {"$ref": "#/$defs/text"},
+          "sink": {"$ref": "#/$defs/text"},
+          "preconditions": {"$ref": "#/$defs/textList"},
+          "impact": {"$ref": "#/$defs/text"},
+          "boundaryIds": {"$ref": "#/$defs/identifierRefs"},
+          "controlIds": {"$ref": "#/$defs/identifierRefs"},
+          "controlAssessment": {"$ref": "#/$defs/text"},
+          "reachability": {"enum": ["reachable", "conditional", "unproven"]},
+          "verificationStatus": {"enum": ["verified", "unverified"]},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "category", "severity", "confidence", "disposition", "verificationStatus", "rootCause", "preconditions", "impact", "residualRisk", "assetIds", "abuseCaseIds", "attackPathIds", "controlIds", "standardMappingIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "title": {"$ref": "#/$defs/shortText"},
+          "category": {"enum": ["spoofing", "tampering", "repudiation", "information-disclosure", "denial-of-service", "elevation-of-privilege"]},
+          "severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+          "confidence": {"enum": ["low", "medium", "high"]},
+          "disposition": {"enum": ["blocker", "non-blocking", "hypothesis"]},
+          "verificationStatus": {"enum": ["verified", "unverified"]},
+          "rootCause": {"$ref": "#/$defs/text"},
+          "preconditions": {"$ref": "#/$defs/textList"},
+          "impact": {"$ref": "#/$defs/text"},
+          "residualRisk": {"$ref": "#/$defs/text"},
+          "assetIds": {"$ref": "#/$defs/identifierRefs"},
+          "abuseCaseIds": {"$ref": "#/$defs/identifierRefs"},
+          "attackPathIds": {"$ref": "#/$defs/identifierRefs"},
+          "controlIds": {"$ref": "#/$defs/identifierRefs"},
+          "standardMappingIds": {"$ref": "#/$defs/identifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "standardsMappings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "standard", "version", "controlId", "applicability", "rationale", "findingIds", "attackPathIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "standard": {"enum": ["MITRE-CWE", "NIST-SP-800-218", "OWASP-ASVS", "OWASP-TOP-10"]},
+          "version": {"type": "string"},
+          "controlId": {"type": "string"},
+          "applicability": {"const": "applicable"},
+          "rationale": {"$ref": "#/$defs/text"},
+          "findingIds": {"$ref": "#/$defs/identifierRefs"},
+          "attackPathIds": {"$ref": "#/$defs/identifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"standard": {"const": "MITRE-CWE"}}},
+            "then": {"properties": {"version": {"const": "4.20"}, "controlId": {"pattern": "^CWE-[1-9][0-9]{0,3}$"}}}
+          },
+          {
+            "if": {"properties": {"standard": {"const": "NIST-SP-800-218"}}},
+            "then": {"properties": {"version": {"const": "1.1"}, "controlId": {"pattern": "^(PO|PS|PW|RV)\\.[1-9][0-9]*\\.[1-9][0-9]*$"}}}
+          },
+          {
+            "if": {"properties": {"standard": {"const": "OWASP-ASVS"}}},
+            "then": {"properties": {"version": {"const": "5.0.0"}, "controlId": {"pattern": "^v5\\.0\\.0-[1-9][0-9]*\\.[1-9][0-9]*\\.[1-9][0-9]*$"}}}
+          },
+          {
+            "if": {"properties": {"standard": {"const": "OWASP-TOP-10"}}},
+            "then": {"properties": {"version": {"const": "2025"}, "controlId": {"pattern": "^A(0[1-9]|10):2025$"}}}
+          }
+        ]
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "description", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "category": {"enum": ["spoofing", "tampering", "repudiation", "information-disclosure", "denial-of-service", "elevation-of-privilege"]},
+          "description": {"$ref": "#/$defs/text"},
+          "evidence": {"$ref": "#/$defs/optionalIdentifierRefs"}
+        }
+      }
+    },
+    "complete": {"const": true},
+    "limitations": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "Stage 3 proves bounded threat-model, citation, and protocol integrity; it does not prove vulnerability absence, exploitability, zero-day detection, or production security."},
+        {"const": "Static repository evidence cannot observe runtime, provider, infrastructure, or operational controls not represented in the bound Git tree; unsupported coverage or unresolved gaps block completion."},
+        {"const": "Passing grants no exploitation, remediation, Git, publication, release, deployment, or production authority; suspected novel vulnerabilities require private coordinated disclosure."}
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

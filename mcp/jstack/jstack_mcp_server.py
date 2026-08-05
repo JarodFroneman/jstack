@@ -44,7 +44,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.3"
+SERVER_VERSION = "0.10.0-alpha.4"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -202,6 +202,66 @@ AUDIT_STAGE2_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 AUDIT_STAGE2_MAX_ITEMS = 256
 AUDIT_STAGE2_MAX_EVIDENCE_FILE_BYTES = 2_000_000
 AUDIT_STAGE2_MAX_EVIDENCE_TOTAL_BYTES = 16_000_000
+AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA = "jstack.audit.security-findings.v1"
+AUDIT_STAGE3_REQUIRED_CATEGORIES = (
+    "spoofing",
+    "tampering",
+    "repudiation",
+    "information-disclosure",
+    "denial-of-service",
+    "elevation-of-privilege",
+)
+AUDIT_STAGE3_ASSESSMENT_BOUNDARY = {
+    "repositoryContentTrust": "untrusted-data",
+    "collectionMode": "static-read-only",
+    "repositoryCode": "not-executed",
+    "liveExploitation": "prohibited",
+    "exploitPayloads": "not-retained",
+    "networkAuthority": "none",
+    "secrets": "not-accessed",
+    "writes": "training-artifacts-only",
+    "remediation": "not-authorized",
+    "disclosure": "private-coordinated-only",
+    "productionAuthority": "none",
+}
+AUDIT_STAGE3_METHODOLOGY = {
+    "framework": "OWASP-Four-Question",
+    "threatTaxonomy": "STRIDE",
+    "analysisMode": "static-source-evidence",
+}
+AUDIT_STAGE3_LIMITATIONS = [
+    "Stage 3 proves bounded threat-model, citation, and protocol integrity; it does not prove vulnerability absence, exploitability, zero-day detection, or production security.",
+    "Static repository evidence cannot observe runtime, provider, infrastructure, or operational controls not represented in the bound Git tree; unsupported coverage or unresolved gaps block completion.",
+    "Passing grants no exploitation, remediation, Git, publication, release, deployment, or production authority; suspected novel vulnerabilities require private coordinated disclosure.",
+]
+AUDIT_STAGE3_ARTIFACT_PATHS = {
+    "threat-model.md": ".jstack-training/threat-model.md",
+    "security-findings.json": ".jstack-training/security-findings.json",
+    "abuse-cases.md": ".jstack-training/abuse-cases.md",
+}
+AUDIT_STAGE3_CATEGORY_STATUSES = {"assessed", "not-applicable", "unsupported"}
+AUDIT_STAGE3_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+AUDIT_STAGE3_STANDARD_REGISTRY = {
+    "MITRE-CWE": {
+        "version": "4.20",
+        "controlPattern": r"CWE-[1-9][0-9]{0,3}",
+    },
+    "NIST-SP-800-218": {
+        "version": "1.1",
+        "controlPattern": r"(?:PO|PS|PW|RV)\.[1-9][0-9]*\.[1-9][0-9]*",
+    },
+    "OWASP-ASVS": {
+        "version": "5.0.0",
+        "controlPattern": r"v5\.0\.0-[1-9][0-9]*\.[1-9][0-9]*\.[1-9][0-9]*",
+    },
+    "OWASP-TOP-10": {
+        "version": "2025",
+        "controlPattern": r"A(?:0[1-9]|10):2025",
+    },
+}
+AUDIT_STAGE3_MAX_ITEMS = 256
+AUDIT_STAGE3_MAX_EVIDENCE_FILE_BYTES = 2_000_000
+AUDIT_STAGE3_MAX_EVIDENCE_TOTAL_BYTES = 16_000_000
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
@@ -3200,6 +3260,18 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
                 "deterministically passing every coverage, citation, invariant, "
                 "reproduction, QA-binding, blocker-verification, and regression gate."
             )
+        elif track == "audit" and stage_number == 3:
+            passed = passed and all(
+                item.get("stage3ThreatModelEvaluation", {}).get("passed") is True
+                for item in recent
+            )
+            requirement = (
+                "Two consecutive independent Stage 3 threat models scoring at least "
+                "80, both bound to the current Git source snapshot and deterministically "
+                "passing every STRIDE-coverage, citation, asset, adversary, trust-boundary, "
+                "control, abuse-case, reachable attack-path, critical-blocker, standards-"
+                "mapping, secret-safety, and non-authority gate."
+            )
     elif stage_number <= 8:
         recent = eligible[-3:]
         scores = [float(item.get("score", 0)) for item in recent]
@@ -3455,6 +3527,74 @@ def load_mastery_json_artifact(project_path: Path, artifact: dict[str, Any]) -> 
     if not isinstance(parsed, dict):
         raise ToolError("Mastery JSON artifact must contain a JSON object.")
     return parsed
+
+
+def audit_stage3_reject_secret_values(value: Any, label: str) -> None:
+    """Reject likely secrets while allowing explicit non-secret security classifications."""
+
+    if isinstance(value, str):
+        normalized = re.sub(
+            r"\b(?:authorization|password|passwd|pwd|secret|token|api[_-]?key|"
+            r"access[_-]?key|client[_-]?secret)\s*[:=]\s*"
+            r"(?:absent|none|not-accessed|not-retained|redacted|present|"
+            r"unverified|prohibited|denied|deny)\b",
+            "",
+            value,
+            flags=re.IGNORECASE,
+        )
+        if audit_core.contains_secret_like(normalized):
+            raise ToolError(
+                f"{label} contains a secret-like value. Submit only a redacted classification and source location."
+            )
+        return
+    if isinstance(value, dict):
+        for child in value.values():
+            audit_stage3_reject_secret_values(child, label)
+        return
+    if isinstance(value, list):
+        for child in value:
+            audit_stage3_reject_secret_values(child, label)
+
+
+def validate_mastery_text_artifact(
+    project_path: Path,
+    artifact: dict[str, Any],
+    label: str,
+    *,
+    max_bytes: int = 2_000_000,
+) -> dict[str, Any]:
+    """Validate a bounded, hashed UTF-8 mastery narrative without returning its content."""
+
+    if artifact.get("kind") != "file":
+        raise ToolError(f"{label} must be a regular text file.")
+    relative = str(artifact.get("path") or "")
+    try:
+        content = audit_core.read_repository_file(
+            project_path,
+            relative,
+            max_bytes=max_bytes,
+            max_seconds=30,
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(f"{label} could not be read safely.") from exc
+    if (
+        len(content) != artifact.get("bytes")
+        or hashlib.sha256(content).hexdigest() != artifact.get("sha256")
+    ):
+        raise ToolError(f"{label} changed after artifact hashing.")
+    try:
+        text_value = content.decode("utf-8")
+    except UnicodeError as exc:
+        raise ToolError(f"{label} must be valid UTF-8 text.") from exc
+    if not text_value.strip():
+        raise ToolError(f"{label} must not be empty.")
+    audit_stage3_reject_secret_values(text_value, label)
+    return {
+        "path": relative,
+        "bytes": len(content),
+        "lines": len(content.splitlines()),
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
 
 
 def load_mastery_directory_json_artifact(
@@ -4901,6 +5041,1005 @@ def evaluate_audit_stage2_correctness(
     return {**result, "evaluationDigest": audit_json_digest(result)}
 
 
+def evaluate_audit_stage3_threat_model(
+    report: Any,
+    project_path: Path,
+    artifacts: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Validate one exact-revision, static-only Stage 3 threat-model package."""
+
+    report_fields = {
+        "schemaVersion",
+        "subject",
+        "assessmentBoundary",
+        "methodology",
+        "artifactBindings",
+        "coverage",
+        "evidence",
+        "assets",
+        "adversaries",
+        "trustBoundaries",
+        "controls",
+        "abuseCases",
+        "attackPaths",
+        "findings",
+        "standardsMappings",
+        "gaps",
+        "complete",
+        "limitations",
+    }
+    if not isinstance(report, dict) or set(report) != report_fields:
+        raise ToolError(
+            "Audit Stage 3 security-findings.json has unsupported or missing fields."
+        )
+    audit_enforce_json_limit(
+        report,
+        "Audit Stage 3 security findings",
+        2_000_000,
+    )
+    audit_stage3_reject_secret_values(report, "Audit Stage 3 security findings")
+
+    source = _audit_source_subject(project_path, "Stage 3")
+    failures: list[str] = []
+
+    def exact_object(
+        container: dict[str, Any],
+        field: str,
+        keys: set[str],
+    ) -> dict[str, Any]:
+        value = container.get(field)
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ToolError(
+                f"Audit Stage 3 security findings {field} has unsupported or missing fields."
+            )
+        return value
+
+    def exact_list(field: str, maximum: int = AUDIT_STAGE3_MAX_ITEMS) -> list[Any]:
+        value = report.get(field)
+        if not isinstance(value, list) or len(value) > maximum:
+            raise ToolError(
+                f"Audit Stage 3 security findings {field} must be an array with at most {maximum} items."
+            )
+        return value
+
+    def valid_id(value: Any) -> bool:
+        return bool(
+            isinstance(value, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+        )
+
+    def valid_text(value: Any, maximum: int = 1000) -> bool:
+        return bool(isinstance(value, str) and value.strip() and len(value) <= maximum)
+
+    def text_list(value: Any, field: str, *, allow_empty: bool = False) -> list[str]:
+        valid = (
+            isinstance(value, list)
+            and len(value) <= 32
+            and (allow_empty or bool(value))
+            and all(valid_text(item) for item in value)
+        )
+        if not valid:
+            failures.append(field)
+            return []
+        return [str(item) for item in value]
+
+    def identifier_refs(
+        value: Any,
+        field: str,
+        *,
+        allow_empty: bool = False,
+    ) -> list[str]:
+        valid = (
+            isinstance(value, list)
+            and len(value) <= 32
+            and (allow_empty or bool(value))
+            and all(valid_id(item) for item in value)
+        )
+        if not valid:
+            failures.append(field)
+            return []
+        if len(value) != len(set(value)):
+            failures.append(field + ".duplicate")
+        return [str(item) for item in value]
+
+    def evidence_refs(
+        value: Any,
+        field: str,
+        known: set[str],
+        referenced: set[str],
+        *,
+        allow_empty: bool = False,
+    ) -> list[str]:
+        refs = identifier_refs(value, field, allow_empty=allow_empty)
+        for item in refs:
+            if item not in known:
+                failures.append(field + ".unknown")
+            else:
+                referenced.add(item)
+        return refs
+
+    def collect_id(
+        item: dict[str, Any],
+        prefix: str,
+        known: set[str],
+    ) -> str:
+        value = item.get("id")
+        if not valid_id(value):
+            failures.append(prefix + ".id")
+            return ""
+        normalized = str(value)
+        if normalized in known:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            known.add(normalized)
+        return normalized
+
+    if report.get("schemaVersion") != AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA:
+        failures.append("schemaVersion")
+
+    subject = exact_object(report, "subject", {"gitHead", "gitTree"})
+    for field in ("gitHead", "gitTree"):
+        if not isinstance(subject.get(field), str) or subject.get(field) != source[field]:
+            failures.append("subject." + field)
+
+    boundary = exact_object(
+        report,
+        "assessmentBoundary",
+        set(AUDIT_STAGE3_ASSESSMENT_BOUNDARY),
+    )
+    for field, expected in AUDIT_STAGE3_ASSESSMENT_BOUNDARY.items():
+        if type(boundary.get(field)) is not type(expected) or boundary.get(field) != expected:
+            failures.append("assessmentBoundary." + field)
+
+    methodology = exact_object(
+        report,
+        "methodology",
+        set(AUDIT_STAGE3_METHODOLOGY),
+    )
+    for field, expected in AUDIT_STAGE3_METHODOLOGY.items():
+        if methodology.get(field) != expected:
+            failures.append("methodology." + field)
+
+    limitations = report.get("limitations")
+    if (
+        not isinstance(limitations, list)
+        or not all(isinstance(item, str) for item in limitations)
+        or limitations != AUDIT_STAGE3_LIMITATIONS
+    ):
+        failures.append("limitations")
+
+    bindings = exact_object(
+        report,
+        "artifactBindings",
+        {"threatModel", "abuseCases"},
+    )
+    for binding_name, artifact_name in (
+        ("threatModel", "threat-model.md"),
+        ("abuseCases", "abuse-cases.md"),
+    ):
+        binding = bindings.get(binding_name)
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            raise ToolError(
+                "Audit Stage 3 artifactBindings entries have unsupported or missing fields."
+            )
+        artifact = artifacts.get(artifact_name) or {}
+        if binding.get("path") != artifact.get("path"):
+            failures.append("artifactBindings." + binding_name + ".path")
+        if binding.get("sha256") != artifact.get("sha256"):
+            failures.append("artifactBindings." + binding_name + ".sha256")
+        validate_mastery_text_artifact(
+            project_path,
+            artifact,
+            "Audit Stage 3 " + artifact_name,
+            max_bytes=2_000_000,
+        )
+
+    evidence_items = exact_list("evidence")
+    if not evidence_items:
+        failures.append("evidence.empty")
+    evidence_ids: set[str] = set()
+    file_cache: dict[str, bytes] = {}
+    total_evidence_bytes = 0
+    for index, item in enumerate(evidence_items):
+        prefix = f"evidence[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "path",
+            "lineStart",
+            "lineEnd",
+            "sha256",
+        }:
+            raise ToolError(
+                "Audit Stage 3 evidence entries have unsupported or missing fields."
+            )
+        collect_id(item, prefix, evidence_ids)
+        path = item.get("path")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+            continue
+        assert isinstance(path, str)
+        if source["tracked"].get(path) not in {"100644", "100755"}:
+            failures.append(prefix + ".path.untracked-or-nonregular")
+            continue
+        start = item.get("lineStart")
+        end = item.get("lineEnd")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 1
+            or end < start
+        ):
+            failures.append(prefix + ".lines")
+        try:
+            if path not in file_cache:
+                content = audit_core.read_repository_file(
+                    source["_root"],
+                    path,
+                    max_bytes=AUDIT_STAGE3_MAX_EVIDENCE_FILE_BYTES,
+                    max_seconds=30,
+                )
+                total_evidence_bytes += len(content)
+                if total_evidence_bytes > AUDIT_STAGE3_MAX_EVIDENCE_TOTAL_BYTES:
+                    raise ToolError(
+                        "Audit Stage 3 evidence exceeds the bounded total read limit."
+                    )
+                file_cache[path] = content
+            content = file_cache[path]
+        except audit_core.AuditError:
+            failures.append(prefix + ".path.unreadable")
+            continue
+        expected_digest = hashlib.sha256(content).hexdigest()
+        if not isinstance(item.get("sha256"), str) or item.get("sha256") != expected_digest:
+            failures.append(prefix + ".sha256")
+        line_count = len(content.splitlines())
+        if isinstance(end, int) and not isinstance(end, bool) and end > line_count:
+            failures.append(prefix + ".lines")
+
+    referenced_evidence: set[str] = set()
+    coverage_items = exact_list(
+        "coverage",
+        len(AUDIT_STAGE3_REQUIRED_CATEGORIES),
+    )
+    coverage_status: dict[str, str] = {}
+    for index, item in enumerate(coverage_items):
+        prefix = f"coverage[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "status",
+            "reason",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 coverage entries have unsupported or missing fields."
+            )
+        category = item.get("id")
+        status = item.get("status")
+        if category not in AUDIT_STAGE3_REQUIRED_CATEGORIES:
+            failures.append(prefix + ".id")
+        elif category in coverage_status:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            coverage_status[str(category)] = str(status)
+        if status not in AUDIT_STAGE3_CATEGORY_STATUSES:
+            failures.append(prefix + ".status")
+        elif status == "unsupported":
+            failures.append(prefix + ".unsupported")
+        if not valid_text(item.get("reason"), 500):
+            failures.append(prefix + ".reason")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+    if set(coverage_status) != set(AUDIT_STAGE3_REQUIRED_CATEGORIES):
+        failures.append("coverage.categories")
+
+    asset_items = exact_list("assets")
+    if not asset_items:
+        failures.append("assets.empty")
+    asset_ids: set[str] = set()
+    referenced_assets: set[str] = set()
+    for index, item in enumerate(asset_items):
+        prefix = f"assets[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "name",
+            "type",
+            "securityObjectives",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 asset entries have unsupported or missing fields."
+            )
+        collect_id(item, prefix, asset_ids)
+        if not valid_text(item.get("name"), 200):
+            failures.append(prefix + ".name")
+        if item.get("type") not in {
+            "credential",
+            "identity",
+            "personal-data",
+            "financial-data",
+            "business-data",
+            "service-availability",
+            "security-boundary",
+            "software-integrity",
+            "audit-data",
+            "other",
+        }:
+            failures.append(prefix + ".type")
+        objectives = item.get("securityObjectives")
+        if (
+            not isinstance(objectives, list)
+            or not objectives
+            or len(objectives) > 3
+            or len(objectives) != len(set(objectives))
+            or not set(objectives).issubset(
+                {"confidentiality", "integrity", "availability"}
+            )
+        ):
+            failures.append(prefix + ".securityObjectives")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    adversary_items = exact_list("adversaries")
+    if not adversary_items:
+        failures.append("adversaries.empty")
+    adversary_ids: set[str] = set()
+    referenced_adversaries: set[str] = set()
+    for index, item in enumerate(adversary_items):
+        prefix = f"adversaries[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "name",
+            "type",
+            "access",
+            "capabilities",
+            "constraints",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 adversary entries have unsupported or missing fields."
+            )
+        collect_id(item, prefix, adversary_ids)
+        if not valid_text(item.get("name"), 200):
+            failures.append(prefix + ".name")
+        if item.get("type") not in {
+            "external",
+            "insider",
+            "compromised-service",
+            "supply-chain",
+        }:
+            failures.append(prefix + ".type")
+        if item.get("access") not in {
+            "unauthenticated",
+            "authenticated",
+            "privileged",
+            "repository-write",
+            "dependency-publisher",
+        }:
+            failures.append(prefix + ".access")
+        text_list(item.get("capabilities"), prefix + ".capabilities")
+        text_list(item.get("constraints"), prefix + ".constraints")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    control_items = exact_list("controls")
+    if not control_items:
+        failures.append("controls.empty")
+    control_ids: set[str] = set()
+    control_status: dict[str, str] = {}
+    referenced_controls: set[str] = set()
+    for index, item in enumerate(control_items):
+        prefix = f"controls[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "name",
+            "type",
+            "implementationStatus",
+            "effectiveness",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 control entries have unsupported or missing fields."
+            )
+        control_id = collect_id(item, prefix, control_ids)
+        if not valid_text(item.get("name"), 200):
+            failures.append(prefix + ".name")
+        if item.get("type") not in {
+            "preventive",
+            "detective",
+            "corrective",
+            "recovery",
+        }:
+            failures.append(prefix + ".type")
+        if item.get("implementationStatus") not in {
+            "implemented",
+            "partial",
+            "absent",
+            "unverified",
+        }:
+            failures.append(prefix + ".implementationStatus")
+        if item.get("effectiveness") not in {
+            "effective",
+            "partial",
+            "ineffective",
+            "unverified",
+        }:
+            failures.append(prefix + ".effectiveness")
+        if control_id:
+            control_status[control_id] = str(item.get("implementationStatus"))
+        if (
+            item.get("implementationStatus") == "absent"
+            and item.get("effectiveness") != "ineffective"
+        ):
+            failures.append(prefix + ".absent-effectiveness")
+        if (
+            item.get("implementationStatus") == "unverified"
+            and item.get("effectiveness") != "unverified"
+        ):
+            failures.append(prefix + ".unverified-effectiveness")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    boundary_items = exact_list("trustBoundaries")
+    if not boundary_items:
+        failures.append("trustBoundaries.empty")
+    boundary_ids: set[str] = set()
+    referenced_boundaries: set[str] = set()
+    for index, item in enumerate(boundary_items):
+        prefix = f"trustBoundaries[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "name",
+            "fromZone",
+            "toZone",
+            "dataFlows",
+            "authentication",
+            "authorization",
+            "authenticationControlIds",
+            "authorizationControlIds",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 trust-boundary entries have unsupported or missing fields."
+            )
+        boundary_id = collect_id(item, prefix, boundary_ids)
+        for field in ("name", "fromZone", "toZone"):
+            if not valid_text(item.get(field), 200):
+                failures.append(prefix + "." + field)
+        if item.get("fromZone") == item.get("toZone"):
+            failures.append(prefix + ".zones.same")
+        text_list(item.get("dataFlows"), prefix + ".dataFlows")
+        for field in ("authentication", "authorization"):
+            if item.get(field) not in {"present", "absent", "unverified"}:
+                failures.append(prefix + "." + field)
+        for status_field, controls_field in (
+            ("authentication", "authenticationControlIds"),
+            ("authorization", "authorizationControlIds"),
+        ):
+            refs = identifier_refs(
+                item.get(controls_field),
+                prefix + "." + controls_field,
+            )
+            for control_id in refs:
+                if control_id not in control_ids:
+                    failures.append(prefix + "." + controls_field + ".unknown")
+                else:
+                    referenced_controls.add(control_id)
+            if item.get(status_field) == "present" and not any(
+                control_status.get(control_id) == "implemented"
+                for control_id in refs
+            ):
+                failures.append(prefix + "." + controls_field + ".not-implemented")
+            if item.get(status_field) == "absent" and not any(
+                control_status.get(control_id) == "absent"
+                for control_id in refs
+            ):
+                failures.append(prefix + "." + controls_field + ".not-absent")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    abuse_items = exact_list("abuseCases")
+    if not abuse_items:
+        failures.append("abuseCases.empty")
+    abuse_ids: set[str] = set()
+    abuse_paths: dict[str, list[str]] = {}
+    referenced_abuse_cases: set[str] = set()
+    for index, item in enumerate(abuse_items):
+        prefix = f"abuseCases[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "title",
+            "adversaryIds",
+            "assetIds",
+            "goal",
+            "preconditions",
+            "boundaryIds",
+            "controlIds",
+            "attackPathIds",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 abuse-case entries have unsupported or missing fields."
+            )
+        abuse_id = collect_id(item, prefix, abuse_ids)
+        if not valid_text(item.get("title"), 200):
+            failures.append(prefix + ".title")
+        if not valid_text(item.get("goal")):
+            failures.append(prefix + ".goal")
+        text_list(item.get("preconditions"), prefix + ".preconditions")
+        adversary_refs = identifier_refs(
+            item.get("adversaryIds"), prefix + ".adversaryIds"
+        )
+        asset_refs = identifier_refs(item.get("assetIds"), prefix + ".assetIds")
+        boundary_refs = identifier_refs(
+            item.get("boundaryIds"), prefix + ".boundaryIds"
+        )
+        control_refs = identifier_refs(
+            item.get("controlIds"), prefix + ".controlIds"
+        )
+        path_refs = identifier_refs(
+            item.get("attackPathIds"), prefix + ".attackPathIds"
+        )
+        if abuse_id:
+            abuse_paths[abuse_id] = path_refs
+        for reference, known, referenced, field in (
+            (adversary_refs, adversary_ids, referenced_adversaries, "adversaryIds"),
+            (asset_refs, asset_ids, referenced_assets, "assetIds"),
+            (boundary_refs, boundary_ids, referenced_boundaries, "boundaryIds"),
+            (control_refs, control_ids, referenced_controls, "controlIds"),
+        ):
+            for identifier in reference:
+                if identifier not in known:
+                    failures.append(prefix + "." + field + ".unknown")
+                else:
+                    referenced.add(identifier)
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    path_items = exact_list("attackPaths")
+    if not path_items:
+        failures.append("attackPaths.empty")
+    path_ids: set[str] = set()
+    path_categories: dict[str, str] = {}
+    path_reachability: dict[str, str] = {}
+    path_verification: dict[str, str] = {}
+    path_abuse_cases: dict[str, list[str]] = {}
+    referenced_paths: set[str] = set()
+    for index, item in enumerate(path_items):
+        prefix = f"attackPaths[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "title",
+            "category",
+            "adversaryId",
+            "assetIds",
+            "abuseCaseIds",
+            "source",
+            "sink",
+            "preconditions",
+            "impact",
+            "boundaryIds",
+            "controlIds",
+            "controlAssessment",
+            "reachability",
+            "verificationStatus",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 attack-path entries have unsupported or missing fields."
+            )
+        path_id = collect_id(item, prefix, path_ids)
+        if not valid_text(item.get("title"), 200):
+            failures.append(prefix + ".title")
+        category = item.get("category")
+        if category not in AUDIT_STAGE3_REQUIRED_CATEGORIES:
+            failures.append(prefix + ".category")
+        elif path_id:
+            path_categories[path_id] = str(category)
+        if category in AUDIT_STAGE3_REQUIRED_CATEGORIES and coverage_status.get(
+            str(category)
+        ) != "assessed":
+            failures.append(prefix + ".category.not-assessed")
+        adversary_id = item.get("adversaryId")
+        if not valid_id(adversary_id) or adversary_id not in adversary_ids:
+            failures.append(prefix + ".adversaryId")
+        else:
+            referenced_adversaries.add(str(adversary_id))
+        asset_refs = identifier_refs(item.get("assetIds"), prefix + ".assetIds")
+        abuse_refs = identifier_refs(
+            item.get("abuseCaseIds"), prefix + ".abuseCaseIds"
+        )
+        boundary_refs = identifier_refs(
+            item.get("boundaryIds"), prefix + ".boundaryIds"
+        )
+        control_refs = identifier_refs(
+            item.get("controlIds"), prefix + ".controlIds"
+        )
+        if path_id:
+            path_abuse_cases[path_id] = abuse_refs
+        for reference, known, referenced, field in (
+            (asset_refs, asset_ids, referenced_assets, "assetIds"),
+            (abuse_refs, abuse_ids, referenced_abuse_cases, "abuseCaseIds"),
+            (boundary_refs, boundary_ids, referenced_boundaries, "boundaryIds"),
+            (control_refs, control_ids, referenced_controls, "controlIds"),
+        ):
+            for identifier in reference:
+                if identifier not in known:
+                    failures.append(prefix + "." + field + ".unknown")
+                else:
+                    referenced.add(identifier)
+        for field in ("source", "sink", "impact", "controlAssessment"):
+            if not valid_text(item.get(field)):
+                failures.append(prefix + "." + field)
+        if item.get("source") == item.get("sink"):
+            failures.append(prefix + ".source-sink.same")
+        text_list(item.get("preconditions"), prefix + ".preconditions")
+        reachability = item.get("reachability")
+        verification = item.get("verificationStatus")
+        if reachability not in {"reachable", "conditional", "unproven"}:
+            failures.append(prefix + ".reachability")
+        if verification not in {"verified", "unverified"}:
+            failures.append(prefix + ".verificationStatus")
+        if verification == "verified" and reachability == "unproven":
+            failures.append(prefix + ".verified-unproven")
+        if path_id:
+            path_reachability[path_id] = str(reachability)
+            path_verification[path_id] = str(verification)
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    for abuse_id, path_refs in abuse_paths.items():
+        for path_id in path_refs:
+            if path_id not in path_ids:
+                failures.append("abuseCases.attackPathIds.unknown")
+            elif abuse_id not in path_abuse_cases.get(path_id, []):
+                failures.append("abuseCases.attackPathIds.not-reciprocal")
+    for path_id, abuse_refs in path_abuse_cases.items():
+        for abuse_id in abuse_refs:
+            if path_id not in abuse_paths.get(abuse_id, []):
+                failures.append("attackPaths.abuseCaseIds.not-reciprocal")
+
+    mapping_items = exact_list("standardsMappings")
+    if not mapping_items:
+        failures.append("standardsMappings.empty")
+    mapping_ids: set[str] = set()
+    mapping_findings: dict[str, list[str]] = {}
+    mapping_paths: dict[str, list[str]] = {}
+    referenced_mappings: set[str] = set()
+    for index, item in enumerate(mapping_items):
+        prefix = f"standardsMappings[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "standard",
+            "version",
+            "controlId",
+            "applicability",
+            "rationale",
+            "findingIds",
+            "attackPathIds",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 standards-mapping entries have unsupported or missing fields."
+            )
+        mapping_id = collect_id(item, prefix, mapping_ids)
+        standard = item.get("standard")
+        registry = AUDIT_STAGE3_STANDARD_REGISTRY.get(str(standard))
+        if registry is None:
+            failures.append(prefix + ".standard")
+        else:
+            if item.get("version") != registry["version"]:
+                failures.append(prefix + ".version")
+            control_id = item.get("controlId")
+            if not isinstance(control_id, str) or not re.fullmatch(
+                str(registry["controlPattern"]), control_id
+            ):
+                failures.append(prefix + ".controlId")
+        if item.get("applicability") != "applicable":
+            failures.append(prefix + ".applicability")
+        if not valid_text(item.get("rationale")):
+            failures.append(prefix + ".rationale")
+        finding_refs = identifier_refs(
+            item.get("findingIds"), prefix + ".findingIds"
+        )
+        path_refs = identifier_refs(
+            item.get("attackPathIds"), prefix + ".attackPathIds"
+        )
+        if mapping_id:
+            mapping_findings[mapping_id] = finding_refs
+            mapping_paths[mapping_id] = path_refs
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+
+    finding_items = exact_list("findings")
+    if not finding_items:
+        failures.append("findings.empty")
+    finding_ids: set[str] = set()
+    finding_mappings: dict[str, list[str]] = {}
+    finding_paths: dict[str, list[str]] = {}
+    finding_abuse_cases: dict[str, list[str]] = {}
+    blocker_ids: set[str] = set()
+    critical_blocker_ids: set[str] = set()
+    verified_finding_ids: set[str] = set()
+    hypothesis_ids: set[str] = set()
+    for index, item in enumerate(finding_items):
+        prefix = f"findings[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "title",
+            "category",
+            "severity",
+            "confidence",
+            "disposition",
+            "verificationStatus",
+            "rootCause",
+            "preconditions",
+            "impact",
+            "residualRisk",
+            "assetIds",
+            "abuseCaseIds",
+            "attackPathIds",
+            "controlIds",
+            "standardMappingIds",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 finding entries have unsupported or missing fields."
+            )
+        finding_id = collect_id(item, prefix, finding_ids)
+        if not valid_text(item.get("title"), 200):
+            failures.append(prefix + ".title")
+        category = item.get("category")
+        if category not in AUDIT_STAGE3_REQUIRED_CATEGORIES:
+            failures.append(prefix + ".category")
+        elif coverage_status.get(str(category)) != "assessed":
+            failures.append(prefix + ".category.not-assessed")
+        severity = item.get("severity")
+        confidence = item.get("confidence")
+        disposition = item.get("disposition")
+        verification = item.get("verificationStatus")
+        if severity not in AUDIT_STAGE3_SEVERITIES:
+            failures.append(prefix + ".severity")
+        if confidence not in {"low", "medium", "high"}:
+            failures.append(prefix + ".confidence")
+        if disposition not in {"blocker", "non-blocking", "hypothesis"}:
+            failures.append(prefix + ".disposition")
+        if verification not in {"verified", "unverified"}:
+            failures.append(prefix + ".verificationStatus")
+        for field in ("rootCause", "impact", "residualRisk"):
+            if not valid_text(item.get(field)):
+                failures.append(prefix + "." + field)
+        text_list(item.get("preconditions"), prefix + ".preconditions")
+        asset_refs = identifier_refs(item.get("assetIds"), prefix + ".assetIds")
+        abuse_refs = identifier_refs(
+            item.get("abuseCaseIds"), prefix + ".abuseCaseIds"
+        )
+        path_refs = identifier_refs(
+            item.get("attackPathIds"), prefix + ".attackPathIds"
+        )
+        control_refs = identifier_refs(
+            item.get("controlIds"), prefix + ".controlIds"
+        )
+        mapping_refs = identifier_refs(
+            item.get("standardMappingIds"), prefix + ".standardMappingIds"
+        )
+        if finding_id:
+            finding_mappings[finding_id] = mapping_refs
+            finding_paths[finding_id] = path_refs
+            finding_abuse_cases[finding_id] = abuse_refs
+        for reference, known, referenced, field in (
+            (asset_refs, asset_ids, referenced_assets, "assetIds"),
+            (abuse_refs, abuse_ids, referenced_abuse_cases, "abuseCaseIds"),
+            (path_refs, path_ids, referenced_paths, "attackPathIds"),
+            (control_refs, control_ids, referenced_controls, "controlIds"),
+            (mapping_refs, mapping_ids, referenced_mappings, "standardMappingIds"),
+        ):
+            for identifier in reference:
+                if identifier not in known:
+                    failures.append(prefix + "." + field + ".unknown")
+                else:
+                    referenced.add(identifier)
+        if any(path_categories.get(path_id) != category for path_id in path_refs):
+            failures.append(prefix + ".attackPathIds.category")
+        strong_claim = disposition == "blocker" or severity in {"high", "critical"}
+        if strong_claim:
+            if verification != "verified":
+                failures.append(prefix + ".strong-claim-unverified")
+            if confidence != "high":
+                failures.append(prefix + ".strong-claim-confidence")
+        if disposition == "blocker":
+            if severity not in {"high", "critical"}:
+                failures.append(prefix + ".blocker-severity")
+            if not any(
+                path_verification.get(path_id) == "verified"
+                and path_reachability.get(path_id) == "reachable"
+                for path_id in path_refs
+            ):
+                failures.append(prefix + ".blocker-reachable-path")
+            if finding_id:
+                blocker_ids.add(finding_id)
+                if severity == "critical":
+                    critical_blocker_ids.add(finding_id)
+        if verification == "verified" and finding_id:
+            verified_finding_ids.add(finding_id)
+        if verification == "unverified" and disposition != "hypothesis":
+            failures.append(prefix + ".unverified-disposition")
+        if disposition == "hypothesis":
+            if verification != "unverified":
+                failures.append(prefix + ".hypothesis-verification")
+            if severity in {"high", "critical"}:
+                failures.append(prefix + ".speculative-high-severity")
+            if finding_id:
+                hypothesis_ids.add(finding_id)
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+        )
+    if not blocker_ids:
+        failures.append("blockers.empty")
+    if not critical_blocker_ids:
+        failures.append("criticalBlockers.empty")
+
+    for finding_id, path_refs in finding_paths.items():
+        abuse_refs = set(finding_abuse_cases.get(finding_id, []))
+        for path_id in path_refs:
+            if path_id in path_ids and not abuse_refs.intersection(
+                path_abuse_cases.get(path_id, [])
+            ):
+                failures.append("findings.attackPathIds.abuseCaseIds")
+        for abuse_id in abuse_refs:
+            if abuse_id in abuse_ids and not any(
+                abuse_id in path_abuse_cases.get(path_id, [])
+                for path_id in path_refs
+            ):
+                failures.append("findings.abuseCaseIds.attackPathIds")
+
+    for mapping_id, finding_refs in mapping_findings.items():
+        for finding_id in finding_refs:
+            if finding_id not in finding_ids:
+                failures.append("standardsMappings.findingIds.unknown")
+            elif mapping_id not in finding_mappings.get(finding_id, []):
+                failures.append("standardsMappings.findingIds.not-reciprocal")
+    for mapping_id, path_refs in mapping_paths.items():
+        mapped_paths = {
+            path_id
+            for finding_id in mapping_findings.get(mapping_id, [])
+            for path_id in finding_paths.get(finding_id, [])
+        }
+        for path_id in path_refs:
+            if path_id not in path_ids:
+                failures.append("standardsMappings.attackPathIds.unknown")
+            elif path_id not in mapped_paths:
+                failures.append(
+                    "standardsMappings.attackPathIds.not-linked-to-finding"
+                )
+    for finding_id, mapping_refs in finding_mappings.items():
+        for mapping_id in mapping_refs:
+            if finding_id not in mapping_findings.get(mapping_id, []):
+                failures.append("findings.standardMappingIds.not-reciprocal")
+    if verified_finding_ids - set(finding_mappings):
+        failures.append("standardsMappings.missing")
+
+    gap_items = exact_list("gaps")
+    gap_ids: set[str] = set()
+    for index, item in enumerate(gap_items):
+        prefix = f"gaps[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "category",
+            "description",
+            "evidence",
+        }:
+            raise ToolError(
+                "Audit Stage 3 gap entries have unsupported or missing fields."
+            )
+        collect_id(item, prefix, gap_ids)
+        if item.get("category") not in AUDIT_STAGE3_REQUIRED_CATEGORIES:
+            failures.append(prefix + ".category")
+        if not valid_text(item.get("description")):
+            failures.append(prefix + ".description")
+        evidence_refs(
+            item.get("evidence"),
+            prefix + ".evidence",
+            evidence_ids,
+            referenced_evidence,
+            allow_empty=True,
+        )
+    if gap_items:
+        failures.append("gaps.present")
+
+    if asset_ids - referenced_assets:
+        failures.append("assets.unused")
+    if adversary_ids - referenced_adversaries:
+        failures.append("adversaries.unused")
+    if boundary_ids - referenced_boundaries:
+        failures.append("trustBoundaries.unused")
+    if control_ids - referenced_controls:
+        failures.append("controls.unused")
+    if abuse_ids - referenced_abuse_cases:
+        failures.append("abuseCases.unused")
+    if path_ids - referenced_paths:
+        failures.append("attackPaths.unused")
+    if mapping_ids - referenced_mappings:
+        failures.append("standardsMappings.unused")
+    if evidence_ids - referenced_evidence:
+        failures.append("evidence.unused")
+    if not isinstance(report.get("complete"), bool) or report.get("complete") is not True:
+        failures.append("complete")
+
+    result = {
+        "schemaVersion": AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
+        "sourceSubject": {
+            "gitHead": source["gitHead"],
+            "gitTree": source["gitTree"],
+        },
+        "categoryCount": len(coverage_status),
+        "assessedCategoryCount": sum(
+            status == "assessed" for status in coverage_status.values()
+        ),
+        "notApplicableCategoryCount": sum(
+            status == "not-applicable" for status in coverage_status.values()
+        ),
+        "unsupportedCategoryCount": sum(
+            status == "unsupported" for status in coverage_status.values()
+        ),
+        "evidenceCount": len(evidence_ids),
+        "assetCount": len(asset_ids),
+        "adversaryCount": len(adversary_ids),
+        "trustBoundaryCount": len(boundary_ids),
+        "controlCount": len(control_ids),
+        "abuseCaseCount": len(abuse_ids),
+        "attackPathCount": len(path_ids),
+        "verifiedAttackPathCount": sum(
+            status == "verified" for status in path_verification.values()
+        ),
+        "findingCount": len(finding_ids),
+        "verifiedFindingCount": len(verified_finding_ids),
+        "blockerCount": len(blocker_ids),
+        "criticalBlockerCount": len(critical_blocker_ids),
+        "hypothesisCount": len(hypothesis_ids),
+        "standardsMappingCount": len(mapping_ids),
+        "gapCount": len(gap_ids),
+        "passed": not failures,
+        "failureCodes": sorted(set(failures)),
+    }
+    return {**result, "evaluationDigest": audit_json_digest(result)}
+
+
 def score_level(score: float) -> int:
     if score < 50:
         return 0
@@ -5166,6 +6305,8 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     stage2_correctness_report = None
     stage2_reproduction_manifest = None
     stage2_correctness_evaluation = None
+    stage3_security_findings = None
+    stage3_threat_model_evaluation = None
     benchmark_evaluation = None
     loop_capstone_evaluation = None
     if track == "audit" and stage_number == 0:
@@ -5195,6 +6336,11 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             project_path,
             artifacts["reproductions"],
             "manifest.json",
+        )
+    elif track == "audit" and stage_number == 3:
+        stage3_security_findings = load_mastery_json_artifact(
+            project_path,
+            artifacts["security-findings.json"],
         )
     elif track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
@@ -5322,9 +6468,24 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 "Audit Stage 2 project state contains non-training changes: "
                 + ", ".join(disallowed_changes)
             )
+    if track == "audit" and stage_number == 3:
+        for artifact_name, expected_path in AUDIT_STAGE3_ARTIFACT_PATHS.items():
+            if artifacts.get(artifact_name, {}).get("path") != expected_path:
+                hard_blocks.append(
+                    f"Audit Stage 3 {artifact_name} must use {expected_path}."
+                )
+        permitted_changes = set(AUDIT_STAGE3_ARTIFACT_PATHS.values())
+        disallowed_changes = [
+            path for path in git_changed_files(project_path) if path not in permitted_changes
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Audit Stage 3 project state contains non-training changes: "
+                + ", ".join(disallowed_changes)
+            )
     if (
         stage_number >= 2
-        and not (track == "audit" and stage_number == 2)
+        and not (track == "audit" and stage_number in {2, 3})
         and not state["clean"]
     ):
         hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
@@ -5347,11 +6508,27 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             hard_blocks.append(
                 f"Audit Stage 2 correctness gate failed: {code}."
             )
+    if track == "audit" and stage_number == 3:
+        assert stage3_security_findings is not None
+        stage3_threat_model_evaluation = evaluate_audit_stage3_threat_model(
+            stage3_security_findings,
+            project_path,
+            artifacts,
+        )
+        for code in stage3_threat_model_evaluation["failureCodes"]:
+            hard_blocks.append(
+                f"Audit Stage 3 threat-model gate failed: {code}."
+            )
     qa_required = stage_number >= 2 and not (
         track == "audit"
-        and stage_number == 2
-        and stage2_correctness_evaluation is not None
-        and stage2_correctness_evaluation["qaReproductionCount"] == 0
+        and (
+            (
+                stage_number == 2
+                and stage2_correctness_evaluation is not None
+                and stage2_correctness_evaluation["qaReproductionCount"] == 0
+            )
+            or stage_number == 3
+        )
     )
     if qa_required and not valid_qa:
         hard_blocks.append("Stage 2+ attempt requires a current passing QA evidence receipt.")
@@ -5506,6 +6683,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "stage0SecurityEvaluation": stage0_security_evaluation,
         "stage1RepositoryMapEvaluation": stage1_repository_map_evaluation,
         "stage2CorrectnessEvaluation": stage2_correctness_evaluation,
+        "stage3ThreatModelEvaluation": stage3_threat_model_evaluation,
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,

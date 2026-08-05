@@ -41,6 +41,13 @@ evidence, launch assurance, release readiness, and mastery progression.
   exact-QA reproductions, and complete regression plans. It returns metadata,
   not raw source or reproduction output; allows only three declared training
   artifacts; and grants no remediation or production authority.
+- Audit mastery Stage 3 validates a static exact-Git-bound threat model with
+  complete STRIDE classification, assets, adversaries, trust boundaries,
+  controls, reciprocal abuse cases and verified reachable paths, critical
+  blockers, pinned versioned standards mappings, and secret-safe narratives.
+  It executes and exploits nothing, returns only metadata, allows only three
+  declared training artifacts, and grants no remediation or production
+  authority.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The

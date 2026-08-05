@@ -542,6 +542,244 @@ def audit_stage2_attempt(
     }
 
 
+def ensure_audit_stage3_fixture(repo: Path) -> None:
+    source = repo / "access_service.py"
+    if source.exists():
+        return
+    source.write_text(
+        "def read_account(requester_id, account_id, records):\n"
+        "    return records[account_id]\n",
+        encoding="utf-8",
+    )
+    test_path = repo / "tests" / "test_project.py"
+    test_path.write_text(
+        test_path.read_text(encoding="utf-8")
+        + "\nfrom access_service import read_account\n\n"
+        + "class TestAccessService(unittest.TestCase):\n"
+        + "    def test_owner_reads_account(self):\n"
+        + "        records = {'owner': {'balance': 10}}\n"
+        + "        self.assertEqual({'balance': 10}, read_account('owner', 'owner', records))\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "access_service.py", "tests/test_project.py")
+    git(repo, "commit", "-m", "add stage 3 threat model fixture")
+
+
+def write_audit_stage3_artifacts(
+    repo: Path,
+    *,
+    report_mutator=None,
+) -> dict[str, str]:
+    ensure_audit_stage3_fixture(repo)
+    training = repo / ".jstack-training"
+    training.mkdir(exist_ok=True)
+    (training / "threat-model.md").write_text(
+        "# Threat model\n\nThe authenticated caller crosses into the account data zone. "
+        "Authorization: absent on the record read path.\n",
+        encoding="utf-8",
+    )
+    (training / "abuse-cases.md").write_text(
+        "# Abuse cases\n\nAn authenticated external caller selects another account "
+        "identifier and receives that account record.\n",
+        encoding="utf-8",
+    )
+    threat_model_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/threat-model.md"
+    )
+    abuse_cases_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/abuse-cases.md"
+    )
+    subject = audit_stage2_subject(repo)
+    evidence = [
+        audit_stage1_evidence(repo, "ev-service", "access_service.py"),
+        audit_stage1_evidence(repo, "ev-tests", "tests/test_project.py"),
+    ]
+    report = {
+        "schemaVersion": server.AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
+        "subject": subject,
+        "assessmentBoundary": json.loads(
+            json.dumps(server.AUDIT_STAGE3_ASSESSMENT_BOUNDARY)
+        ),
+        "methodology": dict(server.AUDIT_STAGE3_METHODOLOGY),
+        "artifactBindings": {
+            "threatModel": {
+                "path": threat_model_artifact["path"],
+                "sha256": threat_model_artifact["sha256"],
+            },
+            "abuseCases": {
+                "path": abuse_cases_artifact["path"],
+                "sha256": abuse_cases_artifact["sha256"],
+            },
+        },
+        "coverage": [
+            {
+                "id": category,
+                "status": "assessed",
+                "reason": "The account read entry point, data boundary, tests, and observed controls were statically assessed for this STRIDE category.",
+                "evidence": ["ev-service", "ev-tests"],
+            }
+            for category in server.AUDIT_STAGE3_REQUIRED_CATEGORIES
+        ],
+        "evidence": evidence,
+        "assets": [
+            {
+                "id": "asset-account-records",
+                "name": "Account records",
+                "type": "personal-data",
+                "securityObjectives": ["confidentiality", "integrity"],
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "adversaries": [
+            {
+                "id": "adversary-authenticated-external",
+                "name": "Authenticated external caller",
+                "type": "external",
+                "access": "authenticated",
+                "capabilities": ["Can choose the account identifier passed to the read service."],
+                "constraints": ["Has no privileged repository, datastore, or production access."],
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "trustBoundaries": [
+            {
+                "id": "boundary-caller-to-account-data",
+                "name": "Caller to account data",
+                "fromZone": "Authenticated caller",
+                "toZone": "Account record store",
+                "dataFlows": ["Requester and selected account identifiers enter the record lookup."],
+                "authentication": "present",
+                "authorization": "absent",
+                "authenticationControlIds": ["control-authentication"],
+                "authorizationControlIds": ["control-ownership-check"],
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "controls": [
+            {
+                "id": "control-authentication",
+                "name": "Caller authentication",
+                "type": "preventive",
+                "implementationStatus": "implemented",
+                "effectiveness": "effective",
+                "evidence": ["ev-tests"],
+            },
+            {
+                "id": "control-ownership-check",
+                "name": "Requester ownership authorization",
+                "type": "preventive",
+                "implementationStatus": "absent",
+                "effectiveness": "ineffective",
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "abuseCases": [
+            {
+                "id": "abuse-cross-account-read",
+                "title": "Read another account record",
+                "adversaryIds": ["adversary-authenticated-external"],
+                "assetIds": ["asset-account-records"],
+                "goal": "Obtain an account record belonging to another identity.",
+                "preconditions": ["The caller can authenticate and choose an account identifier."],
+                "boundaryIds": ["boundary-caller-to-account-data"],
+                "controlIds": ["control-ownership-check"],
+                "attackPathIds": ["path-cross-account-read"],
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "attackPaths": [
+            {
+                "id": "path-cross-account-read",
+                "title": "Caller-controlled identifier reaches an unguarded account read",
+                "category": "elevation-of-privilege",
+                "adversaryId": "adversary-authenticated-external",
+                "assetIds": ["asset-account-records"],
+                "abuseCaseIds": ["abuse-cross-account-read"],
+                "source": "Authenticated caller-controlled account identifier",
+                "sink": "Account record returned by direct identifier lookup",
+                "preconditions": ["A record exists for an identifier not owned by the requester."],
+                "impact": "The caller receives another identity's account record.",
+                "boundaryIds": ["boundary-caller-to-account-data"],
+                "controlIds": ["control-ownership-check"],
+                "controlAssessment": "Authorization: absent. Authentication does not constrain the record-level lookup.",
+                "reachability": "reachable",
+                "verificationStatus": "verified",
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "findings": [
+            {
+                "id": "finding-missing-object-authorization",
+                "title": "Account reads omit object ownership authorization",
+                "category": "elevation-of-privilege",
+                "severity": "critical",
+                "confidence": "high",
+                "disposition": "blocker",
+                "verificationStatus": "verified",
+                "rootCause": "The read path indexes records by caller-selected account identifier without comparing it to the requester identity.",
+                "preconditions": ["The caller authenticates and knows or guesses another account identifier."],
+                "impact": "A caller can read another identity's account record.",
+                "residualRisk": "Record-level authorization remains absent until a separately reviewed remediation is implemented and verified.",
+                "assetIds": ["asset-account-records"],
+                "abuseCaseIds": ["abuse-cross-account-read"],
+                "attackPathIds": ["path-cross-account-read"],
+                "controlIds": ["control-ownership-check"],
+                "standardMappingIds": ["mapping-cwe-862"],
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "standardsMappings": [
+            {
+                "id": "mapping-cwe-862",
+                "standard": "MITRE-CWE",
+                "version": "4.20",
+                "controlId": "CWE-862",
+                "applicability": "applicable",
+                "rationale": "The verified source path omits an authorization check for a protected account record.",
+                "findingIds": ["finding-missing-object-authorization"],
+                "attackPathIds": ["path-cross-account-read"],
+                "evidence": ["ev-service", "ev-tests"],
+            }
+        ],
+        "gaps": [],
+        "complete": True,
+        "limitations": list(server.AUDIT_STAGE3_LIMITATIONS),
+    }
+    if report_mutator is not None:
+        report_mutator(report)
+    write_json(training / "security-findings.json", report)
+    return {
+        "threat-model.md": ".jstack-training/threat-model.md",
+        "security-findings.json": ".jstack-training/security-findings.json",
+        "abuse-cases.md": ".jstack-training/abuse-cases.md",
+    }
+
+
+def audit_stage3_attempt(repo: Path, artifacts: dict[str, str]) -> dict:
+    return {
+        "project_path": str(repo),
+        "track": "audit",
+        "stage": 3,
+        "drill_id": "a3-threat-model",
+        "assistance_level": "independent",
+        "assessor": "independent test assessor",
+        "assessor_citations": [
+            ".jstack-training/threat-model.md:1",
+            ".jstack-training/security-findings.json:1",
+            ".jstack-training/abuse-cases.md:1",
+        ],
+        "assessment": {
+            "correctness": 100,
+            "evidence": 100,
+            "safety": 100,
+            "judgment": 100,
+            "explanation": 100,
+        },
+        "artifacts": artifacts,
+        "qa_receipts": [],
+    }
+
+
 def write_mastery_profile_at_stage(home: Path, track: str, stage: int) -> None:
     profile = server.default_mastery_profile()
     profile["createdAt"] = "2026-08-02T00:00:00+00:00"
@@ -2429,7 +2667,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(0, "audit")
-        self.assertEqual(4, curriculum["version"])
+        self.assertEqual(5, curriculum["version"])
         self.assertEqual("Safe Security Operator", stage["name"])
         self.assertIn("security-orientation.json", stage["requiredArtifacts"])
         self.assertEqual(
@@ -2650,7 +2888,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage1_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(1, "audit")
-        self.assertEqual(4, curriculum["version"])
+        self.assertEqual(5, curriculum["version"])
         self.assertEqual("Repository Reconnaissance and System Mapping", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
@@ -3016,7 +3254,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage2_curriculum_and_schemas_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(2, "audit")
-        self.assertEqual(4, curriculum["version"])
+        self.assertEqual(5, curriculum["version"])
         self.assertEqual("Correctness and Reliability Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
@@ -3049,6 +3287,377 @@ class MasteryAndInstallTests(unittest.TestCase):
                 schema_version,
                 schema["properties"]["schemaVersion"]["const"],
             )
+
+    def test_audit_stage3_static_threat_models_advance_without_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage3_artifacts(repo)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                first = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+                second = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            first_evaluation = first["attempt"]["stage3ThreatModelEvaluation"]
+            self.assertTrue(first_evaluation["passed"])
+            self.assertEqual(6, first_evaluation["categoryCount"])
+            self.assertEqual(1, first_evaluation["criticalBlockerCount"])
+            self.assertEqual(1, first_evaluation["verifiedAttackPathCount"])
+            self.assertEqual([], first["attempt"]["qaEvidence"])
+            self.assertNotIn("rootCause", first_evaluation)
+            self.assertNotIn("source", first_evaluation)
+            self.assertFalse(first["advanced"])
+            self.assertTrue(second["advanced"])
+            self.assertEqual(4, second["status"]["currentStage"]["stage"])
+
+    def test_audit_stage3_stale_subject_boundary_and_binding_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["subject"]["gitHead"] = "0" * 40
+                report["assessmentBoundary"]["liveExploitation"] = "allowed"
+                report["artifactBindings"]["threatModel"]["sha256"] = "0" * 64
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage3ThreatModelEvaluation"]["failureCodes"]
+            self.assertIn("subject.gitHead", failures)
+            self.assertIn("assessmentBoundary.liveExploitation", failures)
+            self.assertIn("artifactBindings.threatModel.sha256", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage3_rejects_unknown_contract_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["exploitPayload"] = "retained"
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(
+                    server.ToolError, "unsupported or missing fields"
+                ):
+                    server.tool_mastery_record(
+                        audit_stage3_attempt(repo, artifacts)
+                    )
+
+    def test_audit_stage3_unsupported_coverage_and_gaps_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["coverage"][0]["status"] = "unsupported"
+                report["coverage"][-1]["status"] = "not-applicable"
+                report["controls"][0]["implementationStatus"] = "absent"
+                report["gaps"] = [
+                    {
+                        "id": "gap-runtime-policy",
+                        "category": "spoofing",
+                        "description": "Runtime identity-provider policy is not represented in this repository.",
+                        "evidence": [],
+                    }
+                ]
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage3ThreatModelEvaluation"]["failureCodes"]
+            self.assertIn("coverage[0].unsupported", failures)
+            self.assertIn("attackPaths[0].category.not-assessed", failures)
+            self.assertIn("findings[0].category.not-assessed", failures)
+            self.assertIn("controls[0].absent-effectiveness", failures)
+            self.assertIn(
+                "trustBoundaries[0].authenticationControlIds.not-implemented",
+                failures,
+            )
+            self.assertIn("gaps.present", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage3_blocker_requires_critical_verified_reachable_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["findings"][0]["severity"] = "high"
+                report["attackPaths"][0]["reachability"] = "conditional"
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage3ThreatModelEvaluation"]["failureCodes"]
+            self.assertIn("criticalBlockers.empty", failures)
+            self.assertIn("findings[0].blocker-reachable-path", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage3_speculative_high_severity_claim_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                finding = report["findings"][0]
+                finding["disposition"] = "hypothesis"
+                finding["verificationStatus"] = "unverified"
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage3ThreatModelEvaluation"]["failureCodes"]
+            self.assertIn("findings[0].speculative-high-severity", failures)
+            self.assertIn("blockers.empty", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage3_standards_are_pinned_and_reciprocal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                mapping = report["standardsMappings"][0]
+                mapping["version"] = "4.19"
+                mapping["controlId"] = "not-a-cwe"
+                mapping["findingIds"] = ["unknown-finding"]
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage3ThreatModelEvaluation"]["failureCodes"]
+            self.assertIn("standardsMappings[0].version", failures)
+            self.assertIn("standardsMappings[0].controlId", failures)
+            self.assertIn("standardsMappings.findingIds.unknown", failures)
+            self.assertIn("findings.standardMappingIds.not-reciprocal", failures)
+            self.assertIn(
+                "standardsMappings.attackPathIds.not-linked-to-finding",
+                failures,
+            )
+
+    def test_audit_stage3_cross_references_and_unused_objects_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["abuseCases"][0]["attackPathIds"] = ["unknown-path"]
+                report["assets"].append(
+                    {
+                        "id": "asset-unused",
+                        "name": "Unused asset",
+                        "type": "other",
+                        "securityObjectives": ["integrity"],
+                        "evidence": ["ev-service"],
+                    }
+                )
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage3ThreatModelEvaluation"]["failureCodes"]
+            self.assertIn("abuseCases.attackPathIds.unknown", failures)
+            self.assertIn("attackPaths.abuseCaseIds.not-reciprocal", failures)
+            self.assertIn("assets.unused", failures)
+
+    def test_audit_stage3_rejects_secret_like_json_and_narrative_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["findings"][0]["residualRisk"] = "api_key=example-sensitive-value"
+
+            artifacts = write_audit_stage3_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(server.ToolError, "secret-like value"):
+                    server.tool_mastery_record(
+                        audit_stage3_attempt(repo, artifacts)
+                    )
+
+            artifacts = write_audit_stage3_artifacts(repo)
+            (repo / artifacts["threat-model.md"]).write_text(
+                "# Threat model\n\npassword=example-sensitive-value\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(server.ToolError, "secret-like value"):
+                    server.tool_mastery_record(
+                        audit_stage3_attempt(repo, artifacts)
+                    )
+
+    def test_audit_stage3_narrative_loader_rejects_toctou(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifact_paths = write_audit_stage3_artifacts(repo)
+            artifacts = {
+                name: server.hash_mastery_artifact(repo, path)
+                for name, path in artifact_paths.items()
+            }
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["security-findings.json"]
+            )
+            (repo / artifact_paths["abuse-cases.md"]).write_text(
+                "# Changed after hashing\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                server.ToolError, "changed after artifact hashing"
+            ):
+                server.evaluate_audit_stage3_threat_model(
+                    report,
+                    repo,
+                    artifacts,
+                )
+
+    def test_audit_stage3_rejects_unsafe_and_untracked_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            repo = make_repo(base)
+            artifact_paths = write_audit_stage3_artifacts(repo)
+            artifacts = {
+                name: server.hash_mastery_artifact(repo, path)
+                for name, path in artifact_paths.items()
+            }
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["security-findings.json"]
+            )
+            report["evidence"][0]["path"] = "../access_service.py"
+            unsafe = server.evaluate_audit_stage3_threat_model(
+                report,
+                repo,
+                artifacts,
+            )
+            self.assertIn("evidence[0].path", unsafe["failureCodes"])
+
+            untracked_path = repo / "untracked-security.py"
+            untracked_path.write_text("value = 1\n", encoding="utf-8")
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["security-findings.json"]
+            )
+            report["evidence"][0] = audit_stage1_evidence(
+                repo, "ev-service", "untracked-security.py"
+            )
+            untracked = server.evaluate_audit_stage3_threat_model(
+                report,
+                repo,
+                artifacts,
+            )
+            self.assertIn(
+                "evidence[0].path.untracked-or-nonregular",
+                untracked["failureCodes"],
+            )
+
+    def test_audit_stage3_non_training_change_is_a_hard_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage3_artifacts(repo)
+            (repo / "application-change.txt").write_text(
+                "not allowed during Stage 3 assessment\n",
+                encoding="utf-8",
+            )
+            write_mastery_profile_at_stage(home, "audit", 3)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage3_attempt(repo, artifacts)
+                )
+
+            self.assertTrue(
+                any(
+                    "application-change.txt" in failure
+                    for failure in result["attempt"]["hardGateFailures"]
+                )
+            )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage3_curriculum_schema_and_standards_are_bound(self) -> None:
+        curriculum = server.load_mastery_curriculum("audit")
+        stage = server.curriculum_stage(3, "audit")
+        self.assertEqual(5, curriculum["version"])
+        self.assertEqual("Security and Threat-Modelling Auditor", stage["name"])
+        self.assertEqual(
+            server.AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
+            stage["artifactSchemas"]["security-findings.json"],
+        )
+        self.assertEqual(
+            {
+                "spoofing",
+                "tampering",
+                "repudiation",
+                "information-disclosure",
+                "denial-of-service",
+                "elevation-of-privilege",
+            },
+            set(server.AUDIT_STAGE3_REQUIRED_CATEGORIES),
+        )
+        self.assertEqual(
+            {"MITRE-CWE", "NIST-SP-800-218", "OWASP-ASVS", "OWASP-TOP-10"},
+            set(server.AUDIT_STAGE3_STANDARD_REGISTRY),
+        )
+        schema = json.loads(
+            (
+                ROOT
+                / "mcp"
+                / "jstack"
+                / "schemas"
+                / "audit-security-findings.v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            server.AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
+            schema["properties"]["schemaVersion"]["const"],
+        )
+        trust_required = set(
+            schema["properties"]["trustBoundaries"]["items"]["required"]
+        )
+        self.assertIn("authenticationControlIds", trust_required)
+        self.assertIn("authorizationControlIds", trust_required)
+        self.assertNotIn("controlIds", trust_required)
 
     def test_audit_intermediate_advancement_has_audit_and_implementation_drills(self) -> None:
         profile = server.default_mastery_profile()

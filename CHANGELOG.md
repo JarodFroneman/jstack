@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.10.0-alpha.4 - 2026-08-05
+
+### Added
+
+- Implemented Audit mastery Stage 3, Security and Threat-Modelling Auditor, as
+  the fourth bounded foundation phase.
+- Added the closed `jstack.audit.security-findings.v1` contract and published
+  schema for exact Git HEAD/tree binding, complete STRIDE coverage,
+  hash-verified source evidence, assets and CIA objectives, bounded
+  adversaries, trust boundaries, controls, reciprocal abuse cases and attack
+  paths, findings, pinned standards mappings, gaps, completeness, boundaries,
+  and limitations.
+- Added deterministic validation for verified reachable blocker paths,
+  critical seeded findings, strong-claim confidence, object/reference use and
+  reciprocity, narrative hashes, UTF-8 and secret safety, and metadata-only
+  results.
+- Added adversarial tests for stale subjects, weakened safety boundaries,
+  binding drift, unsupported coverage, gaps, speculative high severity,
+  conditional blockers, standards drift, broken reciprocity, unused objects,
+  secret-like JSON and narratives, narrative TOCTOU, unsafe/untracked
+  citations, non-training changes, advancement, and curriculum/schema binding.
+
+### Changed
+
+- Audit curriculum content version is now 5. Stage 3 advancement requires two
+  consecutive independent attempts scoring at least 80 and passing every
+  deterministic threat-model gate.
+- Stage 3 permits only `threat-model.md`, `security-findings.json`, and
+  `abuse-cases.md` at their exact `.jstack-training/` paths.
+- Pinned applicable mapping syntax to MITRE CWE 4.20, NIST SP 800-218 v1.1,
+  OWASP ASVS 5.0.0, and OWASP Top 10:2025.
+- Preserved the five commands, 50 canonical MCP tools, read-only Audit
+  boundary, mastery profile v3, Python 3.9+ standard-library runtime,
+  cross-platform packaging, and token-free host-native action boundary.
+
+### Security
+
+- Stage 3 is static-only. It performs no repository execution, live
+  exploitation, network or secret access, exploit-payload retention,
+  remediation, unsafe publication, release, deployment, or production action.
+- JSON and both bound narratives reject recognized secret-like values; source
+  citations must be current tracked regular files with bounded lines and exact
+  SHA-256 hashes.
+- A Stage 3 pass proves deterministic structure, binding, traceability, and
+  safety-contract compliance only. It does not prove vulnerability absence,
+  exploitability, zero-day detection, semantic truth, standards compliance,
+  remediation safety, release readiness, or production security.
+
 ## 0.10.0-alpha.3 - 2026-08-03
 
 ### Added

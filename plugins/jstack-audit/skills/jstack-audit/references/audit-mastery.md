@@ -138,6 +138,60 @@ It records only counts, failure codes, immutable subject metadata, and a
 digest. Advancement requires two consecutive independent attempts scoring at
 least 80 and passing this deterministic contract.
 
+## Stage 3: Security And Threat-Modelling Auditor
+
+Stage 3 is a static threat-model evidence gate. It does not execute the
+repository, probe a live service, develop or retain an exploit, patch code,
+access secrets or the network, publish a suspected novel vulnerability, or
+authorize production. Create only these exact paths:
+
+- `.jstack-training/threat-model.md`
+- `.jstack-training/security-findings.json`
+- `.jstack-training/abuse-cases.md`
+
+`security-findings.json` must conform to
+`mcp/jstack/schemas/audit-security-findings.v1.schema.json`. Bind
+`subject.gitHead` and `subject.gitTree` to the current committed source tree,
+retain the exact static assessment boundary, use the OWASP Four Question
+framework, and classify every STRIDE category: spoofing, tampering,
+repudiation, information disclosure, denial of service, and elevation of
+privilege. `assessed` and evidence-backed `not-applicable` are complete;
+`unsupported`, any gap, or `complete: false` blocks the attempt.
+
+The report must identify assets and their CIA objectives, bounded adversaries,
+trust boundaries and data flows, observed controls and effectiveness, abuse
+cases, attack paths, findings, and standards mappings. Every object uses a
+unique ID and current tracked source evidence with a bounded line range and
+SHA-256. Trust boundaries record authentication and authorization separately,
+each with its own control references and observed implementation status. All
+object references must exist and be used. Abuse cases and attack
+paths are reciprocal; standards mappings and findings are reciprocal. Both
+narratives are non-empty UTF-8, hash-bound to the report, and rejected if they
+contain a recognized secret-like value.
+
+Every attack path records an adversary, affected assets, source, sink,
+preconditions, impact, crossed boundaries, reviewed controls, reachability,
+verification status, and citations. A blocker must be high or critical,
+high-confidence, verified, and linked to at least one verified reachable path.
+The seeded drill requires at least one critical blocker. A high or critical
+hypothesis fails closed; do not inflate an unverified theory into a release
+blocker.
+
+Every verified finding must map to one or more applicable, reciprocal,
+versioned references from the pinned registry:
+
+- MITRE CWE 4.20 (`CWE-n`)
+- NIST SP 800-218 SSDF 1.1 (`PO`, `PS`, `PW`, or `RV` task ID)
+- OWASP ASVS 5.0.0 (`v5.0.0-chapter.section.requirement`)
+- OWASP Top 10:2025 (`A01:2025` through `A10:2025`)
+
+Use only standards applicable to the audited subject. The mapping proves that
+the submitted identifier and version meet JStack's contract; it is not a legal
+or compliance certification and does not prove the semantic finding is true.
+The evaluator returns only subject metadata, counts, failure codes, and a
+digest. Advancement requires two consecutive independent attempts scoring at
+least 80 and passing every deterministic gate.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

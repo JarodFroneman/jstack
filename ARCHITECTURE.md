@@ -48,6 +48,11 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   four correctness surfaces, hash-verified citations, invariant and
   reproduction reciprocity, exact-QA receipt matching, regression completeness,
   and non-authority limitations
+- deterministic audit-mastery Stage 3 validation for exact Git source binding,
+  complete STRIDE classification, asset/adversary/trust/control modeling,
+  reciprocal abuse cases and verified reachable attack paths, critical-blocker
+  enforcement, pinned standards mappings, secret-safe narratives, and static
+  non-authority limitations
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -280,6 +285,33 @@ be dirty when an attempt is recorded. The evaluator returns counts, failure
 codes, subject metadata, and a digest without returning source or artifact
 content. Its pass proves evidence-contract compliance, not that the diagnosis
 is semantically complete or that remediation is safe.
+
+Audit mastery Stage 3 is a separate static threat-model assessment. The
+operator produces `threat-model.md`, closed-schema `security-findings.json`,
+and `abuse-cases.md` at their exact `.jstack-training/` paths. The JSON binds
+the current Git HEAD/tree and both narrative hashes. The evaluator requires
+the OWASP Four Question method, every STRIDE category, assets and CIA
+objectives, bounded adversaries, trust boundaries and flows, observed controls,
+reciprocal abuse cases and attack paths, findings, and applicable pinned
+standards mappings. All material objects cite current tracked source lines and
+SHA-256 hashes.
+
+Every blocker must be a verified high-confidence high/critical finding with at
+least one verified reachable path containing source, sink, preconditions,
+impact, boundaries, and mitigating-control review. The seeded drill requires a
+critical blocker. Unsupported coverage, gaps, stale or unused evidence,
+dangling or unused objects, non-reciprocal relationships, speculative high
+severity, and secret-like JSON or narrative values fail closed.
+
+The immutable Git tree remains the Stage 3 source subject while the full
+project fingerprint separately captures the dirty training artifacts. Only
+the three exact Stage 3 artifact paths may be dirty. The evaluator returns
+counts, failure codes, subject metadata, and a digest without source or
+security content. It performs no repository execution, live exploitation,
+network or secret access, payload retention, remediation, publication,
+release, deployment, or production action. A pass is not proof of
+vulnerability absence, exploitability, zero-day detection, standards
+compliance, or production security.
 
 ## Project Binding
 
