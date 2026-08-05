@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-performance-results.v1.schema.json",
+  "title": "JStack Audit Stage 5 Performance Results",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "revisionSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineGitHead", "baselineGitTree", "candidateGitHead", "candidateGitTree"],
+      "properties": {
+        "baselineGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "baselineGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "surface", "unit", "direction", "role", "sampleCount", "min", "max", "mean", "median", "p95"],
+      "properties": {
+        "id": {"type": "string"},
+        "surface": {"enum": ["latency", "throughput", "cpu", "memory", "io", "query", "contention"]},
+        "unit": {"type": "string"},
+        "direction": {"enum": ["lower-is-better", "higher-is-better"]},
+        "role": {"enum": ["primary", "guardrail"]},
+        "sampleCount": {"type": "integer", "minimum": 5, "maximum": 10000},
+        "min": {"type": "number", "minimum": 0},
+        "max": {"type": "number", "minimum": 0},
+        "mean": {"type": "number", "minimum": 0},
+        "median": {"type": "number", "minimum": 0},
+        "p95": {"type": "number", "minimum": 0}
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "receiptDigest", "environmentDigest", "commandKey", "commandFingerprint", "captureDigest", "capture", "summary"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "revision": {"enum": ["baseline", "candidate"]},
+        "receiptDigest": {"$ref": "#/$defs/sha256"},
+        "environmentDigest": {"$ref": "#/$defs/sha256"},
+        "commandKey": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "commandFingerprint": {"$ref": "#/$defs/sha256"},
+        "captureDigest": {"$ref": "#/$defs/sha256"},
+        "capture": {"$ref": "performance-capture.v1.schema.json"},
+        "summary": {"type": "array", "minItems": 2, "maxItems": 32, "items": {"$ref": "#/$defs/summary"}}
+      }
+    }
+  },
+  "required": ["schemaVersion", "subject", "exercise", "benchmarkPlanSha256", "workload", "comparisonPolicy", "captures", "limitations"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.audit.performance-results.v1"},
+    "subject": {"$ref": "#/$defs/revisionSubject"},
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["drillId", "type"],
+      "properties": {"drillId": {"enum": ["a5-performance", "a5-regression"]}, "type": {"enum": ["audit", "implementation"]}}
+    },
+    "benchmarkPlanSha256": {"$ref": "#/$defs/sha256"},
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "criticalPath", "inputDigest", "deterministicSeed", "concurrency", "warmupIterations", "measurementIterations", "timeoutSeconds", "realisticRationale"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "criticalPath": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "inputDigest": {"$ref": "#/$defs/sha256"},
+        "deterministicSeed": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+        "concurrency": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "warmupIterations": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "measurementIterations": {"type": "integer", "minimum": 5, "maximum": 10000},
+        "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 1800},
+        "realisticRationale": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "comparisonPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["percentileMethod", "outlierPolicy", "environmentPolicy", "commandPolicy", "warmupsExcluded"],
+      "properties": {
+        "percentileMethod": {"const": "nearest-rank"},
+        "outlierPolicy": {"const": "none"},
+        "environmentPolicy": {"const": "same-signed-environment"},
+        "commandPolicy": {"const": "same-command-fingerprint"},
+        "warmupsExcluded": {"const": true}
+      }
+    },
+    "captures": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"$ref": "#/$defs/capture"}},
+    "limitations": {
+      "const": [
+        "Captured samples are exact signed local-run evidence, not a claim that the workload represents production traffic or capacity.",
+        "The local scrubbed execution profile is not an OS or network sandbox; untrusted code requires external isolation."
+      ]
+    }
+  }
+}

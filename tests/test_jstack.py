@@ -1171,6 +1171,349 @@ def audit_stage4_attempt(
     }
 
 
+def audit_stage5_workload() -> dict:
+    return {
+        "id": "checkout-critical-path-v1",
+        "name": "Deterministic checkout critical path",
+        "criticalPath": "Calculate a representative checkout result without external I/O.",
+        "inputDigest": hashlib.sha256(b"checkout-fixture-v1").hexdigest(),
+        "deterministicSeed": 4242,
+        "concurrency": 1,
+        "warmupIterations": 2,
+        "measurementIterations": 5,
+        "timeoutSeconds": 120,
+        "realisticRationale": "The bounded fixture retains the same representative input shape and critical calculation path for every comparison.",
+    }
+
+
+def ensure_audit_stage5_fixture(repo: Path) -> str:
+    target = repo / "performance_target.py"
+    if target.exists():
+        return git(repo, "rev-parse", "HEAD")
+    target.write_text(
+        "LATENCY_SAMPLES = [10, 11, 12, 13, 14]\n"
+        "MEMORY_SAMPLES = [100, 100, 100, 100, 100]\n",
+        encoding="utf-8",
+    )
+    test_path = repo / "tests" / "test_project.py"
+    test_path.write_text(
+        test_path.read_text(encoding="utf-8")
+        + "\nimport json\n"
+        + "from pathlib import Path\n"
+        + "from performance_target import LATENCY_SAMPLES, MEMORY_SAMPLES\n\n"
+        + "class TestPerformanceCapture(unittest.TestCase):\n"
+        + "    def test_closed_capture(self):\n"
+        + "        output = os.environ.get('JSTACK_PERFORMANCE_OUTPUT')\n"
+        + "        if output:\n"
+        + "            payload = {\n"
+        + "                'schemaVersion': os.environ['JSTACK_PERFORMANCE_SCHEMA'],\n"
+        + "                'workloadId': os.environ['JSTACK_PERFORMANCE_WORKLOAD_ID'],\n"
+        + "                'workloadDigest': os.environ['JSTACK_PERFORMANCE_WORKLOAD_DIGEST'],\n"
+        + "                'warmupIterations': 2,\n"
+        + "                'measurementIterations': 5,\n"
+        + "                'metrics': [\n"
+        + "                    {'id': 'checkout-p95', 'surface': 'latency', 'unit': 'ms', 'direction': 'lower-is-better', 'role': 'primary', 'samples': LATENCY_SAMPLES},\n"
+        + "                    {'id': 'resident-memory', 'surface': 'memory', 'unit': 'MiB', 'direction': 'lower-is-better', 'role': 'guardrail', 'samples': MEMORY_SAMPLES},\n"
+        + "                ],\n"
+        + "            }\n"
+        + "            Path(output).write_text(json.dumps(payload), encoding='utf-8')\n"
+        + "        self.assertEqual(5, len(LATENCY_SAMPLES))\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "performance_target.py", "tests/test_project.py")
+    git(repo, "commit", "-m", "add stage 5 performance fixture")
+    return git(repo, "rev-parse", "HEAD")
+
+
+def prepare_audit_stage5_remediation(repo: Path) -> str:
+    baseline = ensure_audit_stage5_fixture(repo)
+    (repo / "performance_target.py").write_text(
+        "LATENCY_SAMPLES = [5, 6, 7, 8, 9]\n"
+        "MEMORY_SAMPLES = [101, 101, 101, 101, 101]\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "performance_target.py")
+    git(repo, "commit", "-m", "reduce critical path latency within memory guardrail")
+    return baseline
+
+
+def audit_stage5_capture(repo: Path, workload: dict) -> dict:
+    workload_digest = server.audit_core.performance_canonical_sha256(workload)
+    discovery = server.tool_performance_capture(
+        {"project_path": str(repo), "base_ref": "HEAD", "run": False}
+    )
+    command = discovery["allowedCommands"][0]
+    return server.tool_performance_capture(
+        {
+            "project_path": str(repo),
+            "base_ref": "HEAD",
+            "run": True,
+            "command_key": command["key"],
+            "timeout_sec": 120,
+            "execution_approved": True,
+            "trusted_revision": discovery["evidenceSubject"]["gitHead"],
+            "trusted_project_fingerprint": discovery["evidenceSubject"]["projectFingerprint"],
+            "trusted_policy_digest": discovery["evidenceSubject"]["policyDigest"],
+            "workload_id": workload["id"],
+            "workload_digest": workload_digest,
+        }
+    )
+
+
+def audit_stage5_capture_record(capture_result: dict, revision: str) -> dict:
+    return {
+        "id": f"capture-{revision}",
+        "revision": revision,
+        "receiptDigest": hashlib.sha256(
+            capture_result["evidenceReceipt"].encode("utf-8")
+        ).hexdigest(),
+        "environmentDigest": capture_result["environment"]["digest"],
+        "commandKey": capture_result["command"]["key"],
+        "commandFingerprint": capture_result["command"]["commandFingerprint"],
+        "captureDigest": capture_result["captureDigest"],
+        "capture": capture_result["capture"],
+        "summary": capture_result["summary"],
+    }
+
+
+def audit_stage5_qa_binding(repo: Path) -> dict:
+    discovery = server.tool_qa({"project_path": str(repo), "base_ref": "HEAD"})
+    command = discovery["allowedCommands"][0]
+    return {
+        "id": "qa-current-suite",
+        "commandKey": command["key"],
+        "commandFingerprint": command["commandFingerprint"],
+        "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+        "returncode": 0,
+    }
+
+
+def write_audit_stage5_artifacts(
+    repo: Path,
+    baseline_capture: dict,
+    *,
+    exercise_type: str = "audit",
+    baseline_head: Optional[str] = None,
+    candidate_capture: Optional[dict] = None,
+    report_mutator=None,
+    results_mutator=None,
+) -> dict[str, str]:
+    baseline = baseline_head or git(repo, "rev-parse", "HEAD")
+    candidate = git(repo, "rev-parse", "HEAD")
+    subject = {
+        "baselineGitHead": baseline,
+        "baselineGitTree": git(repo, "rev-parse", f"{baseline}^{{tree}}"),
+        "candidateGitHead": candidate,
+        "candidateGitTree": git(repo, "rev-parse", f"{candidate}^{{tree}}"),
+    }
+    drill_id = "a5-regression" if exercise_type == "implementation" else "a5-performance"
+    workload = audit_stage5_workload()
+    training = repo / ".jstack-training"
+    training.mkdir(exist_ok=True)
+    (training / "benchmark-plan.md").write_text(
+        "# Benchmark plan\n\nRun the deterministic checkout critical path with two warmups and five retained measurements. Compare nearest-rank p95 latency against the declared budget and protect resident memory as a guardrail.\n",
+        encoding="utf-8",
+    )
+    plan_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/benchmark-plan.md"
+    )
+    captures = [audit_stage5_capture_record(baseline_capture, "baseline")]
+    if exercise_type == "implementation" and candidate_capture is not None:
+        captures.append(audit_stage5_capture_record(candidate_capture, "candidate"))
+    results = {
+        "schemaVersion": server.AUDIT_STAGE5_RESULTS_SCHEMA,
+        "subject": subject,
+        "exercise": {"drillId": drill_id, "type": exercise_type},
+        "benchmarkPlanSha256": plan_artifact["sha256"],
+        "workload": workload,
+        "comparisonPolicy": {
+            "percentileMethod": "nearest-rank",
+            "outlierPolicy": "none",
+            "environmentPolicy": "same-signed-environment",
+            "commandPolicy": "same-command-fingerprint",
+            "warmupsExcluded": True,
+        },
+        "captures": captures,
+        "limitations": list(server.AUDIT_STAGE5_RESULTS_LIMITATIONS),
+    }
+    if results_mutator is not None:
+        results_mutator(results)
+    write_json(training / "baseline-results.json", results)
+    results_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/baseline-results.json"
+    )
+    evidence = [
+        audit_stage4_revision_evidence(
+            repo, "ev-baseline-target", "baseline", baseline, "performance_target.py"
+        ),
+        audit_stage4_revision_evidence(
+            repo, "ev-candidate-target", "candidate", candidate, "performance_target.py"
+        ),
+    ]
+    baseline_summary = {
+        item["id"]: item for item in baseline_capture["summary"]
+    }
+    candidate_summary = (
+        {item["id"]: item for item in candidate_capture["summary"]}
+        if candidate_capture is not None
+        else {}
+    )
+    baseline_latency = baseline_summary["checkout-p95"]["p95"]
+    baseline_memory = baseline_summary["resident-memory"]["p95"]
+    candidate_latency = (
+        candidate_summary["checkout-p95"]["p95"]
+        if exercise_type == "implementation"
+        else None
+    )
+    candidate_memory = (
+        candidate_summary["resident-memory"]["p95"]
+        if exercise_type == "implementation"
+        else None
+    )
+    qa_binding = audit_stage5_qa_binding(repo)
+    coverage = []
+    for surface in server.AUDIT_STAGE5_REQUIRED_SURFACES:
+        metric_ids = {
+            "latency": ["checkout-p95"],
+            "memory": ["resident-memory"],
+        }.get(surface, [])
+        coverage.append(
+            {
+                "id": surface,
+                "status": "measured" if metric_ids else "not-applicable",
+                "reason": (
+                    "The retained signed capture measures this bounded workload surface."
+                    if metric_ids
+                    else "This bounded critical-path fixture does not exercise a separately material metric for this surface."
+                ),
+                "metricIds": metric_ids,
+                "evidence": ["ev-baseline-target", "ev-candidate-target"],
+            }
+        )
+    report = {
+        "schemaVersion": server.AUDIT_STAGE5_FINDINGS_SCHEMA,
+        "subject": subject,
+        "exercise": {"drillId": drill_id, "type": exercise_type},
+        "assessmentBoundary": json.loads(
+            json.dumps(server.AUDIT_STAGE5_ASSESSMENT_BOUNDARY)
+        ),
+        "artifactBindings": {
+            "benchmarkPlan": {
+                "path": plan_artifact["path"],
+                "sha256": plan_artifact["sha256"],
+            },
+            "baselineResults": {
+                "path": results_artifact["path"],
+                "sha256": results_artifact["sha256"],
+            },
+        },
+        "coverage": coverage,
+        "evidence": evidence,
+        "bottlenecks": [
+            {
+                "id": "bottleneck-checkout-latency",
+                "surface": "latency",
+                "description": "The retained checkout latency samples exceed the declared p95 budget on the baseline revision.",
+                "metricId": "checkout-p95",
+                "evidence": ["ev-baseline-target"],
+            }
+        ],
+        "findings": [
+            {
+                "id": "finding-checkout-latency",
+                "surface": "latency",
+                "severity": "medium",
+                "status": "resolved" if exercise_type == "implementation" else "open",
+                "confidence": "high",
+                "verification": "measured",
+                "summary": "The signed baseline p95 checkout latency exceeds the explicit nine millisecond budget.",
+                "metricId": "checkout-p95",
+                "bottleneckId": "bottleneck-checkout-latency",
+                "statistic": "p95",
+                "comparator": "<=",
+                "budget": 9.0,
+                "baselineValue": baseline_latency,
+                "candidateValue": candidate_latency,
+                "relativeImprovementPercent": (
+                    server.audit_core.performance_relative_improvement(
+                        "lower-is-better", baseline_latency, candidate_latency
+                    )
+                    if candidate_latency is not None
+                    else None
+                ),
+                "evidence": ["ev-baseline-target", "ev-candidate-target"],
+                "remediationId": "remediation-checkout-latency",
+            }
+        ],
+        "remediations": [
+            {
+                "id": "remediation-checkout-latency",
+                "findingId": "finding-checkout-latency",
+                "status": "implemented-verified" if exercise_type == "implementation" else "proposed",
+                "description": "Reduce the measured critical-path work while preserving the declared memory guardrail and correctness suite.",
+                "changedPaths": ["performance_target.py"] if exercise_type == "implementation" else [],
+                "evidence": ["ev-baseline-target", "ev-candidate-target"],
+            }
+        ],
+        "regressionGuards": [
+            {
+                "id": "guard-memory-p95",
+                "metricId": "resident-memory",
+                "statistic": "p95",
+                "maxRegressionPercent": 2.0,
+                "baselineValue": baseline_memory,
+                "candidateValue": candidate_memory,
+                "status": "passed" if exercise_type == "implementation" else "planned",
+            }
+        ],
+        "qaBindings": [qa_binding],
+        "gaps": [],
+        "complete": True,
+        "limitations": list(server.AUDIT_STAGE5_LIMITATIONS),
+    }
+    if report_mutator is not None:
+        report_mutator(report)
+    write_json(training / "performance-findings.json", report)
+    return {
+        "benchmark-plan.md": ".jstack-training/benchmark-plan.md",
+        "baseline-results.json": ".jstack-training/baseline-results.json",
+        "performance-findings.json": ".jstack-training/performance-findings.json",
+    }
+
+
+def audit_stage5_attempt(
+    repo: Path,
+    artifacts: dict[str, str],
+    performance_receipts: list[str],
+    qa_receipt_value: str,
+    *,
+    exercise_type: str = "audit",
+) -> dict:
+    return {
+        "project_path": str(repo),
+        "track": "audit",
+        "stage": 5,
+        "drill_id": "a5-regression" if exercise_type == "implementation" else "a5-performance",
+        "assistance_level": "independent",
+        "assessor": "independent test assessor",
+        "assessor_citations": [
+            ".jstack-training/benchmark-plan.md:1",
+            ".jstack-training/baseline-results.json:1",
+            ".jstack-training/performance-findings.json:1",
+        ],
+        "assessment": {
+            "correctness": 100,
+            "evidence": 100,
+            "safety": 100,
+            "judgment": 100,
+            "explanation": 100,
+        },
+        "artifacts": artifacts,
+        "performance_receipts": performance_receipts,
+        "qa_receipts": [qa_receipt_value],
+    }
+
+
 def write_mastery_profile_at_stage(home: Path, track: str, stage: int) -> None:
     profile = server.default_mastery_profile()
     profile["createdAt"] = "2026-08-02T00:00:00+00:00"
@@ -3058,7 +3401,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(0, "audit")
-        self.assertEqual(6, curriculum["version"])
+        self.assertEqual(7, curriculum["version"])
         self.assertEqual("Safe Security Operator", stage["name"])
         self.assertIn("security-orientation.json", stage["requiredArtifacts"])
         self.assertEqual(
@@ -3279,7 +3622,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage1_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(1, "audit")
-        self.assertEqual(6, curriculum["version"])
+        self.assertEqual(7, curriculum["version"])
         self.assertEqual("Repository Reconnaissance and System Mapping", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
@@ -3645,7 +3988,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage2_curriculum_and_schemas_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(2, "audit")
-        self.assertEqual(6, curriculum["version"])
+        self.assertEqual(7, curriculum["version"])
         self.assertEqual("Correctness and Reliability Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
@@ -4009,7 +4352,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage3_curriculum_schema_and_standards_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(3, "audit")
-        self.assertEqual(6, curriculum["version"])
+        self.assertEqual(7, curriculum["version"])
         self.assertEqual("Security and Threat-Modelling Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
@@ -4333,7 +4676,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage4_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(4, "audit")
-        self.assertEqual(6, curriculum["version"])
+        self.assertEqual(7, curriculum["version"])
         self.assertEqual("Maintainability and Architecture Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE4_MAINTAINABILITY_SCHEMA,
@@ -4403,6 +4746,371 @@ class MasteryAndInstallTests(unittest.TestCase):
         drill_types = {item["type"] for item in server.curriculum_stage(4, "audit")["drills"]}
         self.assertEqual({"audit", "implementation"}, drill_types)
         self.assertTrue(server.advancement_status(profile, 4, "audit")["passed"])
+
+    def test_performance_capture_is_closed_signed_and_output_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            ensure_audit_stage5_fixture(repo)
+            workload = audit_stage5_workload()
+            result = audit_stage5_capture(repo, workload)
+
+            self.assertTrue(result["passed"])
+            self.assertEqual(
+                server.audit_core.PERFORMANCE_CAPTURE_SCHEMA_VERSION,
+                result["capture"]["schemaVersion"],
+            )
+            self.assertEqual(2, len(result["summary"]))
+            self.assertEqual(14.0, result["summary"][0]["p95"])
+            self.assertNotIn("stdout", result["command"])
+            self.assertNotIn("stderr", result["command"])
+            verification = server._verify_performance_receipt_for_revision(
+                result["evidenceReceipt"],
+                repo.resolve(),
+                {
+                    "gitHead": result["sourceSubject"]["gitHead"],
+                    "gitTree": result["sourceSubject"]["gitTree"],
+                    "policyDigest": server.evidence_subject(repo)["policyDigest"],
+                    "commandKey": result["command"]["key"],
+                    "commandFingerprint": result["command"]["commandFingerprint"],
+                    "workloadId": workload["id"],
+                    "workloadDigest": server.audit_core.performance_canonical_sha256(workload),
+                    "environmentDigest": result["environment"]["digest"],
+                    "captureDigest": result["captureDigest"],
+                    "metricCount": 2,
+                    "measurementIterations": 5,
+                },
+            )
+            self.assertTrue(verification["valid"])
+
+    def test_performance_capture_protocol_rejects_missing_guardrails_nonfinite_and_count_drift(self) -> None:
+        workload_digest = "a" * 64
+        valid = {
+            "schemaVersion": server.audit_core.PERFORMANCE_CAPTURE_SCHEMA_VERSION,
+            "workloadId": "workload-v1",
+            "workloadDigest": workload_digest,
+            "warmupIterations": 1,
+            "measurementIterations": 5,
+            "metrics": [
+                {
+                    "id": "primary",
+                    "surface": "latency",
+                    "unit": "ms",
+                    "direction": "lower-is-better",
+                    "role": "primary",
+                    "samples": [1, 2, 3, 4, 5],
+                },
+                {
+                    "id": "guard",
+                    "surface": "memory",
+                    "unit": "MiB",
+                    "direction": "lower-is-better",
+                    "role": "guardrail",
+                    "samples": [10, 10, 10, 10, 10],
+                },
+            ],
+        }
+        missing_guard = json.loads(json.dumps(valid))
+        missing_guard["metrics"] = missing_guard["metrics"][:1]
+        with self.assertRaises(server.audit_core.PerformanceProtocolError):
+            server.audit_core.normalize_performance_capture(missing_guard)
+        nonfinite = json.loads(json.dumps(valid))
+        nonfinite["metrics"][0]["samples"][0] = float("nan")
+        with self.assertRaises(server.audit_core.PerformanceProtocolError):
+            server.audit_core.normalize_performance_capture(nonfinite)
+        count_drift = json.loads(json.dumps(valid))
+        count_drift["metrics"][1]["samples"].pop()
+        with self.assertRaises(server.audit_core.PerformanceProtocolError):
+            server.audit_core.normalize_performance_capture(count_drift)
+
+    def test_performance_capture_refuses_stale_trust_and_nontraining_dirty_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            ensure_audit_stage5_fixture(repo)
+            workload = audit_stage5_workload()
+            discovery = server.tool_performance_capture(
+                {"project_path": str(repo), "base_ref": "HEAD", "run": False}
+            )
+            command = discovery["allowedCommands"][0]
+            common = {
+                "project_path": str(repo),
+                "base_ref": "HEAD",
+                "run": True,
+                "command_key": command["key"],
+                "execution_approved": True,
+                "trusted_revision": discovery["evidenceSubject"]["gitHead"],
+                "trusted_project_fingerprint": discovery["evidenceSubject"]["projectFingerprint"],
+                "trusted_policy_digest": discovery["evidenceSubject"]["policyDigest"],
+                "workload_id": workload["id"],
+                "workload_digest": server.audit_core.performance_canonical_sha256(workload),
+            }
+            stale = dict(common)
+            stale["trusted_revision"] = "0" * 40
+            with self.assertRaisesRegex(server.ToolError, "Trusted revision/fingerprint"):
+                server.tool_performance_capture(stale)
+            (repo / "application-change.py").write_text("changed = True\n", encoding="utf-8")
+            current = server.tool_performance_capture(
+                {"project_path": str(repo), "base_ref": "HEAD", "run": False}
+            )
+            dirty = dict(common)
+            dirty.update(
+                {
+                    "trusted_revision": current["evidenceSubject"]["gitHead"],
+                    "trusted_project_fingerprint": current["evidenceSubject"]["projectFingerprint"],
+                    "trusted_policy_digest": current["evidenceSubject"]["policyDigest"],
+                }
+            )
+            with self.assertRaisesRegex(server.ToolError, "committed project code"):
+                server.tool_performance_capture(dirty)
+
+    def test_audit_stage5_measurement_package_passes_with_qa_and_signed_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            ensure_audit_stage5_fixture(repo)
+            capture = audit_stage5_capture(repo, audit_stage5_workload())
+            artifacts = write_audit_stage5_artifacts(repo, capture)
+            qa = qa_receipt(repo)
+            self.assertTrue(qa["result"]["ok"])
+            write_mastery_profile_at_stage(home, "audit", 5)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage5_attempt(
+                        repo,
+                        artifacts,
+                        [capture["evidenceReceipt"]],
+                        qa["evidenceReceipt"],
+                    )
+                )
+
+            evaluation = result["attempt"]["stage5PerformanceEvaluation"]
+            self.assertTrue(evaluation["passed"], evaluation["failureCodes"])
+            self.assertEqual("audit", evaluation["exerciseType"])
+            self.assertEqual(1, evaluation["captureCount"])
+            self.assertEqual(1, evaluation["primaryMetricCount"])
+            self.assertEqual(1, evaluation["guardrailMetricCount"])
+            self.assertEqual(1, evaluation["matchedPerformanceReceiptCount"])
+            self.assertEqual(1, evaluation["matchedQaBindingCount"])
+            self.assertEqual([], result["attempt"]["hardGateFailures"])
+            self.assertNotIn("captures", evaluation)
+            self.assertFalse(result["advanced"])
+
+    def test_audit_stage5_committed_remediation_recomputes_improvement_and_guardrail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            baseline = ensure_audit_stage5_fixture(repo)
+            baseline_capture = audit_stage5_capture(repo, audit_stage5_workload())
+            self.assertEqual(baseline, prepare_audit_stage5_remediation(repo))
+            candidate_capture = audit_stage5_capture(repo, audit_stage5_workload())
+            artifacts = write_audit_stage5_artifacts(
+                repo,
+                baseline_capture,
+                exercise_type="implementation",
+                baseline_head=baseline,
+                candidate_capture=candidate_capture,
+            )
+            qa = qa_receipt(repo)
+            write_mastery_profile_at_stage(home, "audit", 5)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage5_attempt(
+                        repo,
+                        artifacts,
+                        [
+                            baseline_capture["evidenceReceipt"],
+                            candidate_capture["evidenceReceipt"],
+                        ],
+                        qa["evidenceReceipt"],
+                        exercise_type="implementation",
+                    )
+                )
+
+            evaluation = result["attempt"]["stage5PerformanceEvaluation"]
+            self.assertTrue(evaluation["passed"], evaluation["failureCodes"])
+            self.assertEqual("implementation", evaluation["exerciseType"])
+            self.assertEqual(2, evaluation["captureCount"])
+            self.assertEqual(2, evaluation["matchedPerformanceReceiptCount"])
+            self.assertEqual(1, evaluation["changedPathCount"])
+            self.assertEqual([], result["attempt"]["hardGateFailures"])
+
+    def test_audit_stage5_rejects_fabricated_summary_percentage_and_guardrail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            baseline = ensure_audit_stage5_fixture(repo)
+            baseline_capture = audit_stage5_capture(repo, audit_stage5_workload())
+            prepare_audit_stage5_remediation(repo)
+            candidate_capture = audit_stage5_capture(repo, audit_stage5_workload())
+
+            def mutate_results(results: dict) -> None:
+                results["captures"][1]["summary"][0]["p95"] = 1.0
+                results["captures"][1]["environmentDigest"] = "0" * 64
+
+            def mutate_report(report: dict) -> None:
+                report["findings"][0]["relativeImprovementPercent"] = 99.0
+                report["regressionGuards"][0]["maxRegressionPercent"] = 0.5
+
+            artifacts = write_audit_stage5_artifacts(
+                repo,
+                baseline_capture,
+                exercise_type="implementation",
+                baseline_head=baseline,
+                candidate_capture=candidate_capture,
+                results_mutator=mutate_results,
+                report_mutator=mutate_report,
+            )
+            qa = qa_receipt(repo)
+            write_mastery_profile_at_stage(home, "audit", 5)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage5_attempt(
+                        repo,
+                        artifacts,
+                        [
+                            baseline_capture["evidenceReceipt"],
+                            candidate_capture["evidenceReceipt"],
+                        ],
+                        qa["evidenceReceipt"],
+                        exercise_type="implementation",
+                    )
+                )
+
+            failures = result["attempt"]["stage5PerformanceEvaluation"]["failureCodes"]
+            self.assertIn("captures[1].summary", failures)
+            self.assertIn("captures.environment-mismatch", failures)
+            self.assertIn("captures[1].receipt.invalid", failures)
+            self.assertIn("findings[0].relativeImprovementPercent", failures)
+            self.assertIn("regressionGuards[0].regressed", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage5_rejects_tampered_receipt_workload_and_missing_guardrail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            ensure_audit_stage5_fixture(repo)
+            capture = audit_stage5_capture(repo, audit_stage5_workload())
+
+            def mutate_results(results: dict) -> None:
+                results["workload"]["concurrency"] = 2
+                results["captures"][0]["capture"]["metrics"] = [
+                    results["captures"][0]["capture"]["metrics"][0]
+                ]
+
+            artifacts = write_audit_stage5_artifacts(
+                repo,
+                capture,
+                results_mutator=mutate_results,
+            )
+            qa = qa_receipt(repo)
+            write_mastery_profile_at_stage(home, "audit", 5)
+            tampered_receipt = capture["evidenceReceipt"][:-1] + (
+                "A" if capture["evidenceReceipt"][-1] != "A" else "B"
+            )
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(
+                    server.ToolError,
+                    "capture is invalid|Performance receipt is malformed",
+                ):
+                    server.tool_mastery_record(
+                        audit_stage5_attempt(
+                            repo,
+                            artifacts,
+                            [tampered_receipt],
+                            qa["evidenceReceipt"],
+                        )
+                    )
+
+    def test_audit_stage5_rejects_a_rehashed_but_invalid_receipt_signature(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            ensure_audit_stage5_fixture(repo)
+            capture = audit_stage5_capture(repo, audit_stage5_workload())
+            tampered_receipt = capture["evidenceReceipt"][:-1] + (
+                "A" if capture["evidenceReceipt"][-1] != "A" else "B"
+            )
+
+            def mutate_results(results: dict) -> None:
+                results["captures"][0]["receiptDigest"] = hashlib.sha256(
+                    tampered_receipt.encode("utf-8")
+                ).hexdigest()
+
+            artifacts = write_audit_stage5_artifacts(
+                repo,
+                capture,
+                results_mutator=mutate_results,
+            )
+            qa = qa_receipt(repo)
+            write_mastery_profile_at_stage(home, "audit", 5)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(server.ToolError, "Performance receipt is malformed"):
+                    server.tool_mastery_record(
+                        audit_stage5_attempt(
+                            repo,
+                            artifacts,
+                            [tampered_receipt],
+                            qa["evidenceReceipt"],
+                        )
+                    )
+
+    def test_audit_stage5_curriculum_schemas_tool_and_advancement_are_bound(self) -> None:
+        curriculum = server.load_mastery_curriculum("audit")
+        stage = server.curriculum_stage(5, "audit")
+        self.assertEqual(7, curriculum["version"])
+        self.assertEqual("Performance and Resource-Efficiency Auditor", stage["name"])
+        self.assertEqual(
+            server.AUDIT_STAGE5_RESULTS_SCHEMA,
+            stage["artifactSchemas"]["baseline-results.json"],
+        )
+        self.assertEqual(
+            server.AUDIT_STAGE5_FINDINGS_SCHEMA,
+            stage["artifactSchemas"]["performance-findings.json"],
+        )
+        self.assertIn("jstack_performance_capture", server.GIT_REQUIRED_TOOLS)
+        self.assertIn(
+            "jstack_performance_capture",
+            {definition["name"] for definition in server.tool_definitions()},
+        )
+        profile = server.default_mastery_profile()
+        profile["tracks"]["audit"]["currentStage"] = 5
+        profile["tracks"]["audit"]["attempts"] = [
+            {
+                "stage": 5,
+                "eligibleForAdvancement": True,
+                "assistanceLevel": "independent",
+                "score": 86,
+                "exerciseType": "audit",
+                "drillId": "a5-performance",
+                "projectState": {"gitHead": "commit-a"},
+                "stage5PerformanceEvaluation": {"passed": True},
+            },
+            {
+                "stage": 5,
+                "eligibleForAdvancement": True,
+                "assistanceLevel": "independent",
+                "score": 85,
+                "exerciseType": "implementation",
+                "drillId": "a5-regression",
+                "projectState": {"gitHead": "commit-b"},
+                "stage5PerformanceEvaluation": {"passed": True},
+            },
+            {
+                "stage": 5,
+                "eligibleForAdvancement": True,
+                "assistanceLevel": "independent_teach",
+                "score": 84,
+                "exerciseType": "audit",
+                "drillId": "a5-performance",
+                "projectState": {"gitHead": "commit-b"},
+                "stage5PerformanceEvaluation": {"passed": True},
+            },
+        ]
+        self.assertTrue(server.advancement_status(profile, 5, "audit")["passed"])
 
     def test_audit_stage_nine_uses_derived_benchmark_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

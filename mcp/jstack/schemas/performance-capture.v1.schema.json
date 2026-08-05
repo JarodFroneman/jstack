@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/performance-capture.v1.schema.json",
+  "title": "JStack Closed Performance Capture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workloadId", "workloadDigest", "warmupIterations", "measurementIterations", "metrics"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.performance.capture.v1"},
+    "workloadId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "workloadDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "warmupIterations": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "measurementIterations": {"type": "integer", "minimum": 5, "maximum": 10000},
+    "metrics": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "unit", "direction", "role", "samples"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+          "surface": {"enum": ["latency", "throughput", "cpu", "memory", "io", "query", "contention"]},
+          "unit": {"enum": ["ns", "us", "ms", "s", "ops/s", "requests/s", "items/s", "bytes", "KiB", "MiB", "GiB", "percent", "count", "queries/op", "bytes/op", "wait-ms", "allocations/op"]},
+          "direction": {"enum": ["lower-is-better", "higher-is-better"]},
+          "role": {"enum": ["primary", "guardrail"]},
+          "samples": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 10000,
+            "items": {"type": "number", "minimum": 0, "maximum": 1000000000000000000}
+          }
+        }
+      }
+    }
+  }
+}

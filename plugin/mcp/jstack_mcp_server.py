@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import os
+import platform
 import re
 import secrets
 import shlex
@@ -44,7 +45,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.5"
+SERVER_VERSION = "0.10.0-alpha.6"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -343,6 +344,48 @@ AUDIT_STAGE4_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 AUDIT_STAGE4_MAX_ITEMS = 256
 AUDIT_STAGE4_MAX_EVIDENCE_FILE_BYTES = 2_000_000
 AUDIT_STAGE4_MAX_EVIDENCE_TOTAL_BYTES = 16_000_000
+AUDIT_STAGE5_RESULTS_SCHEMA = "jstack.audit.performance-results.v1"
+AUDIT_STAGE5_FINDINGS_SCHEMA = "jstack.audit.performance-findings.v1"
+AUDIT_STAGE5_DRILL_TYPES = {
+    "a5-performance": "audit",
+    "a5-regression": "implementation",
+}
+AUDIT_STAGE5_REQUIRED_SURFACES = tuple(audit_core.PERFORMANCE_SURFACES)
+AUDIT_STAGE5_ASSESSMENT_BOUNDARY = {
+    "repositoryContentTrust": "untrusted-data",
+    "evaluatorMode": "static-git-and-signed-performance-receipt-verification",
+    "repositoryCode": "not-executed-by-evaluator",
+    "benchmarkExecution": "separately-authorized-discovered-command-only",
+    "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+    "networkAuthority": "none-from-audit",
+    "secrets": "not-accessed-or-forwarded",
+    "writes": "training-artifacts-only",
+    "auditOptimization": "not-authorized",
+    "implementationEvidence": "external-committed-candidate-only",
+    "productionAuthority": "none",
+}
+AUDIT_STAGE5_LIMITATIONS = [
+    "Stage 5 proves bounded Git, workload, command, environment, sample, statistic, and receipt integrity; it does not prove workload realism, measurement accuracy, universal performance, or production capacity.",
+    "JStack performance capture uses scrubbed local execution without an OS sandbox or enforced network isolation; untrusted execution requires an external container or VM.",
+    "Passing grants no optimization, Git, publication, release, deployment, or production authority; implementation evidence must come from a separately authorized committed workflow.",
+]
+AUDIT_STAGE5_RESULTS_LIMITATIONS = [
+    "Captured samples are exact signed local-run evidence, not a claim that the workload represents production traffic or capacity.",
+    "The local scrubbed execution profile is not an OS or network sandbox; untrusted code requires external isolation.",
+]
+AUDIT_STAGE5_ARTIFACT_PATHS = {
+    "benchmark-plan.md": ".jstack-training/benchmark-plan.md",
+    "baseline-results.json": ".jstack-training/baseline-results.json",
+    "performance-findings.json": ".jstack-training/performance-findings.json",
+}
+AUDIT_STAGE5_SURFACE_STATUSES = {"measured", "not-applicable", "unsupported"}
+AUDIT_STAGE5_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+AUDIT_STAGE5_STATISTICS = {"mean", "median", "p95", "min", "max"}
+AUDIT_STAGE5_COMPARATORS = {"<=", ">="}
+AUDIT_STAGE5_MAX_ITEMS = 256
+PERFORMANCE_CAPTURE_MAX_BYTES = 5_000_000
+PERFORMANCE_MAX_RECEIPTS = 4
+PERFORMANCE_MAX_RECEIPT_CHARS = 100_000
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
@@ -355,6 +398,7 @@ GIT_REQUIRED_TOOLS = [
     "jstack_review",
     "jstack_security_audit",
     "jstack_qa",
+    "jstack_performance_capture",
     "jstack_context_save",
     "jstack_context_restore",
     "jstack_ship_check",
@@ -3379,6 +3423,21 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
                 "each scoring at least 80 with a mean of at least 85, including "
                 "both the architecture audit and the separately authorized, committed "
                 "behavior-preserving remediation drills, all deterministically passing."
+            )
+        elif track == "audit" and stage_number == 5:
+            passed = passed and all(
+                item.get("stage5PerformanceEvaluation", {}).get("passed") is True
+                for item in recent
+            )
+            passed = passed and {
+                item.get("drillId") for item in recent
+            }.issuperset(AUDIT_STAGE5_DRILL_TYPES)
+            requirement = (
+                "Three independent Stage 5 attempts across at least two commits, "
+                "each scoring at least 80 with a mean of at least 85, including "
+                "both the measurement-only audit and separately authorized committed "
+                "performance-remediation drills, all deterministically passing signed "
+                "capture, statistic, budget, QA, and regression-guard gates."
             )
     else:
         recent = eligible[-2:]
@@ -7295,6 +7354,900 @@ def evaluate_audit_stage4_architecture(
     return {**result, "evaluationDigest": audit_json_digest(result)}
 
 
+def _verify_performance_receipt_for_revision(
+    receipt: str,
+    root: Path,
+    expected: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify a current-session receipt while permitting an immutable historical revision."""
+
+    try:
+        encoded, supplied_signature = receipt.split(".", 1)
+        expected_signature = _b64encode(
+            hmac.new(_RECEIPT_SECRET, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        if issued.tzinfo is None:
+            raise ValueError("timezone-aware issuedAt required")
+    except Exception as exc:
+        raise ToolError(
+            "Performance receipt is malformed, stale, or was not issued by this JStack server session."
+        ) from exc
+    age = (_dt.datetime.now(_dt.timezone.utc) - issued).total_seconds()
+    checks = {
+        "kind": payload.get("kind") == "performance",
+        "session": payload.get("serverSession") == SERVER_SESSION_ID,
+        "projectPath": payload.get("projectPath") == str(root),
+        "gitHead": payload.get("gitHead") == expected.get("gitHead"),
+        "gitTree": payload.get("gitTree") == expected.get("gitTree"),
+        "policyDigest": payload.get("policyDigest") == expected.get("policyDigest"),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "commandKey": payload.get("commandKey") == expected.get("commandKey"),
+        "commandFingerprint": payload.get("commandFingerprint")
+        == expected.get("commandFingerprint"),
+        "workloadId": payload.get("workloadId") == expected.get("workloadId"),
+        "workloadDigest": payload.get("workloadDigest") == expected.get("workloadDigest"),
+        "environmentDigest": payload.get("environmentDigest")
+        == expected.get("environmentDigest"),
+        "captureDigest": payload.get("captureDigest") == expected.get("captureDigest"),
+        "metricCount": payload.get("metricCount") == expected.get("metricCount"),
+        "measurementIterations": payload.get("measurementIterations")
+        == expected.get("measurementIterations"),
+        "executionProfile": payload.get("executionProfile")
+        == "local-scrubbed-no-os-sandbox-v1",
+        "passed": payload.get("passed") is True,
+        "mutationDetected": payload.get("mutationDetected") is False,
+        "fresh": 0 <= age <= RECEIPT_MAX_AGE_SECONDS,
+    }
+    return {"valid": all(checks.values()), "checks": checks, "payload": payload}
+
+
+def evaluate_audit_stage5_performance(
+    results: Any,
+    report: Any,
+    project_path: Path,
+    artifacts: dict[str, dict[str, Any]],
+    qa_verifications: list[dict[str, Any]],
+    performance_receipts: list[str],
+    drill_id: str,
+) -> dict[str, Any]:
+    """Validate one exact-revision Stage 5 performance evidence package."""
+
+    results_fields = {
+        "schemaVersion",
+        "subject",
+        "exercise",
+        "benchmarkPlanSha256",
+        "workload",
+        "comparisonPolicy",
+        "captures",
+        "limitations",
+    }
+    report_fields = {
+        "schemaVersion",
+        "subject",
+        "exercise",
+        "assessmentBoundary",
+        "artifactBindings",
+        "coverage",
+        "evidence",
+        "bottlenecks",
+        "findings",
+        "remediations",
+        "regressionGuards",
+        "qaBindings",
+        "gaps",
+        "complete",
+        "limitations",
+    }
+    if not isinstance(results, dict) or set(results) != results_fields:
+        raise ToolError(
+            "Audit Stage 5 baseline-results.json has unsupported or missing fields."
+        )
+    if not isinstance(report, dict) or set(report) != report_fields:
+        raise ToolError(
+            "Audit Stage 5 performance-findings.json has unsupported or missing fields."
+        )
+    audit_enforce_json_limit(results, "Audit Stage 5 performance results", 10_000_000)
+    audit_enforce_json_limit(report, "Audit Stage 5 performance findings", 2_000_000)
+    audit_reject_secret_values(results, "Audit Stage 5 performance results")
+    audit_reject_secret_values(report, "Audit Stage 5 performance findings")
+    source = _audit_source_subject(project_path, "Stage 5")
+    root = source["_root"]
+    current_policy_digest = evidence_subject(project_path)["policyDigest"]
+    failures: list[str] = []
+
+    def exact_object(
+        container: dict[str, Any], field: str, keys: set[str], label: str
+    ) -> dict[str, Any]:
+        value = container.get(field)
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ToolError(
+                f"Audit Stage 5 {label} {field} has unsupported or missing fields."
+            )
+        return value
+
+    def exact_list(
+        container: dict[str, Any], field: str, label: str, maximum: int = AUDIT_STAGE5_MAX_ITEMS
+    ) -> list[Any]:
+        value = container.get(field)
+        if not isinstance(value, list) or len(value) > maximum:
+            raise ToolError(
+                f"Audit Stage 5 {label} {field} must be an array with at most {maximum} items."
+            )
+        return value
+
+    def valid_id(value: Any) -> bool:
+        return bool(
+            isinstance(value, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+        )
+
+    def valid_text(value: Any, maximum: int = 1000) -> bool:
+        return bool(isinstance(value, str) and value.strip() and len(value) <= maximum)
+
+    if results.get("schemaVersion") != AUDIT_STAGE5_RESULTS_SCHEMA:
+        failures.append("results.schemaVersion")
+    if report.get("schemaVersion") != AUDIT_STAGE5_FINDINGS_SCHEMA:
+        failures.append("report.schemaVersion")
+    expected_type = AUDIT_STAGE5_DRILL_TYPES.get(drill_id)
+    if expected_type is None:
+        raise ToolError(f"Unsupported Audit Stage 5 drill: {drill_id}")
+    for container, label in ((results, "results"), (report, "report")):
+        exercise = exact_object(container, "exercise", {"drillId", "type"}, label)
+        if exercise.get("drillId") != drill_id:
+            failures.append(label + ".exercise.drillId")
+        if exercise.get("type") != expected_type:
+            failures.append(label + ".exercise.type")
+
+    subject_keys = {
+        "baselineGitHead",
+        "baselineGitTree",
+        "candidateGitHead",
+        "candidateGitTree",
+    }
+    results_subject = exact_object(results, "subject", subject_keys, "results")
+    report_subject = exact_object(report, "subject", subject_keys, "report")
+    if report_subject != results_subject:
+        failures.append("subject.report-results-mismatch")
+    baseline = _audit_stage4_resolve_revision(root, results_subject.get("baselineGitHead"))
+    candidate = _audit_stage4_resolve_revision(root, results_subject.get("candidateGitHead"))
+    if baseline is None:
+        failures.append("subject.baseline")
+    if candidate is None:
+        failures.append("subject.candidate")
+    if baseline and results_subject.get("baselineGitTree") != baseline["gitTree"]:
+        failures.append("subject.baselineGitTree")
+    if candidate and results_subject.get("candidateGitTree") != candidate["gitTree"]:
+        failures.append("subject.candidateGitTree")
+    if candidate and (
+        candidate["gitHead"] != source["gitHead"] or candidate["gitTree"] != source["gitTree"]
+    ):
+        failures.append("subject.candidate-not-current")
+    changed_paths: Optional[list[str]] = None
+    if baseline and candidate:
+        if expected_type == "audit":
+            if baseline != candidate:
+                failures.append("subject.audit-baseline-candidate")
+        else:
+            ancestry = run_complete(
+                ["git", "merge-base", "--is-ancestor", baseline["gitHead"], candidate["gitHead"]],
+                root,
+                timeout=8,
+            )
+            changed_paths = _audit_stage4_changed_paths(
+                root, baseline["gitHead"], candidate["gitHead"]
+            )
+            if baseline["gitHead"] == candidate["gitHead"]:
+                failures.append("subject.implementation-distinct-commit")
+            if not ancestry["ok"]:
+                failures.append("subject.baseline-not-ancestor")
+            if not changed_paths:
+                failures.append("subject.implementation-empty-diff")
+
+    plan_artifact = artifacts.get("benchmark-plan.md") or {}
+    results_artifact = artifacts.get("baseline-results.json") or {}
+    plan_metadata = validate_mastery_text_artifact(
+        project_path, plan_artifact, "Audit Stage 5 benchmark-plan.md"
+    )
+    if results.get("benchmarkPlanSha256") != plan_metadata["sha256"]:
+        failures.append("results.benchmarkPlanSha256")
+    bindings = exact_object(
+        report, "artifactBindings", {"benchmarkPlan", "baselineResults"}, "report"
+    )
+    for binding_name, artifact_name in (
+        ("benchmarkPlan", "benchmark-plan.md"),
+        ("baselineResults", "baseline-results.json"),
+    ):
+        binding = bindings.get(binding_name)
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            raise ToolError("Audit Stage 5 artifact binding is malformed.")
+        artifact = artifacts.get(artifact_name) or {}
+        if binding.get("path") != artifact.get("path"):
+            failures.append(f"artifactBindings.{binding_name}.path")
+        if binding.get("sha256") != artifact.get("sha256"):
+            failures.append(f"artifactBindings.{binding_name}.sha256")
+
+    boundary = exact_object(
+        report,
+        "assessmentBoundary",
+        set(AUDIT_STAGE5_ASSESSMENT_BOUNDARY),
+        "report",
+    )
+    for field, expected in AUDIT_STAGE5_ASSESSMENT_BOUNDARY.items():
+        if type(boundary.get(field)) is not type(expected) or boundary.get(field) != expected:
+            failures.append("assessmentBoundary." + field)
+    if results.get("limitations") != AUDIT_STAGE5_RESULTS_LIMITATIONS:
+        failures.append("results.limitations")
+    if report.get("limitations") != AUDIT_STAGE5_LIMITATIONS:
+        failures.append("report.limitations")
+
+    workload_keys = {
+        "id",
+        "name",
+        "criticalPath",
+        "inputDigest",
+        "deterministicSeed",
+        "concurrency",
+        "warmupIterations",
+        "measurementIterations",
+        "timeoutSeconds",
+        "realisticRationale",
+    }
+    workload = exact_object(results, "workload", workload_keys, "results")
+    if not valid_id(workload.get("id")):
+        failures.append("workload.id")
+    for field in ("name", "criticalPath", "realisticRationale"):
+        if not valid_text(workload.get(field)):
+            failures.append("workload." + field)
+    if not re.fullmatch(r"[0-9a-f]{64}", str(workload.get("inputDigest") or "")):
+        failures.append("workload.inputDigest")
+    for field, minimum, maximum in (
+        ("deterministicSeed", 0, 2**63 - 1),
+        ("concurrency", 1, 100_000),
+        ("warmupIterations", 0, 10_000),
+        ("measurementIterations", 5, 10_000),
+        ("timeoutSeconds", 1, 1800),
+    ):
+        value = workload.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or not minimum <= value <= maximum:
+            failures.append("workload." + field)
+    workload_digest = audit_core.performance_canonical_sha256(workload)
+    comparison = exact_object(
+        results,
+        "comparisonPolicy",
+        {
+            "percentileMethod",
+            "outlierPolicy",
+            "environmentPolicy",
+            "commandPolicy",
+            "warmupsExcluded",
+        },
+        "results",
+    )
+    expected_comparison = {
+        "percentileMethod": "nearest-rank",
+        "outlierPolicy": "none",
+        "environmentPolicy": "same-signed-environment",
+        "commandPolicy": "same-command-fingerprint",
+        "warmupsExcluded": True,
+    }
+    if comparison != expected_comparison:
+        failures.append("comparisonPolicy")
+
+    if not isinstance(performance_receipts, list) or not all(
+        isinstance(item, str) for item in performance_receipts
+    ):
+        raise ToolError("performance_receipts must be an array of JStack performance receipts.")
+    if len(performance_receipts) > PERFORMANCE_MAX_RECEIPTS:
+        raise ToolError("performance_receipts exceeds the bounded Stage 5 limit.")
+    if any(len(receipt) > PERFORMANCE_MAX_RECEIPT_CHARS for receipt in performance_receipts):
+        raise ToolError("performance_receipts contains an oversized receipt.")
+    receipts_by_digest: dict[str, str] = {}
+    for receipt in performance_receipts:
+        digest = hashlib.sha256(receipt.encode("utf-8")).hexdigest()
+        if digest in receipts_by_digest:
+            failures.append("performanceReceipts.duplicate")
+        receipts_by_digest[digest] = receipt
+
+    capture_items = exact_list(results, "captures", "results", 2)
+    expected_capture_count = 1 if expected_type == "audit" else 2
+    if len(capture_items) != expected_capture_count:
+        failures.append("captures.count")
+    capture_by_revision: dict[str, dict[str, Any]] = {}
+    summaries_by_revision: dict[str, dict[str, dict[str, Any]]] = {}
+    matched_receipts: set[str] = set()
+    environment_digests: set[str] = set()
+    command_fingerprints: set[str] = set()
+    metric_contracts: list[list[tuple[Any, ...]]] = []
+    capture_fields = {
+        "id",
+        "revision",
+        "receiptDigest",
+        "environmentDigest",
+        "commandKey",
+        "commandFingerprint",
+        "captureDigest",
+        "capture",
+        "summary",
+    }
+    for index, item in enumerate(capture_items):
+        prefix = f"captures[{index}]"
+        if not isinstance(item, dict) or set(item) != capture_fields:
+            raise ToolError(f"Audit Stage 5 {prefix} has unsupported or missing fields.")
+        if not valid_id(item.get("id")):
+            failures.append(prefix + ".id")
+        revision_kind = item.get("revision")
+        if revision_kind not in {"baseline", "candidate"} or revision_kind in capture_by_revision:
+            failures.append(prefix + ".revision")
+            continue
+        capture_by_revision[revision_kind] = item
+        expected_revision = baseline if revision_kind == "baseline" else candidate
+        try:
+            capture = audit_core.normalize_performance_capture(item.get("capture"))
+        except audit_core.PerformanceProtocolError as exc:
+            raise ToolError(f"Audit Stage 5 {prefix}.capture is invalid: {exc}") from exc
+        capture_digest = audit_core.performance_canonical_sha256(capture)
+        summaries = audit_core.summarize_performance_capture(capture)
+        if item.get("captureDigest") != capture_digest:
+            failures.append(prefix + ".captureDigest")
+        if item.get("summary") != summaries:
+            failures.append(prefix + ".summary")
+        if capture.get("workloadId") != workload.get("id"):
+            failures.append(prefix + ".workloadId")
+        if capture.get("workloadDigest") != workload_digest:
+            failures.append(prefix + ".workloadDigest")
+        if capture.get("warmupIterations") != workload.get("warmupIterations"):
+            failures.append(prefix + ".warmupIterations")
+        if capture.get("measurementIterations") != workload.get("measurementIterations"):
+            failures.append(prefix + ".measurementIterations")
+        summary_map = {entry["id"]: entry for entry in summaries}
+        summaries_by_revision[revision_kind] = summary_map
+        metric_contracts.append(
+            [
+                (
+                    entry["id"],
+                    entry["surface"],
+                    entry["unit"],
+                    entry["direction"],
+                    entry["role"],
+                )
+                for entry in summaries
+            ]
+        )
+        environment_digest = item.get("environmentDigest")
+        command_key = item.get("commandKey")
+        command_fingerprint = item.get("commandFingerprint")
+        receipt_digest = item.get("receiptDigest")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(environment_digest or "")):
+            failures.append(prefix + ".environmentDigest")
+        else:
+            environment_digests.add(str(environment_digest))
+        if not valid_id(command_key):
+            failures.append(prefix + ".commandKey")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(command_fingerprint or "")):
+            failures.append(prefix + ".commandFingerprint")
+        else:
+            command_fingerprints.add(str(command_fingerprint))
+        if not re.fullmatch(r"[0-9a-f]{64}", str(receipt_digest or "")):
+            failures.append(prefix + ".receiptDigest")
+        receipt = receipts_by_digest.get(str(receipt_digest))
+        if receipt is None or expected_revision is None:
+            failures.append(prefix + ".receipt.missing")
+        else:
+            verification = _verify_performance_receipt_for_revision(
+                receipt,
+                root,
+                {
+                    "gitHead": expected_revision["gitHead"],
+                    "gitTree": expected_revision["gitTree"],
+                    "policyDigest": current_policy_digest,
+                    "commandKey": command_key,
+                    "commandFingerprint": command_fingerprint,
+                    "workloadId": workload.get("id"),
+                    "workloadDigest": workload_digest,
+                    "environmentDigest": environment_digest,
+                    "captureDigest": capture_digest,
+                    "metricCount": len(capture["metrics"]),
+                    "measurementIterations": capture["measurementIterations"],
+                },
+            )
+            if not verification["valid"]:
+                failures.append(prefix + ".receipt.invalid")
+            else:
+                matched_receipts.add(str(receipt_digest))
+    expected_revisions = {"baseline"} if expected_type == "audit" else {"baseline", "candidate"}
+    if set(capture_by_revision) != expected_revisions:
+        failures.append("captures.revisions")
+    if len(environment_digests) > 1:
+        failures.append("captures.environment-mismatch")
+    if len(command_fingerprints) > 1:
+        failures.append("captures.command-mismatch")
+    if len(metric_contracts) == 2 and metric_contracts[0] != metric_contracts[1]:
+        failures.append("captures.metric-contract-mismatch")
+    if set(receipts_by_digest) != matched_receipts:
+        failures.append("performanceReceipts.unused-or-unverified")
+
+    evidence_items = exact_list(report, "evidence", "report")
+    if not evidence_items:
+        failures.append("evidence.empty")
+    evidence_ids: set[str] = set()
+    referenced_evidence: set[str] = set()
+    total_evidence_bytes = 0
+    for index, item in enumerate(evidence_items):
+        prefix = f"evidence[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "lineStart",
+            "lineEnd",
+            "sha256",
+        }:
+            raise ToolError("Audit Stage 5 evidence entry is malformed.")
+        evidence_id = item.get("id")
+        if not valid_id(evidence_id) or evidence_id in evidence_ids:
+            failures.append(prefix + ".id")
+        else:
+            evidence_ids.add(str(evidence_id))
+        revision_kind = item.get("revision")
+        revision = (
+            baseline["gitHead"]
+            if revision_kind == "baseline" and baseline
+            else candidate["gitHead"]
+            if revision_kind == "candidate" and candidate
+            else ""
+        )
+        if not revision:
+            failures.append(prefix + ".revision")
+        path = item.get("path")
+        start = item.get("lineStart")
+        end = item.get("lineEnd")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+            continue
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 1
+            or end < start
+        ):
+            failures.append(prefix + ".lines")
+        content = (
+            _audit_stage4_revision_file(
+                root,
+                revision,
+                str(path),
+                max_bytes=AUDIT_STAGE4_MAX_EVIDENCE_FILE_BYTES,
+            )
+            if revision
+            else None
+        )
+        if content is None:
+            failures.append(prefix + ".path.untracked-or-nonregular")
+            continue
+        total_evidence_bytes += len(content)
+        if total_evidence_bytes > AUDIT_STAGE4_MAX_EVIDENCE_TOTAL_BYTES:
+            raise ToolError("Audit Stage 5 evidence exceeds the bounded total read limit.")
+        if item.get("sha256") != hashlib.sha256(content).hexdigest():
+            failures.append(prefix + ".sha256")
+        if isinstance(end, int) and not isinstance(end, bool) and end > len(content.splitlines()):
+            failures.append(prefix + ".lines")
+
+    def evidence_refs(value: Any, prefix: str, allow_empty: bool = False) -> list[str]:
+        if (
+            not isinstance(value, list)
+            or (not allow_empty and not value)
+            or len(value) > 32
+            or not all(valid_id(item) for item in value)
+            or len(set(value)) != len(value)
+        ):
+            failures.append(prefix)
+            return []
+        refs = [str(item) for item in value]
+        if any(item not in evidence_ids for item in refs):
+            failures.append(prefix + ".unknown")
+        referenced_evidence.update(item for item in refs if item in evidence_ids)
+        return refs
+
+    baseline_summaries = summaries_by_revision.get("baseline", {})
+    candidate_summaries = summaries_by_revision.get("candidate", {})
+    all_summaries = baseline_summaries
+    metric_ids = set(all_summaries)
+    coverage_items = exact_list(
+        report, "coverage", "report", len(AUDIT_STAGE5_REQUIRED_SURFACES)
+    )
+    coverage_status: dict[str, str] = {}
+    covered_metrics: set[str] = set()
+    for index, item in enumerate(coverage_items):
+        prefix = f"coverage[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "status",
+            "reason",
+            "metricIds",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 5 coverage entry is malformed.")
+        surface = item.get("id")
+        status = item.get("status")
+        if surface not in AUDIT_STAGE5_REQUIRED_SURFACES or surface in coverage_status:
+            failures.append(prefix + ".id")
+        else:
+            coverage_status[str(surface)] = str(status)
+        if status not in AUDIT_STAGE5_SURFACE_STATUSES:
+            failures.append(prefix + ".status")
+        if not valid_text(item.get("reason"), 500):
+            failures.append(prefix + ".reason")
+        refs = item.get("metricIds")
+        if (
+            not isinstance(refs, list)
+            or len(refs) > 32
+            or not all(valid_id(ref) for ref in refs)
+            or len(set(refs)) != len(refs)
+        ):
+            failures.append(prefix + ".metricIds")
+            refs = []
+        expected_metrics = {
+            metric_id
+            for metric_id, summary in all_summaries.items()
+            if summary.get("surface") == surface
+        }
+        if status == "measured" and set(refs) != expected_metrics:
+            failures.append(prefix + ".metricIds")
+        if status != "measured" and refs:
+            failures.append(prefix + ".metricIds.unexpected")
+        covered_metrics.update(item for item in refs if item in metric_ids)
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+    if set(coverage_status) != set(AUDIT_STAGE5_REQUIRED_SURFACES):
+        failures.append("coverage.surfaces")
+    if any(status == "unsupported" for status in coverage_status.values()):
+        failures.append("coverage.unsupported")
+    if covered_metrics != metric_ids:
+        failures.append("coverage.metrics")
+
+    bottleneck_items = exact_list(report, "bottlenecks", "report")
+    if len(bottleneck_items) != 1:
+        failures.append("bottlenecks.count")
+    bottleneck_ids: set[str] = set()
+    bottleneck_metrics: dict[str, str] = {}
+    for index, item in enumerate(bottleneck_items):
+        prefix = f"bottlenecks[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "surface",
+            "description",
+            "metricId",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 5 bottleneck entry is malformed.")
+        identifier = item.get("id")
+        if not valid_id(identifier) or identifier in bottleneck_ids:
+            failures.append(prefix + ".id")
+        else:
+            bottleneck_ids.add(str(identifier))
+        metric_id = str(item.get("metricId") or "")
+        summary = baseline_summaries.get(metric_id)
+        if summary is None or summary.get("role") != "primary":
+            failures.append(prefix + ".metricId")
+        elif item.get("surface") != summary.get("surface"):
+            failures.append(prefix + ".surface")
+        if identifier:
+            bottleneck_metrics[str(identifier)] = metric_id
+        if not valid_text(item.get("description")):
+            failures.append(prefix + ".description")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+
+    finding_items = exact_list(report, "findings", "report")
+    if len(finding_items) != 1:
+        failures.append("findings.count")
+    finding_ids: set[str] = set()
+    finding_remediations: dict[str, str] = {}
+    for index, item in enumerate(finding_items):
+        prefix = f"findings[{index}]"
+        expected_fields = {
+            "id",
+            "surface",
+            "severity",
+            "status",
+            "confidence",
+            "verification",
+            "summary",
+            "metricId",
+            "bottleneckId",
+            "statistic",
+            "comparator",
+            "budget",
+            "baselineValue",
+            "candidateValue",
+            "relativeImprovementPercent",
+            "evidence",
+            "remediationId",
+        }
+        if not isinstance(item, dict) or set(item) != expected_fields:
+            raise ToolError("Audit Stage 5 finding entry is malformed.")
+        finding_id = item.get("id")
+        if not valid_id(finding_id) or finding_id in finding_ids:
+            failures.append(prefix + ".id")
+        else:
+            finding_ids.add(str(finding_id))
+        metric_id = str(item.get("metricId") or "")
+        baseline_summary = baseline_summaries.get(metric_id)
+        candidate_summary = candidate_summaries.get(metric_id)
+        if baseline_summary is None or baseline_summary.get("role") != "primary":
+            failures.append(prefix + ".metricId")
+            continue
+        if item.get("surface") != baseline_summary.get("surface"):
+            failures.append(prefix + ".surface")
+        if item.get("severity") not in AUDIT_STAGE5_SEVERITIES:
+            failures.append(prefix + ".severity")
+        if item.get("confidence") != "high" or item.get("verification") != "measured":
+            failures.append(prefix + ".verification")
+        if not valid_text(item.get("summary")):
+            failures.append(prefix + ".summary")
+        bottleneck_id = str(item.get("bottleneckId") or "")
+        if bottleneck_metrics.get(bottleneck_id) != metric_id:
+            failures.append(prefix + ".bottleneckId")
+        statistic = str(item.get("statistic") or "")
+        comparator = item.get("comparator")
+        if statistic not in AUDIT_STAGE5_STATISTICS:
+            failures.append(prefix + ".statistic")
+            continue
+        expected_comparator = "<=" if baseline_summary["direction"] == "lower-is-better" else ">="
+        if comparator != expected_comparator:
+            failures.append(prefix + ".comparator")
+        budget = item.get("budget")
+        if isinstance(budget, bool) or not isinstance(budget, (int, float)) or not float(budget) >= 0:
+            failures.append(prefix + ".budget")
+            continue
+        baseline_value = audit_core.performance_statistic_value(baseline_summary, statistic)
+        if item.get("baselineValue") != baseline_value:
+            failures.append(prefix + ".baselineValue")
+        violates = baseline_value > float(budget) if comparator == "<=" else baseline_value < float(budget)
+        if not violates:
+            failures.append(prefix + ".baseline-budget-not-violated")
+        remediation_id = str(item.get("remediationId") or "")
+        if finding_id:
+            finding_remediations[str(finding_id)] = remediation_id
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+        if expected_type == "audit":
+            if (
+                item.get("status") != "open"
+                or item.get("candidateValue") is not None
+                or item.get("relativeImprovementPercent") is not None
+            ):
+                failures.append(prefix + ".audit-semantics")
+        else:
+            if item.get("status") != "resolved" or candidate_summary is None:
+                failures.append(prefix + ".implementation-semantics")
+            else:
+                candidate_value = audit_core.performance_statistic_value(candidate_summary, statistic)
+                if item.get("candidateValue") != candidate_value:
+                    failures.append(prefix + ".candidateValue")
+                meets = candidate_value <= float(budget) if comparator == "<=" else candidate_value >= float(budget)
+                if not meets:
+                    failures.append(prefix + ".candidate-budget")
+                try:
+                    improvement = audit_core.performance_relative_improvement(
+                        baseline_summary["direction"], baseline_value, candidate_value
+                    )
+                except audit_core.PerformanceProtocolError:
+                    failures.append(prefix + ".relativeImprovementPercent")
+                else:
+                    if item.get("relativeImprovementPercent") != improvement or improvement <= 0:
+                        failures.append(prefix + ".relativeImprovementPercent")
+
+    remediation_items = exact_list(report, "remediations", "report")
+    if len(remediation_items) != 1:
+        failures.append("remediations.count")
+    remediation_ids: set[str] = set()
+    for index, item in enumerate(remediation_items):
+        prefix = f"remediations[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "findingId",
+            "status",
+            "description",
+            "changedPaths",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 5 remediation entry is malformed.")
+        remediation_id = item.get("id")
+        finding_id = str(item.get("findingId") or "")
+        if not valid_id(remediation_id) or remediation_id in remediation_ids:
+            failures.append(prefix + ".id")
+        else:
+            remediation_ids.add(str(remediation_id))
+        if finding_id not in finding_ids or finding_remediations.get(finding_id) != remediation_id:
+            failures.append(prefix + ".findingId")
+        if not valid_text(item.get("description")):
+            failures.append(prefix + ".description")
+        paths = item.get("changedPaths")
+        if (
+            not isinstance(paths, list)
+            or len(paths) > AUDIT_STAGE5_MAX_ITEMS
+            or not all(isinstance(path, str) for path in paths)
+            or len(set(paths)) != len(paths)
+        ):
+            failures.append(prefix + ".changedPaths")
+            paths = []
+        if any(not _audit_stage1_safe_relative_path(path) for path in paths):
+            failures.append(prefix + ".changedPaths")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+        if expected_type == "audit":
+            if item.get("status") != "proposed" or paths:
+                failures.append(prefix + ".audit-semantics")
+        else:
+            if item.get("status") != "implemented-verified":
+                failures.append(prefix + ".implementation-status")
+            if sorted(paths) != sorted(changed_paths or []):
+                failures.append(prefix + ".changedPaths.diff")
+    if finding_ids != set(finding_remediations) or remediation_ids != set(finding_remediations.values()):
+        failures.append("remediations.reciprocity")
+
+    guard_items = exact_list(report, "regressionGuards", "report")
+    guardrail_metric_ids = {
+        metric_id
+        for metric_id, summary in baseline_summaries.items()
+        if summary.get("role") == "guardrail"
+    }
+    guarded_metrics: set[str] = set()
+    for index, item in enumerate(guard_items):
+        prefix = f"regressionGuards[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "metricId",
+            "statistic",
+            "maxRegressionPercent",
+            "baselineValue",
+            "candidateValue",
+            "status",
+        }:
+            raise ToolError("Audit Stage 5 regression guard entry is malformed.")
+        if not valid_id(item.get("id")):
+            failures.append(prefix + ".id")
+        metric_id = str(item.get("metricId") or "")
+        baseline_summary = baseline_summaries.get(metric_id)
+        if metric_id not in guardrail_metric_ids or metric_id in guarded_metrics:
+            failures.append(prefix + ".metricId")
+            continue
+        guarded_metrics.add(metric_id)
+        statistic = str(item.get("statistic") or "")
+        if statistic not in AUDIT_STAGE5_STATISTICS:
+            failures.append(prefix + ".statistic")
+            continue
+        tolerance = item.get("maxRegressionPercent")
+        if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not 0 <= float(tolerance) <= 25:
+            failures.append(prefix + ".maxRegressionPercent")
+            continue
+        baseline_value = audit_core.performance_statistic_value(baseline_summary, statistic)
+        if item.get("baselineValue") != baseline_value:
+            failures.append(prefix + ".baselineValue")
+        if expected_type == "audit":
+            if item.get("candidateValue") is not None or item.get("status") != "planned":
+                failures.append(prefix + ".audit-semantics")
+        else:
+            candidate_summary = candidate_summaries.get(metric_id)
+            if candidate_summary is None:
+                failures.append(prefix + ".candidateMetric")
+                continue
+            candidate_value = audit_core.performance_statistic_value(candidate_summary, statistic)
+            if item.get("candidateValue") != candidate_value or item.get("status") != "passed":
+                failures.append(prefix + ".candidateValue")
+            regression = audit_core.performance_regression_percent(
+                baseline_summary["direction"], baseline_value, candidate_value
+            )
+            if regression > float(tolerance):
+                failures.append(prefix + ".regressed")
+    if guarded_metrics != guardrail_metric_ids or not guardrail_metric_ids:
+        failures.append("regressionGuards.coverage")
+
+    qa_items = exact_list(report, "qaBindings", "report")
+    matched_qa_ids: set[str] = set()
+    qa_ids: set[str] = set()
+    for index, item in enumerate(qa_items):
+        prefix = f"qaBindings[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "commandKey",
+            "commandFingerprint",
+            "executionProfile",
+            "returncode",
+        }:
+            raise ToolError("Audit Stage 5 QA binding is malformed.")
+        binding_id = item.get("id")
+        if not valid_id(binding_id) or binding_id in qa_ids:
+            failures.append(prefix + ".id")
+        else:
+            qa_ids.add(str(binding_id))
+        matched = False
+        for verification in qa_verifications:
+            payload = verification.get("payload") or {}
+            if (
+                verification.get("valid")
+                and item.get("commandKey") == payload.get("commandKey")
+                and item.get("commandFingerprint") == payload.get("commandFingerprint")
+                and item.get("executionProfile") == payload.get("executionProfile")
+                and item.get("returncode") == payload.get("returncode")
+            ):
+                matched = True
+                matched_qa_ids.add(str(binding_id))
+                break
+        if not matched:
+            failures.append(prefix + ".unverified")
+    if not qa_items:
+        failures.append("qaBindings.required")
+
+    gap_items = exact_list(report, "gaps", "report")
+    for index, item in enumerate(gap_items):
+        prefix = f"gaps[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "surface",
+            "description",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 5 gap entry is malformed.")
+        if not valid_id(item.get("id")):
+            failures.append(prefix + ".id")
+        if item.get("surface") not in AUDIT_STAGE5_REQUIRED_SURFACES:
+            failures.append(prefix + ".surface")
+        if not valid_text(item.get("description")):
+            failures.append(prefix + ".description")
+        evidence_refs(item.get("evidence"), prefix + ".evidence", allow_empty=True)
+    if gap_items:
+        failures.append("gaps.present")
+    if evidence_ids - referenced_evidence:
+        failures.append("evidence.unused")
+    if report.get("complete") is not True:
+        failures.append("complete")
+
+    result = {
+        "schemaVersion": AUDIT_STAGE5_FINDINGS_SCHEMA,
+        "sourceSubject": {
+            "baselineGitHead": baseline["gitHead"] if baseline else None,
+            "baselineGitTree": baseline["gitTree"] if baseline else None,
+            "candidateGitHead": source["gitHead"],
+            "candidateGitTree": source["gitTree"],
+        },
+        "drillId": drill_id,
+        "exerciseType": expected_type,
+        "workloadDigest": workload_digest,
+        "captureCount": len(capture_items),
+        "matchedPerformanceReceiptCount": len(matched_receipts),
+        "metricCount": len(metric_ids),
+        "primaryMetricCount": sum(
+            summary.get("role") == "primary" for summary in baseline_summaries.values()
+        ),
+        "guardrailMetricCount": len(guardrail_metric_ids),
+        "measuredSurfaceCount": sum(
+            status == "measured" for status in coverage_status.values()
+        ),
+        "notApplicableSurfaceCount": sum(
+            status == "not-applicable" for status in coverage_status.values()
+        ),
+        "unsupportedSurfaceCount": sum(
+            status == "unsupported" for status in coverage_status.values()
+        ),
+        "findingCount": len(finding_ids),
+        "bottleneckCount": len(bottleneck_ids),
+        "remediationCount": len(remediation_ids),
+        "regressionGuardCount": len(guard_items),
+        "qaBindingCount": len(qa_ids),
+        "matchedQaBindingCount": len(matched_qa_ids),
+        "changedPathCount": len(changed_paths or []),
+        "gapCount": len(gap_items),
+        "passed": not failures,
+        "failureCodes": sorted(set(failures)),
+    }
+    return {**result, "evaluationDigest": audit_json_digest(result)}
+
+
 def score_level(score: float) -> int:
     if score < 50:
         return 0
@@ -7564,6 +8517,10 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     stage3_threat_model_evaluation = None
     stage4_maintainability_report = None
     stage4_architecture_evaluation = None
+    stage5_performance_results = None
+    stage5_performance_findings = None
+    stage5_performance_evaluation = None
+    performance_evidence: list[dict[str, Any]] = []
     benchmark_evaluation = None
     loop_capstone_evaluation = None
     if track == "audit" and stage_number == 0:
@@ -7603,6 +8560,15 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         stage4_maintainability_report = load_mastery_json_artifact(
             project_path,
             artifacts["maintainability-report.json"],
+        )
+    elif track == "audit" and stage_number == 5:
+        stage5_performance_results = load_mastery_json_artifact(
+            project_path,
+            artifacts["baseline-results.json"],
+        )
+        stage5_performance_findings = load_mastery_json_artifact(
+            project_path,
+            artifacts["performance-findings.json"],
         )
     elif track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
@@ -7760,16 +8726,37 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 "Audit Stage 4 project state contains non-training changes: "
                 + ", ".join(disallowed_changes)
             )
+    if track == "audit" and stage_number == 5:
+        for artifact_name, expected_path in AUDIT_STAGE5_ARTIFACT_PATHS.items():
+            if artifacts.get(artifact_name, {}).get("path") != expected_path:
+                hard_blocks.append(
+                    f"Audit Stage 5 {artifact_name} must use {expected_path}."
+                )
+        permitted_changes = set(AUDIT_STAGE5_ARTIFACT_PATHS.values())
+        disallowed_changes = [
+            path for path in git_changed_files(project_path) if path not in permitted_changes
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Audit Stage 5 project state contains non-training changes: "
+                + ", ".join(disallowed_changes)
+            )
     if (
         stage_number >= 2
-        and not (track == "audit" and stage_number in {2, 3, 4})
+        and not (track == "audit" and stage_number in {2, 3, 4, 5})
         and not state["clean"]
     ):
         hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
     qa_receipts = args.get("qa_receipts") or []
     if not isinstance(qa_receipts, list) or not all(isinstance(item, str) for item in qa_receipts):
         raise ToolError("qa_receipts must be an array.")
-    qa_verifications = [verify_receipt(receipt, "qa", state) for receipt in qa_receipts]
+    qa_verifications = []
+    for receipt in qa_receipts:
+        verification = verify_receipt(receipt, "qa", state)
+        verification["receiptDigest"] = hashlib.sha256(
+            receipt.encode("utf-8")
+        ).hexdigest()
+        qa_verifications.append(verification)
     valid_qa = [item for item in qa_verifications if item["valid"]]
     if track == "audit" and stage_number == 2:
         assert stage2_correctness_report is not None
@@ -7808,6 +8795,41 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         for code in stage4_architecture_evaluation["failureCodes"]:
             hard_blocks.append(
                 f"Audit Stage 4 architecture gate failed: {code}."
+            )
+    if track == "audit" and stage_number == 5:
+        performance_receipts = args.get("performance_receipts") or []
+        if not isinstance(performance_receipts, list) or not all(
+            isinstance(item, str) for item in performance_receipts
+        ):
+            raise ToolError("performance_receipts must be an array.")
+        if len(performance_receipts) > PERFORMANCE_MAX_RECEIPTS:
+            raise ToolError("performance_receipts exceeds the bounded Stage 5 limit.")
+        if any(
+            len(receipt) > PERFORMANCE_MAX_RECEIPT_CHARS
+            for receipt in performance_receipts
+        ):
+            raise ToolError("performance_receipts contains an oversized receipt.")
+        performance_evidence = [
+            {
+                "kind": "performance",
+                "receiptDigest": hashlib.sha256(receipt.encode("utf-8")).hexdigest(),
+            }
+            for receipt in performance_receipts
+        ]
+        assert stage5_performance_results is not None
+        assert stage5_performance_findings is not None
+        stage5_performance_evaluation = evaluate_audit_stage5_performance(
+            stage5_performance_results,
+            stage5_performance_findings,
+            project_path,
+            artifacts,
+            qa_verifications,
+            performance_receipts,
+            drill_id,
+        )
+        for code in stage5_performance_evaluation["failureCodes"]:
+            hard_blocks.append(
+                f"Audit Stage 5 performance gate failed: {code}."
             )
     qa_required = stage_number >= 2 and not (
         track == "audit"
@@ -7969,6 +8991,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "artifacts": artifacts,
         "projectState": state,
         "qaEvidence": qa_verifications,
+        "performanceEvidence": performance_evidence,
         "securityEvidence": security_verification,
         "auditEvidence": audit_verification,
         "stage0SecurityEvaluation": stage0_security_evaluation,
@@ -7976,6 +8999,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "stage2CorrectnessEvaluation": stage2_correctness_evaluation,
         "stage3ThreatModelEvaluation": stage3_threat_model_evaluation,
         "stage4ArchitectureEvaluation": stage4_architecture_evaluation,
+        "stage5PerformanceEvaluation": stage5_performance_evaluation,
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,
@@ -11402,6 +12426,254 @@ def tool_qa(args: dict[str, Any]) -> dict[str, Any]:
             "Discovery is read-only. Execution runs repository-controlled code with stdin closed, a scrubbed environment, an isolated HOME, and process-group timeout handling. "
             "It still has the current user's filesystem and network privileges, so explicit trust approval and an exact revision/fingerprint are mandatory."
         ),
+    }
+
+
+def _performance_environment() -> dict[str, Any]:
+    environment = {
+        "system": platform.system() or "unknown",
+        "release": platform.release() or "unknown",
+        "machine": platform.machine() or "unknown",
+        "pythonImplementation": platform.python_implementation(),
+        "pythonVersion": platform.python_version(),
+        "logicalCpuCount": os.cpu_count(),
+        "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+        "toolVersion": SERVER_VERSION,
+    }
+    return {
+        "metadata": environment,
+        "digest": audit_core.performance_canonical_sha256(environment),
+    }
+
+
+def _load_performance_capture(path: Path) -> dict[str, Any]:
+    try:
+        listed = path.lstat()
+    except FileNotFoundError as exc:
+        raise ToolError(
+            "The performance command passed but did not write JSTACK_PERFORMANCE_OUTPUT."
+        ) from exc
+    if stat.S_ISLNK(listed.st_mode) or not stat.S_ISREG(listed.st_mode):
+        raise ToolError("Performance output must be one regular non-symlink JSON file.")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError as exc:
+        raise ToolError(
+            "The performance command passed but did not write JSTACK_PERFORMANCE_OUTPUT."
+        ) from exc
+    except OSError as exc:
+        raise ToolError("Performance output could not be opened safely.") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or listed.st_dev != before.st_dev
+            or listed.st_ino != before.st_ino
+        ):
+            raise ToolError("Performance output must be one regular non-symlink JSON file.")
+        if before.st_size <= 0 or before.st_size > PERFORMANCE_CAPTURE_MAX_BYTES:
+            raise ToolError(
+                f"Performance output must contain 1 to {PERFORMANCE_CAPTURE_MAX_BYTES} bytes."
+            )
+        chunks: list[bytes] = []
+        remaining = PERFORMANCE_CAPTURE_MAX_BYTES + 1
+        while remaining > 0:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        after = os.fstat(descriptor)
+        raw_bytes = b"".join(chunks)
+    except OSError as exc:
+        raise ToolError("Performance output could not be read safely.") from exc
+    finally:
+        os.close(descriptor)
+    if (
+        len(raw_bytes) != before.st_size
+        or before.st_dev != after.st_dev
+        or before.st_ino != after.st_ino
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+    ):
+        raise ToolError("Performance output changed while it was being read.")
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ToolError("Performance output contains a duplicate JSON key.")
+            result[key] = value
+        return result
+
+    try:
+        raw = json.loads(raw_bytes.decode("utf-8"), object_pairs_hook=reject_duplicates)
+        normalized = audit_core.normalize_performance_capture(raw)
+    except (UnicodeError, json.JSONDecodeError, audit_core.PerformanceProtocolError) as exc:
+        raise ToolError(f"Performance output is invalid: {exc}") from exc
+    audit_reject_secret_values(normalized, "Performance output")
+    return normalized
+
+
+def tool_performance_capture(args: dict[str, Any]) -> dict[str, Any]:
+    """Discover or run one closed-protocol performance capture."""
+
+    project_path = require_project_path(args.get("project_path"))
+    commands = discover_test_commands(project_path)
+    base_ref = str(args.get("base_ref") or "").strip() or None
+    subject_before = evidence_subject(project_path, base_ref)
+    source_before = _audit_source_subject(project_path, "Stage 5 performance capture")
+    run = bool(args.get("run") or False)
+    if not run:
+        return {
+            "projectPath": str(project_path),
+            "evidenceSubject": subject_before,
+            "sourceSubject": {
+                "gitHead": source_before["gitHead"],
+                "gitTree": source_before["gitTree"],
+            },
+            "allowedCommands": commands,
+            "executed": False,
+            "captureProtocol": {
+                "schemaVersion": audit_core.PERFORMANCE_CAPTURE_SCHEMA_VERSION,
+                "outputEnvironmentVariable": "JSTACK_PERFORMANCE_OUTPUT",
+                "surfaces": list(audit_core.PERFORMANCE_SURFACES),
+                "minimumSamples": 5,
+                "requiresExactlyOnePrimaryMetric": True,
+                "requiresGuardrailMetric": True,
+            },
+            "policy": (
+                "Discovery is read-only. Capture execution is a separately authorized developer/QA action, "
+                "not an Audit action, and accepts only a discovered command at an exact trusted Git state."
+            ),
+        }
+
+    if args.get("execution_approved") is not True:
+        raise ToolError(
+            "Performance capture executes repository-controlled code. Set execution_approved=true only within a separately authorized trusted development or QA workflow."
+        )
+    trusted_revision = str(args.get("trusted_revision") or "").strip()
+    trusted_fingerprint = str(args.get("trusted_project_fingerprint") or "").strip()
+    trusted_policy_digest = str(args.get("trusted_policy_digest") or "").strip()
+    if (
+        trusted_revision != subject_before["gitHead"]
+        or trusted_fingerprint != subject_before["projectFingerprint"]
+        or trusted_policy_digest != subject_before["policyDigest"]
+    ):
+        raise ToolError(
+            "Trusted revision/fingerprint does not match the current project state. Rediscover and review the project before capture."
+        )
+    disallowed_changes = [
+        path for path in git_changed_files(project_path) if not path.startswith(".jstack-training/")
+    ]
+    if disallowed_changes:
+        raise ToolError(
+            "Performance capture requires committed project code; only Stage 5 training artifacts may be dirty: "
+            + ", ".join(disallowed_changes)
+        )
+    command_key = str(args.get("command_key") or "").strip()
+    selected = next((command for command in commands if command["key"] == command_key), None)
+    if selected is None:
+        raise ToolError(
+            f"Unsupported command_key: {command_key}. Allowed: {[command['key'] for command in commands]}"
+        )
+    workload_id = str(args.get("workload_id") or "").strip()
+    workload_digest = str(args.get("workload_digest") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", workload_id):
+        raise ToolError("workload_id must be a bounded identifier.")
+    if not re.fullmatch(r"[0-9a-f]{64}", workload_digest):
+        raise ToolError("workload_digest must be a lowercase SHA-256 digest.")
+    environment = _performance_environment()
+    with tempfile.TemporaryDirectory(prefix="jstack-performance-capture-") as temp_dir:
+        output_path = Path(temp_dir) / "capture.json"
+        result = run_approved_project_command(
+            selected["args"],
+            project_path,
+            timeout=int(args.get("timeout_sec") or 300),
+            env_allowlist=[],
+            fixed_env={
+                "JSTACK_PERFORMANCE_OUTPUT": str(output_path),
+                "JSTACK_PERFORMANCE_SCHEMA": audit_core.PERFORMANCE_CAPTURE_SCHEMA_VERSION,
+                "JSTACK_PERFORMANCE_WORKLOAD_ID": workload_id,
+                "JSTACK_PERFORMANCE_WORKLOAD_DIGEST": workload_digest,
+            },
+        )
+        capture = _load_performance_capture(output_path) if result["ok"] else None
+    subject_after = evidence_subject(project_path, base_ref)
+    source_after = _audit_source_subject(project_path, "Stage 5 performance capture")
+    mutation_detected = any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest")
+    )
+    source_changed = any(
+        source_after[field] != source_before[field] for field in ("gitHead", "gitTree")
+    )
+    mutation_detected = mutation_detected or source_changed
+    capture_valid = capture is not None
+    workload_matches = bool(
+        capture
+        and capture["workloadId"] == workload_id
+        and capture["workloadDigest"] == workload_digest
+    )
+    passed = bool(result["ok"]) and capture_valid and workload_matches and not mutation_detected
+    capture_digest = (
+        audit_core.performance_canonical_sha256(capture) if capture is not None else None
+    )
+    summary = audit_core.summarize_performance_capture(capture) if capture is not None else []
+    receipt = issue_receipt(
+        {
+            "kind": "performance",
+            "projectPath": subject_after["gitRoot"],
+            "gitHead": source_after["gitHead"],
+            "gitTree": source_after["gitTree"],
+            "projectFingerprint": subject_after["projectFingerprint"],
+            "baseRef": subject_after["baseRef"],
+            "baseCommit": subject_after["baseCommit"],
+            "policyDigest": subject_after["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+            "commandKey": selected["key"],
+            "commandFingerprint": selected["commandFingerprint"],
+            "workloadId": workload_id,
+            "workloadDigest": workload_digest,
+            "environmentDigest": environment["digest"],
+            "captureDigest": capture_digest,
+            "metricCount": len(capture["metrics"]) if capture else 0,
+            "measurementIterations": capture["measurementIterations"] if capture else 0,
+            "returncode": result["returncode"],
+            "passed": passed,
+            "mutationDetected": mutation_detected,
+        }
+    )
+    return {
+        "projectPath": str(project_path),
+        "sourceSubject": {
+            "gitHead": source_after["gitHead"],
+            "gitTree": source_after["gitTree"],
+        },
+        "executed": True,
+        "passed": passed,
+        "workloadMatched": workload_matches,
+        "mutationDetected": mutation_detected,
+        "command": {
+            "key": selected["key"],
+            "commandFingerprint": selected["commandFingerprint"],
+            "returncode": result["returncode"],
+            "stdoutSha256": result.get("stdoutSha256"),
+            "stderrSha256": result.get("stderrSha256"),
+            "capturedOutputBytes": result.get("capturedOutputBytes"),
+        },
+        "environment": environment,
+        "captureDigest": capture_digest,
+        "capture": capture,
+        "summary": summary,
+        "evidenceReceipt": receipt,
+        "receiptMeaning": (
+            "The receipt binds the exact Git tree, discovered command, workload, local environment, and normalized samples. "
+            "It does not prove workload realism, host isolation, measurement accuracy, production capacity, or optimization authority."
+        ),
+        "outputPolicy": "Only bounded structured measurements and output digests are returned; command stdout and stderr are not returned.",
     }
 
 
@@ -16656,6 +17928,13 @@ TOOLS: dict[str, dict[str, Any]] = {
                 },
                 "artifacts": {"type": "object", "description": "Map each stage requiredArtifact name to a project-relative file or directory."},
                 "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
+                "performance_receipts": {
+                    "type": "array",
+                    "maxItems": PERFORMANCE_MAX_RECEIPTS,
+                    "items": {"type": "string", "maxLength": PERFORMANCE_MAX_RECEIPT_CHARS},
+                    "default": [],
+                    "description": "Audit Stage 5 only: session-local receipts from jstack_performance_capture. Receipts are passed directly to the tool; no terminal token or paste ceremony is used."
+                },
                 "security_receipt": {"type": "string"},
                 "audit_receipt": {"type": "string"},
                 "hard_gate_failures": {"type": "array", "items": {"type": "string"}, "default": []},
@@ -17008,6 +18287,28 @@ TOOLS: dict[str, dict[str, Any]] = {
             },
         },
         "handler": tool_qa,
+        "readOnlyHint": False,
+    },
+    "gstack_performance_capture": {
+        "description": "Discover or run one bounded performance-capture command using the closed JStack sample protocol. Execution is a separately authorized developer/QA action bound to the exact trusted Git state; Audit itself never executes or optimizes repository code.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Optional comparison base bound into the capture receipt."},
+                "run": {"type": "boolean", "default": False},
+                "command_key": {"type": "string", "description": "A discovered command key; required when run=true."},
+                "timeout_sec": {"type": "integer", "minimum": 10, "maximum": 1800, "default": 300},
+                "execution_approved": {"type": "boolean", "default": False, "description": "Required when run=true; records trust for repository-controlled execution within the current authorized workflow. No token or terminal-paste ceremony is used."},
+                "trusted_revision": {"type": "string", "description": "Exact gitHead returned by discovery."},
+                "trusted_project_fingerprint": {"type": "string", "description": "Exact projectFingerprint returned by discovery."},
+                "trusted_policy_digest": {"type": "string", "description": "Exact policyDigest returned by discovery."},
+                "workload_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+                "workload_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+        },
+        "handler": tool_performance_capture,
         "readOnlyHint": False,
     },
     "gstack_context_save": {

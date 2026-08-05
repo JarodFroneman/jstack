@@ -58,6 +58,11 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   graph integrity, material non-style findings, change-amplification counts,
   exact candidate diffs, compatibility evidence, current QA bindings, and
   separate Audit/remediation authority
+- deterministic audit-mastery Stage 5 validation for signed exact-Git,
+  workload, discovered-command, local-environment, and sample binding;
+  recomputed statistics and budgets; complete performance-surface coverage;
+  exact candidate diffs; current QA; guardrail regressions; and separate
+  Audit/capture/optimization authority
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -349,6 +354,42 @@ semantic correctness, behavior preservation, architecture quality,
 compatibility, vulnerability absence, remediation safety, or production
 security.
 
+Audit mastery Stage 5 is a separate performance-evidence assessment. It uses
+closed `performance-results`, `performance-findings`, and performance-capture
+contracts plus one non-empty hash-bound benchmark plan. The immutable Git
+commits and trees are the source subjects. The workload has one canonical
+digest over its input identity, seed, concurrency, warmups, measured
+iterations, timeout, critical path, and realism rationale.
+
+`jstack_performance_capture` is outside the read-only Audit role. A separately
+authorized trusted development or QA workflow may select one existing
+discovered command after binding the exact revision, project fingerprint, and
+policy digest. JStack supplies a fixed external output file and workload
+variables, then accepts only bounded UTF-8 closed-protocol JSON. It normalizes
+finite non-negative samples, requires exactly one primary and at least one
+guardrail metric, rejects Git-visible tracked or non-ignored repository
+mutation, and signs the exact Git tree,
+command fingerprint, workload digest, local-environment digest, capture
+digest, metric count, and sample count. The structured capture is returned
+without command stdout or stderr; the receipt is passed directly through MCP
+and never through a user-generated token or terminal command.
+
+The Stage 5 evaluator never executes repository code. It verifies historical
+baseline and current candidate receipts within the same live MCP session,
+recomputes every sample summary with no outlier removal and nearest-rank
+percentiles, proves an explicit baseline budget violation, and—only for the
+implementation drill—recomputes positive improvement and every guardrail's
+regression. The implementation baseline must be a strict ancestor, captures
+must share workload, command, environment, and metric contracts, and reported
+paths must equal the Git diff. Both drills require current passing QA evidence.
+Only the three exact Stage 5 artifact paths may be dirty.
+
+Evaluation returns counts, subject and workload digests, failure codes, and an
+evaluation digest. It does not return source narratives, artifacts, command
+output, or samples. A pass proves bounded protocol integrity, not workload
+realism, measurement accuracy, universal performance, production capacity,
+optimization safety, release readiness, or production authority.
+
 ## Project Binding
 
 Runtime health is independent from project eligibility. `runtime_status`
@@ -406,7 +447,7 @@ Git inspection neutralizes common external diff, prompt, fsmonitor, and global
 configuration hooks. Scanner files are opened descriptor-first without
 following symlinks where the host supports `O_NOFOLLOW`.
 
-The Python QA runner is not an operating-system sandbox. It closes stdin,
+The shared Python QA/performance runner is not an operating-system sandbox. It closes stdin,
 scrubs inherited variables, isolates HOME, avoids a shell, caps output/time, and
 kills its process group. Untrusted project execution still requires a
 container, VM, or host sandbox.

@@ -20,6 +20,12 @@ evidence, launch assurance, release readiness, and mastery progression.
   execution with host privileges; offline flags are not a firewall.
 - `jstack_qa` can execute only discovered project commands after exact
   revision, fingerprint, policy, and explicit-trust checks.
+- `jstack_performance_capture` uses the same trust boundary, accepts only a
+  discovered command and closed sample protocol, writes its fixed output
+  outside the repository, rejects Git-visible tracked or non-ignored mutation,
+  and signs exact Git, workload,
+  command, local-environment, and capture digests. It is a developer/QA tool;
+  Audit never invokes it as execution authority.
 - Project commands remain repository-controlled code with the current user's
   filesystem and network privileges. The scrubbed environment and isolated
   HOME are hardening, not an OS sandbox.
@@ -56,6 +62,11 @@ evidence, launch assurance, release readiness, and mastery progression.
   authorized development workflow. The evaluator executes no repository code,
   returns only metadata, allows only three declared training artifacts, and
   grants no remediation or production authority.
+- Audit mastery Stage 5 validates signed, retained performance samples against
+  a closed workload and exact Git revisions. It recomputes summaries, budgets,
+  relative improvement, and guardrail regressions, requires current QA, returns
+  only evaluation metadata, permits only three declared training artifacts,
+  and grants no benchmark-execution, optimization, or production authority.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The
@@ -76,7 +87,7 @@ evidence, launch assurance, release readiness, and mastery progression.
 
 ## Evidence
 
-QA, security, audit, and launch receipts are HMAC-signed for one server session and bind:
+QA, performance, security, audit, and launch receipts are HMAC-signed for one server session and bind:
 
 - canonical repository root
 - explicit comparison base where supplied
@@ -120,10 +131,10 @@ execution.
 
 ## Tools
 
-The server exposes 50 canonical `jstack_*` tools for runtime status, project
+The server exposes 51 canonical `jstack_*` tools for runtime status, project
 detection, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
-validation, policy/preflight, health/review, QA, security, launch assurance,
+validation, policy/preflight, health/review, QA, performance capture, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.

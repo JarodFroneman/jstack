@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 6,
+  "version": 7,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -20,7 +20,7 @@
   },
   "advancementPolicy": {
     "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two deterministic static threat-model passes.",
-    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and the attempt set to include both named Stage 4 drills.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and both named Stage 4 drills. Stage 5 additionally requires every attempt to pass the signed performance-evidence contract and both named Stage 5 drills.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
       "fabricated or stale evidence",
@@ -117,16 +117,17 @@
     {
       "stage": 5,
       "name": "Performance and Resource-Efficiency Auditor",
-      "outcome": "Identify measurable CPU, memory, I/O, latency, query, or contention problems.",
+      "outcome": "Prove one material performance or resource-efficiency defect with exact-revision, workload-bound, signed samples and deterministic statistics, then verify one separately authorized committed correction without regressing a guardrail metric or granting Audit optimization authority.",
       "prerequisites": [4],
-      "corePrinciples": ["Measure before optimizing", "Retain realistic workloads", "Separate asymptotic and constant cost", "Benchmark the critical path", "Prevent regressions"],
+      "corePrinciples": ["Measure before optimizing", "Bind samples to the exact Git tree, discovered command, workload, and environment", "Retain deterministic realistic workloads", "Warmups are excluded and outliers are never silently removed", "Use a declared statistic and budget", "Separate asymptotic and constant cost", "Benchmark the critical path", "Protect at least one non-primary guardrail", "Correctness QA remains mandatory", "Audit evidence never grants optimization or production authority"],
       "drills": [
         {"id": "a5-performance", "name": "Measure and verify one performance defect", "type": "audit"},
         {"id": "a5-regression", "name": "Implement a measured performance correction and regression guard", "type": "implementation"}
       ],
       "requiredArtifacts": ["benchmark-plan.md", "baseline-results.json", "performance-findings.json"],
-      "benchmarks": ["Reproducible baseline", "Realistic workload", "Evidence-backed finding", "No guessed speedup", "Regression threshold"],
-      "hardGates": ["No percentage claim without measurement", "Retained benchmark inputs and results"]
+      "artifactSchemas": {"baseline-results.json": "jstack.audit.performance-results.v1", "performance-findings.json": "jstack.audit.performance-findings.v1", "captureProtocol": "jstack.performance.capture.v1"},
+      "benchmarks": ["Exact baseline and candidate Git commit/tree binding", "Closed workload definition with deterministic seed, input digest, concurrency, warmups, measured iterations, timeout, critical path, and realism rationale", "Every capture is signed by the current JStack session and binds the discovered command, exact revision, workload digest, environment digest, normalized sample digest, and execution profile", "Exactly one primary metric and at least one guardrail metric", "Nearest-rank percentile and mean summaries recomputed from retained samples with no hidden outlier removal", "All seven performance surfaces classified with measured metrics mapped reciprocally", "One source-cited measured bottleneck and one baseline budget violation", "No caller-authored speedup: candidate values and relative improvement are recomputed", "Implementation uses a strict ancestor-to-current committed diff and exact changed paths", "Every guardrail has a declared maximum regression and the candidate remains within it", "A current passing QA receipt is present for both drills", "Evaluation returns metadata and failure codes without echoing source narratives or command output"],
+      "hardGates": ["Only the three exact Stage 5 training artifacts may be dirty", "The evaluator never executes repository code and Audit never performs optimization", "Benchmark execution is a separate explicitly trusted discovered-command action with scrubbed environment and no forwarded secrets", "Untrusted execution requires an external container or VM because local capture is not an OS or network sandbox", "Missing, stale, wrong-session, tampered, or mismatched performance receipts block completion", "Workload, command, environment, metric contract, sample count, summary, budget, or percentage mismatches block completion", "Unsupported coverage, unresolved gaps, unused evidence, missing guardrails, or missing current QA block completion", "Audit drill uses one current-revision capture and proposals only", "Implementation drill uses comparable baseline and candidate captures, a strict ancestor-to-current committed diff, exact changed paths, a met budget, positive recomputed improvement, and non-regressing guardrails", "No speculative high-severity performance claim", "Artifacts remain at the exact .jstack-training Stage 5 paths", "Passing grants no optimization, Git, publication, release, deployment, or production authority"]
     },
     {
       "stage": 6,

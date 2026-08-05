@@ -16,7 +16,7 @@ response-time guarantee is offered.
 
 ## Trust Boundary
 
-JStack is a local workflow and evidence tool. Its QA runner executes reviewed
+JStack is a local workflow and evidence tool. Its QA/performance runner executes reviewed
 repository commands with a scrubbed environment and isolated home, but standard
 Python cannot remove the current user's filesystem or network privileges. Use a
 host/container sandbox for untrusted repositories.
@@ -173,6 +173,45 @@ failure codes, and a digest. Passing Stage 4 does not prove semantic
 correctness, behavior preservation, maintainability, compatibility,
 vulnerability absence, remediation safety, release readiness, or production
 security.
+
+### Audit mastery Stage 5
+
+Audit mastery Stage 5 permits only `benchmark-plan.md`,
+`baseline-results.json`, and `performance-findings.json` at their exact
+`.jstack-training/` paths. The Audit evaluator is static: it reads immutable
+Git blobs and verifies signed receipt metadata but never runs repository code,
+optimizes a target, accesses secrets, mutates Git, publishes, releases,
+deploys, or touches production.
+
+`jstack_performance_capture` is a separate developer/QA tool, not an Audit
+execution escape hatch. It accepts only a discovered command after the caller
+binds explicit trust to the exact current Git revision, project fingerprint,
+and policy digest. No custom signer, approval token, or terminal-paste flow is
+used. Execution closes stdin, scrubs inherited variables, forwards no secrets,
+uses an isolated HOME, avoids a shell, bounds time and output, writes the
+protocol target outside the repository, and rejects Git-visible tracked or
+non-ignored repository mutation. The
+output is opened without following symlinks where supported, identity-checked,
+size-bounded, parsed as duplicate-free UTF-8 JSON, and normalized to finite
+non-negative samples. Command stdout and stderr are reduced to digests and are
+not returned.
+
+This runner is not an OS or network sandbox and retains the current user's
+filesystem and network privileges. Use a container, VM, or hardened execution
+host for untrusted code. A signed capture proves only that the same live JStack
+session bound the stated Git tree, discovered command, workload, local
+environment metadata, and normalized sample digest. It cannot prove that the
+workload is realistic, the host was isolated or idle, a timer was accurate,
+the measurements generalize, or production has sufficient capacity.
+
+The evaluator recomputes summaries, nearest-rank percentiles, budget results,
+relative improvement, and guardrail regressions. Missing or altered receipts,
+historical/candidate revision mismatch, different workload/command/environment
+contracts, hidden outlier removal, non-finite samples, unsupported coverage,
+gaps, missing current QA, and non-training dirty paths fail closed. Passing
+Stage 5 grants no optimization, Git, release, deployment, or production
+authority and does not prove correctness, universal performance, capacity, or
+remediation safety.
 
 ## Launch-Assurance Safety
 

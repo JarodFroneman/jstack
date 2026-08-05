@@ -239,6 +239,61 @@ only contract and receipt integrity—not behavior preservation, architecture
 quality, compatibility, vulnerability absence, remediation safety, release
 readiness, or production authority.
 
+## Stage 5: Performance And Resource-Efficiency Auditor
+
+Stage 5 is a measurement-evidence gate, not authority for Audit to execute a
+benchmark or optimize code. Create only these exact paths:
+
+- `.jstack-training/benchmark-plan.md`
+- `.jstack-training/baseline-results.json`
+- `.jstack-training/performance-findings.json`
+
+The JSON files must conform to
+`mcp/jstack/schemas/audit-performance-results.v1.schema.json` and
+`mcp/jstack/schemas/audit-performance-findings.v1.schema.json`. Each retained
+capture must conform to `jstack.performance.capture.v1` and match a signed
+session-local receipt from `jstack_performance_capture`. That tool may be run
+only by a separately authorized trusted development or QA workflow using a
+discovered command and the exact reviewed revision, project fingerprint, and
+policy digest. It passes only fixed protocol variables, a scrubbed environment,
+and an isolated HOME. It forwards no secrets, but it is not an OS or network
+sandbox; use an external container or VM for untrusted repository code.
+
+The workload object is closed and hash-bound: record its deterministic seed,
+input digest, concurrency, warmup count, measured-iteration count, timeout,
+critical path, and realism rationale. Retain every measured sample. Warmups are
+excluded; the outlier policy is `none`; mean and nearest-rank median/p95 are
+recomputed by JStack. Every capture has exactly one primary metric and at least
+one guardrail metric. Classify latency, throughput, CPU, memory, I/O, query, and
+contention as measured or evidence-backed not applicable. `unsupported`, gaps,
+unused evidence, a mismatched environment or command, a changed metric
+contract, or a missing current passing QA receipt blocks completion.
+
+For `a5-performance`, baseline and candidate are the same current commit and
+tree. Submit exactly one signed capture. Prove one source-cited bottleneck and
+one explicit baseline budget violation; keep the finding open, remediation
+proposed, candidate values absent, and guardrails planned.
+
+For `a5-regression`, Audit verifies a candidate already changed and committed
+by a separate development workflow. The baseline must be a strict ancestor,
+reported changed paths must equal the Git diff, and the two signed captures
+must share workload digest, command fingerprint, environment digest, metric
+IDs, units, directions, and roles. JStack recomputes the declared statistic,
+candidate budget result, and relative improvement. Exactly one remediation is
+implemented and verified, and every non-primary metric has a declared maximum
+regression of at most 25 percent that the candidate satisfies. A current
+passing exact-candidate `jstack_qa` receipt remains mandatory for both drills;
+performance evidence never substitutes for correctness evidence.
+
+The evaluator reads immutable Git blobs and signed receipt metadata. It does
+not execute repository code or return source narratives, command output, or
+raw artifact content. Advancement requires three independent deterministic
+passes across at least two commits, every score at least 80, mean at least 85,
+and both named drills. A pass proves protocol integrity for the bounded local
+measurements—not workload realism, measurement accuracy, universal
+performance, production capacity, optimization safety, or production
+authority.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

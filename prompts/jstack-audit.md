@@ -37,7 +37,9 @@ Stage 2 may write only `correctness-report.json`, `invariants.md`, and
 `reproductions/manifest.json`; Audit Stage 3 may write only `threat-model.md`,
 `security-findings.json`, and `abuse-cases.md`; Audit Stage 4 may write only
 `architecture-map.md`, `maintainability-report.json`, and
-`migration-outline.md` beneath `.jstack-training/`.
+`migration-outline.md`; Audit Stage 5 may write only `benchmark-plan.md`,
+`baseline-results.json`, and `performance-findings.json` beneath
+`.jstack-training/`.
 None may perform
 network or secret access, exploit development, public disclosure, remediation,
 Git change, release, deployment, or production action. Stage 2 may reference a
@@ -46,7 +48,10 @@ authority and does not make JStack QA an OS or network sandbox. Stage 3 is
 static-only and prohibits repository execution, live exploitation, retained
 exploit payloads, and unsafe disclosure. Stage 4 implementation evidence may
 reference a separately authorized committed candidate and current QA receipt;
-Audit does not create or commit that candidate.
+Audit does not create or commit that candidate. Stage 5 may consume signed
+performance-capture and current QA receipts created by a separately authorized
+trusted development or QA workflow; Audit never runs the benchmark, optimizes
+code, or creates the candidate.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -89,7 +94,20 @@ Audit does not create or commit that candidate.
    mandatory. Three deterministic attempts across at least two commits, both
    drills, every score at least 80, and mean at least 85 are required. The
    evaluator executes no repository code and grants no remediation or
-   production authority.
+   production authority. At Stage 5, bind the exact Git commits and trees,
+   closed workload, retained samples, discovered command, local environment,
+   and capture digests to current-session `jstack_performance_capture`
+   receipts. Require one primary metric, at least one guardrail, all seven
+   surface classifications, an explicit statistic and budget, and current
+   passing JStack QA. The audit drill uses one current-revision capture and
+   proposals only. The regression drill verifies two comparable captures for
+   a separately authorized strict-ancestor-to-current committed change,
+   recomputes the candidate value and improvement, matches changed paths to the
+   Git diff, and rejects every guardrail regression above its declared
+   tolerance. Missing or mismatched receipts, self-reported summaries or
+   percentages, outlier removal, unsupported coverage, gaps, or non-training
+   dirty paths fail closed. Audit performs no capture execution or
+   optimization and grants no production authority.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
    audit goal, source-attributed facts, separate assumptions, and only material
