@@ -39,7 +39,7 @@ evidence remains attributable to the versioned rubric.
 | 2 - Correctness And Reliability | Prove exact-revision logic, state-transition, error-handling, and reliability defects with reciprocal invariant/reproduction evidence and regression plans. | `correctness-report.json`, `reproductions/manifest.json`, `invariants.md` |
 | 3 - Security And Threat Modeling | Model assets/adversaries and prove defensible attack paths. | `threat-model.md`, `security-findings.json`, `abuse-cases.md` |
 | 4 - Maintainability And Architecture | Find structural risks with material change or defect cost. | `architecture-map.md`, `maintainability-report.json`, `migration-outline.md` |
-| 5 - Performance And Resources | Establish measurable CPU, memory, I/O, latency, query, or contention findings. | `benchmark-plan.md`, `baseline-results.json`, `performance-findings.json` |
+| 5 - Performance And Resources | Prove one exact-revision, signed-sample performance defect and verify one separately authorized committed correction without regressing a guardrail. | `benchmark-plan.md`, `baseline-results.json`, `performance-findings.json` |
 | 6 - Supply Chain And Release | Audit dependencies, lockfiles, CI permissions, provenance, and generated artifacts. | `dependency-inventory.json`, `build-trace.md`, `supply-chain-report.json` |
 | 7 - Adversarial Verification | Falsify static findings through bounded deterministic testing. | `adversarial-plan.md`, `verification-results.json`, `false-positive-analysis.md` |
 | 8 - Enterprise Audit Lead | Triage, manage accepted risk, and produce engineering/executive reports. | `audit-report.md`, `audit-result.json`, `audit.sarif`, `risk-register.json` |
@@ -216,6 +216,61 @@ Advancement requires three independent deterministic passes across at least
 two commits. Every score must be at least 80, the mean must be at least 85, and
 the attempt set must include both named Stage 4 drills.
 
+## Stage 5 Deterministic Gate
+
+Stage 5 validates performance evidence without turning Audit into an execution
+or optimization agent. Its only permitted dirty paths are
+`benchmark-plan.md`, `baseline-results.json`, and
+`performance-findings.json` beneath `.jstack-training/`. The JSON uses the
+closed `jstack.audit.performance-results.v1` and
+`jstack.audit.performance-findings.v1` contracts; captured samples use
+`jstack.performance.capture.v1`.
+
+Benchmark execution happens before the Audit assessment in a separately
+authorized trusted development or QA workflow. `jstack_performance_capture`
+accepts only a discovered project command at an exact reviewed Git revision,
+fingerprint, and policy. It supplies a fixed output path and workload binding,
+closes stdin, scrubs the environment, forwards no secrets, uses an isolated
+HOME, bounds time and output, and rejects Git-visible tracked or non-ignored
+repository mutation. Ignored cache and build outputs remain outside that
+guarantee. It then signs
+the Git tree, command fingerprint, workload digest, local environment digest,
+normalized sample digest, metric count, and measured-iteration count. This
+uses direct MCP receipt passing—never a user-generated approval token or
+terminal-paste ceremony. The local runner retains the current user's
+filesystem and network privileges, so untrusted code still requires an
+external container or VM.
+
+The workload records a deterministic seed, input digest, concurrency, warmups,
+measured iterations, timeout, critical path, and realism rationale. Every
+capture contains exactly one primary metric and at least one guardrail metric.
+All samples are retained; warmups are excluded; outliers are not removed; and
+JStack recomputes mean and nearest-rank median/p95 values. Latency, throughput,
+CPU, memory, I/O, query, and contention must each be measured or explicitly
+not applicable. Unsupported coverage and gaps fail closed. A current passing
+exact-candidate `jstack_qa` receipt is required for both drills because
+performance evidence does not prove correctness.
+
+`a5-performance` uses one signed capture with baseline and candidate equal to
+the current commit. It requires one source-cited bottleneck, one declared
+statistic and budget that the baseline violates, a proposed remediation, and
+planned guardrails. `a5-regression` verifies a candidate already changed and
+committed by a separate workflow. Its baseline must be a strict ancestor; the
+two captures must use the same workload, command, environment, metric IDs,
+units, directions, and roles; reported paths must equal the Git diff; the
+candidate must meet the budget with a positive improvement recomputed from the
+retained samples; and every guardrail must remain within its declared maximum
+regression.
+
+The evaluator reads immutable Git blobs and signed receipts and returns only
+subject metadata, counts, failure codes, and a digest—not source narratives,
+command output, artifacts, or performance samples. A pass proves bounded
+protocol integrity, not workload realism, measurement accuracy, universal
+performance, production capacity, optimization safety, release readiness, or
+production authority. Advancement requires three independent deterministic
+passes across at least two commits, every score at least 80, mean at least 85,
+and both named Stage 5 drills.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -229,10 +284,11 @@ The five weighted dimensions remain:
 Assistance caps and independent-assessor rules match the engineering track.
 Stage 0 uses the distinct two-lab rule above; Stage 1 uses the deterministic
 repository-map rule above; Stage 2 uses the deterministic correctness-evidence
-rule above; Stage 3 uses the deterministic threat-model rule above; and Stage
-4 uses the deterministic architecture rule above. Stages 5 through 8 provide
-separate audit and bounded implementation drills and require repeated evidence
-across both work types and repository states. Stage 9 requires two independent,
+rule above; Stage 3 uses the deterministic threat-model rule above; Stage 4
+uses the deterministic architecture rule above; and Stage 5 uses the signed
+performance-evidence rule above. Stages 6 through 8 provide separate audit and
+bounded implementation drills and require repeated evidence across both work
+types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.
 
 Audit attempts at Stage 8 and above require a current, complete audit receipt.
@@ -268,5 +324,6 @@ false production-ready claims, or an audit pass issued with incomplete required
 coverage.
 
 Benchmark metrics describe only the retained seeded corpus. They are not proof
-that every real-world defect will be found. Performance claims require a pinned
-external harness and retained raw measurements.
+that every real-world defect will be found. Performance claims require a
+closed workload, retained raw measurements, signed capture binding, and an
+honest statement of environment and representativeness limits.

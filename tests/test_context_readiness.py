@@ -535,7 +535,7 @@ class AdaptiveContextGateTests(unittest.TestCase):
         definitions = {item["name"] for item in server.tool_definitions()}
         self.assertIn("jstack_context_readiness", definitions)
         self.assertIn("jstack_loop_goal_readiness", definitions)
-        self.assertEqual(50, len(definitions))
+        self.assertEqual(51, len(definitions))
 
 
 if __name__ == "__main__":

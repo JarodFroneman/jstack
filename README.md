@@ -143,7 +143,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.10.0-alpha.5
+## What Ships In v0.10.0-alpha.6
 
 | Capability | What it provides |
 | --- | --- |
@@ -152,6 +152,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Correctness And Reliability Stage 2 | Closed report and reproduction contracts for exact-Git-bound logic, state-transition, error-handling, and reliability evidence; strong claims require current source hashes, violated invariants, reciprocal static or exact-QA reproductions, complete regression plans, and two deterministic independent passes |
 | Security And Threat-Modelling Stage 3 | A closed static threat-model contract with complete STRIDE classification, exact-Git-bound citations, assets, bounded adversaries, trust boundaries, controls, reciprocal abuse cases and verified reachable attack paths, critical-blocker enforcement, pinned versioned standards mappings, secret-safe narratives, and two deterministic independent passes |
 | Maintainability And Architecture Stage 4 | A closed baseline/candidate architecture contract covering module boundaries, dependency direction, contracts and compatibility, change amplification, testability, and migration risk; static audits propose only, while implementation attempts verify one separately authorized committed remediation against the exact Git diff and current passing JStack QA evidence |
+| Performance And Resource Efficiency Stage 5 | Closed workload, capture, results, and finding contracts with signed exact-Git/workload/command/environment/sample binding; JStack recomputes percentiles, budgets, improvements, and guardrail regressions, while Audit remains non-executing and implementation evidence must come from a separately authorized committed workflow |
 | Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
@@ -166,10 +167,10 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, transactional installers, and cross-platform CI |
 
-The MCP exposes 50 canonical `jstack_*` tools, including the shared
+The MCP exposes 51 canonical `jstack_*` tools, including the shared
 `jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
-protocol, in addition to the delivery, audit, loop, continuity,
+protocol, plus `jstack_performance_capture` and the delivery, audit, loop, continuity,
 specialist-review, and mastery families. Legacy `gstack_*` aliases remain
 available for compatibility.
 
@@ -357,6 +358,18 @@ Release readiness is evidence only: its result always includes
   pass proves evidence-contract integrity—not vulnerability absence,
   exploitability, zero-day detection, standards compliance, or production
   security.
+- Audit mastery Stage 4 reads immutable baseline/candidate Git objects and may
+  write only its three declared architecture training artifacts. Audit proposes
+  rather than edits; implementation evidence must already be committed and
+  match current QA. A pass does not prove an optimal architecture or grant
+  remediation or production authority.
+- Audit mastery Stage 5 may write only its three declared performance training
+  artifacts. Audit never executes a benchmark or optimizes code. Captures come
+  from a separately authorized discovered command and are signed against the
+  exact Git tree, workload, command, local environment, and normalized samples.
+  JStack recomputes statistics and guardrail regressions, but local capture is
+  not an OS or network sandbox and does not prove workload realism, measurement
+  accuracy, production capacity, or production authority.
 - Artifact-only projects can use planning and direct operator evidence, but
   cannot receive commit-bound JStack release receipts.
 
@@ -397,6 +410,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-alpha.6 migration guide](docs/migration-0.10.0-alpha.6.md) | [Performance and Resource Efficiency decision](docs/adr/0016-performance-resources-stage5.md) |
 | [v0.10.0-alpha.5 migration guide](docs/migration-0.10.0-alpha.5.md) | [Maintainability and Architecture decision](docs/adr/0015-maintainability-architecture-stage4.md) |
 | [v0.10.0-alpha.4 migration guide](docs/migration-0.10.0-alpha.4.md) | [Security and Threat-Modelling decision](docs/adr/0014-security-threat-model-stage3.md) |
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-performance-findings.v1.schema.json",
+  "title": "JStack Audit Stage 5 Performance Findings",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "surface": {"enum": ["latency", "throughput", "cpu", "memory", "io", "query", "contention"]},
+    "evidenceRefs": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineGitHead", "baselineGitTree", "candidateGitHead", "candidateGitTree"],
+      "properties": {
+        "baselineGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "baselineGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    }
+  },
+  "required": ["schemaVersion", "subject", "exercise", "assessmentBoundary", "artifactBindings", "coverage", "evidence", "bottlenecks", "findings", "remediations", "regressionGuards", "qaBindings", "gaps", "complete", "limitations"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.audit.performance-findings.v1"},
+    "subject": {"$ref": "#/$defs/subject"},
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["drillId", "type"],
+      "properties": {"drillId": {"enum": ["a5-performance", "a5-regression"]}, "type": {"enum": ["audit", "implementation"]}}
+    },
+    "assessmentBoundary": {
+      "const": {
+        "repositoryContentTrust": "untrusted-data",
+        "evaluatorMode": "static-git-and-signed-performance-receipt-verification",
+        "repositoryCode": "not-executed-by-evaluator",
+        "benchmarkExecution": "separately-authorized-discovered-command-only",
+        "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+        "networkAuthority": "none-from-audit",
+        "secrets": "not-accessed-or-forwarded",
+        "writes": "training-artifacts-only",
+        "auditOptimization": "not-authorized",
+        "implementationEvidence": "external-committed-candidate-only",
+        "productionAuthority": "none"
+      }
+    },
+    "artifactBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["benchmarkPlan", "baselineResults"],
+      "properties": {
+        "benchmarkPlan": {"allOf": [{"$ref": "#/$defs/binding"}, {"properties": {"path": {"const": ".jstack-training/benchmark-plan.md"}}}]},
+        "baselineResults": {"allOf": [{"$ref": "#/$defs/binding"}, {"properties": {"path": {"const": ".jstack-training/baseline-results.json"}}}]}
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "reason", "metricIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/surface"},
+          "status": {"enum": ["measured", "not-applicable", "unsupported"]},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+          "metricIds": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "revision", "path", "lineStart", "lineEnd", "sha256"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "revision": {"enum": ["baseline", "candidate"]},
+          "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+          "lineStart": {"type": "integer", "minimum": 1},
+          "lineEnd": {"type": "integer", "minimum": 1},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "bottlenecks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "description", "metricId", "evidence"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "surface": {"$ref": "#/$defs/surface"}, "description": {"$ref": "#/$defs/text"}, "metricId": {"$ref": "#/$defs/id"}, "evidence": {"$ref": "#/$defs/evidenceRefs"}}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "severity", "status", "confidence", "verification", "summary", "metricId", "bottleneckId", "statistic", "comparator", "budget", "baselineValue", "candidateValue", "relativeImprovementPercent", "evidence", "remediationId"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"}, "surface": {"$ref": "#/$defs/surface"}, "severity": {"enum": ["info", "low", "medium", "high", "critical"]}, "status": {"enum": ["open", "resolved"]}, "confidence": {"const": "high"}, "verification": {"const": "measured"}, "summary": {"$ref": "#/$defs/text"}, "metricId": {"$ref": "#/$defs/id"}, "bottleneckId": {"$ref": "#/$defs/id"}, "statistic": {"enum": ["mean", "median", "p95", "min", "max"]}, "comparator": {"enum": ["<=", ">="]}, "budget": {"type": "number", "minimum": 0}, "baselineValue": {"type": "number", "minimum": 0}, "candidateValue": {"type": ["number", "null"], "minimum": 0}, "relativeImprovementPercent": {"type": ["number", "null"]}, "evidence": {"$ref": "#/$defs/evidenceRefs"}, "remediationId": {"$ref": "#/$defs/id"}
+        }
+      }
+    },
+    "remediations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "findingId", "status", "description", "changedPaths", "evidence"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "findingId": {"$ref": "#/$defs/id"}, "status": {"enum": ["proposed", "implemented-verified"]}, "description": {"$ref": "#/$defs/text"}, "changedPaths": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1024}}, "evidence": {"$ref": "#/$defs/evidenceRefs"}}
+      }
+    },
+    "regressionGuards": {
+      "type": "array", "minItems": 1, "maxItems": 31,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "metricId", "statistic", "maxRegressionPercent", "baselineValue", "candidateValue", "status"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "metricId": {"$ref": "#/$defs/id"}, "statistic": {"enum": ["mean", "median", "p95", "min", "max"]}, "maxRegressionPercent": {"type": "number", "minimum": 0, "maximum": 25}, "baselineValue": {"type": "number", "minimum": 0}, "candidateValue": {"type": ["number", "null"], "minimum": 0}, "status": {"enum": ["planned", "passed"]}}
+      }
+    },
+    "qaBindings": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "commandKey", "commandFingerprint", "executionProfile", "returncode"],
+        "properties": {"id": {"$ref": "#/$defs/id"}, "commandKey": {"type": "string", "minLength": 1, "maxLength": 200}, "commandFingerprint": {"$ref": "#/$defs/sha256"}, "executionProfile": {"const": "local-scrubbed-no-os-sandbox-v1"}, "returncode": {"const": 0}}
+      }
+    },
+    "gaps": {
+      "type": "array", "maxItems": 256,
+      "items": {"type": "object", "additionalProperties": false, "required": ["id", "surface", "description", "evidence"], "properties": {"id": {"$ref": "#/$defs/id"}, "surface": {"$ref": "#/$defs/surface"}, "description": {"$ref": "#/$defs/text"}, "evidence": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}}}}
+    },
+    "complete": {"const": true},
+    "limitations": {
+      "const": [
+        "Stage 5 proves bounded Git, workload, command, environment, sample, statistic, and receipt integrity; it does not prove workload realism, measurement accuracy, universal performance, or production capacity.",
+        "JStack performance capture uses scrubbed local execution without an OS sandbox or enforced network isolation; untrusted execution requires an external container or VM.",
+        "Passing grants no optimization, Git, publication, release, deployment, or production authority; implementation evidence must come from a separately authorized committed workflow."
+      ]
+    }
+  }
+}

@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.10.0-alpha.6 - 2026-08-05
+
+### Added
+
+- Implemented Audit mastery Stage 5, Performance and Resource-Efficiency
+  Auditor, as the sixth bounded foundation phase.
+- Added closed `jstack.performance.capture.v1`,
+  `jstack.audit.performance-results.v1`, and
+  `jstack.audit.performance-findings.v1` contracts and published schemas.
+- Added `jstack_performance_capture`, the 51st canonical MCP tool, for bounded
+  discovered-command measurement in separately authorized trusted developer
+  or QA workflows. It signs exact Git, workload, command, local-environment,
+  sample, policy, version, and server-session bindings without any user token
+  or terminal-paste ceremony.
+- Added deterministic recomputation of retained-sample summaries,
+  nearest-rank percentiles, budget violations, candidate improvement, and
+  guardrail regressions, with exact historical-baseline/current-candidate
+  receipt verification.
+- Added adversarial coverage for capture protocol, signature and workload
+  tampering, fabricated summaries and percentages, guardrail regressions,
+  exact Git diff and QA binding, metadata-only results, advancement, schemas,
+  and tool registration.
+
+### Changed
+
+- Audit curriculum content version is now 7. Stage 5 advancement requires
+  three independent deterministic passes across at least two commits, every
+  score at least 80, a mean score of at least 85, and both the measurement-only
+  audit and committed-remediation verification drills.
+- Stage 5 permits only `benchmark-plan.md`, `baseline-results.json`, and
+  `performance-findings.json` at their exact `.jstack-training/` paths.
+- Both Stage 5 drills require current passing JStack QA. Performance evidence
+  never substitutes for correctness evidence.
+- Updated the Audit skill, prompt, architecture, security policy, mastery
+  guide, installation guide, migration guide, and release documentation for
+  the new signed measurement boundary.
+- Preserved the five commands, mastery profile v3, Python 3.9+ standard-library
+  runtime, cross-platform packaging, and token-free host-native action model.
+
+### Security
+
+- Audit never invokes the performance runner or edits the target. Capture
+  execution is a separate exact-trust developer/QA action using a scrubbed
+  environment, isolated HOME, fixed external output file, no forwarded
+  secrets, no shell, bounded process output/time, and Git-visible tracked or
+  non-ignored mutation detection. Ignored cache/build outputs remain outside
+  that guarantee.
+- Performance output is identity-checked, bounded, duplicate-key rejected,
+  secret-screened, and normalized to finite non-negative samples. Command
+  stdout and stderr are reduced to digests and not returned.
+- The local runner is not an OS or network sandbox. A Stage 5 pass proves
+  bounded protocol integrity only; it does not prove workload realism,
+  measurement accuracy, universal performance, production capacity,
+  correctness, optimization safety, release readiness, or production
+  authority.
+
 ## 0.10.0-alpha.5 - 2026-08-05
 
 ### Added
