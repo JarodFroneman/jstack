@@ -192,6 +192,53 @@ The evaluator returns only subject metadata, counts, failure codes, and a
 digest. Advancement requires two consecutive independent attempts scoring at
 least 80 and passing every deterministic gate.
 
+## Stage 4: Maintainability And Architecture Auditor
+
+Stage 4 is an architecture-evidence gate, not authority for Audit to edit.
+Create only these exact paths:
+
+- `.jstack-training/architecture-map.md`
+- `.jstack-training/maintainability-report.json`
+- `.jstack-training/migration-outline.md`
+
+`maintainability-report.json` must conform to
+`mcp/jstack/schemas/audit-maintainability-report.v1.schema.json`. Hash-bind
+both narratives and bind exact baseline and candidate Git commits and trees.
+Classify all six surfaces: module boundaries, dependency direction, contracts
+and compatibility, change amplification, testability, and migration risk.
+`assessed` and evidence-backed `not-applicable` are complete; `unsupported`,
+any gap, or `complete: false` blocks the attempt.
+
+Every component, dependency, contract, change scenario, finding, remediation,
+and compatibility assessment must use unique, valid references and
+revision-tagged tracked-source evidence with bounded lines and an exact
+SHA-256. A change scenario's `touchPointCount` must equal its exact affected
+component set. A finding must identify material change cost, defect risk,
+compatibility risk, testability risk, or migration risk and link dependency,
+contract, and change-scenario evidence. Style preference alone is not a
+maintainability defect. Every verified finding has exactly one reciprocal
+remediation, and every violating dependency links to a verified finding.
+
+For `a4-architecture`, baseline and candidate are the same current commit,
+remediations remain proposed, findings remain open, and `qaBindings` is empty.
+For `a4-remediation`, Audit verifies rather than authors the change. A separate
+authorized development workflow must commit the candidate first. The baseline
+must be a strict ancestor; the reported changed paths must exactly equal the
+Git diff; exactly one finding is resolved with one implemented-and-verified
+remediation; and every contract has baseline/candidate compatibility evidence.
+Breaking or unsupported compatibility blocks completion. The QA binding must
+match a current passing exact-candidate `jstack_qa` receipt by receipt,
+command key, command fingerprint, profile, and return code.
+
+The evaluator reads immutable Git objects and existing receipts, executes no
+repository code, accesses no network or secrets, and returns no source,
+finding, root-cause, architecture-map, or migration content. Advancement
+requires three independent deterministic passes across at least two commits,
+every score at least 80, mean at least 85, and both named drills. A pass proves
+only contract and receipt integrity—not behavior preservation, architecture
+quality, compatibility, vulnerability absence, remediation safety, release
+readiness, or production authority.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

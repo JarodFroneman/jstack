@@ -53,6 +53,11 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   reciprocal abuse cases and verified reachable attack paths, critical-blocker
   enforcement, pinned standards mappings, secret-safe narratives, and static
   non-authority limitations
+- deterministic audit-mastery Stage 4 validation for baseline/candidate Git
+  binding, six architecture surfaces, revision-bound citations, architecture
+  graph integrity, material non-style findings, change-amplification counts,
+  exact candidate diffs, compatibility evidence, current QA bindings, and
+  separate Audit/remediation authority
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -312,6 +317,37 @@ network or secret access, payload retention, remediation, publication,
 release, deployment, or production action. A pass is not proof of
 vulnerability absence, exploitability, zero-day detection, standards
 compliance, or production security.
+
+Audit mastery Stage 4 is a separate architecture-evidence assessment. The
+operator produces `architecture-map.md`, closed-schema
+`maintainability-report.json`, and `migration-outline.md` at their exact
+`.jstack-training/` paths. The report binds exact baseline and candidate Git
+commits and trees plus both narrative hashes. It covers module boundaries,
+dependency direction, contracts and compatibility, change amplification,
+testability, and migration risk. Components, dependencies, contracts, change
+scenarios, material findings, remediations, and compatibility assessments cite
+bounded revision-tagged source evidence loaded from immutable Git objects.
+
+The architecture drill is static: baseline equals candidate, findings remain
+open, remediations remain proposed, and QA bindings are forbidden. The
+remediation drill verifies evidence about a candidate already changed and
+committed by a separate authorized development workflow. Its baseline must be
+a strict ancestor, the reported path set must equal the exact Git diff,
+exactly one finding and reciprocal remediation must be resolved and verified,
+every contract must have supported baseline/candidate compatibility evidence,
+and the QA binding must match a current passing exact-candidate `jstack_qa`
+receipt.
+
+The immutable Git revisions are the Stage 4 source subjects while the full
+project fingerprint separately captures the dirty training artifacts. Only
+the three exact Stage 4 artifact paths may be dirty. The evaluator returns
+counts, failure codes, subject metadata, and a digest without source, finding,
+architecture-map, or migration content. It executes no repository code and
+grants no remediation, Git, release, deployment, or production authority. A
+pass proves deterministic evidence-contract and receipt integrity, not
+semantic correctness, behavior preservation, architecture quality,
+compatibility, vulnerability absence, remediation safety, or production
+security.
 
 ## Project Binding
 

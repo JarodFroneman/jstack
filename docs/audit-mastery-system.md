@@ -172,6 +172,50 @@ detection, standards compliance, or production security. Advancement requires
 two consecutive independent attempts scoring at least 80 and passing every
 deterministic gate.
 
+## Stage 4 Deterministic Gate
+
+Stage 4 evaluates architecture and maintainability evidence without turning
+Audit into an editing agent. Its only permitted dirty paths are
+`architecture-map.md`, `maintainability-report.json`, and
+`migration-outline.md` beneath `.jstack-training/`. The JSON uses the closed
+`jstack.audit.maintainability-report.v1` contract and hash-binds both non-empty,
+UTF-8, secret-safe narratives.
+
+The report classifies exactly module boundaries, dependency direction,
+contracts and compatibility, change amplification, testability, and migration
+risk. Revision-tagged citations are loaded from immutable baseline or
+candidate Git objects and verified by line range and SHA-256. Components,
+dependencies, contracts, change scenarios, findings, remediations, and
+compatibility assessments use reciprocal closed references. Change-scenario
+touch-point counts must exactly match the affected component set. Findings
+must describe material change cost, defect risk, compatibility risk,
+testability risk, or migration risk; style-only preferences cannot pass as
+maintainability defects.
+
+The `a4-architecture` drill is static: baseline and candidate are the same
+current commit, remediations remain proposed, and QA bindings are forbidden.
+The `a4-remediation` drill does not authorize Audit to edit. A separate
+development workflow must produce and commit the candidate first. The
+evaluator then requires a strict ancestor baseline, reconciles every reported
+changed path with the exact Git diff, requires exactly one implemented and
+verified remediation for a resolved finding, checks every contract at both
+revisions, blocks breaking or unsupported compatibility, and verifies a
+current passing exact-candidate `jstack_qa` receipt.
+
+The evaluator executes no repository code, accesses no network or secrets,
+and returns only subject metadata, counts, failure codes, and an evaluation
+digest—not source, finding, root-cause, architecture-map, or migration content.
+Unsupported coverage, unresolved gaps, unused objects, stale evidence,
+malformed references, speculative high severity, or non-training changes fail
+closed. A pass proves contract and receipt integrity only; it does not prove
+semantic correctness, behavior preservation, architecture quality,
+compatibility, vulnerability absence, remediation safety, release readiness,
+or production authority.
+
+Advancement requires three independent deterministic passes across at least
+two commits. Every score must be at least 80, the mean must be at least 85, and
+the attempt set must include both named Stage 4 drills.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -185,8 +229,8 @@ The five weighted dimensions remain:
 Assistance caps and independent-assessor rules match the engineering track.
 Stage 0 uses the distinct two-lab rule above; Stage 1 uses the deterministic
 repository-map rule above; Stage 2 uses the deterministic correctness-evidence
-rule above; Stage 3 uses the deterministic threat-model rule above. Stages 4
-through 8 provide
+rule above; Stage 3 uses the deterministic threat-model rule above; and Stage
+4 uses the deterministic architecture rule above. Stages 5 through 8 provide
 separate audit and bounded implementation drills and require repeated evidence
 across both work types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.

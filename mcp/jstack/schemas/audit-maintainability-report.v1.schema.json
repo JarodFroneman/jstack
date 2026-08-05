@@ -1,0 +1,516 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-maintainability-report.v1.schema.json",
+  "title": "JStack Audit Stage 4 Maintainability Report",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "sourcePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!\\.git(?:/|$))(?!\\.jstack-training(?:/|$))(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "shortText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "identifierRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "optionalIdentifierRefs": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/identifier"}
+    },
+    "textList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/text"}
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "subject",
+    "exercise",
+    "assessmentBoundary",
+    "artifactBindings",
+    "coverage",
+    "evidence",
+    "components",
+    "dependencies",
+    "contracts",
+    "changeScenarios",
+    "findings",
+    "remediations",
+    "compatibilityAssessments",
+    "qaBindings",
+    "gaps",
+    "complete",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.audit.maintainability-report.v1"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baselineGitHead",
+        "baselineGitTree",
+        "candidateGitHead",
+        "candidateGitTree"
+      ],
+      "properties": {
+        "baselineGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "baselineGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    },
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["drillId", "type"],
+      "properties": {
+        "drillId": {"enum": ["a4-architecture", "a4-remediation"]},
+        "type": {"enum": ["audit", "implementation"]}
+      }
+    },
+    "assessmentBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryContentTrust",
+        "evaluatorMode",
+        "repositoryCode",
+        "networkAuthority",
+        "secrets",
+        "writes",
+        "auditRemediation",
+        "implementationEvidence",
+        "productionAuthority"
+      ],
+      "properties": {
+        "repositoryContentTrust": {"const": "untrusted-data"},
+        "evaluatorMode": {"const": "static-git-and-receipt-verification"},
+        "repositoryCode": {"const": "not-executed-by-evaluator"},
+        "networkAuthority": {"const": "none"},
+        "secrets": {"const": "not-accessed"},
+        "writes": {"const": "training-artifacts-only"},
+        "auditRemediation": {"const": "not-authorized"},
+        "implementationEvidence": {"const": "external-committed-candidate-only"},
+        "productionAuthority": {"const": "none"}
+      }
+    },
+    "artifactBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architectureMap", "migrationOutline"],
+      "properties": {
+        "architectureMap": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactBinding"},
+            {"properties": {"path": {"const": ".jstack-training/architecture-map.md"}}}
+          ]
+        },
+        "migrationOutline": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactBinding"},
+            {"properties": {"path": {"const": ".jstack-training/migration-outline.md"}}}
+          ]
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "reason", "evidence"],
+        "properties": {
+          "id": {
+            "enum": [
+              "module-boundaries",
+              "dependency-direction",
+              "contracts-compatibility",
+              "change-amplification",
+              "testability",
+              "migration-risk"
+            ]
+          },
+          "status": {"enum": ["assessed", "not-applicable", "unsupported"]},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "revision", "path", "lineStart", "lineEnd", "sha256"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "revision": {"enum": ["baseline", "candidate"]},
+          "path": {"$ref": "#/$defs/sourcePath"},
+          "lineStart": {"type": "integer", "minimum": 1},
+          "lineEnd": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "kind", "responsibility", "boundary", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"$ref": "#/$defs/shortText"},
+          "kind": {
+            "enum": [
+              "entry-point",
+              "module",
+              "service",
+              "package",
+              "data-store",
+              "external-system",
+              "generated-artifact",
+              "test-surface"
+            ]
+          },
+          "responsibility": {"$ref": "#/$defs/text"},
+          "boundary": {"$ref": "#/$defs/text"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "fromComponentId",
+          "toComponentId",
+          "kind",
+          "directionPolicy",
+          "contractIds",
+          "evidence"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "fromComponentId": {"$ref": "#/$defs/identifier"},
+          "toComponentId": {"$ref": "#/$defs/identifier"},
+          "kind": {"enum": ["runtime", "build", "test", "data", "control", "generation"]},
+          "directionPolicy": {"enum": ["allowed", "violating"]},
+          "contractIds": {"$ref": "#/$defs/optionalIdentifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "type",
+          "stability",
+          "providerComponentId",
+          "consumerComponentIds",
+          "evidence"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "name": {"$ref": "#/$defs/shortText"},
+          "type": {"enum": ["api", "schema", "event", "config", "file", "cli", "internal"]},
+          "stability": {"enum": ["stable", "internal", "experimental"]},
+          "providerComponentId": {"$ref": "#/$defs/identifier"},
+          "consumerComponentIds": {"$ref": "#/$defs/identifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "changeScenarios": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "trigger",
+          "originComponentId",
+          "affectedComponentIds",
+          "dependencyIds",
+          "contractIds",
+          "touchPointCount",
+          "evidence"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "trigger": {"$ref": "#/$defs/text"},
+          "originComponentId": {"$ref": "#/$defs/identifier"},
+          "affectedComponentIds": {"$ref": "#/$defs/identifierRefs"},
+          "dependencyIds": {"$ref": "#/$defs/identifierRefs"},
+          "contractIds": {"$ref": "#/$defs/identifierRefs"},
+          "touchPointCount": {"type": "integer", "minimum": 1, "maximum": 256},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "category",
+          "title",
+          "severity",
+          "confidence",
+          "priority",
+          "state",
+          "verificationStatus",
+          "styleOnly",
+          "materialImpacts",
+          "rootCause",
+          "changeTrigger",
+          "impact",
+          "componentIds",
+          "dependencyIds",
+          "contractIds",
+          "changeScenarioIds",
+          "evidence"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "category": {
+            "enum": [
+              "module-boundaries",
+              "dependency-direction",
+              "contracts-compatibility",
+              "change-amplification",
+              "testability",
+              "migration-risk"
+            ]
+          },
+          "title": {"$ref": "#/$defs/shortText"},
+          "severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+          "confidence": {"enum": ["low", "medium", "high"]},
+          "priority": {"enum": ["blocker", "non-blocking"]},
+          "state": {"enum": ["open", "resolved", "hypothesis"]},
+          "verificationStatus": {"enum": ["verified", "unverified"]},
+          "styleOnly": {"const": false},
+          "materialImpacts": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "change-cost",
+                "defect-risk",
+                "migration-risk",
+                "compatibility-risk",
+                "testability-risk"
+              ]
+            }
+          },
+          "rootCause": {"$ref": "#/$defs/text"},
+          "changeTrigger": {"$ref": "#/$defs/text"},
+          "impact": {"$ref": "#/$defs/text"},
+          "componentIds": {"$ref": "#/$defs/identifierRefs"},
+          "dependencyIds": {"$ref": "#/$defs/identifierRefs"},
+          "contractIds": {"$ref": "#/$defs/identifierRefs"},
+          "changeScenarioIds": {"$ref": "#/$defs/identifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "remediations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "findingId",
+          "status",
+          "targetState",
+          "compatibilityStrategy",
+          "migrationSteps",
+          "rollbackStrategy",
+          "changedPaths",
+          "contractIds",
+          "qaBindingIds",
+          "evidence"
+        ],
+        "properties": {
+          "findingId": {"$ref": "#/$defs/identifier"},
+          "status": {"enum": ["proposed", "implemented-verified"]},
+          "targetState": {"$ref": "#/$defs/text"},
+          "compatibilityStrategy": {"$ref": "#/$defs/text"},
+          "migrationSteps": {"$ref": "#/$defs/textList"},
+          "rollbackStrategy": {"$ref": "#/$defs/text"},
+          "changedPaths": {
+            "type": "array",
+            "maxItems": 256,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/sourcePath"}
+          },
+          "contractIds": {"$ref": "#/$defs/identifierRefs"},
+          "qaBindingIds": {"$ref": "#/$defs/optionalIdentifierRefs"},
+          "evidence": {"$ref": "#/$defs/evidenceRefs"}
+        }
+      }
+    },
+    "compatibilityAssessments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "contractId",
+          "status",
+          "rationale",
+          "baselineEvidence",
+          "candidateEvidence",
+          "qaBindingIds"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "contractId": {"$ref": "#/$defs/identifier"},
+          "status": {
+            "enum": ["unchanged", "preserved", "changed-compatible", "breaking", "unsupported"]
+          },
+          "rationale": {"$ref": "#/$defs/text"},
+          "baselineEvidence": {"$ref": "#/$defs/evidenceRefs"},
+          "candidateEvidence": {"$ref": "#/$defs/evidenceRefs"},
+          "qaBindingIds": {"$ref": "#/$defs/optionalIdentifierRefs"}
+        }
+      }
+    },
+    "qaBindings": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "commandKey",
+          "commandFingerprint",
+          "executionProfile",
+          "returncode"
+        ],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "commandKey": {"$ref": "#/$defs/shortText"},
+          "commandFingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "executionProfile": {"const": "local-scrubbed-no-os-sandbox-v1"},
+          "returncode": {"const": 0}
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "surface", "description", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "surface": {
+            "enum": [
+              "module-boundaries",
+              "dependency-direction",
+              "contracts-compatibility",
+              "change-amplification",
+              "testability",
+              "migration-risk"
+            ]
+          },
+          "description": {"$ref": "#/$defs/text"},
+          "evidence": {"$ref": "#/$defs/optionalIdentifierRefs"}
+        }
+      }
+    },
+    "complete": {"const": true},
+    "limitations": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "Stage 4 proves bounded architecture, maintainability, compatibility, and verification-protocol integrity; it does not prove semantic completeness or an optimal design."
+        },
+        {
+          "const": "Static Git evidence and current QA receipts cannot prove compatibility for unobserved consumers or absence of every regression; untrusted execution still requires an external sandbox."
+        },
+        {
+          "const": "Passing does not authorize remediation, Git changes, publication, merge, release, deployment, or production access; implementation evidence must come from a separately authorized committed workflow."
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

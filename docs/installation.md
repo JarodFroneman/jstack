@@ -176,7 +176,7 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.4`);
+  prerelease, `0.10.0-alpha.5`);
 - `tools/list` includes 50 canonical `jstack_*` tools, including
   `jstack_context_readiness`.
 

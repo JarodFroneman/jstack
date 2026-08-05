@@ -35,14 +35,18 @@ The only exception is an explicitly requested mastery assessment: Audit Stage
 `system-map.md`, `trust-boundaries.md`, and `coverage-matrix.json`; and Audit
 Stage 2 may write only `correctness-report.json`, `invariants.md`, and
 `reproductions/manifest.json`; Audit Stage 3 may write only `threat-model.md`,
-`security-findings.json`, and `abuse-cases.md` beneath `.jstack-training/`.
+`security-findings.json`, and `abuse-cases.md`; Audit Stage 4 may write only
+`architecture-map.md`, `maintainability-report.json`, and
+`migration-outline.md` beneath `.jstack-training/`.
 None may perform
 network or secret access, exploit development, public disclosure, remediation,
 Git change, release, deployment, or production action. Stage 2 may reference a
 separately issued current `jstack_qa` receipt but grants no arbitrary execution
 authority and does not make JStack QA an OS or network sandbox. Stage 3 is
 static-only and prohibits repository execution, live exploitation, retained
-exploit payloads, and unsafe disclosure.
+exploit payloads, and unsafe disclosure. Stage 4 implementation evidence may
+reference a separately authorized committed candidate and current QA receipt;
+Audit does not create or commit that candidate.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -72,6 +76,19 @@ exploit payloads, and unsafe disclosure.
    evidence/object, non-reciprocal reference, secret-like value, unverified
    blocker, speculative high severity, or non-authority boundary mismatch. Two
    independent deterministic passes are required and grant no remediation or
+   production authority. At Stage 4, cover module boundaries, dependency
+   direction, contracts and compatibility, change amplification, testability,
+   and migration risk using exact baseline/candidate Git objects and
+   revision-bound source hashes. Reject style-only findings and require valid
+   reciprocal component, dependency, contract, scenario, finding, remediation,
+   and compatibility links. The architecture drill is static with proposals
+   only and no QA binding. The remediation drill verifies one separately
+   authorized committed candidate: baseline must be a strict ancestor, the
+   path manifest must equal the Git diff, every contract must have supported
+   compatibility evidence, and current passing exact-candidate JStack QA is
+   mandatory. Three deterministic attempts across at least two commits, both
+   drills, every score at least 80, and mean at least 85 are required. The
+   evaluator executes no repository code and grants no remediation or
    production authority.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact

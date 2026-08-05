@@ -780,6 +780,397 @@ def audit_stage3_attempt(repo: Path, artifacts: dict[str, str]) -> dict:
     }
 
 
+def ensure_audit_stage4_fixture(repo: Path) -> str:
+    source = repo / "checkout.py"
+    if source.exists():
+        return git(repo, "rev-parse", "HEAD")
+    source.write_text(
+        "def checkout(items, notifier):\n"
+        "    total = sum(items)\n"
+        "    notifier(total)\n"
+        "    return total\n",
+        encoding="utf-8",
+    )
+    test_path = repo / "tests" / "test_project.py"
+    test_path.write_text(
+        test_path.read_text(encoding="utf-8")
+        + "\nfrom checkout import checkout\n\n"
+        + "class TestCheckout(unittest.TestCase):\n"
+        + "    def test_checkout_contract(self):\n"
+        + "        notifications = []\n"
+        + "        self.assertEqual(5, checkout([2, 3], notifications.append))\n"
+        + "        self.assertEqual([5], notifications)\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "checkout.py", "tests/test_project.py")
+    git(repo, "commit", "-m", "add stage 4 architecture fixture")
+    return git(repo, "rev-parse", "HEAD")
+
+
+def prepare_audit_stage4_remediation(repo: Path) -> str:
+    baseline = ensure_audit_stage4_fixture(repo)
+    (repo / "pricing.py").write_text(
+        "def calculate_total(items):\n"
+        "    return sum(items)\n",
+        encoding="utf-8",
+    )
+    (repo / "checkout.py").write_text(
+        "from pricing import calculate_total\n\n"
+        "def checkout(items, notifier):\n"
+        "    total = calculate_total(items)\n"
+        "    notifier(total)\n"
+        "    return total\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "checkout.py", "pricing.py")
+    git(repo, "commit", "-m", "separate pricing from checkout orchestration")
+    return baseline
+
+
+def audit_stage4_revision_evidence(
+    repo: Path,
+    evidence_id: str,
+    revision_kind: str,
+    revision: str,
+    relative: str,
+) -> dict:
+    content = subprocess.run(
+        ["git", "cat-file", "blob", f"{revision}:{relative}"],
+        cwd=repo,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout
+    line_count = len(content.splitlines())
+    assert line_count > 0
+    return {
+        "id": evidence_id,
+        "revision": revision_kind,
+        "path": relative,
+        "lineStart": 1,
+        "lineEnd": line_count,
+        "sha256": hashlib.sha256(content).hexdigest(),
+    }
+
+
+def audit_stage4_qa_binding(repo: Path) -> dict[str, object]:
+    discovery = server.tool_qa({"project_path": str(repo), "base_ref": "HEAD"})
+    command = discovery["allowedCommands"][0]
+    return {
+        "id": "qa-current-suite",
+        "commandKey": command["key"],
+        "commandFingerprint": command["commandFingerprint"],
+        "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+        "returncode": 0,
+    }
+
+
+def write_audit_stage4_artifacts(
+    repo: Path,
+    *,
+    exercise_type: str = "audit",
+    baseline_head: Optional[str] = None,
+    qa_binding: Optional[dict[str, object]] = None,
+    report_mutator=None,
+) -> dict[str, str]:
+    baseline = baseline_head or ensure_audit_stage4_fixture(repo)
+    candidate = git(repo, "rev-parse", "HEAD")
+    baseline_tree = git(repo, "rev-parse", f"{baseline}^{{tree}}")
+    candidate_tree = git(repo, "rev-parse", "HEAD^{tree}")
+    training = repo / ".jstack-training"
+    training.mkdir(exist_ok=True)
+    (training / "architecture-map.md").write_text(
+        "# Architecture map\n\nCheckout orchestration, pricing policy, and the contract test are mapped as separate responsibilities with explicit dependency evidence.\n",
+        encoding="utf-8",
+    )
+    (training / "migration-outline.md").write_text(
+        "# Migration outline\n\nExtract pricing behind the existing checkout contract, preserve the observable result and notification behavior, verify the current suite, and roll back the candidate commit if compatibility evidence fails.\n",
+        encoding="utf-8",
+    )
+    architecture_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/architecture-map.md"
+    )
+    migration_artifact = server.hash_mastery_artifact(
+        repo, ".jstack-training/migration-outline.md"
+    )
+    evidence = [
+        audit_stage4_revision_evidence(
+            repo, "ev-baseline-checkout", "baseline", baseline, "checkout.py"
+        ),
+        audit_stage4_revision_evidence(
+            repo,
+            "ev-baseline-tests",
+            "baseline",
+            baseline,
+            "tests/test_project.py",
+        ),
+        audit_stage4_revision_evidence(
+            repo, "ev-candidate-checkout", "candidate", candidate, "checkout.py"
+        ),
+        audit_stage4_revision_evidence(
+            repo,
+            "ev-candidate-tests",
+            "candidate",
+            candidate,
+            "tests/test_project.py",
+        ),
+    ]
+    pricing_evidence = "ev-candidate-checkout"
+    if exercise_type == "implementation":
+        evidence.append(
+            audit_stage4_revision_evidence(
+                repo,
+                "ev-candidate-pricing",
+                "candidate",
+                candidate,
+                "pricing.py",
+            )
+        )
+        pricing_evidence = "ev-candidate-pricing"
+    all_evidence = [item["id"] for item in evidence]
+    drill_id = (
+        "a4-remediation" if exercise_type == "implementation" else "a4-architecture"
+    )
+    qa_bindings = [qa_binding] if qa_binding is not None else []
+    qa_ids = [str(item["id"]) for item in qa_bindings]
+    changed_paths = (
+        ["checkout.py", "pricing.py"] if exercise_type == "implementation" else []
+    )
+    finding_state = "resolved" if exercise_type == "implementation" else "open"
+    remediation_status = (
+        "implemented-verified" if exercise_type == "implementation" else "proposed"
+    )
+    direction_policy = "allowed" if exercise_type == "implementation" else "violating"
+    compatibility_status = (
+        "preserved" if exercise_type == "implementation" else "unchanged"
+    )
+    report = {
+        "schemaVersion": server.AUDIT_STAGE4_MAINTAINABILITY_SCHEMA,
+        "subject": {
+            "baselineGitHead": baseline,
+            "baselineGitTree": baseline_tree,
+            "candidateGitHead": candidate,
+            "candidateGitTree": candidate_tree,
+        },
+        "exercise": {"drillId": drill_id, "type": exercise_type},
+        "assessmentBoundary": json.loads(
+            json.dumps(server.AUDIT_STAGE4_ASSESSMENT_BOUNDARY)
+        ),
+        "artifactBindings": {
+            "architectureMap": {
+                "path": architecture_artifact["path"],
+                "sha256": architecture_artifact["sha256"],
+            },
+            "migrationOutline": {
+                "path": migration_artifact["path"],
+                "sha256": migration_artifact["sha256"],
+            },
+        },
+        "coverage": [
+            {
+                "id": surface,
+                "status": "assessed",
+                "reason": "Baseline and candidate components, dependencies, contracts, change propagation, tests, and migration evidence were assessed for this surface.",
+                "evidence": all_evidence,
+            }
+            for surface in server.AUDIT_STAGE4_REQUIRED_SURFACES
+        ],
+        "evidence": evidence,
+        "components": [
+            {
+                "id": "component-checkout",
+                "name": "Checkout orchestration",
+                "kind": "entry-point",
+                "responsibility": "Coordinate total calculation, notification, and the checkout return value.",
+                "boundary": "Own orchestration while delegating pricing policy through an internal contract.",
+                "evidence": ["ev-candidate-checkout"],
+            },
+            {
+                "id": "component-pricing",
+                "name": "Pricing policy",
+                "kind": "module",
+                "responsibility": "Calculate the checkout total from the supplied items.",
+                "boundary": "Own pricing calculation independently from notification orchestration.",
+                "evidence": [pricing_evidence],
+            },
+            {
+                "id": "component-tests",
+                "name": "Checkout contract tests",
+                "kind": "test-surface",
+                "responsibility": "Verify the observable checkout total and notification behavior.",
+                "boundary": "Exercise the public checkout contract without owning implementation policy.",
+                "evidence": ["ev-candidate-tests"],
+            },
+        ],
+        "dependencies": [
+            {
+                "id": "dependency-checkout-pricing",
+                "fromComponentId": "component-checkout",
+                "toComponentId": "component-pricing",
+                "kind": "runtime",
+                "directionPolicy": direction_policy,
+                "contractIds": [],
+                "evidence": list(
+                    dict.fromkeys(["ev-candidate-checkout", pricing_evidence])
+                ),
+            },
+            {
+                "id": "dependency-tests-checkout",
+                "fromComponentId": "component-tests",
+                "toComponentId": "component-checkout",
+                "kind": "test",
+                "directionPolicy": "allowed",
+                "contractIds": ["contract-checkout-result"],
+                "evidence": ["ev-candidate-tests", "ev-candidate-checkout"],
+            },
+        ],
+        "contracts": [
+            {
+                "id": "contract-checkout-result",
+                "name": "Checkout result and notification contract",
+                "type": "api",
+                "stability": "stable",
+                "providerComponentId": "component-checkout",
+                "consumerComponentIds": ["component-tests"],
+                "evidence": [
+                    "ev-baseline-checkout",
+                    "ev-baseline-tests",
+                    "ev-candidate-checkout",
+                    "ev-candidate-tests",
+                ],
+            }
+        ],
+        "changeScenarios": [
+            {
+                "id": "scenario-pricing-change",
+                "trigger": "Change the pricing calculation while preserving checkout and notification behavior.",
+                "originComponentId": "component-pricing",
+                "affectedComponentIds": [
+                    "component-pricing",
+                    "component-checkout",
+                    "component-tests",
+                ],
+                "dependencyIds": [
+                    "dependency-checkout-pricing",
+                    "dependency-tests-checkout",
+                ],
+                "contractIds": ["contract-checkout-result"],
+                "touchPointCount": 3,
+                "evidence": all_evidence,
+            }
+        ],
+        "findings": [
+            {
+                "id": "finding-pricing-coupling",
+                "category": "change-amplification",
+                "title": "Pricing policy is coupled to checkout orchestration",
+                "severity": "medium",
+                "confidence": "high",
+                "priority": "non-blocking",
+                "state": finding_state,
+                "verificationStatus": "verified",
+                "styleOnly": False,
+                "materialImpacts": ["change-cost", "defect-risk", "testability-risk"],
+                "rootCause": "Pricing policy and orchestration share a source boundary, coupling policy changes to notification and contract behavior.",
+                "changeTrigger": "A pricing-rule change requires touching the checkout orchestration path and its contract tests.",
+                "impact": "Unrelated checkout behavior is exposed to defects when pricing policy changes.",
+                "componentIds": [
+                    "component-pricing",
+                    "component-checkout",
+                    "component-tests",
+                ],
+                "dependencyIds": [
+                    "dependency-checkout-pricing",
+                    "dependency-tests-checkout",
+                ],
+                "contractIds": ["contract-checkout-result"],
+                "changeScenarioIds": ["scenario-pricing-change"],
+                "evidence": all_evidence,
+            }
+        ],
+        "remediations": [
+            {
+                "findingId": "finding-pricing-coupling",
+                "status": remediation_status,
+                "targetState": "Pricing calculation is isolated behind a focused module while checkout retains its observable contract.",
+                "compatibilityStrategy": "Preserve the checkout arguments, return value, notification order, and test-observed behavior.",
+                "migrationSteps": [
+                    "Extract calculation into the pricing module.",
+                    "Delegate from checkout without changing its stable contract.",
+                    "Verify the current contract test suite and retain rollback to the baseline commit.",
+                ],
+                "rollbackStrategy": "Revert the candidate commit if the stable checkout contract or QA evidence fails.",
+                "changedPaths": changed_paths,
+                "contractIds": ["contract-checkout-result"],
+                "qaBindingIds": qa_ids,
+                "evidence": [
+                    "ev-baseline-checkout",
+                    "ev-candidate-checkout",
+                ]
+                + (["ev-candidate-pricing"] if exercise_type == "implementation" else []),
+            }
+        ],
+        "compatibilityAssessments": [
+            {
+                "id": "compatibility-checkout-result",
+                "contractId": "contract-checkout-result",
+                "status": compatibility_status,
+                "rationale": "The baseline and candidate retain the same checkout arguments, result, notification behavior, and contract tests.",
+                "baselineEvidence": ["ev-baseline-checkout", "ev-baseline-tests"],
+                "candidateEvidence": ["ev-candidate-checkout", "ev-candidate-tests"],
+                "qaBindingIds": qa_ids,
+            }
+        ],
+        "qaBindings": qa_bindings,
+        "gaps": [],
+        "complete": True,
+        "limitations": list(server.AUDIT_STAGE4_LIMITATIONS),
+    }
+    if report_mutator is not None:
+        report_mutator(report)
+    write_json(training / "maintainability-report.json", report)
+    return {
+        "architecture-map.md": ".jstack-training/architecture-map.md",
+        "maintainability-report.json": ".jstack-training/maintainability-report.json",
+        "migration-outline.md": ".jstack-training/migration-outline.md",
+    }
+
+
+def audit_stage4_attempt(
+    repo: Path,
+    artifacts: dict[str, str],
+    *,
+    exercise_type: str = "audit",
+    qa_receipts: Optional[list[str]] = None,
+) -> dict:
+    return {
+        "project_path": str(repo),
+        "track": "audit",
+        "stage": 4,
+        "drill_id": (
+            "a4-remediation"
+            if exercise_type == "implementation"
+            else "a4-architecture"
+        ),
+        "assistance_level": "independent",
+        "assessor": "independent test assessor",
+        "assessor_citations": [
+            ".jstack-training/architecture-map.md:1",
+            ".jstack-training/maintainability-report.json:1",
+            ".jstack-training/migration-outline.md:1",
+        ],
+        "assessment": {
+            "correctness": 100,
+            "evidence": 100,
+            "safety": 100,
+            "judgment": 100,
+            "explanation": 100,
+        },
+        "artifacts": artifacts,
+        "qa_receipts": qa_receipts or [],
+    }
+
+
 def write_mastery_profile_at_stage(home: Path, track: str, stage: int) -> None:
     profile = server.default_mastery_profile()
     profile["createdAt"] = "2026-08-02T00:00:00+00:00"
@@ -2667,7 +3058,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(0, "audit")
-        self.assertEqual(5, curriculum["version"])
+        self.assertEqual(6, curriculum["version"])
         self.assertEqual("Safe Security Operator", stage["name"])
         self.assertIn("security-orientation.json", stage["requiredArtifacts"])
         self.assertEqual(
@@ -2888,7 +3279,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage1_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(1, "audit")
-        self.assertEqual(5, curriculum["version"])
+        self.assertEqual(6, curriculum["version"])
         self.assertEqual("Repository Reconnaissance and System Mapping", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
@@ -3254,7 +3645,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage2_curriculum_and_schemas_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(2, "audit")
-        self.assertEqual(5, curriculum["version"])
+        self.assertEqual(6, curriculum["version"])
         self.assertEqual("Correctness and Reliability Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
@@ -3618,7 +4009,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage3_curriculum_schema_and_standards_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(3, "audit")
-        self.assertEqual(5, curriculum["version"])
+        self.assertEqual(6, curriculum["version"])
         self.assertEqual("Security and Threat-Modelling Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
@@ -3659,6 +4050,320 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertIn("authorizationControlIds", trust_required)
         self.assertNotIn("controlIds", trust_required)
 
+    def test_audit_stage4_static_architecture_package_passes_without_qa(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage4_artifacts(repo)
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(repo, artifacts)
+                )
+
+            evaluation = result["attempt"]["stage4ArchitectureEvaluation"]
+            self.assertTrue(evaluation["passed"])
+            self.assertEqual("audit", evaluation["exerciseType"])
+            self.assertEqual(6, evaluation["surfaceCount"])
+            self.assertEqual(3, evaluation["maximumTouchPointCount"])
+            self.assertEqual(1, evaluation["verifiedFindingCount"])
+            self.assertEqual(0, evaluation["qaBindingCount"])
+            self.assertEqual([], result["attempt"]["qaEvidence"])
+            self.assertNotIn("rootCause", evaluation)
+            self.assertNotIn("changedPaths", evaluation)
+            self.assertFalse(result["advanced"])
+
+    def test_audit_stage4_committed_remediation_requires_matching_qa(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            baseline = prepare_audit_stage4_remediation(repo)
+            binding = audit_stage4_qa_binding(repo)
+            artifacts = write_audit_stage4_artifacts(
+                repo,
+                exercise_type="implementation",
+                baseline_head=baseline,
+                qa_binding=binding,
+            )
+            qa = qa_receipt(repo)
+            self.assertTrue(qa["result"]["ok"])
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(
+                        repo,
+                        artifacts,
+                        exercise_type="implementation",
+                        qa_receipts=[qa["evidenceReceipt"]],
+                    )
+                )
+
+            evaluation = result["attempt"]["stage4ArchitectureEvaluation"]
+            self.assertTrue(evaluation["passed"])
+            self.assertEqual("implementation", evaluation["exerciseType"])
+            self.assertEqual(1, evaluation["resolvedFindingCount"])
+            self.assertEqual(1, evaluation["implementedRemediationCount"])
+            self.assertEqual(1, evaluation["matchedQaBindingCount"])
+            self.assertEqual(2, evaluation["changedPathCount"])
+            self.assertEqual([], result["attempt"]["hardGateFailures"])
+
+    def test_audit_stage4_stale_subject_boundary_and_binding_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["subject"]["baselineGitHead"] = "0" * 40
+                report["assessmentBoundary"]["repositoryCode"] = "executed"
+                report["artifactBindings"]["architectureMap"]["sha256"] = "0" * 64
+
+            artifacts = write_audit_stage4_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage4ArchitectureEvaluation"]["failureCodes"]
+            self.assertIn("subject.baselineGitHead", failures)
+            self.assertIn("assessmentBoundary.repositoryCode", failures)
+            self.assertIn("artifactBindings.architectureMap.sha256", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage4_rejects_unknown_contract_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["automaticRefactor"] = True
+
+            artifacts = write_audit_stage4_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(
+                    server.ToolError, "unsupported or missing fields"
+                ):
+                    server.tool_mastery_record(
+                        audit_stage4_attempt(repo, artifacts)
+                    )
+
+    def test_audit_stage4_blocks_style_only_unsupported_and_gap_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["coverage"][0]["status"] = "unsupported"
+                report["findings"][0]["styleOnly"] = True
+                report["gaps"] = [
+                    {
+                        "id": "gap-consumer",
+                        "surface": "contracts-compatibility",
+                        "description": "One external consumer is not represented in the repository.",
+                        "evidence": [],
+                    }
+                ]
+
+            artifacts = write_audit_stage4_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage4ArchitectureEvaluation"]["failureCodes"]
+            self.assertIn("coverage[0].unsupported", failures)
+            self.assertIn("findings[0].styleOnly", failures)
+            self.assertIn("gaps.present", failures)
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage4_validates_change_amplification_and_dependency_links(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["changeScenarios"][0]["touchPointCount"] = 2
+                report["findings"][0]["dependencyIds"] = ["unknown-dependency"]
+
+            artifacts = write_audit_stage4_artifacts(repo, report_mutator=mutate)
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(repo, artifacts)
+                )
+
+            failures = result["attempt"]["stage4ArchitectureEvaluation"]["failureCodes"]
+            self.assertIn("changeScenarios[0].touchPointCount", failures)
+            self.assertIn("findings[0].dependencyIds.unknown", failures)
+            self.assertIn("findings[0].changeScenarioIds.no-dependency-link", failures)
+            self.assertIn("dependencies.violating-without-verified-finding", failures)
+
+    def test_audit_stage4_implementation_rejects_diff_compatibility_and_qa_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            baseline = prepare_audit_stage4_remediation(repo)
+            binding = audit_stage4_qa_binding(repo)
+
+            def mutate(report: dict) -> None:
+                report["remediations"][0]["changedPaths"] = ["checkout.py"]
+                report["compatibilityAssessments"][0]["status"] = "breaking"
+
+            artifacts = write_audit_stage4_artifacts(
+                repo,
+                exercise_type="implementation",
+                baseline_head=baseline,
+                qa_binding=binding,
+                report_mutator=mutate,
+            )
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(
+                        repo,
+                        artifacts,
+                        exercise_type="implementation",
+                    )
+                )
+
+            failures = result["attempt"]["stage4ArchitectureEvaluation"]["failureCodes"]
+            self.assertIn("remediations[0].changedPaths.diff-mismatch", failures)
+            self.assertIn("compatibilityAssessments[0].status.blocking", failures)
+            self.assertIn("qaBindings[0].unverified", failures)
+            self.assertIn("qaBindings.unverified", failures)
+            self.assertIn(
+                "Stage 2+ attempt requires a current passing QA evidence receipt.",
+                result["attempt"]["hardGateFailures"],
+            )
+
+    def test_audit_stage4_rejects_unsafe_evidence_secret_narrative_and_toctou(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+
+            def mutate(report: dict) -> None:
+                report["evidence"][0]["path"] = "../checkout.py"
+
+            artifacts_arg = write_audit_stage4_artifacts(repo, report_mutator=mutate)
+            artifacts = {
+                name: server.hash_mastery_artifact(repo, path)
+                for name, path in artifacts_arg.items()
+            }
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["maintainability-report.json"]
+            )
+            evaluation = server.evaluate_audit_stage4_architecture(
+                report,
+                repo,
+                artifacts,
+                [],
+                "a4-architecture",
+            )
+            self.assertIn("evidence[0].path", evaluation["failureCodes"])
+
+            artifacts_arg = write_audit_stage4_artifacts(repo)
+            (repo / artifacts_arg["migration-outline.md"]).write_text(
+                "password=example-sensitive-value\n",
+                encoding="utf-8",
+            )
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                with self.assertRaisesRegex(server.ToolError, "secret-like value"):
+                    server.tool_mastery_record(
+                        audit_stage4_attempt(repo, artifacts_arg)
+                    )
+
+            artifacts_arg = write_audit_stage4_artifacts(repo)
+            artifacts = {
+                name: server.hash_mastery_artifact(repo, path)
+                for name, path in artifacts_arg.items()
+            }
+            report = server.load_mastery_json_artifact(
+                repo, artifacts["maintainability-report.json"]
+            )
+            (repo / artifacts_arg["architecture-map.md"]).write_text(
+                "# Changed after hashing\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                server.ToolError, "changed after artifact hashing"
+            ):
+                server.evaluate_audit_stage4_architecture(
+                    report,
+                    repo,
+                    artifacts,
+                    [],
+                    "a4-architecture",
+                )
+
+    def test_audit_stage4_non_training_change_is_a_hard_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            home = base / "home"
+            repo = make_repo(base)
+            artifacts = write_audit_stage4_artifacts(repo)
+            (repo / "application-change.txt").write_text(
+                "not allowed during Stage 4 assessment\n",
+                encoding="utf-8",
+            )
+            write_mastery_profile_at_stage(home, "audit", 4)
+            with mock.patch.object(server.Path, "home", return_value=home):
+                result = server.tool_mastery_record(
+                    audit_stage4_attempt(repo, artifacts)
+                )
+
+            self.assertTrue(
+                any(
+                    "application-change.txt" in failure
+                    for failure in result["attempt"]["hardGateFailures"]
+                )
+            )
+            self.assertFalse(result["attempt"]["eligibleForAdvancement"])
+
+    def test_audit_stage4_curriculum_and_schema_are_bound(self) -> None:
+        curriculum = server.load_mastery_curriculum("audit")
+        stage = server.curriculum_stage(4, "audit")
+        self.assertEqual(6, curriculum["version"])
+        self.assertEqual("Maintainability and Architecture Auditor", stage["name"])
+        self.assertEqual(
+            server.AUDIT_STAGE4_MAINTAINABILITY_SCHEMA,
+            stage["artifactSchemas"]["maintainability-report.json"],
+        )
+        self.assertEqual(
+            {
+                "module-boundaries",
+                "dependency-direction",
+                "contracts-compatibility",
+                "change-amplification",
+                "testability",
+                "migration-risk",
+            },
+            set(server.AUDIT_STAGE4_REQUIRED_SURFACES),
+        )
+        schema = json.loads(
+            (
+                ROOT
+                / "mcp"
+                / "jstack"
+                / "schemas"
+                / "audit-maintainability-report.v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            server.AUDIT_STAGE4_MAINTAINABILITY_SCHEMA,
+            schema["properties"]["schemaVersion"]["const"],
+        )
+
     def test_audit_intermediate_advancement_has_audit_and_implementation_drills(self) -> None:
         profile = server.default_mastery_profile()
         audit_state = profile["tracks"]["audit"]
@@ -3670,7 +4375,9 @@ class MasteryAndInstallTests(unittest.TestCase):
                 "assistanceLevel": "independent",
                 "score": 86,
                 "exerciseType": "audit",
+                "drillId": "a4-architecture",
                 "projectState": {"gitHead": "commit-a"},
+                "stage4ArchitectureEvaluation": {"passed": True},
             },
             {
                 "stage": 4,
@@ -3678,7 +4385,9 @@ class MasteryAndInstallTests(unittest.TestCase):
                 "assistanceLevel": "independent",
                 "score": 85,
                 "exerciseType": "implementation",
+                "drillId": "a4-remediation",
                 "projectState": {"gitHead": "commit-b"},
+                "stage4ArchitectureEvaluation": {"passed": True},
             },
             {
                 "stage": 4,
@@ -3686,7 +4395,9 @@ class MasteryAndInstallTests(unittest.TestCase):
                 "assistanceLevel": "independent_teach",
                 "score": 84,
                 "exerciseType": "audit",
+                "drillId": "a4-architecture",
                 "projectState": {"gitHead": "commit-b"},
+                "stage4ArchitectureEvaluation": {"passed": True},
             },
         ]
         drill_types = {item["type"] for item in server.curriculum_stage(4, "audit")["drills"]}
