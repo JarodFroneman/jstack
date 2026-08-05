@@ -144,6 +144,36 @@ contract. It does not prove vulnerability absence, exploitability, zero-day
 detection, semantic correctness of model-authored findings, standards
 compliance, remediation safety, release readiness, or production security.
 
+### Audit mastery Stage 4
+
+Audit mastery Stage 4 permits only `architecture-map.md`,
+`maintainability-report.json`, and `migration-outline.md` at their exact
+`.jstack-training/` paths. The closed JSON contract binds exact baseline and
+candidate Git commits and trees, hash-binds both narratives, and restricts
+evidence to bounded tracked source lines read from those immutable Git
+objects. Recognized secret-like JSON or narrative values are rejected.
+
+The evaluator treats repository content as untrusted data. It does not execute
+repository code, access the network or secrets, edit application code, mutate
+Git, publish, release, deploy, or touch production. Audit attempts require the
+same baseline and candidate and may propose remediation only. Implementation
+attempts can verify only a candidate already changed and committed through a
+separately authorized development workflow; they require a strict ancestor
+baseline, exact Git-diff reconciliation, explicit non-breaking compatibility
+evidence, and a current passing exact-candidate `jstack_qa` receipt. JStack QA
+remains environment hardening, not an OS or network sandbox.
+
+All six architecture surfaces, graph relationships, evidence references,
+change-amplification counts, material non-style findings, remediations, and
+compatibility assessments must be complete and internally consistent.
+Unsupported coverage, unresolved gaps, stale or unused objects, speculative
+high severity, breaking or unsupported compatibility, fabricated QA, and
+non-training changes fail closed. Evaluation returns only metadata, counts,
+failure codes, and a digest. Passing Stage 4 does not prove semantic
+correctness, behavior preservation, maintainability, compatibility,
+vulnerability absence, remediation safety, release readiness, or production
+security.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

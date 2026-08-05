@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.10.0-alpha.5 - 2026-08-05
+
+### Added
+
+- Implemented Audit mastery Stage 4, Maintainability and Architecture Auditor,
+  as the fifth bounded foundation phase.
+- Added the closed `jstack.audit.maintainability-report.v1` contract and
+  published schema for exact baseline/candidate Git commit and tree binding,
+  six-surface architecture coverage, revision-bound source evidence,
+  components, dependency direction, contracts, change-amplification
+  scenarios, material findings, remediations, compatibility assessments,
+  current QA bindings, gaps, boundaries, and limitations.
+- Added deterministic evaluation for static architecture audits and for one
+  separately authorized, committed, behavior-preserving remediation, including
+  exact Git-diff reconciliation and current JStack QA receipt verification.
+- Added adversarial tests for stale revisions, weakened boundaries, schema and
+  artifact-binding drift, style-only findings, unsupported coverage, broken
+  graph relationships, incorrect change-amplification counts, unsafe evidence,
+  secret-like values, narrative TOCTOU, compatibility breaks, fabricated QA,
+  non-training changes, advancement, and curriculum/schema binding.
+
+### Changed
+
+- Audit curriculum content version is now 6. Stage 4 advancement requires
+  three independent deterministic passes across at least two commits, every
+  score at least 80, a mean score of at least 85, and both the architecture
+  audit and remediation-verification drills.
+- Stage 4 permits only `architecture-map.md`,
+  `maintainability-report.json`, and `migration-outline.md` at their exact
+  `.jstack-training/` paths.
+- Updated Audit workflow guidance to distinguish an Audit-authored proposal
+  from evidence about a candidate changed and committed by a separately
+  authorized development workflow.
+- Preserved the five commands, 50 canonical MCP tools, read-only Audit
+  boundary, mastery profile v3, Python 3.9+ standard-library runtime,
+  cross-platform packaging, and token-free host-native action boundary.
+
+### Security
+
+- The Stage 4 evaluator treats repository content as untrusted data, reads
+  source evidence only from immutable Git objects, executes no repository
+  code, performs no network or secret access, and writes no application code.
+- Audit attempts require baseline and candidate to be the same current
+  revision and may contain proposals only. Implementation attempts require a
+  strict ancestor baseline, the exact committed candidate diff, explicit
+  compatibility evidence, and a current passing JStack QA receipt.
+- A Stage 4 pass proves deterministic architecture-evidence and receipt
+  integrity only. It does not prove semantic correctness, behavior
+  preservation, maintainability, compatibility, vulnerability absence,
+  remediation safety, release readiness, or production authority.
+
 ## 0.10.0-alpha.4 - 2026-08-05
 
 ### Added

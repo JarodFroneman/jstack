@@ -48,6 +48,14 @@ evidence, launch assurance, release readiness, and mastery progression.
   It executes and exploits nothing, returns only metadata, allows only three
   declared training artifacts, and grants no remediation or production
   authority.
+- Audit mastery Stage 4 validates exact baseline/candidate Git architecture
+  evidence across six surfaces, graph relationships, material non-style
+  findings, change-amplification counts, compatibility assessments, exact
+  candidate diffs, and current QA receipts. Static audits propose only;
+  implementation attempts verify a candidate committed by a separately
+  authorized development workflow. The evaluator executes no repository code,
+  returns only metadata, allows only three declared training artifacts, and
+  grants no remediation or production authority.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The

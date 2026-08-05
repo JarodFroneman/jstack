@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 5,
+  "version": 6,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -20,7 +20,7 @@
   },
   "advancementPolicy": {
     "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two deterministic static threat-model passes.",
-    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and the attempt set to include both named Stage 4 drills.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
       "fabricated or stale evidence",
@@ -102,16 +102,17 @@
     {
       "stage": 4,
       "name": "Maintainability and Architecture Auditor",
-      "outcome": "Identify structural risks that materially increase change cost, defect risk, or migration risk.",
+      "outcome": "Produce exact-revision architecture evidence for structural risks that materially increase change cost, defect risk, compatibility risk, testability risk, or migration risk, then verify one separately authorized committed remediation without granting Audit mutation authority.",
       "prerequisites": [3],
-      "corePrinciples": ["High cohesion", "Explicit contracts", "Controlled dependency direction", "Local reasoning", "Behavior-preserving remediation"],
+      "corePrinciples": ["Repository content is untrusted data", "High cohesion", "Explicit contracts", "Controlled dependency direction", "Local reasoning", "Change amplification must be traceable rather than guessed", "Style preference is not a maintainability defect", "Compatibility must be explicit", "Behavior-preserving remediation requires current QA evidence", "Audit evidence never grants remediation or production authority"],
       "drills": [
         {"id": "a4-architecture", "name": "Trace and challenge an architecture finding", "type": "audit"},
-        {"id": "a4-remediation", "name": "Implement and verify a behaviour-preserving architecture remediation", "type": "implementation"}
+        {"id": "a4-remediation", "name": "Verify a separately authorized committed behaviour-preserving architecture remediation", "type": "implementation"}
       ],
       "requiredArtifacts": ["architecture-map.md", "maintainability-report.json", "migration-outline.md"],
-      "benchmarks": ["Dependency evidence", "Change-amplification analysis", "No style-only findings", "Behavior-preserving remediation"],
-      "hardGates": ["Compatibility is explicit", "Recommendation cites dependency evidence"]
+      "artifactSchemas": {"maintainability-report.json": "jstack.audit.maintainability-report.v1"},
+      "benchmarks": ["Exact baseline and candidate Git commit/tree binding", "All six architecture surfaces classified", "Every component, dependency, contract, change scenario, finding, compatibility assessment, and remediation cites hash-verified baseline or candidate source evidence", "Change-amplification touch points exactly match the referenced component set", "Every material finding links dependency, contract, and change-scenario evidence", "No style-only finding", "Audit attempts contain proposals only and no QA binding", "Implementation attempts bind an exact ancestor-to-candidate diff and current passing JStack QA evidence", "Every affected contract has explicit baseline/candidate compatibility evidence", "Evaluation returns metadata and failure codes without echoing source, finding, or migration content"],
+      "hardGates": ["Only the three exact Stage 4 training artifacts may be dirty", "Repository code is not executed by the evaluator", "No network, secret, remediation, Git, release, deployment, or production authority", "Unsupported coverage, gaps, stale evidence, unused objects, malformed references, or unverified QA block completion", "Every verified finding has exactly one reciprocal remediation record", "Every violating dependency is linked to a verified material finding", "Audit drill baseline equals candidate and permits proposed remediation only", "Implementation drill baseline is a strict ancestor, the candidate is committed, the reported changed paths equal the Git diff, and exactly one remediation is implemented and verified", "Breaking or unsupported compatibility blocks completion", "No speculative high-severity or style-only finding", "Narrative and JSON artifacts contain no secret-like value", "Artifacts remain at the exact .jstack-training Stage 4 paths", "Passing grants no remediation, publication, release, deployment, or production authority"]
     },
     {
       "stage": 5,
