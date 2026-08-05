@@ -143,13 +143,14 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.10.0-alpha.3
+## What Ships In v0.10.0-alpha.4
 
 | Capability | What it provides |
 | --- | --- |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
 | Correctness And Reliability Stage 2 | Closed report and reproduction contracts for exact-Git-bound logic, state-transition, error-handling, and reliability evidence; strong claims require current source hashes, violated invariants, reciprocal static or exact-QA reproductions, complete regression plans, and two deterministic independent passes |
+| Security And Threat-Modelling Stage 3 | A closed static threat-model contract with complete STRIDE classification, exact-Git-bound citations, assets, bounded adversaries, trust boundaries, controls, reciprocal abuse cases and verified reachable attack paths, critical-blocker enforcement, pinned versioned standards mappings, secret-safe narratives, and two deterministic independent passes |
 | Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
@@ -348,6 +349,13 @@ Release readiness is evidence only: its result always includes
   nothing; executed cases require an exact-revision passing JStack QA receipt.
   JStack QA is environment-hardened but is not an OS or network sandbox, and a
   Stage 2 pass grants no patch, release, deployment, or production authority.
+- Audit mastery Stage 3 writes only its threat-model narrative, closed security
+  report, and abuse-case narrative under `.jstack-training/`. It performs no
+  repository execution, live exploitation, network or secret access, exploit-
+  payload retention, remediation, publication, or production action. A Stage 3
+  pass proves evidence-contract integrity—not vulnerability absence,
+  exploitability, zero-day detection, standards compliance, or production
+  security.
 - Artifact-only projects can use planning and direct operator evidence, but
   cannot receive commit-bound JStack release receipts.
 
@@ -388,6 +396,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-alpha.4 migration guide](docs/migration-0.10.0-alpha.4.md) | [Security and Threat-Modelling decision](docs/adr/0014-security-threat-model-stage3.md) |
 | [Enterprise workflow](docs/enterprise-workflow.md) | [Agent coordination protocol](docs/agent-coordination-protocol.md) |
 | [Team operating model](docs/team-operating-model.md) | [Audit system](docs/audit-system.md) |
 | [Specialist capability system](docs/specialist-capabilities.md) | [Architecture decisions](docs/adr/) |

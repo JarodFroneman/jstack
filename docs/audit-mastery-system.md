@@ -137,6 +137,41 @@ evaluation digest—not source, report, invariant, or reproduction content.
 Advancement requires two consecutive independent attempts scoring at least 80
 and passing the deterministic evaluator.
 
+## Stage 3 Deterministic Gate
+
+Stage 3 evaluates a static security and threat-model package against the
+current committed Git HEAD/tree. Only `threat-model.md`,
+`security-findings.json`, and `abuse-cases.md` may be dirty at their exact
+`.jstack-training/` paths. The JSON uses the closed
+`jstack.audit.security-findings.v1` contract and hash-binds both non-empty,
+UTF-8, secret-safe narratives.
+
+The model follows the OWASP Four Question framework and classifies all six
+STRIDE categories. It connects current hash-verified tracked-source citations
+to assets and CIA objectives, bounded adversaries, trust boundaries and data
+flows, separately referenced authentication and authorization controls,
+control effectiveness, reciprocal abuse cases, attack paths,
+findings, and applicable standards. Unsupported coverage, gaps, stale or
+unused evidence, dangling or unused objects, non-reciprocal references, and
+secret-like values fail closed.
+
+Every blocker must be high or critical, high-confidence, verified, and linked
+to a verified reachable path with an explicit source, sink, preconditions,
+impact, trust boundaries, and mitigating-control review. The seeded drill
+requires at least one critical blocker. High or critical hypotheses cannot
+pass. Every verified finding requires a reciprocal mapping to the pinned
+MITRE CWE 4.20, NIST SP 800-218 v1.1, OWASP ASVS 5.0.0, or OWASP Top 10:2025
+registry.
+
+The evaluator performs no repository execution, live exploitation, network or
+secret access, exploit-payload retention, remediation, publication, release,
+deployment, or production action. It returns only counts, immutable subject
+metadata, failure codes, and an evaluation digest. A pass proves evidence-
+contract integrity, not vulnerability absence, exploitability, zero-day
+detection, standards compliance, or production security. Advancement requires
+two consecutive independent attempts scoring at least 80 and passing every
+deterministic gate.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -150,7 +185,7 @@ The five weighted dimensions remain:
 Assistance caps and independent-assessor rules match the engineering track.
 Stage 0 uses the distinct two-lab rule above; Stage 1 uses the deterministic
 repository-map rule above; Stage 2 uses the deterministic correctness-evidence
-rule above; Stage 3 requires two consecutive independent passes. Stages 4
+rule above; Stage 3 uses the deterministic threat-model rule above. Stages 4
 through 8 provide
 separate audit and bounded implementation drills and require repeated evidence
 across both work types and repository states. Stage 9 requires two independent,

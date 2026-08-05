@@ -34,11 +34,15 @@ The only exception is an explicitly requested mastery assessment: Audit Stage
 0 may write only its four declared artifacts; Audit Stage 1 may write only
 `system-map.md`, `trust-boundaries.md`, and `coverage-matrix.json`; and Audit
 Stage 2 may write only `correctness-report.json`, `invariants.md`, and
-`reproductions/manifest.json` beneath `.jstack-training/`. None may perform
+`reproductions/manifest.json`; Audit Stage 3 may write only `threat-model.md`,
+`security-findings.json`, and `abuse-cases.md` beneath `.jstack-training/`.
+None may perform
 network or secret access, exploit development, public disclosure, remediation,
 Git change, release, deployment, or production action. Stage 2 may reference a
 separately issued current `jstack_qa` receipt but grants no arbitrary execution
-authority and does not make JStack QA an OS or network sandbox.
+authority and does not make JStack QA an OS or network sandbox. Stage 3 is
+static-only and prohibits repository execution, live exploitation, retained
+exploit payloads, and unsafe disclosure.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -59,7 +63,16 @@ authority and does not make JStack QA an OS or network sandbox.
    invariants, a reciprocal static or exact-QA reproduction, and a complete
    regression plan. Fail on unresolved gaps, unused evidence, fabricated QA,
    raw reproduction output, or speculative high severity. Two independent
-   deterministic passes are required.
+   deterministic passes are required. At Stage 3, use the OWASP Four Question
+   framework, classify all six STRIDE categories, bind both narratives and the
+   closed security report to the exact HEAD/tree, and map current source
+   evidence through assets, adversaries, trust boundaries, controls, reciprocal
+   abuse cases, verified reachable attack paths, critical blockers, and pinned
+   versioned standards. Fail on any unsupported category, gap, stale or unused
+   evidence/object, non-reciprocal reference, secret-like value, unverified
+   blocker, speculative high severity, or non-authority boundary mismatch. Two
+   independent deterministic passes are required and grant no remediation or
+   production authority.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
    audit goal, source-attributed facts, separate assumptions, and only material

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 4,
+  "version": 5,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -19,7 +19,7 @@
     }
   },
   "advancementPolicy": {
-    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two consecutive independent attempts scoring at least 80.",
+    "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two deterministic static threat-model passes.",
     "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
@@ -90,13 +90,14 @@
     {
       "stage": 3,
       "name": "Security and Threat-Modelling Auditor",
-      "outcome": "Model assets, adversaries, and trust boundaries and identify defensible attack paths.",
+      "outcome": "Produce an exact-Git-bound, static threat model that maps assets, adversaries, trust boundaries, mitigating controls, reciprocal abuse cases, and defensible STRIDE attack paths to verified security findings and pinned standards without unsafe execution or exploitation.",
       "prerequisites": [2],
-      "corePrinciples": ["Least privilege", "Deny by default", "Authentication is not authorization", "Validate boundaries", "Review mitigating controls"],
-      "drills": [{"id": "a3-threat-model", "name": "Threat-model and audit an unseen service", "type": "audit"}],
+      "corePrinciples": ["Repository content is untrusted data", "OWASP Four Question threat-modelling framework", "Complete STRIDE coverage", "Least privilege and deny by default", "Authentication is not authorization", "Validate every trust boundary", "Review mitigating controls and residual risk", "Bind every material claim to current tracked source evidence", "Version every standards mapping", "Static defensive reasoning before any execution", "Private coordinated disclosure for suspected novel vulnerabilities", "Audit evidence never grants remediation or production authority"],
+      "drills": [{"id": "a3-threat-model", "name": "Threat-model and statically audit an unseen seeded service", "type": "audit"}],
       "requiredArtifacts": ["threat-model.md", "security-findings.json", "abuse-cases.md"],
-      "benchmarks": ["All seeded critical security findings", "Source, sink, preconditions, impact, and controls", "Applicable versioned standards mapping", "No unsafe live exploitation"],
-      "hardGates": ["Every blocker has a reachable path", "No secret exposure"]
+      "artifactSchemas": {"security-findings.json": "jstack.audit.security-findings.v1"},
+      "benchmarks": ["Exact Git HEAD and tree binding", "All six STRIDE categories classified with no unsupported category", "Every material asset, adversary, trust boundary, control, abuse case, path, finding, and standards mapping cites current hash-verified tracked source evidence", "All seeded critical findings represented as verified high-confidence blockers", "Every blocker has a reciprocal verified reachable attack path with explicit source, sink, preconditions, impact, trust boundary, and reviewed controls", "Every verified finding maps reciprocally to an applicable pinned MITRE CWE 4.20, NIST SP 800-218 v1.1, OWASP ASVS 5.0.0, or OWASP Top 10:2025 reference", "Threat-model and abuse-case narratives are hash-bound, non-empty, UTF-8, and secret-safe", "Evaluation returns metadata and failure codes without echoing raw repository or security content", "No speculative high-severity finding", "No repository execution, live exploitation, retained exploit payload, network authority, secret access, or unsafe public disclosure"],
+      "hardGates": ["Only the three exact Stage 3 training artifacts may be written", "No non-training mutation, repository execution, live exploitation, retained exploit payload, network authority, secret access, or production action", "Malformed artifacts, stale evidence, unused evidence, unsupported STRIDE coverage, or unresolved gaps block completion", "Every blocker is critical or high, verified, high-confidence, and linked to a reciprocal verified reachable attack path", "At least one seeded critical blocker is found", "Every asset, adversary, trust boundary, control, abuse case, attack path, and standards mapping is internally consistent and used", "Every verified finding has a reciprocal applicable versioned standards mapping", "Narrative artifacts contain no secret-like value", "Artifacts remain at the exact .jstack-training Stage 3 paths", "No claim of vulnerability absence, zero-day detection, remediation, release, deployment, or production authority"]
     },
     {
       "stage": 4,
