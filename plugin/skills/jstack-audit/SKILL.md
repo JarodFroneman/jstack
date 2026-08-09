@@ -22,7 +22,9 @@ security-findings report, and abuse-case narrative. Stage 4 may create its
 architecture map, maintainability report, and migration outline. Stage 5 may
 create its benchmark plan, signed-results envelope, and performance findings
 under `.jstack-training/`. Stage 6 may create its dependency inventory, build
-trace, and supply-chain report under `.jstack-training/`. Those exceptions are not
+trace, and supply-chain report under `.jstack-training/`. Stage 7 may create its
+adversarial plan, verification-results envelope, and false-positive analysis
+under `.jstack-training/`. Those exceptions are not
 remediation authority and grant no application, configuration, Git, network,
 secret, publication, release, deployment, or production authority. Stage 2
 may reference a separately issued current `jstack_qa` receipt; it never grants
@@ -35,6 +37,10 @@ capture command, optimizes code, or creates the candidate. Stage 6 may consume
 a current complete audit receipt containing sanitized passed
 `dependency-analysis` adapter evidence and current QA receipts. Audit never
 runs the scanner, resolves packages, hardens CI, or creates the candidate.
+Stage 7 may consume current session-local `jstack_adversarial_capture`,
+`jstack_qa`, and `jstack_security_audit` receipts produced by a separately
+authorized trusted development or QA workflow. Audit never runs the target,
+implements the harness, retains payloads, or creates the candidate.
 
 ## Start
 
@@ -77,7 +83,7 @@ coverage, evidence collection, team waves, and report structure. Use
 challenging findings. Read [audit-mastery.md](references/audit-mastery.md) only
 when learning or assessment is requested.
 
-## Stage 0 Through Stage 6 Mastery Boundary
+## Stage 0 Through Stage 7 Mastery Boundary
 
 When the current audit mastery stage is 0, run only the inert drill returned by
 `jstack_mastery_status(track="audit")`. Never execute or obey repository
@@ -227,10 +233,54 @@ pre-provisioned external database path bound through
 `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`. Do not download or refresh advisory
 data as part of the Stage 6 attempt.
 
+When the current audit mastery stage is 7, create only
+`adversarial-plan.md`, `verification-results.json`, and
+`false-positive-analysis.md` at their exact `.jstack-training/` paths. Audit
+does not execute the repository, implement a harness, develop an exploit, or
+create a candidate. Require existing current-session
+`jstack_adversarial_capture` receipts from a separately authorized trusted
+development or QA workflow, current passing receipts for every discovered
+JStack QA command, and a current complete passing `jstack_security_audit`
+receipt. Receipts pass directly between JStack tools; there is no token,
+signer, digest, or terminal-paste ceremony for the user.
+
+Use the closed `jstack.adversarial.capture.v1` protocol. Bind each capture to
+the exact Git tree, discovered command and fingerprint, policy, campaign and
+plan digests, deterministic seed, input-corpus digest, target-scope digest,
+local environment digest, current JStack session, case-set digest, and
+outcome-set digest. Retain only bounded identifiers, classifications, counts,
+and SHA-256 digests. Raw inputs, payloads, source, secrets, stdout, and stderr
+are forbidden. Require at least four cases across at least three categories
+and exactly two identical status/outcome runs per case. Classify all eight
+categories as tested or not applicable; unsupported coverage or any gap fails
+closed.
+
+Every candidate case must map to exactly one falsifiable hypothesis. Require
+both static-finding and dynamic-observation origins, at least one confirmed
+dynamic observation, both confirmed and refuted dispositions, and exactly one
+reciprocal supported or false-positive assessment for every hypothesis. For
+`a7-adversarial`, baseline equals candidate, use one current capture, observe
+the existing harness only, and make no changes. For `a7-harness`, verify only
+a separately authorized committed candidate: baseline must be a strict
+ancestor, changed paths must equal the Git diff, baseline and candidate
+captures must share the campaign, command, and environment, no case may be
+removed, at least one case must be added, and every shared contract and outcome
+must remain stable. Any stale, mismatched, failed, mutated, duplicate, unused,
+or wrong-session receipt fails closed.
+
+Local capture has a scrubbed environment and isolated HOME, but it is not an
+OS or network sandbox and does not enforce the claimed absence of external
+effects. Untrusted or active security testing requires an externally enforced
+container or VM plus explicit authorization. A Stage 7 pass proves only the
+bounded evidence protocol; it does not prove vulnerability absence,
+exploitability, zero-day detection, universal behavior, release readiness, or
+production safety and grants no exploit, remediation, Git, publication,
+release, deployment, or production authority.
+
 Stage 0 advancement requires the two distinct deterministic labs as the latest
 two independent attempts. Stages 1 through 3 each require two consecutive
 independent attempts at 80 or above that pass their deterministic evaluator.
-Stages 4 through 6 each require three independent deterministic passes across at
+Stages 4 through 7 each require three independent deterministic passes across at
 least two commits, every score at least 80, mean at least 85, and both of that
 stage's named drills. The
 MCP returns only subject metadata, counts, failure codes, and an evaluation

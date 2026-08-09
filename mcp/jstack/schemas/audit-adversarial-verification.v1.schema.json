@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-adversarial-verification.v1.schema.json",
+  "title": "JStack Audit Stage 7 Adversarial Verification Results",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifierList": {"type": "array", "maxItems": 512, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+    "revisionSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineGitHead", "baselineGitTree", "candidateGitHead", "candidateGitTree"],
+      "properties": {
+        "baselineGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "baselineGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitHead": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "candidateGitTree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "path", "lineStart", "lineEnd", "sha256"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "revision": {"enum": ["baseline", "candidate"]},
+        "path": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "lineStart": {"type": "integer", "minimum": 1},
+        "lineEnd": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseCount", "deterministicCaseCount", "testedCategoryCount", "categoryCounts", "statusCounts", "caseSetDigest", "outcomeSetDigest"],
+      "properties": {
+        "caseCount": {"type": "integer", "minimum": 4, "maximum": 512},
+        "deterministicCaseCount": {"type": "integer", "minimum": 4, "maximum": 512},
+        "testedCategoryCount": {"type": "integer", "minimum": 3, "maximum": 8},
+        "categoryCounts": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["category", "count"],
+            "properties": {
+              "category": {"enum": ["negative-input", "boundary-value", "invariant", "fault-injection", "authorization", "state-transition", "differential", "resource-boundary"]},
+              "count": {"type": "integer", "minimum": 0, "maximum": 512}
+            }
+          }
+        },
+        "statusCounts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "count"],
+            "properties": {
+              "status": {"enum": ["confirmed", "refuted"]},
+              "count": {"type": "integer", "minimum": 0, "maximum": 512}
+            }
+          }
+        },
+        "caseSetDigest": {"$ref": "#/$defs/sha256"},
+        "outcomeSetDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "receiptDigest", "environmentDigest", "commandKey", "commandFingerprint", "captureDigest", "capture", "summary"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "revision": {"enum": ["baseline", "candidate"]},
+        "receiptDigest": {"$ref": "#/$defs/sha256"},
+        "environmentDigest": {"$ref": "#/$defs/sha256"},
+        "commandKey": {"$ref": "#/$defs/identifier"},
+        "commandFingerprint": {"$ref": "#/$defs/sha256"},
+        "captureDigest": {"$ref": "#/$defs/sha256"},
+        "capture": {"$ref": "adversarial-capture.v1.schema.json"},
+        "summary": {"$ref": "#/$defs/summary"}
+      }
+    }
+  },
+  "required": ["schemaVersion", "subject", "exercise", "assessmentBoundary", "artifactBindings", "campaign", "captures", "coverage", "evidence", "hypotheses", "falsePositiveAssessments", "harness", "comparison", "qaBindings", "securityBinding", "gaps", "complete", "limitations"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.audit.adversarial-verification.v1"},
+    "subject": {"$ref": "#/$defs/revisionSubject"},
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["drillId", "type"],
+      "properties": {"drillId": {"enum": ["a7-adversarial", "a7-harness"]}, "type": {"enum": ["audit", "implementation"]}}
+    },
+    "assessmentBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repositoryContentTrust", "evaluatorMode", "repositoryCode", "adversarialExecution", "executionProfile", "networkIsolation", "externalEffects", "secrets", "writes", "auditHarnessImplementation", "implementationEvidence", "productionAuthority"],
+      "properties": {
+        "repositoryContentTrust": {"const": "untrusted-data"},
+        "evaluatorMode": {"const": "static-git-and-signed-adversarial-receipt-verification"},
+        "repositoryCode": {"const": "not-executed-by-evaluator"},
+        "adversarialExecution": {"const": "separately-authorized-discovered-command-only"},
+        "executionProfile": {"const": "local-scrubbed-no-os-sandbox-v1"},
+        "networkIsolation": {"const": "not-enforced"},
+        "externalEffects": {"const": "none-observed-required-not-enforced"},
+        "secrets": {"const": "not-accessed-or-forwarded"},
+        "writes": {"const": "training-artifacts-only"},
+        "auditHarnessImplementation": {"const": "not-authorized"},
+        "implementationEvidence": {"const": "external-committed-candidate-only"},
+        "productionAuthority": {"const": "none"}
+      }
+    },
+    "artifactBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adversarialPlan", "falsePositiveAnalysis"],
+      "properties": {"adversarialPlan": {"$ref": "#/$defs/artifactBinding"}, "falsePositiveAnalysis": {"$ref": "#/$defs/artifactBinding"}}
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "planDigest", "deterministicSeed", "inputCorpusDigest", "targetScopeDigest", "timeoutSeconds", "maximumCases", "rerunsPerCase", "externalEffectPolicy", "isolationPolicy"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "planDigest": {"$ref": "#/$defs/sha256"},
+        "deterministicSeed": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+        "inputCorpusDigest": {"$ref": "#/$defs/sha256"},
+        "targetScopeDigest": {"$ref": "#/$defs/sha256"},
+        "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 1800},
+        "maximumCases": {"type": "integer", "minimum": 4, "maximum": 512},
+        "rerunsPerCase": {"const": 2},
+        "externalEffectPolicy": {"const": "none-observed-required-not-enforced"},
+        "isolationPolicy": {"const": "local-scrubbed-requires-external-isolation-for-untrusted-targets"}
+      }
+    },
+    "captures": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"$ref": "#/$defs/capture"}},
+    "coverage": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "reason", "caseIds", "evidence"],
+        "properties": {
+          "id": {"enum": ["negative-input", "boundary-value", "invariant", "fault-injection", "authorization", "state-transition", "differential", "resource-boundary"]},
+          "status": {"enum": ["tested", "not-applicable", "unsupported"]},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "caseIds": {"$ref": "#/$defs/identifierList"},
+          "evidence": {"$ref": "#/$defs/identifierList"}
+        }
+      }
+    },
+    "evidence": {"type": "array", "minItems": 1, "maxItems": 512, "items": {"$ref": "#/$defs/evidence"}},
+    "hypotheses": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "origin", "findingFingerprint", "severity", "disposition", "caseIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "origin": {"enum": ["static-finding", "dynamic-observation"]},
+          "findingFingerprint": {"$ref": "#/$defs/sha256"},
+          "severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+          "disposition": {"enum": ["confirmed", "refuted"]},
+          "caseIds": {"$ref": "#/$defs/identifierList"},
+          "evidence": {"$ref": "#/$defs/identifierList"}
+        }
+      }
+    },
+    "falsePositiveAssessments": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "hypothesisId", "classification", "caseIds", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "hypothesisId": {"$ref": "#/$defs/identifier"},
+          "classification": {"enum": ["supported", "false-positive"]},
+          "caseIds": {"$ref": "#/$defs/identifierList"},
+          "evidence": {"$ref": "#/$defs/identifierList"}
+        }
+      }
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "changedPaths", "evidence"],
+      "properties": {
+        "status": {"enum": ["existing-observed", "implemented-verified"]},
+        "changedPaths": {"type": "array", "maxItems": 512, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+        "evidence": {"$ref": "#/$defs/identifierList"}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "sharedCaseIds", "addedCaseIds", "removedCaseIds", "sharedOutcomesStable"],
+      "properties": {
+        "policy": {"enum": ["single-current-capture", "baseline-subset-candidate-superset"]},
+        "sharedCaseIds": {"$ref": "#/$defs/identifierList"},
+        "addedCaseIds": {"$ref": "#/$defs/identifierList"},
+        "removedCaseIds": {"$ref": "#/$defs/identifierList"},
+        "sharedOutcomesStable": {"type": "boolean"}
+      }
+    },
+    "qaBindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "commandKey", "commandFingerprint", "executionProfile", "returncode"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "commandKey": {"$ref": "#/$defs/identifier"},
+          "commandFingerprint": {"$ref": "#/$defs/sha256"},
+          "executionProfile": {"const": "local-scrubbed-no-os-sandbox-v1"},
+          "returncode": {"const": 0}
+        }
+      }
+    },
+    "securityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "passed", "findingCount"],
+      "properties": {
+        "complete": {"const": true},
+        "passed": {"const": true},
+        "findingCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "description", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/identifier"},
+          "category": {"enum": ["negative-input", "boundary-value", "invariant", "fault-injection", "authorization", "state-transition", "differential", "resource-boundary"]},
+          "description": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "evidence": {"$ref": "#/$defs/identifierList"}
+        }
+      }
+    },
+    "complete": {"const": true},
+    "limitations": {
+      "const": [
+        "Stage 7 proves bounded Git, campaign, receipt, deterministic-rerun, hypothesis-challenge, false-positive-analysis, and comparison protocol integrity; it does not prove vulnerability absence, exploitability, universal behavior, or production safety.",
+        "JStack adversarial capture uses scrubbed local execution without an OS sandbox or enforced network isolation; untrusted or active security testing requires externally enforced isolation and explicit authorization.",
+        "Passing grants no exploit development, remediation, Git, publication, release, deployment, or production authority; harness implementation evidence must come from a separately authorized committed workflow."
+      ]
+    }
+  }
+}

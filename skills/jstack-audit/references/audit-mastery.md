@@ -373,6 +373,72 @@ semantics, current advisory coverage, reproducible builds, artifact
 authenticity, vulnerability absence, release readiness, or production
 authority.
 
+## Stage 7: Dynamic And Adversarial Verification Auditor
+
+Stage 7 challenges static findings with bounded dynamic evidence while keeping
+Audit read-only. Create only these exact paths:
+
+- `.jstack-training/adversarial-plan.md`
+- `.jstack-training/verification-results.json`
+- `.jstack-training/false-positive-analysis.md`
+
+`verification-results.json` must conform to
+`mcp/jstack/schemas/audit-adversarial-verification.v1.schema.json`. Captures
+must conform to `mcp/jstack/schemas/adversarial-capture.v1.schema.json` and
+come from current-session `jstack_adversarial_capture` receipts produced by a
+separately authorized trusted development or QA workflow. Audit never runs the
+target, implements a harness, develops an exploit, creates a candidate, or
+retains raw inputs or output.
+
+Declare one closed campaign with a plan digest, deterministic seed,
+input-corpus digest, target-scope digest, timeout, case cap, exactly two reruns,
+the `none-observed-required-not-enforced` external-effect policy, and the
+`local-scrubbed-requires-external-isolation-for-untrusted-targets` isolation
+policy. Every capture binds the exact Git commit/tree, current policy,
+discovered command and fingerprint, campaign, local environment, current
+JStack session, normalized capture digest, case-set digest, and outcome-set
+digest. Receipts move directly between JStack tools; the user never copies a
+token, signer command, or digest into a terminal.
+
+The capture format is deliberately closed. It accepts only bounded case IDs,
+one of eight categories, hypothesis IDs, SHA-256 input and expectation
+digests, and two classified outcome runs. Raw test inputs, payloads, source,
+secrets, stdout, and stderr are forbidden. Require at least four cases across
+at least three categories; the two runs for every case must have identical
+status and outcome digests and must report only `none-observed` for external
+effects. That value is an observation, not enforced isolation.
+
+Classify all eight categories as tested or not applicable: negative input,
+boundary value, invariant, fault injection, authorization, state transition,
+differential, and resource boundary. Unsupported coverage and any unresolved
+gap fail closed. Every candidate case belongs to exactly one hypothesis. The
+set must include a static-finding origin, a dynamic-observation origin, at
+least one confirmed dynamic observation, and both confirmed and refuted
+dispositions. Every hypothesis must have exactly one reciprocal assessment:
+`supported` for confirmed evidence or `false-positive` for refuted evidence.
+Current passing receipts for every discovered QA command and a current complete
+passing security receipt remain mandatory.
+
+For `a7-adversarial`, baseline and candidate are the same current commit and
+one current capture observes the existing harness. For `a7-harness`, Audit
+verifies a candidate already implemented and committed by a separate workflow.
+The baseline is a strict ancestor, reported paths equal the Git diff, baseline
+and candidate captures use the same campaign, command, and environment, at
+least one case is added, none is removed, and every shared case contract and
+outcome is unchanged. Stale, failed, mismatched, mutated, duplicate,
+wrong-session, or unused receipts fail closed.
+
+The local runner uses a scrubbed environment, isolated HOME, closed stdin,
+timeouts, and output caps, but it retains the current user's filesystem and
+network privileges. Use an externally enforced container or VM for untrusted
+or active security testing and obtain explicit authorization for the target.
+The evaluator itself executes no repository code and returns only metadata,
+counts, failure codes, and a digest. Advancement requires three independent
+deterministic passes across at least two commits, every score at least 80, mean
+at least 85, and both named drills. A pass proves bounded protocol integrity,
+not vulnerability absence, exploitability, zero-day detection, universal
+behavior, release readiness, production safety, or production authority.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

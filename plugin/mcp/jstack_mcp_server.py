@@ -45,7 +45,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.7"
+SERVER_VERSION = "0.10.0-alpha.8"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -437,9 +437,46 @@ AUDIT_STAGE6_MAX_INPUT_FILE_BYTES = 50_000_000
 AUDIT_STAGE6_MAX_INPUT_TOTAL_BYTES = 256_000_000
 AUDIT_STAGE6_MAX_EVIDENCE_FILE_BYTES = 2_000_000
 AUDIT_STAGE6_MAX_EVIDENCE_TOTAL_BYTES = 32_000_000
+AUDIT_STAGE7_RESULTS_SCHEMA = audit_core.ADVERSARIAL_RESULTS_SCHEMA_VERSION
+AUDIT_STAGE7_DRILL_TYPES = {
+    "a7-adversarial": "audit",
+    "a7-harness": "implementation",
+}
+AUDIT_STAGE7_ASSESSMENT_BOUNDARY = {
+    "repositoryContentTrust": "untrusted-data",
+    "evaluatorMode": "static-git-and-signed-adversarial-receipt-verification",
+    "repositoryCode": "not-executed-by-evaluator",
+    "adversarialExecution": "separately-authorized-discovered-command-only",
+    "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+    "networkIsolation": "not-enforced",
+    "externalEffects": "none-observed-required-not-enforced",
+    "secrets": "not-accessed-or-forwarded",
+    "writes": "training-artifacts-only",
+    "auditHarnessImplementation": "not-authorized",
+    "implementationEvidence": "external-committed-candidate-only",
+    "productionAuthority": "none",
+}
+AUDIT_STAGE7_LIMITATIONS = [
+    "Stage 7 proves bounded Git, campaign, receipt, deterministic-rerun, hypothesis-challenge, false-positive-analysis, and comparison protocol integrity; it does not prove vulnerability absence, exploitability, universal behavior, or production safety.",
+    "JStack adversarial capture uses scrubbed local execution without an OS sandbox or enforced network isolation; untrusted or active security testing requires externally enforced isolation and explicit authorization.",
+    "Passing grants no exploit development, remediation, Git, publication, release, deployment, or production authority; harness implementation evidence must come from a separately authorized committed workflow.",
+]
+AUDIT_STAGE7_ARTIFACT_PATHS = {
+    "adversarial-plan.md": ".jstack-training/adversarial-plan.md",
+    "verification-results.json": ".jstack-training/verification-results.json",
+    "false-positive-analysis.md": ".jstack-training/false-positive-analysis.md",
+}
+AUDIT_STAGE7_COVERAGE_STATUSES = {"tested", "not-applicable", "unsupported"}
+AUDIT_STAGE7_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+AUDIT_STAGE7_MAX_ITEMS = 512
+AUDIT_STAGE7_MAX_EVIDENCE_FILE_BYTES = 2_000_000
+AUDIT_STAGE7_MAX_EVIDENCE_TOTAL_BYTES = 32_000_000
 PERFORMANCE_CAPTURE_MAX_BYTES = 5_000_000
 PERFORMANCE_MAX_RECEIPTS = 4
 PERFORMANCE_MAX_RECEIPT_CHARS = 100_000
+ADVERSARIAL_CAPTURE_MAX_BYTES = 5_000_000
+ADVERSARIAL_MAX_RECEIPTS = 4
+ADVERSARIAL_MAX_RECEIPT_CHARS = 100_000
 SERVER_SESSION_ID = secrets.token_hex(16)
 _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
@@ -453,6 +490,7 @@ GIT_REQUIRED_TOOLS = [
     "jstack_security_audit",
     "jstack_qa",
     "jstack_performance_capture",
+    "jstack_adversarial_capture",
     "jstack_context_save",
     "jstack_context_restore",
     "jstack_ship_check",
@@ -3508,6 +3546,22 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
                 "committed hardening drills, all deterministically passing exact "
                 "inventory, CI, provenance, generated-artifact, scanner, QA, and "
                 "Git-diff gates."
+            )
+        elif track == "audit" and stage_number == 7:
+            passed = passed and all(
+                item.get("stage7AdversarialEvaluation", {}).get("passed") is True
+                for item in recent
+            )
+            passed = passed and {
+                item.get("drillId") for item in recent
+            }.issuperset(AUDIT_STAGE7_DRILL_TYPES)
+            requirement = (
+                "Three independent Stage 7 attempts across at least two commits, "
+                "each scoring at least 80 with a mean of at least 85, including "
+                "both the adversarial audit and separately authorized committed "
+                "harness drills, all deterministically passing exact campaign, "
+                "two-rerun capture, hypothesis, false-positive, comparison, QA, "
+                "security, and Git-diff gates."
             )
     else:
         recent = eligible[-2:]
@@ -9590,6 +9644,865 @@ def evaluate_audit_stage6_supply_chain(
     return {**result, "evaluationDigest": audit_json_digest(result)}
 
 
+def _verify_adversarial_receipt_for_revision(
+    receipt: str,
+    root: Path,
+    expected: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify a current-session Stage 7 receipt for an immutable revision."""
+
+    try:
+        encoded, supplied_signature = receipt.split(".", 1)
+        expected_signature = _b64encode(
+            hmac.new(_RECEIPT_SECRET, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        if issued.tzinfo is None:
+            raise ValueError("timezone-aware issuedAt required")
+    except Exception as exc:
+        raise ToolError(
+            "Adversarial receipt is malformed, stale, or was not issued by this JStack server session."
+        ) from exc
+    age = (_dt.datetime.now(_dt.timezone.utc) - issued).total_seconds()
+    exact_fields = (
+        "gitHead",
+        "gitTree",
+        "policyDigest",
+        "commandKey",
+        "commandFingerprint",
+        "campaignId",
+        "campaignDigest",
+        "planDigest",
+        "deterministicSeed",
+        "inputCorpusDigest",
+        "targetScopeDigest",
+        "environmentDigest",
+        "captureDigest",
+        "caseSetDigest",
+        "outcomeSetDigest",
+        "caseCount",
+        "testedCategoryCount",
+    )
+    checks = {
+        "kind": payload.get("kind") == "adversarial",
+        "session": payload.get("serverSession") == SERVER_SESSION_ID,
+        "projectPath": payload.get("projectPath") == str(root),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "executionProfile": payload.get("executionProfile")
+        == "local-scrubbed-no-os-sandbox-v1",
+        "networkIsolationEnforced": payload.get("networkIsolationEnforced") is False,
+        "returncode": payload.get("returncode") == 0,
+        "passed": payload.get("passed") is True,
+        "mutationDetected": payload.get("mutationDetected") is False,
+        "fresh": 0 <= age <= RECEIPT_MAX_AGE_SECONDS,
+    }
+    for field in exact_fields:
+        checks[field] = payload.get(field) == expected.get(field)
+    return {"valid": all(checks.values()), "checks": checks, "payload": payload}
+
+
+def evaluate_audit_stage7_adversarial(
+    report: Any,
+    project_path: Path,
+    artifacts: dict[str, dict[str, Any]],
+    qa_verifications: list[dict[str, Any]],
+    security_verification: Optional[dict[str, Any]],
+    adversarial_receipts: list[str],
+    drill_id: str,
+) -> dict[str, Any]:
+    """Validate one exact-revision Stage 7 adversarial evidence package."""
+
+    report_fields = {
+        "schemaVersion",
+        "subject",
+        "exercise",
+        "assessmentBoundary",
+        "artifactBindings",
+        "campaign",
+        "captures",
+        "coverage",
+        "evidence",
+        "hypotheses",
+        "falsePositiveAssessments",
+        "harness",
+        "comparison",
+        "qaBindings",
+        "securityBinding",
+        "gaps",
+        "complete",
+        "limitations",
+    }
+    if not isinstance(report, dict) or set(report) != report_fields:
+        raise ToolError(
+            "Audit Stage 7 verification-results.json has unsupported or missing fields."
+        )
+    audit_enforce_json_limit(report, "Audit Stage 7 verification results", 10_000_000)
+    audit_reject_secret_values(report, "Audit Stage 7 verification results")
+    source = _audit_source_subject(project_path, "Stage 7")
+    root = source["_root"]
+    current_policy_digest = evidence_subject(project_path)["policyDigest"]
+    failures: list[str] = []
+
+    def exact_object(field: str, keys: set[str]) -> dict[str, Any]:
+        value = report.get(field)
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ToolError(
+                f"Audit Stage 7 {field} has unsupported or missing fields."
+            )
+        return value
+
+    def exact_list(field: str, maximum: int = AUDIT_STAGE7_MAX_ITEMS) -> list[Any]:
+        value = report.get(field)
+        if not isinstance(value, list) or len(value) > maximum:
+            raise ToolError(
+                f"Audit Stage 7 {field} must be an array with at most {maximum} items."
+            )
+        return value
+
+    def valid_id(value: Any) -> bool:
+        return bool(
+            isinstance(value, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+        )
+
+    def valid_digest(value: Any) -> bool:
+        return bool(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value))
+
+    def valid_text(value: Any, maximum: int = 1000) -> bool:
+        return bool(isinstance(value, str) and value.strip() and len(value) <= maximum)
+
+    def collect_id(item: dict[str, Any], prefix: str, seen: set[str]) -> Optional[str]:
+        identifier = item.get("id")
+        if not valid_id(identifier) or identifier in seen:
+            failures.append(prefix + ".id")
+            return None
+        seen.add(str(identifier))
+        return str(identifier)
+
+    if report.get("schemaVersion") != AUDIT_STAGE7_RESULTS_SCHEMA:
+        failures.append("schemaVersion")
+    expected_type = AUDIT_STAGE7_DRILL_TYPES.get(drill_id)
+    if expected_type is None:
+        raise ToolError(f"Unsupported Audit Stage 7 drill: {drill_id}")
+    exercise = exact_object("exercise", {"drillId", "type"})
+    if exercise.get("drillId") != drill_id:
+        failures.append("exercise.drillId")
+    if exercise.get("type") != expected_type:
+        failures.append("exercise.type")
+
+    subject = exact_object(
+        "subject",
+        {
+            "baselineGitHead",
+            "baselineGitTree",
+            "candidateGitHead",
+            "candidateGitTree",
+        },
+    )
+    baseline = _audit_stage4_resolve_revision(root, subject.get("baselineGitHead"))
+    candidate = _audit_stage4_resolve_revision(root, subject.get("candidateGitHead"))
+    if baseline is None:
+        failures.append("subject.baseline")
+    if candidate is None:
+        failures.append("subject.candidate")
+    if baseline and subject.get("baselineGitTree") != baseline["gitTree"]:
+        failures.append("subject.baselineGitTree")
+    if candidate and subject.get("candidateGitTree") != candidate["gitTree"]:
+        failures.append("subject.candidateGitTree")
+    if candidate and (
+        candidate["gitHead"] != source["gitHead"]
+        or candidate["gitTree"] != source["gitTree"]
+    ):
+        failures.append("subject.candidate-not-current")
+    changed_paths: Optional[list[str]] = None
+    if baseline and candidate:
+        if expected_type == "audit":
+            if baseline != candidate:
+                failures.append("subject.audit-baseline-candidate")
+        else:
+            ancestry = run_complete(
+                ["git", "merge-base", "--is-ancestor", baseline["gitHead"], candidate["gitHead"]],
+                root,
+                timeout=8,
+            )
+            changed_paths = _audit_stage4_changed_paths(
+                root, baseline["gitHead"], candidate["gitHead"]
+            )
+            if baseline["gitHead"] == candidate["gitHead"]:
+                failures.append("subject.implementation-distinct-commit")
+            if not ancestry["ok"]:
+                failures.append("subject.baseline-not-ancestor")
+            if not changed_paths:
+                failures.append("subject.implementation-empty-diff")
+
+    boundary = exact_object(
+        "assessmentBoundary", set(AUDIT_STAGE7_ASSESSMENT_BOUNDARY)
+    )
+    for field, expected in AUDIT_STAGE7_ASSESSMENT_BOUNDARY.items():
+        if type(boundary.get(field)) is not type(expected) or boundary.get(field) != expected:
+            failures.append("assessmentBoundary." + field)
+    if report.get("limitations") != AUDIT_STAGE7_LIMITATIONS:
+        failures.append("limitations")
+
+    bindings = exact_object(
+        "artifactBindings", {"adversarialPlan", "falsePositiveAnalysis"}
+    )
+    for binding_name, artifact_name in (
+        ("adversarialPlan", "adversarial-plan.md"),
+        ("falsePositiveAnalysis", "false-positive-analysis.md"),
+    ):
+        binding = bindings.get(binding_name)
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            raise ToolError("Audit Stage 7 artifact binding is malformed.")
+        artifact = artifacts.get(artifact_name) or {}
+        if binding.get("path") != artifact.get("path"):
+            failures.append(f"artifactBindings.{binding_name}.path")
+        if binding.get("sha256") != artifact.get("sha256"):
+            failures.append(f"artifactBindings.{binding_name}.sha256")
+        validate_mastery_text_artifact(
+            project_path, artifact, "Audit Stage 7 " + artifact_name
+        )
+
+    campaign_keys = {
+        "id",
+        "name",
+        "planDigest",
+        "deterministicSeed",
+        "inputCorpusDigest",
+        "targetScopeDigest",
+        "timeoutSeconds",
+        "maximumCases",
+        "rerunsPerCase",
+        "externalEffectPolicy",
+        "isolationPolicy",
+    }
+    campaign = exact_object("campaign", campaign_keys)
+    if not valid_id(campaign.get("id")):
+        failures.append("campaign.id")
+    if not valid_text(campaign.get("name")):
+        failures.append("campaign.name")
+    if campaign.get("planDigest") != (artifacts.get("adversarial-plan.md") or {}).get("sha256"):
+        failures.append("campaign.planDigest")
+    for field in ("planDigest", "inputCorpusDigest", "targetScopeDigest"):
+        if not valid_digest(campaign.get(field)):
+            failures.append("campaign." + field)
+    seed = campaign.get("deterministicSeed")
+    if (
+        not isinstance(seed, int)
+        or isinstance(seed, bool)
+        or not 0 <= seed <= 2**63 - 1
+    ):
+        failures.append("campaign.deterministicSeed")
+    for field, minimum, maximum in (
+        ("timeoutSeconds", 1, 1800),
+        ("maximumCases", audit_core.ADVERSARIAL_MIN_CASES, audit_core.ADVERSARIAL_MAX_CASES),
+    ):
+        value = campaign.get(field)
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not minimum <= value <= maximum
+        ):
+            failures.append("campaign." + field)
+    if campaign.get("rerunsPerCase") != audit_core.ADVERSARIAL_RERUNS_PER_CASE:
+        failures.append("campaign.rerunsPerCase")
+    if campaign.get("externalEffectPolicy") != "none-observed-required-not-enforced":
+        failures.append("campaign.externalEffectPolicy")
+    if campaign.get("isolationPolicy") != "local-scrubbed-requires-external-isolation-for-untrusted-targets":
+        failures.append("campaign.isolationPolicy")
+    campaign_digest = audit_core.adversarial_canonical_sha256(campaign)
+
+    if not isinstance(adversarial_receipts, list) or not all(
+        isinstance(item, str) for item in adversarial_receipts
+    ):
+        raise ToolError(
+            "adversarial_receipts must be an array of JStack adversarial receipts."
+        )
+    if len(adversarial_receipts) > ADVERSARIAL_MAX_RECEIPTS:
+        raise ToolError("adversarial_receipts exceeds the bounded Stage 7 limit.")
+    if any(len(item) > ADVERSARIAL_MAX_RECEIPT_CHARS for item in adversarial_receipts):
+        raise ToolError("adversarial_receipts contains an oversized receipt.")
+    receipts_by_digest: dict[str, str] = {}
+    for receipt in adversarial_receipts:
+        digest = hashlib.sha256(receipt.encode("utf-8")).hexdigest()
+        if digest in receipts_by_digest:
+            failures.append("adversarialReceipts.duplicate")
+        receipts_by_digest[digest] = receipt
+
+    capture_items = exact_list("captures", 2)
+    expected_capture_count = 1 if expected_type == "audit" else 2
+    if len(capture_items) != expected_capture_count:
+        failures.append("captures.count")
+    capture_fields = {
+        "id",
+        "revision",
+        "receiptDigest",
+        "environmentDigest",
+        "commandKey",
+        "commandFingerprint",
+        "captureDigest",
+        "capture",
+        "summary",
+    }
+    capture_by_revision: dict[str, dict[str, Any]] = {}
+    normalized_by_revision: dict[str, dict[str, Any]] = {}
+    matched_receipts: set[str] = set()
+    environment_digests: set[str] = set()
+    command_fingerprints: set[str] = set()
+    for index, item in enumerate(capture_items):
+        prefix = f"captures[{index}]"
+        if not isinstance(item, dict) or set(item) != capture_fields:
+            raise ToolError(f"Audit Stage 7 {prefix} is malformed.")
+        if not valid_id(item.get("id")):
+            failures.append(prefix + ".id")
+        revision_kind = item.get("revision")
+        if revision_kind not in {"baseline", "candidate"} or revision_kind in capture_by_revision:
+            failures.append(prefix + ".revision")
+            continue
+        capture_by_revision[str(revision_kind)] = item
+        expected_revision = baseline if revision_kind == "baseline" else candidate
+        try:
+            capture = audit_core.normalize_adversarial_capture(item.get("capture"))
+        except audit_core.AdversarialProtocolError as exc:
+            raise ToolError(f"Audit Stage 7 {prefix}.capture is invalid: {exc}") from exc
+        normalized_by_revision[str(revision_kind)] = capture
+        capture_digest = audit_core.adversarial_canonical_sha256(capture)
+        summary = audit_core.summarize_adversarial_capture(capture)
+        if item.get("captureDigest") != capture_digest:
+            failures.append(prefix + ".captureDigest")
+        if item.get("summary") != summary:
+            failures.append(prefix + ".summary")
+        if capture.get("campaignId") != campaign.get("id"):
+            failures.append(prefix + ".campaignId")
+        if capture.get("campaignDigest") != campaign_digest:
+            failures.append(prefix + ".campaignDigest")
+        for capture_field, campaign_field in (
+            ("planDigest", "planDigest"),
+            ("deterministicSeed", "deterministicSeed"),
+            ("inputCorpusDigest", "inputCorpusDigest"),
+            ("targetScopeDigest", "targetScopeDigest"),
+        ):
+            if capture.get(capture_field) != campaign.get(campaign_field):
+                failures.append(prefix + "." + capture_field)
+        maximum_cases = campaign.get("maximumCases")
+        if isinstance(maximum_cases, int) and len(capture["cases"]) > maximum_cases:
+            failures.append(prefix + ".caseCount")
+        environment_digest = item.get("environmentDigest")
+        command_key = item.get("commandKey")
+        command_fingerprint = item.get("commandFingerprint")
+        receipt_digest = item.get("receiptDigest")
+        if valid_digest(environment_digest):
+            environment_digests.add(str(environment_digest))
+        else:
+            failures.append(prefix + ".environmentDigest")
+        if not valid_id(command_key):
+            failures.append(prefix + ".commandKey")
+        if valid_digest(command_fingerprint):
+            command_fingerprints.add(str(command_fingerprint))
+        else:
+            failures.append(prefix + ".commandFingerprint")
+        if not valid_digest(receipt_digest):
+            failures.append(prefix + ".receiptDigest")
+        receipt = receipts_by_digest.get(str(receipt_digest))
+        if receipt is None or expected_revision is None:
+            failures.append(prefix + ".receipt.missing")
+        else:
+            verification = _verify_adversarial_receipt_for_revision(
+                receipt,
+                root,
+                {
+                    "gitHead": expected_revision["gitHead"],
+                    "gitTree": expected_revision["gitTree"],
+                    "policyDigest": current_policy_digest,
+                    "commandKey": command_key,
+                    "commandFingerprint": command_fingerprint,
+                    "campaignId": campaign.get("id"),
+                    "campaignDigest": campaign_digest,
+                    "planDigest": campaign.get("planDigest"),
+                    "deterministicSeed": campaign.get("deterministicSeed"),
+                    "inputCorpusDigest": campaign.get("inputCorpusDigest"),
+                    "targetScopeDigest": campaign.get("targetScopeDigest"),
+                    "environmentDigest": environment_digest,
+                    "captureDigest": capture_digest,
+                    "caseSetDigest": summary["caseSetDigest"],
+                    "outcomeSetDigest": summary["outcomeSetDigest"],
+                    "caseCount": summary["caseCount"],
+                    "testedCategoryCount": summary["testedCategoryCount"],
+                },
+            )
+            if verification["valid"]:
+                matched_receipts.add(str(receipt_digest))
+            else:
+                failures.append(prefix + ".receipt.invalid")
+    expected_revisions = {"candidate"} if expected_type == "audit" else {"baseline", "candidate"}
+    if expected_type == "audit" and "baseline" in capture_by_revision and "candidate" not in capture_by_revision:
+        # A single current capture may be labelled baseline for parity with earlier stages.
+        capture_by_revision["candidate"] = capture_by_revision.pop("baseline")
+        normalized_by_revision["candidate"] = normalized_by_revision.pop("baseline")
+    if set(capture_by_revision) != expected_revisions:
+        failures.append("captures.revisions")
+    if len(environment_digests) > 1:
+        failures.append("captures.environment-mismatch")
+    if len(command_fingerprints) > 1:
+        failures.append("captures.command-mismatch")
+    if set(receipts_by_digest) != matched_receipts:
+        failures.append("adversarialReceipts.unused-or-unverified")
+
+    candidate_capture = normalized_by_revision.get("candidate")
+    baseline_capture = normalized_by_revision.get("baseline")
+    candidate_cases = {
+        case["id"]: case for case in (candidate_capture or {}).get("cases", [])
+    }
+    baseline_cases = {
+        case["id"]: case for case in (baseline_capture or {}).get("cases", [])
+    }
+    if not candidate_cases:
+        failures.append("captures.candidate-required")
+
+    evidence_items = exact_list("evidence")
+    if not evidence_items:
+        failures.append("evidence.empty")
+    evidence_ids: set[str] = set()
+    evidence_revision: dict[str, str] = {}
+    total_evidence_bytes = 0
+    for index, item in enumerate(evidence_items):
+        prefix = f"evidence[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "lineStart",
+            "lineEnd",
+            "sha256",
+        }:
+            raise ToolError("Audit Stage 7 evidence entry is malformed.")
+        evidence_id = collect_id(item, prefix, evidence_ids)
+        revision_kind = item.get("revision")
+        revision = (
+            baseline["gitHead"]
+            if revision_kind == "baseline" and baseline
+            else candidate["gitHead"]
+            if revision_kind == "candidate" and candidate
+            else ""
+        )
+        if not revision:
+            failures.append(prefix + ".revision")
+        if evidence_id and isinstance(revision_kind, str):
+            evidence_revision[evidence_id] = revision_kind
+        path = item.get("path")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+            continue
+        assert isinstance(path, str)
+        start = item.get("lineStart")
+        end = item.get("lineEnd")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 1
+            or end < start
+        ):
+            failures.append(prefix + ".lines")
+        content = (
+            _audit_stage4_revision_file(
+                root,
+                revision,
+                path,
+                max_bytes=AUDIT_STAGE7_MAX_EVIDENCE_FILE_BYTES,
+            )
+            if revision
+            else None
+        )
+        if content is None:
+            failures.append(prefix + ".path.untracked-or-nonregular")
+            continue
+        total_evidence_bytes += len(content)
+        if total_evidence_bytes > AUDIT_STAGE7_MAX_EVIDENCE_TOTAL_BYTES:
+            raise ToolError("Audit Stage 7 evidence exceeds the bounded total read limit.")
+        if item.get("sha256") != hashlib.sha256(content).hexdigest():
+            failures.append(prefix + ".sha256")
+        if isinstance(end, int) and not isinstance(end, bool) and end > len(content.splitlines()):
+            failures.append(prefix + ".lines")
+
+    referenced_evidence: set[str] = set()
+
+    def evidence_refs(value: Any, prefix: str, *, allow_empty: bool = False) -> list[str]:
+        if (
+            not isinstance(value, list)
+            or len(value) > AUDIT_STAGE7_MAX_ITEMS
+            or not all(valid_id(item) for item in value)
+            or len(set(value)) != len(value)
+            or (not allow_empty and not value)
+        ):
+            failures.append(prefix)
+            return []
+        for identifier in value:
+            if identifier not in evidence_ids:
+                failures.append(prefix + ".unknown")
+            else:
+                referenced_evidence.add(str(identifier))
+        return [str(item) for item in value]
+
+    coverage_items = exact_list("coverage", len(audit_core.ADVERSARIAL_CATEGORIES))
+    coverage_status: dict[str, str] = {}
+    covered_case_ids: set[str] = set()
+    for index, item in enumerate(coverage_items):
+        prefix = f"coverage[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "status",
+            "reason",
+            "caseIds",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 7 coverage entry is malformed.")
+        category = item.get("id")
+        status = item.get("status")
+        if category not in audit_core.ADVERSARIAL_CATEGORIES or category in coverage_status:
+            failures.append(prefix + ".id")
+            continue
+        coverage_status[str(category)] = str(status)
+        if status not in AUDIT_STAGE7_COVERAGE_STATUSES:
+            failures.append(prefix + ".status")
+        if not valid_text(item.get("reason")):
+            failures.append(prefix + ".reason")
+        case_ids = item.get("caseIds")
+        if (
+            not isinstance(case_ids, list)
+            or len(case_ids) > AUDIT_STAGE7_MAX_ITEMS
+            or not all(valid_id(case_id) for case_id in case_ids)
+            or len(set(case_ids)) != len(case_ids)
+        ):
+            failures.append(prefix + ".caseIds")
+            case_ids = []
+        expected_case_ids = {
+            case_id
+            for case_id, case in candidate_cases.items()
+            if case.get("category") == category
+        }
+        if status == "tested":
+            if set(case_ids) != expected_case_ids or not expected_case_ids:
+                failures.append(prefix + ".caseIds")
+        elif case_ids:
+            failures.append(prefix + ".caseIds.unexpected")
+        if status == "not-applicable" and expected_case_ids:
+            failures.append(prefix + ".not-applicable-with-cases")
+        covered_case_ids.update(case_id for case_id in case_ids if case_id in candidate_cases)
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+    if set(coverage_status) != set(audit_core.ADVERSARIAL_CATEGORIES):
+        failures.append("coverage.categories")
+    if any(status == "unsupported" for status in coverage_status.values()):
+        failures.append("coverage.unsupported")
+    if covered_case_ids != set(candidate_cases):
+        failures.append("coverage.cases")
+
+    hypothesis_items = exact_list("hypotheses")
+    if len(hypothesis_items) < 2:
+        failures.append("hypotheses.count")
+    hypothesis_ids: set[str] = set()
+    hypothesis_dispositions: dict[str, str] = {}
+    hypothesis_cases: dict[str, set[str]] = {}
+    origins: set[str] = set()
+    candidate_case_owners: set[str] = set()
+    for index, item in enumerate(hypothesis_items):
+        prefix = f"hypotheses[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "origin",
+            "findingFingerprint",
+            "severity",
+            "disposition",
+            "caseIds",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 7 hypothesis entry is malformed.")
+        hypothesis_id = collect_id(item, prefix, hypothesis_ids)
+        origin = item.get("origin")
+        if origin not in {"static-finding", "dynamic-observation"}:
+            failures.append(prefix + ".origin")
+        else:
+            origins.add(str(origin))
+        if not valid_digest(item.get("findingFingerprint")):
+            failures.append(prefix + ".findingFingerprint")
+        if item.get("severity") not in AUDIT_STAGE7_SEVERITIES:
+            failures.append(prefix + ".severity")
+        disposition = item.get("disposition")
+        if disposition not in audit_core.ADVERSARIAL_STATUSES:
+            failures.append(prefix + ".disposition")
+        case_ids = item.get("caseIds")
+        if (
+            not isinstance(case_ids, list)
+            or not case_ids
+            or len(case_ids) > AUDIT_STAGE7_MAX_ITEMS
+            or not all(valid_id(case_id) for case_id in case_ids)
+            or len(set(case_ids)) != len(case_ids)
+        ):
+            failures.append(prefix + ".caseIds")
+            case_ids = []
+        actual = {
+            case_id
+            for case_id, case in candidate_cases.items()
+            if case.get("hypothesisId") == hypothesis_id
+        }
+        if set(case_ids) != actual:
+            failures.append(prefix + ".caseIds")
+        statuses = {
+            candidate_cases[case_id]["runs"][0]["status"]
+            for case_id in case_ids
+            if case_id in candidate_cases
+        }
+        if len(statuses) != 1 or disposition not in statuses:
+            failures.append(prefix + ".disposition")
+        candidate_case_owners.update(case_ids)
+        if hypothesis_id:
+            hypothesis_dispositions[hypothesis_id] = str(disposition)
+            hypothesis_cases[hypothesis_id] = set(case_ids)
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+    if candidate_case_owners != set(candidate_cases):
+        failures.append("hypotheses.case-coverage")
+    if not {"static-finding", "dynamic-observation"}.issubset(origins):
+        failures.append("hypotheses.origins")
+    dispositions = set(hypothesis_dispositions.values())
+    if not {"confirmed", "refuted"}.issubset(dispositions):
+        failures.append("hypotheses.dispositions")
+    dynamic_confirmed = sum(
+        item.get("origin") == "dynamic-observation" and item.get("disposition") == "confirmed"
+        for item in hypothesis_items
+        if isinstance(item, dict)
+    )
+    if dynamic_confirmed < 1:
+        failures.append("hypotheses.dynamic-confirmed")
+
+    assessment_items = exact_list("falsePositiveAssessments")
+    assessment_ids: set[str] = set()
+    assessed_hypotheses: set[str] = set()
+    for index, item in enumerate(assessment_items):
+        prefix = f"falsePositiveAssessments[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "hypothesisId",
+            "classification",
+            "caseIds",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 7 false-positive assessment is malformed.")
+        collect_id(item, prefix, assessment_ids)
+        hypothesis_id = str(item.get("hypothesisId") or "")
+        if hypothesis_id not in hypothesis_ids or hypothesis_id in assessed_hypotheses:
+            failures.append(prefix + ".hypothesisId")
+        else:
+            assessed_hypotheses.add(hypothesis_id)
+        expected_classification = (
+            "supported"
+            if hypothesis_dispositions.get(hypothesis_id) == "confirmed"
+            else "false-positive"
+        )
+        if item.get("classification") != expected_classification:
+            failures.append(prefix + ".classification")
+        case_ids = item.get("caseIds")
+        if not isinstance(case_ids, list) or set(case_ids) != hypothesis_cases.get(hypothesis_id, set()):
+            failures.append(prefix + ".caseIds")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+    if assessed_hypotheses != hypothesis_ids or len(assessment_items) != len(hypothesis_items):
+        failures.append("falsePositiveAssessments.reciprocity")
+
+    harness = exact_object("harness", {"status", "changedPaths", "evidence"})
+    harness_paths = harness.get("changedPaths")
+    if (
+        not isinstance(harness_paths, list)
+        or len(harness_paths) > AUDIT_STAGE7_MAX_ITEMS
+        or not all(_audit_stage1_safe_relative_path(path) for path in harness_paths)
+        or len(set(harness_paths)) != len(harness_paths)
+    ):
+        failures.append("harness.changedPaths")
+        harness_paths = []
+    harness_evidence = evidence_refs(harness.get("evidence"), "harness.evidence")
+    if expected_type == "audit":
+        if harness.get("status") != "existing-observed" or harness_paths:
+            failures.append("harness.audit-semantics")
+    else:
+        if harness.get("status") != "implemented-verified":
+            failures.append("harness.implementation-status")
+        if sorted(harness_paths) != sorted(changed_paths or []):
+            failures.append("harness.changedPaths.diff")
+        if not any(evidence_revision.get(item) == "candidate" for item in harness_evidence):
+            failures.append("harness.candidate-evidence")
+
+    comparison = exact_object(
+        "comparison",
+        {
+            "policy",
+            "sharedCaseIds",
+            "addedCaseIds",
+            "removedCaseIds",
+            "sharedOutcomesStable",
+        },
+    )
+    if expected_type == "audit":
+        expected_comparison = {
+            "policy": "single-current-capture",
+            "sharedCaseIds": [],
+            "addedCaseIds": [],
+            "removedCaseIds": [],
+            "sharedOutcomesStable": True,
+        }
+        if comparison != expected_comparison:
+            failures.append("comparison.audit")
+        shared_case_ids: set[str] = set()
+        added_case_ids: set[str] = set()
+        removed_case_ids: set[str] = set()
+        shared_outcomes_stable = True
+    else:
+        shared_case_ids = set(baseline_cases) & set(candidate_cases)
+        added_case_ids = set(candidate_cases) - set(baseline_cases)
+        removed_case_ids = set(baseline_cases) - set(candidate_cases)
+        shared_outcomes_stable = all(
+            audit_core.adversarial_case_contract(baseline_cases[case_id])
+            == audit_core.adversarial_case_contract(candidate_cases[case_id])
+            and audit_core.adversarial_case_outcome(baseline_cases[case_id])
+            == audit_core.adversarial_case_outcome(candidate_cases[case_id])
+            for case_id in shared_case_ids
+        )
+        expected_comparison = {
+            "policy": "baseline-subset-candidate-superset",
+            "sharedCaseIds": sorted(shared_case_ids),
+            "addedCaseIds": sorted(added_case_ids),
+            "removedCaseIds": sorted(removed_case_ids),
+            "sharedOutcomesStable": shared_outcomes_stable,
+        }
+        if comparison != expected_comparison:
+            failures.append("comparison.implementation")
+        if not shared_case_ids:
+            failures.append("comparison.shared-required")
+        if not added_case_ids:
+            failures.append("comparison.added-required")
+        if removed_case_ids:
+            failures.append("comparison.removed")
+        if not shared_outcomes_stable:
+            failures.append("comparison.shared-outcomes")
+
+    qa_items = exact_list("qaBindings", 64)
+    qa_ids: set[str] = set()
+    matched_qa_keys: set[str] = set()
+    expected_qa_keys = {item["key"] for item in discover_test_commands(project_path)}
+    for index, item in enumerate(qa_items):
+        prefix = f"qaBindings[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "commandKey",
+            "commandFingerprint",
+            "executionProfile",
+            "returncode",
+        }:
+            raise ToolError("Audit Stage 7 QA binding is malformed.")
+        collect_id(item, prefix, qa_ids)
+        matches = [
+            verification
+            for verification in qa_verifications
+            if verification.get("valid")
+            and item.get("commandKey") == (verification.get("payload") or {}).get("commandKey")
+            and item.get("commandFingerprint")
+            == (verification.get("payload") or {}).get("commandFingerprint")
+            and item.get("executionProfile")
+            == (verification.get("payload") or {}).get("executionProfile")
+            and item.get("returncode") == (verification.get("payload") or {}).get("returncode")
+        ]
+        if len(matches) != 1:
+            failures.append(prefix + ".unverified")
+        else:
+            matched_qa_keys.add(str(item.get("commandKey")))
+    if matched_qa_keys != expected_qa_keys:
+        failures.append("qaBindings.complete")
+
+    security = exact_object(
+        "securityBinding", {"complete", "passed", "findingCount"}
+    )
+    security_payload = (
+        security_verification.get("payload", {}) if security_verification else {}
+    )
+    if not security_verification or not security_verification.get("valid"):
+        failures.append("securityBinding.receipt")
+    for field in ("complete", "passed", "findingCount"):
+        if security.get(field) != security_payload.get(field):
+            failures.append("securityBinding." + field)
+    if security.get("complete") is not True or security.get("passed") is not True:
+        failures.append("securityBinding.not-passing")
+
+    gap_items = exact_list("gaps")
+    for index, item in enumerate(gap_items):
+        prefix = f"gaps[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "category",
+            "description",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 7 gap entry is malformed.")
+        if not valid_id(item.get("id")):
+            failures.append(prefix + ".id")
+        if item.get("category") not in audit_core.ADVERSARIAL_CATEGORIES:
+            failures.append(prefix + ".category")
+        if not valid_text(item.get("description")):
+            failures.append(prefix + ".description")
+        evidence_refs(item.get("evidence"), prefix + ".evidence", allow_empty=True)
+    if gap_items:
+        failures.append("gaps.present")
+    if report.get("complete") is not True:
+        failures.append("complete")
+    if evidence_ids - referenced_evidence:
+        failures.append("evidence.unused")
+
+    result = {
+        "schemaVersion": "jstack.audit.stage7-evaluation.v1",
+        "exerciseType": expected_type,
+        "drillId": drill_id,
+        "baselineGitHead": baseline["gitHead"] if baseline else None,
+        "baselineGitTree": baseline["gitTree"] if baseline else None,
+        "candidateGitHead": candidate["gitHead"] if candidate else None,
+        "candidateGitTree": candidate["gitTree"] if candidate else None,
+        "campaignDigest": campaign_digest,
+        "captureCount": len(capture_items),
+        "matchedAdversarialReceiptCount": len(matched_receipts),
+        "candidateCaseCount": len(candidate_cases),
+        "baselineCaseCount": len(baseline_cases),
+        "testedCategoryCount": sum(
+            status == "tested" for status in coverage_status.values()
+        ),
+        "notApplicableCategoryCount": sum(
+            status == "not-applicable" for status in coverage_status.values()
+        ),
+        "unsupportedCategoryCount": sum(
+            status == "unsupported" for status in coverage_status.values()
+        ),
+        "hypothesisCount": len(hypothesis_ids),
+        "confirmedHypothesisCount": sum(
+            value == "confirmed" for value in hypothesis_dispositions.values()
+        ),
+        "refutedHypothesisCount": sum(
+            value == "refuted" for value in hypothesis_dispositions.values()
+        ),
+        "dynamicConfirmedHypothesisCount": dynamic_confirmed,
+        "falsePositiveAssessmentCount": len(assessment_items),
+        "sharedCaseCount": len(shared_case_ids),
+        "addedCaseCount": len(added_case_ids),
+        "removedCaseCount": len(removed_case_ids),
+        "sharedOutcomesStable": shared_outcomes_stable,
+        "evidenceCount": len(evidence_ids),
+        "qaBindingCount": len(qa_ids),
+        "matchedQaBindingCount": len(matched_qa_keys),
+        "changedPathCount": len(changed_paths or []),
+        "gapCount": len(gap_items),
+        "passed": not failures,
+        "failureCodes": sorted(set(failures)),
+    }
+    return {**result, "evaluationDigest": audit_json_digest(result)}
+
+
 def score_level(score: float) -> int:
     if score < 50:
         return 0
@@ -9865,7 +10778,10 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     stage6_dependency_inventory = None
     stage6_supply_chain_report = None
     stage6_supply_chain_evaluation = None
+    stage7_verification_results = None
+    stage7_adversarial_evaluation = None
     performance_evidence: list[dict[str, Any]] = []
+    adversarial_evidence: list[dict[str, Any]] = []
     audit_verification = None
     benchmark_evaluation = None
     loop_capstone_evaluation = None
@@ -9924,6 +10840,11 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         stage6_supply_chain_report = load_mastery_json_artifact(
             project_path,
             artifacts["supply-chain-report.json"],
+        )
+    elif track == "audit" and stage_number == 7:
+        stage7_verification_results = load_mastery_json_artifact(
+            project_path,
+            artifacts["verification-results.json"],
         )
     elif track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
@@ -10111,9 +11032,24 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 "Audit Stage 6 project state contains non-training changes: "
                 + ", ".join(disallowed_changes)
             )
+    if track == "audit" and stage_number == 7:
+        for artifact_name, expected_path in AUDIT_STAGE7_ARTIFACT_PATHS.items():
+            if artifacts.get(artifact_name, {}).get("path") != expected_path:
+                hard_blocks.append(
+                    f"Audit Stage 7 {artifact_name} must use {expected_path}."
+                )
+        permitted_changes = set(AUDIT_STAGE7_ARTIFACT_PATHS.values())
+        disallowed_changes = [
+            path for path in git_changed_files(project_path) if path not in permitted_changes
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Audit Stage 7 project state contains non-training changes: "
+                + ", ".join(disallowed_changes)
+            )
     if (
         stage_number >= 2
-        and not (track == "audit" and stage_number in {2, 3, 4, 5, 6})
+        and not (track == "audit" and stage_number in {2, 3, 4, 5, 6, 7})
         and not state["clean"]
     ):
         hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
@@ -10255,8 +11191,45 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             hard_blocks.append("Stage 7+ attempt requires a current complete security receipt.")
         else:
             security_verification = verify_receipt(security_receipt, "security", state)
+            security_verification["receiptDigest"] = hashlib.sha256(
+                security_receipt.encode("utf-8")
+            ).hexdigest()
             if not security_verification["valid"]:
                 hard_blocks.append("Stage 7+ security receipt is invalid or stale.")
+    if track == "audit" and stage_number == 7:
+        adversarial_receipts = args.get("adversarial_receipts") or []
+        if not isinstance(adversarial_receipts, list) or not all(
+            isinstance(item, str) for item in adversarial_receipts
+        ):
+            raise ToolError("adversarial_receipts must be an array.")
+        if len(adversarial_receipts) > ADVERSARIAL_MAX_RECEIPTS:
+            raise ToolError("adversarial_receipts exceeds the bounded Stage 7 limit.")
+        if any(
+            len(receipt) > ADVERSARIAL_MAX_RECEIPT_CHARS
+            for receipt in adversarial_receipts
+        ):
+            raise ToolError("adversarial_receipts contains an oversized receipt.")
+        adversarial_evidence = [
+            {
+                "kind": "adversarial",
+                "receiptDigest": hashlib.sha256(receipt.encode("utf-8")).hexdigest(),
+            }
+            for receipt in adversarial_receipts
+        ]
+        assert stage7_verification_results is not None
+        stage7_adversarial_evaluation = evaluate_audit_stage7_adversarial(
+            stage7_verification_results,
+            project_path,
+            artifacts,
+            qa_verifications,
+            security_verification,
+            adversarial_receipts,
+            drill_id,
+        )
+        for code in stage7_adversarial_evaluation["failureCodes"]:
+            hard_blocks.append(
+                f"Audit Stage 7 adversarial-verification gate failed: {code}."
+            )
     if track == "audit" and stage_number >= 8:
         audit_receipt = str(args.get("audit_receipt") or "").strip()
         if not audit_receipt:
@@ -10389,6 +11362,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "projectState": state,
         "qaEvidence": qa_verifications,
         "performanceEvidence": performance_evidence,
+        "adversarialEvidence": adversarial_evidence,
         "securityEvidence": security_verification,
         "auditEvidence": audit_verification,
         "stage0SecurityEvaluation": stage0_security_evaluation,
@@ -10398,6 +11372,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "stage4ArchitectureEvaluation": stage4_architecture_evaluation,
         "stage5PerformanceEvaluation": stage5_performance_evaluation,
         "stage6SupplyChainEvaluation": stage6_supply_chain_evaluation,
+        "stage7AdversarialEvaluation": stage7_adversarial_evaluation,
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,
@@ -14161,6 +15136,301 @@ def tool_performance_capture(args: dict[str, Any]) -> dict[str, Any]:
             "It does not prove workload realism, host isolation, measurement accuracy, production capacity, or optimization authority."
         ),
         "outputPolicy": "Only bounded structured measurements and output digests are returned; command stdout and stderr are not returned.",
+    }
+
+
+def _adversarial_environment() -> dict[str, Any]:
+    metadata = {
+        "system": platform.system() or "unknown",
+        "release": platform.release() or "unknown",
+        "machine": platform.machine() or "unknown",
+        "pythonImplementation": platform.python_implementation(),
+        "pythonVersion": platform.python_version(),
+        "logicalCpuCount": os.cpu_count(),
+        "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+        "networkIsolationEnforced": False,
+        "toolVersion": SERVER_VERSION,
+    }
+    return {
+        "metadata": metadata,
+        "digest": audit_core.adversarial_canonical_sha256(metadata),
+    }
+
+
+def _load_adversarial_capture(path: Path) -> dict[str, Any]:
+    try:
+        listed = path.lstat()
+    except FileNotFoundError as exc:
+        raise ToolError(
+            "The adversarial command passed but did not write JSTACK_ADVERSARIAL_OUTPUT."
+        ) from exc
+    if stat.S_ISLNK(listed.st_mode) or not stat.S_ISREG(listed.st_mode):
+        raise ToolError("Adversarial output must be one regular non-symlink JSON file.")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError as exc:
+        raise ToolError(
+            "The adversarial command passed but did not write JSTACK_ADVERSARIAL_OUTPUT."
+        ) from exc
+    except OSError as exc:
+        raise ToolError("Adversarial output could not be opened safely.") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or listed.st_dev != before.st_dev
+            or listed.st_ino != before.st_ino
+        ):
+            raise ToolError("Adversarial output must be one regular non-symlink JSON file.")
+        if before.st_size <= 0 or before.st_size > ADVERSARIAL_CAPTURE_MAX_BYTES:
+            raise ToolError(
+                f"Adversarial output must contain 1 to {ADVERSARIAL_CAPTURE_MAX_BYTES} bytes."
+            )
+        chunks: list[bytes] = []
+        remaining = ADVERSARIAL_CAPTURE_MAX_BYTES + 1
+        while remaining > 0:
+            chunk = os.read(descriptor, min(65_536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        after = os.fstat(descriptor)
+        raw_bytes = b"".join(chunks)
+    except OSError as exc:
+        raise ToolError("Adversarial output could not be read safely.") from exc
+    finally:
+        os.close(descriptor)
+    if (
+        len(raw_bytes) != before.st_size
+        or before.st_dev != after.st_dev
+        or before.st_ino != after.st_ino
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+    ):
+        raise ToolError("Adversarial output changed while it was being read.")
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ToolError("Adversarial output contains a duplicate JSON key.")
+            result[key] = value
+        return result
+
+    try:
+        raw = json.loads(raw_bytes.decode("utf-8"), object_pairs_hook=reject_duplicates)
+        normalized = audit_core.normalize_adversarial_capture(raw)
+    except (
+        UnicodeError,
+        json.JSONDecodeError,
+        audit_core.AdversarialProtocolError,
+    ) as exc:
+        raise ToolError(f"Adversarial output is invalid: {exc}") from exc
+    audit_reject_secret_values(normalized, "Adversarial output")
+    return normalized
+
+
+def tool_adversarial_capture(args: dict[str, Any]) -> dict[str, Any]:
+    """Discover or run one closed-protocol adversarial verification capture."""
+
+    project_path = require_project_path(args.get("project_path"))
+    commands = discover_test_commands(project_path)
+    base_ref = str(args.get("base_ref") or "").strip() or None
+    subject_before = evidence_subject(project_path, base_ref)
+    source_before = _audit_source_subject(project_path, "Stage 7 adversarial capture")
+    run = bool(args.get("run") or False)
+    if not run:
+        return {
+            "projectPath": str(project_path),
+            "evidenceSubject": subject_before,
+            "sourceSubject": {
+                "gitHead": source_before["gitHead"],
+                "gitTree": source_before["gitTree"],
+            },
+            "allowedCommands": commands,
+            "executed": False,
+            "captureProtocol": {
+                "schemaVersion": audit_core.ADVERSARIAL_CAPTURE_SCHEMA_VERSION,
+                "outputEnvironmentVariable": "JSTACK_ADVERSARIAL_OUTPUT",
+                "categories": list(audit_core.ADVERSARIAL_CATEGORIES),
+                "minimumCases": audit_core.ADVERSARIAL_MIN_CASES,
+                "maximumCases": audit_core.ADVERSARIAL_MAX_CASES,
+                "rerunsPerCase": audit_core.ADVERSARIAL_RERUNS_PER_CASE,
+                "externalEffectClaim": audit_core.ADVERSARIAL_EXTERNAL_EFFECT,
+                "rawPayloadsAllowed": False,
+                "networkIsolationEnforced": False,
+            },
+            "policy": (
+                "Discovery is read-only. Capture execution is a separately authorized trusted developer/QA action, "
+                "not an Audit action, and accepts only a discovered command at an exact trusted Git state. "
+                "The local runner is not an OS or network sandbox."
+            ),
+        }
+
+    if args.get("execution_approved") is not True:
+        raise ToolError(
+            "Adversarial capture executes repository-controlled code. Set execution_approved=true only within a separately authorized trusted development or QA workflow."
+        )
+    trusted_revision = str(args.get("trusted_revision") or "").strip()
+    trusted_fingerprint = str(args.get("trusted_project_fingerprint") or "").strip()
+    trusted_policy_digest = str(args.get("trusted_policy_digest") or "").strip()
+    if (
+        trusted_revision != subject_before["gitHead"]
+        or trusted_fingerprint != subject_before["projectFingerprint"]
+        or trusted_policy_digest != subject_before["policyDigest"]
+    ):
+        raise ToolError(
+            "Trusted revision/fingerprint does not match the current project state. Rediscover and review the project before capture."
+        )
+    permitted_changes = set(AUDIT_STAGE7_ARTIFACT_PATHS.values())
+    disallowed_changes = [
+        path for path in git_changed_files(project_path) if path not in permitted_changes
+    ]
+    if disallowed_changes:
+        raise ToolError(
+            "Adversarial capture requires committed project code; only the three exact Stage 7 training artifacts may be dirty: "
+            + ", ".join(disallowed_changes)
+        )
+    command_key = str(args.get("command_key") or "").strip()
+    selected = next((command for command in commands if command["key"] == command_key), None)
+    if selected is None:
+        raise ToolError(
+            f"Unsupported command_key: {command_key}. Allowed: {[command['key'] for command in commands]}"
+        )
+    campaign_id = str(args.get("campaign_id") or "").strip()
+    campaign_digest = str(args.get("campaign_digest") or "").strip()
+    plan_digest = str(args.get("plan_digest") or "").strip()
+    input_corpus_digest = str(args.get("input_corpus_digest") or "").strip()
+    target_scope_digest = str(args.get("target_scope_digest") or "").strip()
+    deterministic_seed = args.get("deterministic_seed")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", campaign_id):
+        raise ToolError("campaign_id must be a bounded identifier.")
+    for value, label in (
+        (campaign_digest, "campaign_digest"),
+        (plan_digest, "plan_digest"),
+        (input_corpus_digest, "input_corpus_digest"),
+        (target_scope_digest, "target_scope_digest"),
+    ):
+        if not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise ToolError(f"{label} must be a lowercase SHA-256 digest.")
+    if (
+        not isinstance(deterministic_seed, int)
+        or isinstance(deterministic_seed, bool)
+        or not 0 <= deterministic_seed <= 2**63 - 1
+    ):
+        raise ToolError("deterministic_seed must be an integer from 0 to 2^63-1.")
+    timeout_seconds = args.get("timeout_sec", 300)
+    if (
+        not isinstance(timeout_seconds, int)
+        or isinstance(timeout_seconds, bool)
+        or not 10 <= timeout_seconds <= 1800
+    ):
+        raise ToolError("timeout_sec must be an integer from 10 to 1800.")
+    environment = _adversarial_environment()
+    with tempfile.TemporaryDirectory(prefix="jstack-adversarial-capture-") as temp_dir:
+        output_path = Path(temp_dir) / "capture.json"
+        result = run_approved_project_command(
+            selected["args"],
+            project_path,
+            timeout=timeout_seconds,
+            env_allowlist=[],
+            fixed_env={
+                "JSTACK_ADVERSARIAL_OUTPUT": str(output_path),
+                "JSTACK_ADVERSARIAL_SCHEMA": audit_core.ADVERSARIAL_CAPTURE_SCHEMA_VERSION,
+                "JSTACK_ADVERSARIAL_CAMPAIGN_ID": campaign_id,
+                "JSTACK_ADVERSARIAL_CAMPAIGN_DIGEST": campaign_digest,
+                "JSTACK_ADVERSARIAL_PLAN_DIGEST": plan_digest,
+                "JSTACK_ADVERSARIAL_SEED": str(deterministic_seed),
+                "JSTACK_ADVERSARIAL_INPUT_CORPUS_DIGEST": input_corpus_digest,
+                "JSTACK_ADVERSARIAL_TARGET_SCOPE_DIGEST": target_scope_digest,
+            },
+        )
+        capture = _load_adversarial_capture(output_path) if result["ok"] else None
+    subject_after = evidence_subject(project_path, base_ref)
+    source_after = _audit_source_subject(project_path, "Stage 7 adversarial capture")
+    mutation_detected = any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest")
+    ) or any(
+        source_after[field] != source_before[field] for field in ("gitHead", "gitTree")
+    )
+    binding_matches = bool(
+        capture
+        and capture["campaignId"] == campaign_id
+        and capture["campaignDigest"] == campaign_digest
+        and capture["planDigest"] == plan_digest
+        and capture["deterministicSeed"] == deterministic_seed
+        and capture["inputCorpusDigest"] == input_corpus_digest
+        and capture["targetScopeDigest"] == target_scope_digest
+    )
+    passed = bool(result["ok"]) and capture is not None and binding_matches and not mutation_detected
+    capture_digest = (
+        audit_core.adversarial_canonical_sha256(capture) if capture is not None else None
+    )
+    summary = audit_core.summarize_adversarial_capture(capture) if capture is not None else None
+    receipt = issue_receipt(
+        {
+            "kind": "adversarial",
+            "projectPath": subject_after["gitRoot"],
+            "gitHead": source_after["gitHead"],
+            "gitTree": source_after["gitTree"],
+            "projectFingerprint": subject_after["projectFingerprint"],
+            "baseRef": subject_after["baseRef"],
+            "baseCommit": subject_after["baseCommit"],
+            "policyDigest": subject_after["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "executionProfile": "local-scrubbed-no-os-sandbox-v1",
+            "networkIsolationEnforced": False,
+            "commandKey": selected["key"],
+            "commandFingerprint": selected["commandFingerprint"],
+            "campaignId": campaign_id,
+            "campaignDigest": campaign_digest,
+            "planDigest": plan_digest,
+            "deterministicSeed": deterministic_seed,
+            "inputCorpusDigest": input_corpus_digest,
+            "targetScopeDigest": target_scope_digest,
+            "environmentDigest": environment["digest"],
+            "captureDigest": capture_digest,
+            "caseSetDigest": summary["caseSetDigest"] if summary else None,
+            "outcomeSetDigest": summary["outcomeSetDigest"] if summary else None,
+            "caseCount": summary["caseCount"] if summary else 0,
+            "testedCategoryCount": summary["testedCategoryCount"] if summary else 0,
+            "returncode": result["returncode"],
+            "passed": passed,
+            "mutationDetected": mutation_detected,
+        }
+    )
+    return {
+        "projectPath": str(project_path),
+        "sourceSubject": {
+            "gitHead": source_after["gitHead"],
+            "gitTree": source_after["gitTree"],
+        },
+        "executed": True,
+        "passed": passed,
+        "bindingMatched": binding_matches,
+        "mutationDetected": mutation_detected,
+        "command": {
+            "key": selected["key"],
+            "commandFingerprint": selected["commandFingerprint"],
+            "returncode": result["returncode"],
+            "stdoutSha256": result.get("stdoutSha256"),
+            "stderrSha256": result.get("stderrSha256"),
+            "capturedOutputBytes": result.get("capturedOutputBytes"),
+        },
+        "environment": environment,
+        "captureDigest": capture_digest,
+        "capture": capture,
+        "summary": summary,
+        "evidenceReceipt": receipt,
+        "receiptMeaning": (
+            "The receipt binds the exact Git tree, discovered command, campaign, plan, deterministic corpus, target scope, local environment, repeated case contracts, and digested outcomes. "
+            "It does not prove host or network isolation, absence of external effects, exploitability, vulnerability absence, or production safety."
+        ),
+        "outputPolicy": (
+            "Only bounded identifiers, classifications, counts, and SHA-256 digests are returned; raw inputs, payloads, source, stdout, and stderr are not returned."
+        ),
     }
 
 
@@ -19422,6 +20692,13 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "default": [],
                     "description": "Audit Stage 5 only: session-local receipts from jstack_performance_capture. Receipts are passed directly to the tool; no terminal token or paste ceremony is used."
                 },
+                "adversarial_receipts": {
+                    "type": "array",
+                    "maxItems": ADVERSARIAL_MAX_RECEIPTS,
+                    "items": {"type": "string", "maxLength": ADVERSARIAL_MAX_RECEIPT_CHARS},
+                    "default": [],
+                    "description": "Audit Stage 7 only: session-local receipts from jstack_adversarial_capture. Receipts are passed directly to the tool; no terminal token or paste ceremony is used."
+                },
                 "security_receipt": {"type": "string"},
                 "audit_receipt": {
                     "type": "string",
@@ -19799,6 +21076,32 @@ TOOLS: dict[str, dict[str, Any]] = {
             }
         },
         "handler": tool_performance_capture,
+        "readOnlyHint": False,
+    },
+    "gstack_adversarial_capture": {
+        "description": "Discover or run one bounded deterministic adversarial-verification campaign using the closed JStack two-rerun digest-only protocol. Execution is a separately authorized trusted developer/QA action bound to the exact Git state; Audit itself never executes targets or implements harnesses.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_path": {"type": "string"},
+                "base_ref": {"type": "string", "description": "Optional comparison base bound into the capture receipt."},
+                "run": {"type": "boolean", "default": False},
+                "command_key": {"type": "string", "description": "A discovered command key; required when run=true."},
+                "timeout_sec": {"type": "integer", "minimum": 10, "maximum": 1800, "default": 300},
+                "execution_approved": {"type": "boolean", "default": False, "description": "Required when run=true; records trust for repository-controlled execution within the current authorized workflow. No token or terminal-paste ceremony is used."},
+                "trusted_revision": {"type": "string", "description": "Exact gitHead returned by discovery."},
+                "trusted_project_fingerprint": {"type": "string", "description": "Exact projectFingerprint returned by discovery."},
+                "trusted_policy_digest": {"type": "string", "description": "Exact policyDigest returned by discovery."},
+                "campaign_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+                "campaign_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "plan_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "deterministic_seed": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+                "input_corpus_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "target_scope_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+        },
+        "handler": tool_adversarial_capture,
         "readOnlyHint": False,
     },
     "gstack_context_save": {

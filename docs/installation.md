@@ -131,6 +131,17 @@ updates the database. If the executable or database is absent, the adapter is
 reported unavailable and Stage 6 fails closed rather than silently weakening
 advisory coverage.
 
+### Stage 7 adversarial-capture isolation
+
+`jstack_adversarial_capture` runs only a discovered command at an exact
+reviewed Git state with a scrubbed environment, isolated HOME, closed stdin,
+timeouts, and bounded structured output. This local profile is not an OS or
+network sandbox and retains the current user's filesystem and network
+privileges. Run untrusted repositories or active security tests inside an
+externally enforced container or VM with target authorization and appropriate
+egress controls. The capture value `none-observed` records an observation; it
+does not prove network isolation.
+
 ### 3. Keep The Umbrella Plugin Uninstalled
 
 The `plugin/` directory is an alternative all-in-one distribution. Installing
@@ -190,9 +201,10 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.7`);
-- `tools/list` includes 51 canonical `jstack_*` tools, including
-  `jstack_context_readiness` and `jstack_performance_capture`.
+  prerelease, `0.10.0-alpha.8`);
+- `tools/list` includes 52 canonical `jstack_*` tools, including
+  `jstack_context_readiness`, `jstack_performance_capture`, and
+  `jstack_adversarial_capture`.
 
 ## Upgrade
 

@@ -40,7 +40,9 @@ Stage 2 may write only `correctness-report.json`, `invariants.md`, and
 `migration-outline.md`; Audit Stage 5 may write only `benchmark-plan.md`,
 `baseline-results.json`, and `performance-findings.json`; and Audit Stage 6 may
 write only `dependency-inventory.json`, `build-trace.md`, and
-`supply-chain-report.json` beneath
+`supply-chain-report.json`; and Audit Stage 7 may write only
+`adversarial-plan.md`, `verification-results.json`, and
+`false-positive-analysis.md` beneath
 `.jstack-training/`.
 None may perform
 network or secret access, exploit development, public disclosure, remediation,
@@ -56,7 +58,10 @@ trusted development or QA workflow; Audit never runs the benchmark, optimizes
 code, or creates the candidate. Stage 6 may consume a current complete audit
 receipt containing sanitized passed dependency-analysis adapter results and
 current QA receipts; Audit never runs the scanner, resolves packages, hardens
-CI, or creates the candidate.
+CI, or creates the candidate. Stage 7 may consume current-session signed
+adversarial-capture, QA, and security receipts created by a separately
+authorized trusted development or QA workflow; Audit never executes the
+target, implements the harness, retains payloads, or creates the candidate.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -133,6 +138,28 @@ CI, or creates the candidate.
    in a separate trusted workflow, using a pre-provisioned external database
    bound through `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`; never download or
    refresh advisory data during the Stage 6 attempt.
+   At Stage 7, use the closed adversarial campaign and capture contracts. Bind
+   each current-session receipt to the exact Git tree, policy, discovered
+   command and fingerprint, campaign and plan, deterministic seed,
+   input-corpus and target-scope digests, local environment, case-set digest,
+   and outcome-set digest. Require at least four cases across at least three
+   categories with exactly two identical status/outcome runs. Store only
+   bounded identifiers, classifications, counts, and SHA-256 digests—never raw
+   inputs, payloads, source, secrets, stdout, or stderr. Classify all eight
+   categories as tested or not applicable, map every case to exactly one
+   static-finding or dynamic-observation hypothesis, require a confirmed
+   dynamic observation plus both confirmed and refuted dispositions, and give
+   every hypothesis one reciprocal supported or false-positive assessment.
+   Require current passing QA for every discovered command and a current
+   complete passing security receipt. The audit drill uses one current capture
+   and no harness changes. The harness drill verifies only a separately
+   authorized strict-ancestor-to-current committed change with exact paths, at
+   least one added case, no removed cases, and stable shared contracts and
+   outcomes. Local capture is not an OS or network sandbox; untrusted or active
+   security testing needs externally enforced isolation and explicit target
+   authorization. Audit performs no execution, exploitation, harness
+   implementation, remediation, Git, release, deployment, or production
+   action and makes no vulnerability-absence or zero-day-detection claim.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
    audit goal, source-attributed facts, separate assumptions, and only material

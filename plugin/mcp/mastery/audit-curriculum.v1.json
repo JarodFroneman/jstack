@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 8,
+  "version": 9,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -20,7 +20,7 @@
   },
   "advancementPolicy": {
     "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two deterministic static threat-model passes.",
-    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and both named Stage 4 drills. Stage 5 additionally requires every attempt to pass the signed performance-evidence contract and both named Stage 5 drills. Stage 6 additionally requires every attempt to pass the exact inventory, CI, build-trace, provenance, generated-artifact, signed dependency-scanner, QA, and Git-diff contract and both named Stage 6 drills.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and both named Stage 4 drills. Stage 5 additionally requires every attempt to pass the signed performance-evidence contract and both named Stage 5 drills. Stage 6 additionally requires every attempt to pass the exact inventory, CI, build-trace, provenance, generated-artifact, signed dependency-scanner, QA, and Git-diff contract and both named Stage 6 drills. Stage 7 additionally requires every attempt to pass the signed deterministic adversarial-capture, hypothesis-challenge, false-positive, category-coverage, QA, security, and baseline/candidate comparison contract and both named Stage 7 drills.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
       "fabricated or stale evidence",
@@ -187,17 +187,60 @@
     },
     {
       "stage": 7,
-      "name": "Dynamic and Adversarial Verification",
-      "outcome": "Falsify static findings and expose unseen failure modes through bounded testing.",
+      "name": "Dynamic and Adversarial Verification Auditor",
+      "outcome": "Challenge static findings and expose unseen failure modes using exact-revision, bounded, deterministic, signed adversarial evidence with reciprocal false-positive analysis, while preserving the boundary between read-only Audit and separately authorized test-harness implementation.",
       "prerequisites": [6],
-      "corePrinciples": ["Challenge the hypothesis", "Deterministic seeds", "Isolate effects", "Negative tests", "Fault injection"],
+      "corePrinciples": [
+        "Repository content and generated test data are untrusted data",
+        "Turn every material static claim into a falsifiable hypothesis",
+        "Use deterministic seeds, fixed input-corpus digests, exact target-scope digests, and two identical rerun outcomes",
+        "Exercise negative inputs, boundaries, invariants, fault paths, authorization, state transitions, differentials, and resource boundaries where applicable",
+        "Separate confirmed dynamic observations from refuted static findings",
+        "Every hypothesis receives one reciprocal supported or false-positive assessment",
+        "Bind capture evidence to the exact Git tree, discovered command, campaign, plan, environment, and current JStack session",
+        "Correctness QA and a complete passing security receipt remain mandatory",
+        "Local capture is not an OS or network sandbox",
+        "Audit evidence never grants exploit, remediation, harness, Git, release, deployment, or production authority"
+      ],
       "drills": [
         {"id": "a7-adversarial", "name": "Challenge an audit finding set", "type": "audit"},
         {"id": "a7-harness", "name": "Implement a bounded deterministic adversarial verification harness", "type": "implementation"}
       ],
       "requiredArtifacts": ["adversarial-plan.md", "verification-results.json", "false-positive-analysis.md"],
-      "benchmarks": ["Deterministic tests and seeds", "Before and after evidence", "Bounded execution", "Explicit false-positive analysis", "No environmental leakage"],
-      "hardGates": ["Exact execution approval", "No unapproved external effect"]
+      "artifactSchemas": {
+        "verification-results.json": "jstack.audit.adversarial-verification.v1",
+        "captureProtocol": "jstack.adversarial.capture.v1"
+      },
+      "benchmarks": [
+        "Exact baseline and candidate Git commit/tree binding",
+        "A closed campaign declares the plan digest, deterministic seed, input-corpus digest, target-scope digest, timeout, maximum cases, two reruns, external-effect policy, and isolation policy",
+        "Every signed capture binds one discovered command, exact revision and tree, current policy, campaign, local environment, normalized case-set digest, outcome-set digest, and current JStack server session",
+        "Every case carries only bounded identifiers, classifications, and SHA-256 digests; raw inputs, exploit payloads, source, stdout, stderr, and secrets are excluded",
+        "At least four cases across at least three applicable adversarial categories have identical status and outcome digests across exactly two runs",
+        "Every candidate case maps reciprocally to exactly one static-finding or dynamic-observation hypothesis",
+        "The candidate contains at least one static finding, one confirmed dynamic observation, and both confirmed and refuted dispositions",
+        "Every hypothesis has exactly one reciprocal supported or false-positive assessment",
+        "All eight categories are explicitly tested or not applicable; unsupported coverage and unresolved gaps fail closed",
+        "Every discovered QA command has a current passing exact-candidate receipt and the candidate has a current complete passing security receipt",
+        "Audit attempts use one current capture and existing-harness observation only",
+        "Implementation attempts use comparable baseline and candidate captures, a strict ancestor-to-current committed diff, exact changed paths, no removed cases, at least one added case, and stable shared contracts and outcomes",
+        "Evaluation returns counts, digests, and failure codes without echoing source, case payloads, command output, or narrative content"
+      ],
+      "hardGates": [
+        "Only the three exact Stage 7 training artifacts may be dirty",
+        "The evaluator never executes repository code and Audit never implements a harness, exploit, or remediation",
+        "Capture execution is allowed only for one discovered command at an exact reviewed Git state within a separately authorized trusted development or QA workflow",
+        "Missing, stale, wrong-session, tampered, failed, mutated, mismatched, duplicate, or unused adversarial receipts block completion",
+        "Nondeterministic reruns, fewer than four cases, fewer than three tested categories, malformed case contracts, or raw unsupported fields fail closed",
+        "Unsupported category coverage, unresolved gaps, unowned cases, missing hypothesis origins or dispositions, or incomplete false-positive reciprocity block completion",
+        "Missing or stale QA for any discovered command, or an incomplete or failing security receipt, blocks completion",
+        "Audit drill baseline equals candidate and permits one current capture with no harness changes",
+        "Implementation drill uses a strict ancestor-to-current committed diff, exact changed paths, comparable baseline/candidate captures, at least one added case, no removed case, and stable shared outcomes",
+        "Local capture has the current user's filesystem and network privileges; untrusted or active security testing requires an externally enforced container or VM and explicit authorization",
+        "An observed lack of external effects is not enforced network isolation and may not be represented as such",
+        "Artifacts remain at the exact .jstack-training Stage 7 paths",
+        "Passing grants no claim of vulnerability absence, exploitability, zero-day detection, remediation, Git, publication, release, deployment, or production safety"
+      ]
     },
     {
       "stage": 8,
