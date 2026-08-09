@@ -974,7 +974,7 @@ class AuditSupplyChainStageTests(unittest.TestCase):
     def test_curriculum_schemas_and_advancement_bind_both_stage6_drills(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(6, "audit")
-        self.assertEqual(8, curriculum["version"])
+        self.assertEqual(9, curriculum["version"])
         self.assertEqual(
             server.AUDIT_STAGE6_INVENTORY_SCHEMA,
             stage["artifactSchemas"]["dependency-inventory.json"],

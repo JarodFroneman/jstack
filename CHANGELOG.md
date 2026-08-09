@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.10.0-alpha.8 - 2026-08-09
+
+### Added
+
+- Implemented Audit mastery Stage 7, Dynamic and Adversarial Verification
+  Auditor, as the eighth bounded foundation phase.
+- Added closed `jstack.adversarial.capture.v1` and
+  `jstack.audit.adversarial-verification.v1` contracts and published schemas.
+- Added `jstack_adversarial_capture`, the 52nd canonical MCP tool, for bounded
+  deterministic evidence capture through one discovered command at an exact
+  reviewed Git state. It binds the campaign, plan, deterministic corpus and
+  seed, target scope, command, environment, case-set digest, outcome-set
+  digest, policy, version, and current server session without a user token or
+  terminal-paste ceremony.
+- Added exact reconciliation for eight adversarial categories, two-run outcome
+  determinism, reciprocal case/hypothesis ownership, static and dynamic
+  origins, confirmed and refuted dispositions, and one supported or
+  false-positive assessment per hypothesis.
+- Added strict audit-versus-harness drill semantics. The audit drill uses one
+  current capture; the harness drill verifies a separately committed strict-
+  ancestor diff with exact changed paths, at least one added case, no removed
+  cases, and stable shared contracts and outcomes.
+- Added adversarial tests for nondeterministic and duplicate cases, weak
+  coverage, stale trust bindings, capture/report tampering, incomplete false-
+  positive reciprocity, non-training writes, QA/security binding, schema/tool
+  registration, and Stage 7 advancement.
+
+### Changed
+
+- Audit curriculum content version is now 9. Stage 7 advancement requires
+  three independent deterministic passes across at least two commits, every
+  score at least 80, a mean score of at least 85, and both named Stage 7
+  drills.
+- Stage 7 permits only `adversarial-plan.md`, `verification-results.json`, and
+  `false-positive-analysis.md` at their exact `.jstack-training/` paths.
+- Both Stage 7 drills require current passing receipts for every discovered QA
+  command plus a current complete passing security receipt.
+- Preserved the five commands, mastery profile v3, Python 3.9+ standard-library
+  runtime, cross-platform packaging, and token-free host-native action model.
+
+### Security
+
+- The deterministic evaluator executes no repository code, implements no
+  harness or exploit, creates no candidate, accesses no secrets, and performs
+  no remediation or production action. Dynamic captures remain separately
+  authorized trusted development/QA actions bound to exact project state.
+- Capture artifacts exclude raw inputs, payloads, source, secrets, stdout, and
+  stderr. Only bounded identifiers, classifications, counts, and SHA-256
+  digests cross the receipt boundary; malformed, stale, failed, mutated,
+  duplicate, mismatched, wrong-session, or unused evidence fails closed.
+- Local capture uses a scrubbed environment, isolated HOME, closed stdin,
+  process-group timeouts, and output caps, but it is not an OS or network
+  sandbox. `none-observed` is not enforced isolation, and untrusted or active
+  testing requires an external container or VM plus target authorization.
+- A Stage 7 pass proves bounded evidence-protocol integrity only. It does not
+  prove vulnerability absence, exploitability, zero-day detection, universal
+  behavior, remediation safety, release readiness, production safety, or
+  production authority.
+
 ## 0.10.0-alpha.7 - 2026-08-09
 
 ### Added

@@ -46,7 +46,7 @@ class ActionSafetyTests(unittest.TestCase):
         definitions = {
             item["name"]: item for item in server.tool_definitions()
         }
-        self.assertEqual(51, len(definitions))
+        self.assertEqual(52, len(definitions))
         self.assertFalse(RETIRED_TOOLS & set(definitions))
         gate_schema = definitions["jstack_program_gate_resolve"]["inputSchema"]
         self.assertEqual(

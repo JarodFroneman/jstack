@@ -68,6 +68,11 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   permissions, source-to-artifact graphs, provenance, generated-copy drift,
   signed no-mutation dependency-analysis evidence, complete QA, exact candidate
   diffs, and separate Audit/hardening/release authority
+- deterministic audit-mastery Stage 7 validation for exact-revision signed
+  adversarial campaigns, two-run case determinism, eight-category coverage,
+  reciprocal hypothesis/false-positive analysis, complete QA and security
+  receipts, baseline/candidate harness comparison, and separate
+  Audit/capture/harness/production authority
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -441,6 +446,36 @@ source, finding, scanner, dependency, or build-trace content. A pass proves
 bounded protocol integrity—not complete transitive dependency semantics,
 current advisory coverage, reproducible builds, artifact authenticity,
 vulnerability absence, release readiness, or production authority.
+
+Audit mastery Stage 7 is a read-only evidence-reconciliation layer over a
+separately authorized adversarial capture workflow. Its closed campaign binds
+the plan, deterministic corpus and seed, target scope, time/case limits,
+external-effect observation policy, and isolation limitation. Its closed
+capture carries only bounded identifiers, categories, classifications, and
+SHA-256 digests. At least four cases across three categories must have exactly
+two identical classified outcomes; raw inputs, payloads, source, secrets,
+stdout, and stderr are excluded.
+
+Each `jstack_adversarial_capture` receipt is session-local and binds an exact
+Git commit/tree, policy, discovered command/fingerprint, campaign, local
+environment, normalized capture, case-set digest, and outcome-set digest. The
+runner uses a scrubbed environment, isolated HOME, closed stdin, process-group
+timeouts, and output caps, but it retains the user's filesystem and network
+privileges. `none-observed` is an evidence classification, not enforced
+network isolation. Untrusted or active targets require an externally enforced
+container or VM and explicit authorization.
+
+The evaluator independently checks all eight category dispositions, complete
+case ownership, static and dynamic hypothesis origins, confirmed and refuted
+outcomes, reciprocal supported/false-positive assessments, current QA for
+every discovered command, and one complete passing security receipt. The
+audit drill uses one current capture. The harness drill requires a strict
+ancestor-to-current committed diff, exact changed paths, at least one added
+case, no removed cases, and unchanged shared contracts and outcomes. Only the
+three exact Stage 7 artifact paths may be dirty. A pass proves bounded protocol
+integrity, not vulnerability absence, exploitability, zero-day detection,
+universal behavior, release readiness, production safety, or production
+authority.
 
 ## Project Binding
 

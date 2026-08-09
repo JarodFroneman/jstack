@@ -41,7 +41,7 @@ evidence remains attributable to the versioned rubric.
 | 4 - Maintainability And Architecture | Find structural risks with material change or defect cost. | `architecture-map.md`, `maintainability-report.json`, `migration-outline.md` |
 | 5 - Performance And Resources | Prove one exact-revision, signed-sample performance defect and verify one separately authorized committed correction without regressing a guardrail. | `benchmark-plan.md`, `baseline-results.json`, `performance-findings.json` |
 | 6 - Supply Chain And Release | Audit dependencies, lockfiles, CI permissions, provenance, and generated artifacts. | `dependency-inventory.json`, `build-trace.md`, `supply-chain-report.json` |
-| 7 - Adversarial Verification | Falsify static findings through bounded deterministic testing. | `adversarial-plan.md`, `verification-results.json`, `false-positive-analysis.md` |
+| 7 - Dynamic And Adversarial Verification | Challenge static findings with exact-revision signed deterministic captures, reciprocal false-positive analysis, complete category classification, QA/security bindings, and a separately committed harness comparison. | `adversarial-plan.md`, `verification-results.json`, `false-positive-analysis.md` |
 | 8 - Enterprise Audit Lead | Triage, manage accepted risk, and produce engineering/executive reports. | `audit-report.md`, `audit-result.json`, `audit.sarif`, `risk-register.json` |
 | 9 - Principal Auditor | Evaluate the audit system and lead unseen audits independently. | `blind-audit.md`, `evaluation-results.json`, `calibration-report.md`, `operator-runbook.md`, `release-dossier.md` |
 
@@ -328,6 +328,61 @@ authority. Advancement requires three independent deterministic passes across
 at least two commits, every score at least 80, mean at least 85, and both named
 Stage 6 drills.
 
+## Stage 7 Deterministic Gate
+
+Stage 7 challenges static findings with bounded dynamic evidence without
+turning Audit into an execution, exploit, harness-development, or remediation
+agent. Its only permitted dirty paths are `adversarial-plan.md`,
+`verification-results.json`, and `false-positive-analysis.md` beneath
+`.jstack-training/`. The result envelope uses
+`jstack.audit.adversarial-verification.v1`; each retained capture uses the
+closed `jstack.adversarial.capture.v1` protocol.
+
+One declared campaign binds the plan digest, deterministic seed, input-corpus
+digest, target-scope digest, timeout, maximum case count, two-rerun rule,
+external-effect policy, and isolation policy. Captures must come from
+session-local `jstack_adversarial_capture` receipts produced by a separately
+authorized trusted development or QA workflow. Each receipt binds an exact Git
+commit and tree, current policy, one discovered command and fingerprint,
+campaign, local environment, normalized capture, case-set digest, and
+outcome-set digest. Receipts pass directly between MCP tools; users do not copy
+tokens, signer commands, or confirmation digests into a terminal.
+
+The capture protocol carries only bounded identifiers, categories,
+classifications, counts, and SHA-256 digests. It excludes raw test inputs,
+payloads, source, secrets, stdout, and stderr. At least four cases across at
+least three categories are required, and every case must report identical
+status and outcome digests across exactly two runs. All eight categories are
+explicitly classified as tested or not applicable: negative input, boundary
+value, invariant, fault injection, authorization, state transition,
+differential, and resource boundary. Unsupported coverage and unresolved gaps
+fail closed.
+
+Every candidate case maps to exactly one falsifiable hypothesis. The package
+must contain static-finding and dynamic-observation origins, at least one
+confirmed dynamic observation, and both confirmed and refuted dispositions.
+Every hypothesis has exactly one reciprocal supported or false-positive
+assessment. A current passing receipt for every discovered QA command and a
+current complete passing security receipt remain mandatory.
+
+`a7-adversarial` uses one current capture with baseline equal to candidate and
+observes an existing harness only. `a7-harness` verifies a candidate already
+implemented and committed by a separate authorized workflow: the baseline is
+a strict ancestor, reported changed paths equal the Git diff, captures share
+campaign/command/environment bindings, at least one case is added, no case is
+removed, and all shared case contracts and outcomes remain stable. The
+evaluator returns only metadata, counts, failure codes, and a digest.
+
+Local capture uses a scrubbed environment and isolated HOME but is not an OS
+or network sandbox and does not enforce the claimed absence of external
+effects. Untrusted or active security testing requires an externally enforced
+container or VM plus explicit target authorization. A Stage 7 pass proves only
+bounded protocol integrity—not vulnerability absence, exploitability,
+zero-day detection, universal behavior, release readiness, production safety,
+or production authority. Advancement requires three independent deterministic
+passes across at least two commits, every score at least 80, mean at least 85,
+and both Stage 7 drills.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -344,8 +399,9 @@ repository-map rule above; Stage 2 uses the deterministic correctness-evidence
 rule above; Stage 3 uses the deterministic threat-model rule above; Stage 4
 uses the deterministic architecture rule above; Stage 5 uses the signed
 performance-evidence rule above; and Stage 6 uses the deterministic supply-
-chain/build-integrity rule above. Stages 7 and 8 provide separate audit and
-bounded implementation drills and require repeated evidence across both work
+chain/build-integrity rule above; and Stage 7 uses the signed deterministic
+adversarial-verification rule above. Stage 8 provides separate audit and
+bounded implementation drills and requires repeated evidence across both work
 types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.
 

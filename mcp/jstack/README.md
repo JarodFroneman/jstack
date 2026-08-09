@@ -75,6 +75,13 @@ evidence, launch assurance, release readiness, and mastery progression.
   returns only metadata, permits only three declared training artifacts, and
   grants no dependency-update, Git, release, deployment, or production
   authority.
+- Audit mastery Stage 7 validates exact-revision, signed deterministic
+  adversarial captures, eight-category coverage, reciprocal hypotheses and
+  false-positive assessments, every discovered QA command, a current passing
+  security receipt, and strict baseline/candidate harness comparison. Audit
+  performs no target execution or harness implementation; local capture is not
+  an OS or network sandbox, and a pass grants no vulnerability-absence,
+  exploit, remediation, release, deployment, or production claim.
 - The optional `osv-scanner-offline` curated adapter provides cross-ecosystem
   advisory evidence from a pre-provisioned external local database. It
   requires `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`, enforces OSV offline mode,
@@ -144,10 +151,10 @@ execution.
 
 ## Tools
 
-The server exposes 51 canonical `jstack_*` tools for runtime status, project
+The server exposes 52 canonical `jstack_*` tools for runtime status, project
 detection, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
-validation, policy/preflight, health/review, QA, performance capture, security, launch assurance,
+validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
 itself is optional.

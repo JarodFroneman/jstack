@@ -255,6 +255,44 @@ It does not prove complete transitive dependency semantics, current or complete
 advisory data, reproducible builds, artifact authenticity, vulnerability
 absence, hardening safety, release readiness, or production authority.
 
+### Audit mastery Stage 7
+
+Audit mastery Stage 7 permits only `adversarial-plan.md`,
+`verification-results.json`, and `false-positive-analysis.md` at their exact
+`.jstack-training/` paths. Audit and its deterministic evaluator do not execute
+the repository, implement a harness, develop or retain an exploit, create a
+candidate, access secrets, mutate Git, publish, release, deploy, or touch
+production.
+
+Dynamic evidence must come from current-session `jstack_adversarial_capture`
+receipts produced within a separately authorized trusted development or QA
+workflow. The tool accepts only a discovered command at an exact reviewed Git
+state and emits a closed capture containing bounded identifiers,
+classifications, and SHA-256 digests. Raw inputs, payloads, source, stdout,
+stderr, and secrets are forbidden. Receipts bind the exact Git commit/tree,
+policy, command/fingerprint, campaign, deterministic corpus and seed, target
+scope, local environment, case-set digest, and outcome-set digest.
+
+Every case has exactly two identical classified outcomes, and the campaign
+requires at least four cases across at least three categories. The evaluator
+also requires complete eight-category classification, reciprocal static and
+dynamic hypotheses, both confirmed and refuted dispositions, a confirmed
+dynamic observation, reciprocal false-positive analysis, current passing QA
+for every discovered command, and a complete passing security receipt. The
+implementation drill additionally requires a strict ancestor-to-current
+committed diff, exact paths, at least one added case, no removals, and stable
+shared contracts and outcomes.
+
+The local runner scrubs its environment, isolates HOME, closes stdin, and caps
+time and output, but it is not an OS or network sandbox and retains the current
+user's filesystem and network privileges. `none-observed` does not prove that
+external effects were prevented. Use an externally enforced container or VM
+for untrusted or active security testing and obtain explicit authorization for
+the target. A Stage 7 pass proves bounded receipt and evidence-contract
+integrity only; it does not prove vulnerability absence, exploitability,
+zero-day detection, universal behavior, remediation safety, release readiness,
+production safety, or production authority.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit
