@@ -102,6 +102,21 @@ _REGISTRY: Dict[str, Dict[str, Any]] = {
         "environment": {"CI": "true", "NO_COLOR": "1", "npm_config_offline": "true"},
         "executesRepositoryCode": False,
     },
+    "osv-scanner-offline": {
+        "capability": "dependency-analysis",
+        "description": "Cross-ecosystem OSV source scan using a caller-provisioned local advisory database with offline mode enforced.",
+        "command": (
+            "osv-scanner",
+            "--offline",
+            "--format",
+            "json",
+            "--recursive",
+            ".",
+        ),
+        "environment": {"NO_COLOR": "1"},
+        "requiredEnvironment": ("OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",),
+        "executesRepositoryCode": False,
+    },
     "python-pytest-offline": {
         "capability": "tests",
         "description": "Pytest in isolated Python mode with package-index access disabled; host network isolation is not provided.",
@@ -135,6 +150,7 @@ def _copy_adapter(adapter_id: str) -> Dict[str, Any]:
         "command": list(item["command"]),
         "cwd": ".",
         "environment": dict(sorted(item["environment"].items())),
+        "requiredEnvironment": list(item.get("requiredEnvironment", ())),
         "offline": True,
         "network": "offline-requested-not-enforced",
         "networkIsolation": "not-provided-by-local-runner",
@@ -188,6 +204,7 @@ def get_adapter_plan(adapter_id: str, binding: Any) -> Dict[str, Any]:
         "command": adapter["command"],
         "cwd": adapter["cwd"],
         "environment": adapter["environment"],
+        "requiredEnvironment": adapter["requiredEnvironment"],
         "offline": True,
         "network": "offline-requested-not-enforced",
         "networkIsolation": adapter["networkIsolation"],
@@ -199,6 +216,7 @@ def get_adapter_plan(adapter_id: str, binding: Any) -> Dict[str, Any]:
 
 def _applicable(adapter_id: str, paths: Sequence[str]) -> bool:
     names = {path.rsplit("/", 1)[-1] for path in paths}
+    lower_names = {name.lower() for name in names}
     has_tests = any(path == "tests" or path.startswith("tests/") for path in paths)
     has_python = any(path.endswith(".py") for path in paths)
     has_go_tests = any(path.endswith("_test.go") for path in paths)
@@ -221,6 +239,39 @@ def _applicable(adapter_id: str, paths: Sequence[str]) -> bool:
         return "Cargo.lock" in names and "deny.toml" in names
     if adapter_id == "npm-audit-offline":
         return "package-lock.json" in names
+    if adapter_id == "osv-scanner-offline":
+        return bool(
+            lower_names.intersection(
+                {
+                    "bun.lock",
+                    "cabal.project.freeze",
+                    "cargo.lock",
+                    "composer.lock",
+                    "conan.lock",
+                    "gemfile.lock",
+                    "gems.locked",
+                    "go.mod",
+                    "gradle.lockfile",
+                    "mix.lock",
+                    "package-lock.json",
+                    "packages.config",
+                    "packages.lock.json",
+                    "pdm.lock",
+                    "pipfile.lock",
+                    "pnpm-lock.yaml",
+                    "poetry.lock",
+                    "pom.xml",
+                    "pubspec.lock",
+                    "pylock.toml",
+                    "renv.lock",
+                    "requirements.txt",
+                    "stack.yaml.lock",
+                    "uv.lock",
+                    "verification-metadata.xml",
+                    "yarn.lock",
+                }
+            )
+        ) or any(name.startswith("requirements") and name.endswith(".txt") for name in lower_names)
     return False
 
 

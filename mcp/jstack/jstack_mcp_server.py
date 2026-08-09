@@ -45,7 +45,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.6"
+SERVER_VERSION = "0.10.0-alpha.7"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -383,6 +383,60 @@ AUDIT_STAGE5_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 AUDIT_STAGE5_STATISTICS = {"mean", "median", "p95", "min", "max"}
 AUDIT_STAGE5_COMPARATORS = {"<=", ">="}
 AUDIT_STAGE5_MAX_ITEMS = 256
+AUDIT_STAGE6_INVENTORY_SCHEMA = audit_core.DEPENDENCY_INVENTORY_SCHEMA_VERSION
+AUDIT_STAGE6_REPORT_SCHEMA = audit_core.SUPPLY_CHAIN_REPORT_SCHEMA_VERSION
+AUDIT_STAGE6_DRILL_TYPES = {
+    "a6-supply-chain": "audit",
+    "a6-hardening": "implementation",
+}
+AUDIT_STAGE6_ASSESSMENT_BOUNDARY = {
+    "repositoryContentTrust": "untrusted-data",
+    "evaluatorMode": "static-git-and-signed-scanner-receipt-verification",
+    "repositoryCode": "not-executed-by-evaluator",
+    "registryNetwork": "not-used-by-evaluator",
+    "secrets": "not-accessed",
+    "writes": "training-artifacts-only",
+    "auditHardening": "not-authorized",
+    "implementationEvidence": "external-committed-candidate-only",
+    "productionAuthority": "none",
+}
+AUDIT_STAGE6_INVENTORY_LIMITATIONS = [
+    "Stage 6 statically proves bounded tracked-input enumeration and Git-object identity; it does not prove semantic dependency completeness, artifact reproducibility, or vulnerability absence.",
+    "Advisory coverage comes from a separately approved curated scanner and may be limited by its local cache; the evaluator itself performs no registry or network access.",
+    "Passing grants no dependency update, hardening, Git, publication, release, deployment, or production authority; implementation evidence must come from a separately authorized committed workflow.",
+]
+AUDIT_STAGE6_REPORT_LIMITATIONS = [
+    "Stage 6 proves bounded Git, inventory, CI-reference, permission, build-trace, generated-artifact, and signed-scanner protocol integrity; it does not prove complete transitive dependency semantics, reproducible builds, or vulnerability absence.",
+    "Curated offline-requested scanner results are limited by installed tooling and locally available advisory data; local execution is not an OS or network sandbox.",
+    "Passing grants no dependency update, hardening, Git, publication, release, deployment, or production authority; implementation evidence must come from a separately authorized committed workflow.",
+]
+AUDIT_STAGE6_ARTIFACT_PATHS = {
+    "dependency-inventory.json": ".jstack-training/dependency-inventory.json",
+    "build-trace.md": ".jstack-training/build-trace.md",
+    "supply-chain-report.json": ".jstack-training/supply-chain-report.json",
+}
+AUDIT_STAGE6_INVENTORY_SURFACES = (
+    "dependency-inputs",
+    "lockfiles",
+    "build-configs",
+    "ci-workflows",
+    "provenance",
+    "generated-artifacts",
+)
+AUDIT_STAGE6_REQUIRED_SURFACES = (
+    "dependency-inventory",
+    "lockfile-integrity",
+    "ci-least-privilege",
+    "automation-pinning",
+    "build-trace-provenance",
+    "generated-artifact-integrity",
+    "advisory-coverage",
+)
+AUDIT_STAGE6_MAX_ITEMS = 4096
+AUDIT_STAGE6_MAX_INPUT_FILE_BYTES = 50_000_000
+AUDIT_STAGE6_MAX_INPUT_TOTAL_BYTES = 256_000_000
+AUDIT_STAGE6_MAX_EVIDENCE_FILE_BYTES = 2_000_000
+AUDIT_STAGE6_MAX_EVIDENCE_TOTAL_BYTES = 32_000_000
 PERFORMANCE_CAPTURE_MAX_BYTES = 5_000_000
 PERFORMANCE_MAX_RECEIPTS = 4
 PERFORMANCE_MAX_RECEIPT_CHARS = 100_000
@@ -3438,6 +3492,22 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
                 "both the measurement-only audit and separately authorized committed "
                 "performance-remediation drills, all deterministically passing signed "
                 "capture, statistic, budget, QA, and regression-guard gates."
+            )
+        elif track == "audit" and stage_number == 6:
+            passed = passed and all(
+                item.get("stage6SupplyChainEvaluation", {}).get("passed") is True
+                for item in recent
+            )
+            passed = passed and {
+                item.get("drillId") for item in recent
+            }.issuperset(AUDIT_STAGE6_DRILL_TYPES)
+            requirement = (
+                "Three independent Stage 6 attempts across at least two commits, "
+                "each scoring at least 80 with a mean of at least 85, including "
+                "both the static supply-chain audit and separately authorized "
+                "committed hardening drills, all deterministically passing exact "
+                "inventory, CI, provenance, generated-artifact, scanner, QA, and "
+                "Git-diff gates."
             )
     else:
         recent = eligible[-2:]
@@ -8248,6 +8318,1278 @@ def evaluate_audit_stage5_performance(
     return {**result, "evaluationDigest": audit_json_digest(result)}
 
 
+def _audit_stage6_revision_paths(root: Path, revision: str) -> Optional[list[str]]:
+    result = run_complete(
+        ["git", "ls-tree", "-r", "-z", "--name-only", revision],
+        root,
+        timeout=30,
+        max_bytes=20_000_000,
+    )
+    if not result["ok"]:
+        return None
+    paths: list[str] = []
+    for raw_path in result["stdout"].split(b"\0"):
+        if not raw_path:
+            continue
+        try:
+            relative = decode_git_relative_path(raw_path, "Stage 6 tracked path")
+        except ToolError:
+            return None
+        if not _audit_stage1_safe_relative_path(relative):
+            return None
+        paths.append(relative)
+        if len(paths) > 100_000:
+            return None
+    return paths
+
+
+def evaluate_audit_stage6_supply_chain(
+    inventory: Any,
+    report: Any,
+    project_path: Path,
+    artifacts: dict[str, dict[str, Any]],
+    qa_verifications: list[dict[str, Any]],
+    audit_verification: Optional[dict[str, Any]],
+    drill_id: str,
+) -> dict[str, Any]:
+    """Validate one exact-revision Stage 6 supply-chain evidence package."""
+
+    inventory_fields = {
+        "schemaVersion",
+        "subject",
+        "assessmentBoundary",
+        "inputs",
+        "relationships",
+        "coverage",
+        "gaps",
+        "complete",
+        "limitations",
+    }
+    report_fields = {
+        "schemaVersion",
+        "subject",
+        "exercise",
+        "assessmentBoundary",
+        "artifactBindings",
+        "coverage",
+        "evidence",
+        "workflowActions",
+        "ciPermissions",
+        "buildGraph",
+        "provenance",
+        "generatedArtifacts",
+        "scannerBindings",
+        "findings",
+        "remediations",
+        "qaBindings",
+        "gaps",
+        "complete",
+        "limitations",
+    }
+    if not isinstance(inventory, dict) or set(inventory) != inventory_fields:
+        raise ToolError(
+            "Audit Stage 6 dependency-inventory.json has unsupported or missing fields."
+        )
+    if not isinstance(report, dict) or set(report) != report_fields:
+        raise ToolError(
+            "Audit Stage 6 supply-chain-report.json has unsupported or missing fields."
+        )
+    audit_enforce_json_limit(inventory, "Audit Stage 6 dependency inventory", 10_000_000)
+    audit_enforce_json_limit(report, "Audit Stage 6 supply-chain report", 10_000_000)
+    audit_reject_secret_values(inventory, "Audit Stage 6 dependency inventory")
+    audit_reject_secret_values(report, "Audit Stage 6 supply-chain report")
+    source = _audit_source_subject(project_path, "Stage 6")
+    root = source["_root"]
+    failures: list[str] = []
+
+    def valid_id(value: Any) -> bool:
+        return bool(
+            isinstance(value, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+        )
+
+    def valid_text(value: Any, maximum: int = 1000) -> bool:
+        return bool(isinstance(value, str) and value.strip() and len(value) <= maximum)
+
+    def exact_object(
+        container: dict[str, Any], field: str, keys: set[str], label: str
+    ) -> dict[str, Any]:
+        value = container.get(field)
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ToolError(
+                f"Audit Stage 6 {label} {field} has unsupported or missing fields."
+            )
+        return value
+
+    def exact_list(
+        container: dict[str, Any],
+        field: str,
+        label: str,
+        maximum: int = AUDIT_STAGE6_MAX_ITEMS,
+    ) -> list[Any]:
+        value = container.get(field)
+        if not isinstance(value, list) or len(value) > maximum:
+            raise ToolError(
+                f"Audit Stage 6 {label} {field} must be an array with at most {maximum} items."
+            )
+        return value
+
+    def collect_id(item: dict[str, Any], prefix: str, known: set[str]) -> str:
+        value = item.get("id")
+        if not valid_id(value):
+            failures.append(prefix + ".id")
+            return ""
+        identifier = str(value)
+        if identifier in known:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            known.add(identifier)
+        return identifier
+
+    def id_refs(
+        value: Any,
+        prefix: str,
+        known: set[str],
+        referenced: Optional[set[str]] = None,
+        *,
+        allow_empty: bool = False,
+        maximum: int = 64,
+    ) -> list[str]:
+        if (
+            not isinstance(value, list)
+            or len(value) > maximum
+            or (not allow_empty and not value)
+            or not all(valid_id(item) for item in value)
+        ):
+            failures.append(prefix)
+            return []
+        refs = [str(item) for item in value]
+        if len(refs) != len(set(refs)):
+            failures.append(prefix + ".duplicate")
+        for ref in refs:
+            if ref not in known:
+                failures.append(prefix + ".unknown")
+            elif referenced is not None:
+                referenced.add(ref)
+        return refs
+
+    if inventory.get("schemaVersion") != AUDIT_STAGE6_INVENTORY_SCHEMA:
+        failures.append("inventory.schemaVersion")
+    if report.get("schemaVersion") != AUDIT_STAGE6_REPORT_SCHEMA:
+        failures.append("report.schemaVersion")
+    if inventory.get("assessmentBoundary") != AUDIT_STAGE6_ASSESSMENT_BOUNDARY:
+        failures.append("inventory.assessmentBoundary")
+    if report.get("assessmentBoundary") != AUDIT_STAGE6_ASSESSMENT_BOUNDARY:
+        failures.append("report.assessmentBoundary")
+    if inventory.get("limitations") != AUDIT_STAGE6_INVENTORY_LIMITATIONS:
+        failures.append("inventory.limitations")
+    if report.get("limitations") != AUDIT_STAGE6_REPORT_LIMITATIONS:
+        failures.append("report.limitations")
+
+    expected_type = AUDIT_STAGE6_DRILL_TYPES.get(drill_id)
+    if expected_type is None:
+        raise ToolError(f"Unsupported Audit Stage 6 drill: {drill_id}")
+    exercise = exact_object(report, "exercise", {"drillId", "type"}, "report")
+    if exercise.get("drillId") != drill_id:
+        failures.append("exercise.drillId")
+    if exercise.get("type") != expected_type:
+        failures.append("exercise.type")
+
+    subject_keys = {
+        "baselineGitHead",
+        "baselineGitTree",
+        "candidateGitHead",
+        "candidateGitTree",
+    }
+    inventory_subject = exact_object(inventory, "subject", subject_keys, "inventory")
+    report_subject = exact_object(report, "subject", subject_keys, "report")
+    if report_subject != inventory_subject:
+        failures.append("subject.report-inventory-mismatch")
+    baseline = _audit_stage4_resolve_revision(
+        root, inventory_subject.get("baselineGitHead")
+    )
+    candidate = _audit_stage4_resolve_revision(
+        root, inventory_subject.get("candidateGitHead")
+    )
+    if baseline is None:
+        failures.append("subject.baseline")
+    if candidate is None:
+        failures.append("subject.candidate")
+    if baseline and inventory_subject.get("baselineGitTree") != baseline["gitTree"]:
+        failures.append("subject.baselineGitTree")
+    if candidate and inventory_subject.get("candidateGitTree") != candidate["gitTree"]:
+        failures.append("subject.candidateGitTree")
+    if candidate and (
+        candidate["gitHead"] != source["gitHead"]
+        or candidate["gitTree"] != source["gitTree"]
+    ):
+        failures.append("subject.candidate-not-current")
+    changed_paths: Optional[list[str]] = None
+    if baseline and candidate:
+        if expected_type == "audit":
+            if baseline != candidate:
+                failures.append("subject.audit-baseline-candidate")
+        else:
+            ancestry = run_complete(
+                [
+                    "git",
+                    "merge-base",
+                    "--is-ancestor",
+                    baseline["gitHead"],
+                    candidate["gitHead"],
+                ],
+                root,
+                timeout=8,
+            )
+            changed_paths = _audit_stage4_changed_paths(
+                root, baseline["gitHead"], candidate["gitHead"]
+            )
+            if baseline["gitHead"] == candidate["gitHead"]:
+                failures.append("subject.implementation-distinct-commit")
+            if not ancestry["ok"]:
+                failures.append("subject.baseline-not-ancestor")
+            if not changed_paths:
+                failures.append("subject.implementation-empty-diff")
+
+    build_trace = validate_mastery_text_artifact(
+        project_path,
+        artifacts.get("build-trace.md") or {},
+        "Audit Stage 6 build-trace.md",
+    )
+    bindings = exact_object(
+        report,
+        "artifactBindings",
+        {"dependencyInventory", "buildTrace"},
+        "report",
+    )
+    for binding_name, artifact_name in (
+        ("dependencyInventory", "dependency-inventory.json"),
+        ("buildTrace", "build-trace.md"),
+    ):
+        binding = bindings.get(binding_name)
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            raise ToolError("Audit Stage 6 artifact binding is malformed.")
+        artifact = artifacts.get(artifact_name) or {}
+        if binding.get("path") != artifact.get("path"):
+            failures.append(f"artifactBindings.{binding_name}.path")
+        if binding.get("sha256") != artifact.get("sha256"):
+            failures.append(f"artifactBindings.{binding_name}.sha256")
+    if bindings.get("buildTrace", {}).get("sha256") != build_trace.get("sha256"):
+        failures.append("artifactBindings.buildTrace.sha256")
+
+    revision_heads = {
+        "baseline": baseline["gitHead"] if baseline else "",
+        "candidate": candidate["gitHead"] if candidate else "",
+    }
+    expected_inputs: dict[tuple[str, str], dict[str, Any]] = {}
+    revision_blobs: dict[tuple[str, str], bytes] = {}
+    immutable_blob_cache: dict[tuple[str, str], bytes] = {}
+    total_input_bytes = 0
+    for revision_kind, revision in revision_heads.items():
+        if not revision:
+            continue
+        paths = _audit_stage6_revision_paths(root, revision)
+        if paths is None:
+            failures.append(f"inventory.{revision_kind}.tracked-paths")
+            continue
+        try:
+            discovered = audit_core.discover_supply_chain_inputs(paths)
+        except audit_core.SupplyChainProtocolError:
+            failures.append(f"inventory.{revision_kind}.discovery")
+            continue
+        for classified in discovered:
+            path = classified["path"]
+            immutable_key = (revision, path)
+            content = immutable_blob_cache.get(immutable_key)
+            if content is None:
+                content = _audit_stage4_revision_file(
+                    root,
+                    revision,
+                    path,
+                    max_bytes=AUDIT_STAGE6_MAX_INPUT_FILE_BYTES,
+                )
+                if content is not None:
+                    total_input_bytes += len(content)
+                    if total_input_bytes > AUDIT_STAGE6_MAX_INPUT_TOTAL_BYTES:
+                        raise ToolError(
+                            "Audit Stage 6 classified inputs exceed the bounded total read limit."
+                        )
+                    immutable_blob_cache[immutable_key] = content
+            if content is None:
+                failures.append(f"inventory.{revision_kind}.unreadable")
+                continue
+            revision_blobs[(revision_kind, path)] = content
+            expected_inputs[(revision_kind, path)] = {
+                "revision": revision_kind,
+                "path": path,
+                "kind": classified["kind"],
+                "ecosystem": classified["ecosystem"],
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "sizeBytes": len(content),
+            }
+
+    input_items = exact_list(inventory, "inputs", "inventory")
+    input_ids: set[str] = set()
+    input_by_id: dict[str, dict[str, Any]] = {}
+    actual_input_keys: set[tuple[str, str]] = set()
+    required_input_fields = {
+        "id",
+        "revision",
+        "path",
+        "kind",
+        "ecosystem",
+        "sha256",
+        "sizeBytes",
+    }
+    for index, item in enumerate(input_items):
+        prefix = f"inputs[{index}]"
+        if not isinstance(item, dict) or set(item) != required_input_fields:
+            raise ToolError("Audit Stage 6 inventory input entry is malformed.")
+        identifier = collect_id(item, prefix, input_ids)
+        key = (str(item.get("revision")), str(item.get("path")))
+        if key in actual_input_keys:
+            failures.append(prefix + ".duplicate-subject")
+        actual_input_keys.add(key)
+        expected = expected_inputs.get(key)
+        if expected is None:
+            failures.append(prefix + ".undiscovered")
+        else:
+            for field, value in expected.items():
+                if type(item.get(field)) is not type(value) or item.get(field) != value:
+                    failures.append(prefix + "." + field)
+        if identifier:
+            input_by_id[identifier] = item
+    if actual_input_keys != set(expected_inputs):
+        failures.append("inputs.discovery-set")
+    if not input_items:
+        failures.append("inputs.empty")
+
+    inventory_coverage = exact_list(
+        inventory,
+        "coverage",
+        "inventory",
+        len(AUDIT_STAGE6_INVENTORY_SURFACES),
+    )
+    coverage_kind_map = {
+        "dependency-inputs": {"manifest", "policy"},
+        "lockfiles": {"lockfile"},
+        "build-configs": {"build-config"},
+        "ci-workflows": {"ci-workflow"},
+        "provenance": {"provenance"},
+        "generated-artifacts": {"generated-artifact"},
+    }
+    inventory_coverage_ids: set[str] = set()
+    for index, item in enumerate(inventory_coverage):
+        prefix = f"inventory.coverage[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "status",
+            "reason",
+            "inputIds",
+        }:
+            raise ToolError("Audit Stage 6 inventory coverage entry is malformed.")
+        surface = item.get("id")
+        if surface not in AUDIT_STAGE6_INVENTORY_SURFACES:
+            failures.append(prefix + ".id")
+            expected_ids: set[str] = set()
+        elif surface in inventory_coverage_ids:
+            failures.append(prefix + ".id.duplicate")
+            expected_ids = set()
+        else:
+            inventory_coverage_ids.add(str(surface))
+            expected_ids = {
+                identifier
+                for identifier, input_item in input_by_id.items()
+                if input_item.get("kind") in coverage_kind_map[str(surface)]
+            }
+        supplied_ids = id_refs(
+            item.get("inputIds"),
+            prefix + ".inputIds",
+            input_ids,
+            allow_empty=True,
+            maximum=AUDIT_STAGE6_MAX_ITEMS,
+        )
+        if set(supplied_ids) != expected_ids:
+            failures.append(prefix + ".inputIds.coverage")
+        expected_status = "inventoried" if expected_ids else "not-applicable"
+        if item.get("status") != expected_status:
+            failures.append(prefix + ".status")
+        if not valid_text(item.get("reason"), 500):
+            failures.append(prefix + ".reason")
+    if inventory_coverage_ids != set(AUDIT_STAGE6_INVENTORY_SURFACES):
+        failures.append("inventory.coverage.surfaces")
+
+    relationship_items = exact_list(inventory, "relationships", "inventory")
+    relationship_ids: set[str] = set()
+    lock_relationships: set[str] = set()
+    for index, item in enumerate(relationship_items):
+        prefix = f"relationships[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "fromInputId",
+            "toInputId",
+            "type",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 6 inventory relationship entry is malformed.")
+        collect_id(item, prefix, relationship_ids)
+        from_id = str(item.get("fromInputId") or "")
+        to_id = str(item.get("toInputId") or "")
+        if from_id not in input_by_id:
+            failures.append(prefix + ".fromInputId")
+        if to_id not in input_by_id:
+            failures.append(prefix + ".toInputId")
+        if from_id in input_by_id and to_id in input_by_id:
+            if item.get("revision") != input_by_id[from_id].get("revision") or item.get(
+                "revision"
+            ) != input_by_id[to_id].get("revision"):
+                failures.append(prefix + ".revision")
+        if item.get("type") not in {
+            "locked-by",
+            "configured-by",
+            "built-by",
+            "attested-by",
+            "generated-by",
+        }:
+            failures.append(prefix + ".type")
+        id_refs(item.get("evidence"), prefix + ".evidence", input_ids)
+        if item.get("type") == "locked-by" and to_id in input_by_id:
+            lock_relationships.add(to_id)
+            if input_by_id[to_id].get("kind") != "lockfile":
+                failures.append(prefix + ".locked-by.target")
+    for identifier, item in input_by_id.items():
+        if item.get("kind") != "lockfile":
+            continue
+        matching_manifest = any(
+            candidate_item.get("revision") == item.get("revision")
+            and candidate_item.get("ecosystem") == item.get("ecosystem")
+            and candidate_item.get("kind") == "manifest"
+            for candidate_item in input_by_id.values()
+        )
+        if matching_manifest and identifier not in lock_relationships:
+            failures.append("relationships.lockfile-missing")
+    inventory_gaps = exact_list(inventory, "gaps", "inventory", 256)
+    if inventory_gaps:
+        failures.append("inventory.gaps")
+    if inventory.get("complete") is not True:
+        failures.append("inventory.complete")
+
+    evidence_items = exact_list(report, "evidence", "report", 1024)
+    evidence_ids: set[str] = set()
+    evidence_by_id: dict[str, dict[str, Any]] = {}
+    evidence_revision: dict[str, str] = {}
+    evidence_content_by_subject: dict[tuple[str, str], bytes] = {}
+    referenced_evidence: set[str] = set()
+    total_evidence_bytes = 0
+    for index, item in enumerate(evidence_items):
+        prefix = f"evidence[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "lineStart",
+            "lineEnd",
+            "sha256",
+        }:
+            raise ToolError("Audit Stage 6 evidence entry is malformed.")
+        identifier = collect_id(item, prefix, evidence_ids)
+        revision_kind = item.get("revision")
+        revision = revision_heads.get(str(revision_kind), "")
+        path = item.get("path")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+            continue
+        assert isinstance(path, str)
+        start = item.get("lineStart")
+        end = item.get("lineEnd")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 1
+            or end < start
+        ):
+            failures.append(prefix + ".lines")
+        content = (
+            _audit_stage4_revision_file(
+                root,
+                revision,
+                path,
+                max_bytes=AUDIT_STAGE6_MAX_EVIDENCE_FILE_BYTES,
+            )
+            if revision
+            else None
+        )
+        if content is None:
+            failures.append(prefix + ".path.untracked-or-nonregular")
+            continue
+        total_evidence_bytes += len(content)
+        if total_evidence_bytes > AUDIT_STAGE6_MAX_EVIDENCE_TOTAL_BYTES:
+            raise ToolError("Audit Stage 6 evidence exceeds the bounded total read limit.")
+        if item.get("sha256") != hashlib.sha256(content).hexdigest():
+            failures.append(prefix + ".sha256")
+        evidence_content_by_subject[(str(revision_kind), path)] = content
+        line_count = max(1, len(content.splitlines()))
+        if isinstance(end, int) and not isinstance(end, bool) and end > line_count:
+            failures.append(prefix + ".lines")
+        if identifier:
+            evidence_by_id[identifier] = item
+            evidence_revision[identifier] = str(revision_kind)
+
+    def evidence_refs(value: Any, prefix: str, *, allow_empty: bool = False) -> list[str]:
+        return id_refs(
+            value,
+            prefix,
+            evidence_ids,
+            referenced_evidence,
+            allow_empty=allow_empty,
+        )
+
+    report_coverage = exact_list(
+        report, "coverage", "report", len(AUDIT_STAGE6_REQUIRED_SURFACES)
+    )
+    report_coverage_ids: set[str] = set()
+    report_coverage_statuses: dict[str, str] = {}
+    for index, item in enumerate(report_coverage):
+        prefix = f"coverage[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "status",
+            "reason",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 6 report coverage entry is malformed.")
+        surface = item.get("id")
+        if surface not in AUDIT_STAGE6_REQUIRED_SURFACES:
+            failures.append(prefix + ".id")
+        elif surface in report_coverage_ids:
+            failures.append(prefix + ".id.duplicate")
+        else:
+            report_coverage_ids.add(str(surface))
+            report_coverage_statuses[str(surface)] = str(item.get("status"))
+        if item.get("status") not in {"assessed", "not-applicable"}:
+            failures.append(prefix + ".status")
+        if not valid_text(item.get("reason"), 500):
+            failures.append(prefix + ".reason")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+    if report_coverage_ids != set(AUDIT_STAGE6_REQUIRED_SURFACES):
+        failures.append("coverage.surfaces")
+
+    finding_items = exact_list(report, "findings", "report", 256)
+    finding_ids: set[str] = set()
+    finding_by_id: dict[str, dict[str, Any]] = {}
+    finding_remediations: dict[str, str] = {}
+    for index, item in enumerate(finding_items):
+        prefix = f"findings[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "category",
+            "severity",
+            "status",
+            "confidence",
+            "verification",
+            "summary",
+            "evidence",
+            "remediationId",
+        }:
+            raise ToolError("Audit Stage 6 finding entry is malformed.")
+        identifier = collect_id(item, prefix, finding_ids)
+        if item.get("category") not in set(AUDIT_STAGE6_REQUIRED_SURFACES) - {
+            "dependency-inventory"
+        }:
+            failures.append(prefix + ".category")
+        if item.get("severity") not in {"info", "low", "medium", "high", "critical"}:
+            failures.append(prefix + ".severity")
+        if item.get("status") not in {"open", "resolved"}:
+            failures.append(prefix + ".status")
+        if item.get("confidence") != "high":
+            failures.append(prefix + ".confidence")
+        if item.get("verification") not in {"source-proven", "tool-confirmed"}:
+            failures.append(prefix + ".verification")
+        if not valid_text(item.get("summary")):
+            failures.append(prefix + ".summary")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+        remediation_id = item.get("remediationId")
+        if not valid_id(remediation_id):
+            failures.append(prefix + ".remediationId")
+        elif identifier:
+            finding_remediations[identifier] = str(remediation_id)
+        if identifier:
+            finding_by_id[identifier] = item
+    if not finding_items:
+        failures.append("findings.empty")
+
+    qa_items = exact_list(report, "qaBindings", "report", 64)
+    qa_ids: set[str] = set()
+    qa_command_keys: set[str] = set()
+    matched_qa_ids: set[str] = set()
+    valid_qa_by_key = {
+        str(item.get("payload", {}).get("commandKey")): item
+        for item in qa_verifications
+        if item.get("valid") is True
+    }
+    for index, item in enumerate(qa_items):
+        prefix = f"qaBindings[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "commandKey",
+            "commandFingerprint",
+            "executionProfile",
+            "returncode",
+        }:
+            raise ToolError("Audit Stage 6 QA binding is malformed.")
+        identifier = collect_id(item, prefix, qa_ids)
+        command_key = str(item.get("commandKey") or "")
+        if command_key in qa_command_keys:
+            failures.append(prefix + ".commandKey.duplicate")
+        else:
+            qa_command_keys.add(command_key)
+        verification = valid_qa_by_key.get(command_key)
+        payload = verification.get("payload", {}) if verification else {}
+        if (
+            verification is None
+            or item.get("commandFingerprint") != payload.get("commandFingerprint")
+            or item.get("executionProfile") != payload.get("executionProfile")
+            or item.get("returncode") != payload.get("returncode")
+            or payload.get("mutationDetected") is not False
+        ):
+            failures.append(prefix + ".receipt-mismatch")
+        elif identifier:
+            matched_qa_ids.add(identifier)
+    discovered_qa_keys = {item["key"] for item in discover_test_commands(project_path)}
+    if {str(item.get("commandKey")) for item in qa_items} != discovered_qa_keys:
+        failures.append("qaBindings.discovered-command-coverage")
+
+    remediation_items = exact_list(report, "remediations", "report", 256)
+    remediation_ids: set[str] = set()
+    remediation_by_id: dict[str, dict[str, Any]] = {}
+    implemented_ids: list[str] = []
+    for index, item in enumerate(remediation_items):
+        prefix = f"remediations[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "findingId",
+            "status",
+            "description",
+            "changedPaths",
+            "evidence",
+            "qaBindingIds",
+        }:
+            raise ToolError("Audit Stage 6 remediation entry is malformed.")
+        identifier = collect_id(item, prefix, remediation_ids)
+        finding_id = str(item.get("findingId") or "")
+        if finding_id not in finding_by_id:
+            failures.append(prefix + ".findingId")
+        elif finding_remediations.get(finding_id) != identifier:
+            failures.append(prefix + ".findingId.reciprocal")
+        if not valid_text(item.get("description")):
+            failures.append(prefix + ".description")
+        changed = item.get("changedPaths")
+        if (
+            not isinstance(changed, list)
+            or len(changed) > 256
+            or len(changed) != len(set(changed))
+            or not all(_audit_stage1_safe_relative_path(path) for path in changed)
+        ):
+            failures.append(prefix + ".changedPaths")
+            changed_values: list[str] = []
+        else:
+            changed_values = [str(path) for path in changed]
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+        qa_refs = id_refs(
+            item.get("qaBindingIds"),
+            prefix + ".qaBindingIds",
+            qa_ids,
+            allow_empty=True,
+        )
+        status = item.get("status")
+        if status not in {"proposed", "implemented-verified"}:
+            failures.append(prefix + ".status")
+        if expected_type == "audit":
+            if status != "proposed" or changed_values or qa_refs:
+                failures.append(prefix + ".audit-authority")
+        elif status == "implemented-verified":
+            implemented_ids.append(identifier)
+            if finding_by_id.get(finding_id, {}).get("status") != "resolved":
+                failures.append(prefix + ".finding-not-resolved")
+            if changed_paths is None or set(changed_values) != set(changed_paths):
+                failures.append(prefix + ".changedPaths.diff-mismatch")
+            if not qa_refs or not set(qa_refs).issubset(matched_qa_ids):
+                failures.append(prefix + ".qaBindingIds.unverified")
+            refs = item.get("evidence") if isinstance(item.get("evidence"), list) else []
+            if not any(evidence_revision.get(str(ref)) == "baseline" for ref in refs):
+                failures.append(prefix + ".evidence.baseline-missing")
+            if not any(evidence_revision.get(str(ref)) == "candidate" for ref in refs):
+                failures.append(prefix + ".evidence.candidate-missing")
+        else:
+            if changed_values or qa_refs:
+                failures.append(prefix + ".proposal-evidence")
+        if identifier:
+            remediation_by_id[identifier] = item
+    if set(remediation_by_id) != set(finding_remediations.values()):
+        failures.append("remediations.reciprocal-set")
+    if expected_type == "audit":
+        if any(item.get("status") != "open" for item in finding_items):
+            failures.append("findings.audit-status")
+    else:
+        resolved = [item for item in finding_items if item.get("status") == "resolved"]
+        if len(resolved) != 1 or len(implemented_ids) != 1:
+            failures.append("remediations.implementation-count")
+
+    def linked_finding(
+        raw_id: Any, category: str, prefix: str, *, required: bool
+    ) -> None:
+        if raw_id is None:
+            if required:
+                failures.append(prefix + ".findingId.missing")
+            return
+        finding = finding_by_id.get(str(raw_id))
+        if finding is None:
+            failures.append(prefix + ".findingId.unknown")
+        elif finding.get("category") != category:
+            failures.append(prefix + ".findingId.category")
+
+    expected_actions: dict[tuple[str, str, int, str], dict[str, Any]] = {}
+    expected_permissions: dict[tuple[str, str], dict[str, Any]] = {}
+    for key, input_item in expected_inputs.items():
+        revision_kind, path = key
+        if input_item["kind"] != "ci-workflow":
+            continue
+        content = revision_blobs[key]
+        try:
+            for action in audit_core.parse_github_actions(path, content):
+                expected_actions[(revision_kind, path, action["line"], action["locator"])] = {
+                    **action,
+                    "revision": revision_kind,
+                }
+            permission = audit_core.parse_github_permissions(path, content)
+        except audit_core.SupplyChainProtocolError:
+            failures.append(f"workflow.{revision_kind}.{path}.parse")
+            continue
+        if permission["mode"] != "not-applicable":
+            expected_permissions[(revision_kind, path)] = {
+                **permission,
+                "revision": revision_kind,
+            }
+
+    action_items = exact_list(report, "workflowActions", "report", 1024)
+    action_ids: set[str] = set()
+    actual_action_keys: set[tuple[str, str, int, str]] = set()
+    for index, item in enumerate(action_items):
+        prefix = f"workflowActions[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "line",
+            "locator",
+            "reference",
+            "referenceType",
+            "immutable",
+            "evidence",
+            "findingId",
+        }:
+            raise ToolError("Audit Stage 6 workflow action entry is malformed.")
+        collect_id(item, prefix, action_ids)
+        key = (
+            str(item.get("revision")),
+            str(item.get("path")),
+            int(item.get("line")) if isinstance(item.get("line"), int) else -1,
+            str(item.get("locator")),
+        )
+        if key in actual_action_keys:
+            failures.append(prefix + ".duplicate-subject")
+        actual_action_keys.add(key)
+        expected = expected_actions.get(key)
+        if expected is None:
+            failures.append(prefix + ".undiscovered")
+        else:
+            for field in ("revision", "path", "line", "locator", "reference", "referenceType", "immutable"):
+                if type(item.get(field)) is not type(expected[field]) or item.get(field) != expected[field]:
+                    failures.append(prefix + "." + field)
+        refs = evidence_refs(item.get("evidence"), prefix + ".evidence")
+        if not any(
+            evidence_by_id.get(ref, {}).get("revision") == item.get("revision")
+            and evidence_by_id.get(ref, {}).get("path") == item.get("path")
+            for ref in refs
+        ):
+            failures.append(prefix + ".evidence.subject")
+        linked_finding(
+            item.get("findingId"),
+            "automation-pinning",
+            prefix,
+            required=item.get("immutable") is False,
+        )
+        if item.get("immutable") is True and item.get("findingId") is not None:
+            failures.append(prefix + ".findingId.unexpected")
+    if actual_action_keys != set(expected_actions):
+        failures.append("workflowActions.discovery-set")
+
+    permission_items = exact_list(report, "ciPermissions", "report", 512)
+    permission_ids: set[str] = set()
+    actual_permission_keys: set[tuple[str, str]] = set()
+    for index, item in enumerate(permission_items):
+        prefix = f"ciPermissions[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "mode",
+            "scopes",
+            "writeScopes",
+            "justification",
+            "evidence",
+            "findingId",
+        }:
+            raise ToolError("Audit Stage 6 CI permission entry is malformed.")
+        collect_id(item, prefix, permission_ids)
+        key = (str(item.get("revision")), str(item.get("path")))
+        if key in actual_permission_keys:
+            failures.append(prefix + ".duplicate-subject")
+        actual_permission_keys.add(key)
+        expected = expected_permissions.get(key)
+        if expected is None:
+            failures.append(prefix + ".undiscovered")
+        else:
+            for field in ("revision", "path", "mode", "scopes", "writeScopes"):
+                if item.get(field) != expected[field]:
+                    failures.append(prefix + "." + field)
+        refs = evidence_refs(item.get("evidence"), prefix + ".evidence")
+        if not any(
+            evidence_by_id.get(ref, {}).get("revision") == item.get("revision")
+            and evidence_by_id.get(ref, {}).get("path") == item.get("path")
+            for ref in refs
+        ):
+            failures.append(prefix + ".evidence.subject")
+        mode = item.get("mode")
+        write_scopes = item.get("writeScopes")
+        risky = mode in {"implicit", "explicit-write-all", "unsupported"}
+        if isinstance(write_scopes, list) and write_scopes:
+            risky = risky or not valid_text(item.get("justification"))
+        elif item.get("justification") is not None:
+            failures.append(prefix + ".justification.unexpected")
+        linked_finding(
+            item.get("findingId"),
+            "ci-least-privilege",
+            prefix,
+            required=risky,
+        )
+        if not risky and item.get("findingId") is not None:
+            failures.append(prefix + ".findingId.unexpected")
+    if actual_permission_keys != set(expected_permissions):
+        failures.append("ciPermissions.discovery-set")
+
+    graph = exact_object(report, "buildGraph", {"nodes", "edges"}, "report")
+    node_items = exact_list(graph, "nodes", "buildGraph", 1024)
+    edge_items = exact_list(graph, "edges", "buildGraph", 2048)
+    node_ids: set[str] = set()
+    node_by_id: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(node_items):
+        prefix = f"buildGraph.nodes[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "role",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 6 build graph node is malformed.")
+        identifier = collect_id(item, prefix, node_ids)
+        if item.get("revision") not in {"baseline", "candidate"}:
+            failures.append(prefix + ".revision")
+        if item.get("role") not in {
+            "source",
+            "configuration",
+            "dependency",
+            "artifact",
+            "attestation",
+        }:
+            failures.append(prefix + ".role")
+        path = item.get("path")
+        if not _audit_stage1_safe_relative_path(path):
+            failures.append(prefix + ".path")
+        refs = evidence_refs(item.get("evidence"), prefix + ".evidence")
+        if not any(
+            evidence_by_id.get(ref, {}).get("revision") == item.get("revision")
+            and evidence_by_id.get(ref, {}).get("path") == item.get("path")
+            for ref in refs
+        ):
+            failures.append(prefix + ".evidence.subject")
+        if identifier:
+            node_by_id[identifier] = item
+    edge_ids: set[str] = set()
+    traced_artifacts: set[str] = set()
+    edges_by_artifact: dict[str, list[tuple[str, str]]] = {}
+    for index, item in enumerate(edge_items):
+        prefix = f"buildGraph.edges[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "fromNodeId",
+            "toNodeId",
+            "type",
+            "evidence",
+        }:
+            raise ToolError("Audit Stage 6 build graph edge is malformed.")
+        collect_id(item, prefix, edge_ids)
+        from_id = str(item.get("fromNodeId") or "")
+        to_id = str(item.get("toNodeId") or "")
+        if from_id not in node_by_id:
+            failures.append(prefix + ".fromNodeId")
+        if to_id not in node_by_id:
+            failures.append(prefix + ".toNodeId")
+        if from_id in node_by_id and to_id in node_by_id:
+            if node_by_id[from_id].get("revision") != node_by_id[to_id].get("revision"):
+                failures.append(prefix + ".revision")
+            if node_by_id[to_id].get("role") == "artifact":
+                edge_type = str(item.get("type") or "")
+                edges_by_artifact.setdefault(to_id, []).append((from_id, edge_type))
+                if node_by_id[from_id].get("role") in {
+                    "source",
+                    "configuration",
+                    "dependency",
+                }:
+                    traced_artifacts.add(to_id)
+        if item.get("type") not in {"declares", "configures", "builds", "generates", "attests"}:
+            failures.append(prefix + ".type")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+    candidate_artifacts = {
+        identifier
+        for identifier, item in node_by_id.items()
+        if item.get("revision") == "candidate" and item.get("role") == "artifact"
+    }
+    if not candidate_artifacts or not candidate_artifacts.issubset(traced_artifacts):
+        failures.append("buildGraph.candidate-artifact-trace")
+
+    provenance_items = exact_list(report, "provenance", "report", 256)
+    provenance_ids: set[str] = set()
+    provenance_artifacts: set[str] = set()
+    for index, item in enumerate(provenance_items):
+        prefix = f"provenance[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "artifactNodeId",
+            "materialNodeIds",
+            "builderId",
+            "attestationStatus",
+            "evidence",
+            "findingId",
+        }:
+            raise ToolError("Audit Stage 6 provenance entry is malformed.")
+        collect_id(item, prefix, provenance_ids)
+        artifact_id = str(item.get("artifactNodeId") or "")
+        if artifact_id not in node_by_id or node_by_id[artifact_id].get("role") != "artifact":
+            failures.append(prefix + ".artifactNodeId")
+        else:
+            if artifact_id in provenance_artifacts:
+                failures.append(prefix + ".artifactNodeId.duplicate")
+            provenance_artifacts.add(artifact_id)
+            if item.get("revision") != node_by_id[artifact_id].get("revision"):
+                failures.append(prefix + ".revision")
+        material_ids = id_refs(
+            item.get("materialNodeIds"), prefix + ".materialNodeIds", node_ids
+        )
+        for material_id in material_ids:
+            material = node_by_id.get(material_id)
+            if material is None:
+                continue
+            if material.get("revision") != item.get("revision"):
+                failures.append(prefix + ".materialNodeIds.revision")
+            if material.get("role") not in {"source", "configuration", "dependency"}:
+                failures.append(prefix + ".materialNodeIds.role")
+        if not valid_text(item.get("builderId"), 500):
+            failures.append(prefix + ".builderId")
+        status = item.get("attestationStatus")
+        if status not in {"verified", "missing", "unsupported"}:
+            failures.append(prefix + ".attestationStatus")
+        evidence_refs(item.get("evidence"), prefix + ".evidence")
+        linked_finding(
+            item.get("findingId"),
+            "build-trace-provenance",
+            prefix,
+            required=status in {"missing", "unsupported"},
+        )
+        if status == "verified" and not any(
+            node_by_id.get(from_id, {}).get("role") == "attestation"
+            and edge_type == "attests"
+            for from_id, edge_type in edges_by_artifact.get(artifact_id, [])
+        ):
+            failures.append(prefix + ".attestation-evidence")
+        if status == "verified" and item.get("findingId") is not None:
+            failures.append(prefix + ".findingId.unexpected")
+    if not candidate_artifacts.issubset(provenance_artifacts):
+        failures.append("provenance.candidate-artifacts")
+
+    generated_items = exact_list(report, "generatedArtifacts", "report", 512)
+    generated_ids: set[str] = set()
+    actual_generated_keys: set[tuple[str, str]] = set()
+    expected_generated_keys = {
+        key for key, item in expected_inputs.items() if item["kind"] == "generated-artifact"
+    }
+    for index, item in enumerate(generated_items):
+        prefix = f"generatedArtifacts[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "id",
+            "revision",
+            "path",
+            "artifactNodeId",
+            "sourcePaths",
+            "status",
+            "evidence",
+            "findingId",
+        }:
+            raise ToolError("Audit Stage 6 generated artifact entry is malformed.")
+        collect_id(item, prefix, generated_ids)
+        key = (str(item.get("revision")), str(item.get("path")))
+        if key in actual_generated_keys:
+            failures.append(prefix + ".duplicate-subject")
+        actual_generated_keys.add(key)
+        if key not in expected_generated_keys:
+            failures.append(prefix + ".undiscovered")
+        artifact_id = str(item.get("artifactNodeId") or "")
+        if (
+            artifact_id not in node_by_id
+            or node_by_id[artifact_id].get("role") != "artifact"
+            or node_by_id[artifact_id].get("revision") != item.get("revision")
+            or node_by_id[artifact_id].get("path") != item.get("path")
+        ):
+            failures.append(prefix + ".artifactNodeId")
+        refs = evidence_refs(item.get("evidence"), prefix + ".evidence")
+        evidence_subjects = {
+            (
+                str(evidence_by_id.get(ref, {}).get("revision")),
+                str(evidence_by_id.get(ref, {}).get("path")),
+            )
+            for ref in refs
+        }
+        source_paths = item.get("sourcePaths")
+        if (
+            not isinstance(source_paths, list)
+            or len(source_paths) > 64
+            or len(source_paths) != len(set(source_paths))
+            or not all(_audit_stage1_safe_relative_path(path) for path in source_paths)
+        ):
+            failures.append(prefix + ".sourcePaths")
+            source_contents: list[bytes] = []
+        else:
+            source_contents = []
+            for source_path in source_paths:
+                source_key = (str(item.get("revision")), str(source_path))
+                if source_path == item.get("path"):
+                    failures.append(prefix + ".sourcePaths.self")
+                try:
+                    source_classification = audit_core.classify_supply_chain_path(
+                        str(source_path)
+                    )
+                except audit_core.SupplyChainProtocolError:
+                    source_classification = None
+                if (
+                    source_classification is not None
+                    and source_classification.get("kind") == "generated-artifact"
+                ):
+                    failures.append(prefix + ".sourcePaths.generated")
+                source_nodes = [
+                    node_id
+                    for node_id, node in node_by_id.items()
+                    if node.get("revision") == item.get("revision")
+                    and node.get("path") == source_path
+                    and node.get("role") == "source"
+                ]
+                if not source_nodes or not any(
+                    from_id in source_nodes and edge_type in {"builds", "generates"}
+                    for from_id, edge_type in edges_by_artifact.get(artifact_id, [])
+                ):
+                    failures.append(prefix + ".sourcePaths.build-edge")
+                if source_key not in evidence_subjects:
+                    failures.append(prefix + ".sourcePaths.evidence")
+                content = evidence_content_by_subject.get(source_key)
+                if content is None:
+                    failures.append(prefix + ".sourcePaths.untracked")
+                else:
+                    source_contents.append(content)
+        artifact_content = revision_blobs.get(key)
+        if not source_contents:
+            expected_status = "unverifiable"
+        elif artifact_content is not None and any(
+            hashlib.sha256(content).digest() == hashlib.sha256(artifact_content).digest()
+            for content in source_contents
+        ):
+            expected_status = "in-sync"
+        else:
+            expected_status = "drift"
+        if item.get("status") != expected_status:
+            failures.append(prefix + ".status")
+        if not any(
+            evidence_by_id.get(ref, {}).get("revision") == item.get("revision")
+            and evidence_by_id.get(ref, {}).get("path") == item.get("path")
+            for ref in refs
+        ):
+            failures.append(prefix + ".evidence.subject")
+        linked_finding(
+            item.get("findingId"),
+            "generated-artifact-integrity",
+            prefix,
+            required=expected_status != "in-sync",
+        )
+        if expected_status == "in-sync" and item.get("findingId") is not None:
+            failures.append(prefix + ".findingId.unexpected")
+    if actual_generated_keys != expected_generated_keys:
+        failures.append("generatedArtifacts.discovery-set")
+
+    scanner_items = exact_list(report, "scannerBindings", "report", 16)
+    scanner_ids: set[str] = set()
+    payload = audit_verification.get("payload", {}) if audit_verification else {}
+    receipt_valid = bool(audit_verification and audit_verification.get("valid"))
+    required_domains = payload.get("requiredDomains")
+    if (
+        not receipt_valid
+        or payload.get("complete") is not True
+        or payload.get("resultStatus") not in {"pass", "fail"}
+        or not isinstance(required_domains, list)
+        or not all(isinstance(item, str) for item in required_domains)
+        or "supply-chain" not in required_domains
+    ):
+        failures.append("scannerBindings.audit-receipt")
+    expected_scanners: dict[str, dict[str, Any]] = {}
+    adapter_results = payload.get("adapterResults")
+    if not isinstance(adapter_results, list):
+        failures.append("scannerBindings.audit-receipt-adapters")
+        adapter_results = []
+    dependency_adapter_ids: set[str] = set()
+    for index, adapter in enumerate(adapter_results):
+        if not isinstance(adapter, dict):
+            failures.append(f"scannerBindings.audit-receipt-adapters[{index}]")
+            continue
+        if adapter.get("capability") != "dependency-analysis":
+            continue
+        adapter_id = str(adapter.get("adapterId") or "")
+        if not valid_id(adapter_id):
+            failures.append(f"scannerBindings.audit-receipt-adapters[{index}].adapterId")
+            continue
+        if adapter_id in dependency_adapter_ids:
+            failures.append(f"scannerBindings.audit-receipt-adapters[{index}].duplicate")
+        dependency_adapter_ids.add(adapter_id)
+        valid_dependency_result = (
+            adapter.get("status") == "passed"
+            and adapter.get("subjectValidated") is True
+            and isinstance(adapter.get("returnCode"), int)
+            and not isinstance(adapter.get("returnCode"), bool)
+            and adapter.get("returnCode") == 0
+            and adapter.get("mutationDetected") is False
+            and all(
+                valid_text(adapter.get(field), 200)
+                for field in (
+                    "adapterVersion",
+                    "approvalSubjectDigest",
+                    "evidenceFingerprint",
+                    "outputFingerprint",
+                )
+            )
+        )
+        if not valid_dependency_result:
+            failures.append(
+                f"scannerBindings.audit-receipt-adapters[{index}].not-passed-exact-subject"
+            )
+            continue
+        expected_scanners[adapter_id] = adapter
+    actual_scanner_ids: set[str] = set()
+    scanner_fields = (
+        "adapterId",
+        "capability",
+        "status",
+        "subjectValidated",
+        "adapterVersion",
+        "approvalSubjectDigest",
+        "evidenceFingerprint",
+        "returnCode",
+        "outputFingerprint",
+        "mutationDetected",
+    )
+    for index, item in enumerate(scanner_items):
+        prefix = f"scannerBindings[{index}]"
+        if not isinstance(item, dict) or set(item) != {"id", *scanner_fields}:
+            raise ToolError("Audit Stage 6 scanner binding is malformed.")
+        collect_id(item, prefix, scanner_ids)
+        adapter_id = str(item.get("adapterId") or "")
+        if adapter_id in actual_scanner_ids:
+            failures.append(prefix + ".adapterId.duplicate")
+        actual_scanner_ids.add(adapter_id)
+        expected = expected_scanners.get(adapter_id)
+        if expected is None:
+            failures.append(prefix + ".receipt-mismatch")
+        else:
+            for field in scanner_fields:
+                if item.get(field) != expected.get(field):
+                    failures.append(prefix + "." + field)
+    if not expected_scanners or actual_scanner_ids != set(expected_scanners):
+        failures.append("scannerBindings.complete-passed-dependency-analysis")
+
+    has_lockfile = any(
+        item.get("kind") == "lockfile" for item in expected_inputs.values()
+    )
+    has_ci_workflow = any(
+        item.get("kind") == "ci-workflow" for item in expected_inputs.values()
+    )
+    expected_coverage_statuses = {
+        "dependency-inventory": "assessed",
+        "lockfile-integrity": "assessed" if has_lockfile else "not-applicable",
+        "ci-least-privilege": "assessed" if has_ci_workflow else "not-applicable",
+        "automation-pinning": "assessed" if has_ci_workflow else "not-applicable",
+        "build-trace-provenance": "assessed",
+        "generated-artifact-integrity": (
+            "assessed" if expected_generated_keys else "not-applicable"
+        ),
+        "advisory-coverage": "assessed",
+    }
+    for surface, expected_status in expected_coverage_statuses.items():
+        if report_coverage_statuses.get(surface) != expected_status:
+            failures.append(f"coverage.{surface}.status")
+
+    report_gaps = exact_list(report, "gaps", "report", 256)
+    if report_gaps:
+        failures.append("report.gaps")
+    if report.get("complete") is not True:
+        failures.append("report.complete")
+    if evidence_ids - referenced_evidence:
+        failures.append("evidence.unused")
+
+    result = {
+        "schemaVersion": "jstack.audit.stage6-evaluation.v1",
+        "exerciseType": expected_type,
+        "drillId": drill_id,
+        "baselineGitHead": baseline["gitHead"] if baseline else None,
+        "baselineGitTree": baseline["gitTree"] if baseline else None,
+        "candidateGitHead": candidate["gitHead"] if candidate else None,
+        "candidateGitTree": candidate["gitTree"] if candidate else None,
+        "inputCount": len(input_items),
+        "relationshipCount": len(relationship_items),
+        "evidenceCount": len(evidence_items),
+        "workflowActionCount": len(action_items),
+        "immutableWorkflowActionCount": sum(
+            item.get("immutable") is True for item in action_items if isinstance(item, dict)
+        ),
+        "ciPermissionCount": len(permission_items),
+        "buildNodeCount": len(node_items),
+        "buildEdgeCount": len(edge_items),
+        "provenanceCount": len(provenance_items),
+        "generatedArtifactCount": len(generated_items),
+        "scannerBindingCount": len(scanner_items),
+        "matchedQaBindingCount": len(matched_qa_ids),
+        "findingCount": len(finding_items),
+        "resolvedFindingCount": sum(
+            item.get("status") == "resolved" for item in finding_items if isinstance(item, dict)
+        ),
+        "implementedRemediationCount": len(implemented_ids),
+        "changedPathCount": len(changed_paths or []),
+        "gapCount": len(inventory_gaps) + len(report_gaps),
+        "passed": not failures,
+        "failureCodes": sorted(set(failures)),
+    }
+    return {**result, "evaluationDigest": audit_json_digest(result)}
+
+
 def score_level(score: float) -> int:
     if score < 50:
         return 0
@@ -8520,7 +9862,11 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     stage5_performance_results = None
     stage5_performance_findings = None
     stage5_performance_evaluation = None
+    stage6_dependency_inventory = None
+    stage6_supply_chain_report = None
+    stage6_supply_chain_evaluation = None
     performance_evidence: list[dict[str, Any]] = []
+    audit_verification = None
     benchmark_evaluation = None
     loop_capstone_evaluation = None
     if track == "audit" and stage_number == 0:
@@ -8569,6 +9915,15 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         stage5_performance_findings = load_mastery_json_artifact(
             project_path,
             artifacts["performance-findings.json"],
+        )
+    elif track == "audit" and stage_number == 6:
+        stage6_dependency_inventory = load_mastery_json_artifact(
+            project_path,
+            artifacts["dependency-inventory.json"],
+        )
+        stage6_supply_chain_report = load_mastery_json_artifact(
+            project_path,
+            artifacts["supply-chain-report.json"],
         )
     elif track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
@@ -8741,9 +10096,24 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 "Audit Stage 5 project state contains non-training changes: "
                 + ", ".join(disallowed_changes)
             )
+    if track == "audit" and stage_number == 6:
+        for artifact_name, expected_path in AUDIT_STAGE6_ARTIFACT_PATHS.items():
+            if artifacts.get(artifact_name, {}).get("path") != expected_path:
+                hard_blocks.append(
+                    f"Audit Stage 6 {artifact_name} must use {expected_path}."
+                )
+        permitted_changes = set(AUDIT_STAGE6_ARTIFACT_PATHS.values())
+        disallowed_changes = [
+            path for path in git_changed_files(project_path) if path not in permitted_changes
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Audit Stage 6 project state contains non-training changes: "
+                + ", ".join(disallowed_changes)
+            )
     if (
         stage_number >= 2
-        and not (track == "audit" and stage_number in {2, 3, 4, 5})
+        and not (track == "audit" and stage_number in {2, 3, 4, 5, 6})
         and not state["clean"]
     ):
         hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
@@ -8831,6 +10201,34 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             hard_blocks.append(
                 f"Audit Stage 5 performance gate failed: {code}."
             )
+    if track == "audit" and stage_number == 6:
+        audit_receipt = str(args.get("audit_receipt") or "").strip()
+        if not audit_receipt:
+            hard_blocks.append(
+                "Audit Stage 6 requires a current complete audit receipt with passed dependency-analysis adapter evidence."
+            )
+        else:
+            audit_verification = verify_receipt(
+                audit_receipt,
+                "audit",
+                state,
+                require_passed=False,
+            )
+        assert stage6_dependency_inventory is not None
+        assert stage6_supply_chain_report is not None
+        stage6_supply_chain_evaluation = evaluate_audit_stage6_supply_chain(
+            stage6_dependency_inventory,
+            stage6_supply_chain_report,
+            project_path,
+            artifacts,
+            qa_verifications,
+            audit_verification,
+            drill_id,
+        )
+        for code in stage6_supply_chain_evaluation["failureCodes"]:
+            hard_blocks.append(
+                f"Audit Stage 6 supply-chain gate failed: {code}."
+            )
     qa_required = stage_number >= 2 and not (
         track == "audit"
         and (
@@ -8859,7 +10257,6 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
             security_verification = verify_receipt(security_receipt, "security", state)
             if not security_verification["valid"]:
                 hard_blocks.append("Stage 7+ security receipt is invalid or stale.")
-    audit_verification = None
     if track == "audit" and stage_number >= 8:
         audit_receipt = str(args.get("audit_receipt") or "").strip()
         if not audit_receipt:
@@ -9000,6 +10397,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "stage3ThreatModelEvaluation": stage3_threat_model_evaluation,
         "stage4ArchitectureEvaluation": stage4_architecture_evaluation,
         "stage5PerformanceEvaluation": stage5_performance_evaluation,
+        "stage6SupplyChainEvaluation": stage6_supply_chain_evaluation,
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,
@@ -11223,22 +12621,92 @@ def audit_adapter_plans(
     plans: list[dict[str, Any]] = []
     for raw_plan in discovery["adapters"]:
         plan = dict(raw_plan)
-        executable = audit_adapter_executable(list(plan["command"]), project_path)
+        required_environment = plan.get("requiredEnvironment") or []
+        if not isinstance(required_environment, list) or not all(
+            isinstance(name, str)
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name)
+            for name in required_environment
+        ):
+            raise ToolError("Curated audit adapter required-environment metadata is invalid.")
         adapter_version = audit_json_digest(
             {
                 "adapterId": plan["adapterId"],
                 "capability": plan["capability"],
                 "command": plan["command"],
                 "environment": plan["environment"],
+                "requiredEnvironment": required_environment,
             }
         )
+        resolved_environment = dict(plan["environment"])
+        missing_environment = [
+            name
+            for name in required_environment
+            if not isinstance(os.environ.get(name), str)
+            or not str(os.environ.get(name)).strip()
+            or "\x00" in str(os.environ.get(name))
+            or len(str(os.environ.get(name))) > 4096
+        ]
+        if not missing_environment:
+            resolved_environment.update(
+                {name: str(os.environ[name]) for name in required_environment}
+            )
+        executable = audit_adapter_executable(list(plan["command"]), project_path)
+        if missing_environment:
+            executable = {
+                "available": False,
+                "reason": "missing-required-environment:" + ",".join(missing_environment),
+            }
+        elif plan["adapterId"] == "osv-scanner-offline":
+            cache_path = Path(
+                resolved_environment["OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY"]
+            ).expanduser()
+            try:
+                resolved_cache = cache_path.resolve(strict=True)
+                resolved_cache.relative_to(project_path.resolve())
+            except FileNotFoundError:
+                executable = {
+                    "available": False,
+                    "reason": "osv-local-database-directory-not-found",
+                }
+            except OSError:
+                executable = {
+                    "available": False,
+                    "reason": "osv-local-database-directory-unreadable",
+                }
+            except ValueError:
+                if not resolved_cache.is_dir():
+                    executable = {
+                        "available": False,
+                        "reason": "osv-local-database-path-is-not-a-directory",
+                    }
+                elif not os.access(resolved_cache, os.R_OK | os.X_OK):
+                    executable = {
+                        "available": False,
+                        "reason": "osv-local-database-directory-unreadable",
+                    }
+                elif not (resolved_cache / "osv-scanner").is_dir():
+                    executable = {
+                        "available": False,
+                        "reason": "osv-local-database-content-not-found",
+                    }
+                else:
+                    resolved_environment[
+                        "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY"
+                    ] = str(resolved_cache)
+            else:
+                executable = {
+                    "available": False,
+                    "reason": "osv-local-database-must-be-outside-repository",
+                }
         plan["adapterVersion"] = adapter_version
+        plan["environment"] = dict(sorted(resolved_environment.items()))
         plan["availability"] = executable
         if executable.get("available"):
             subject_value = dict(plan["approvalSubject"])
             subject_value.update(
                 {
                     "adapterVersion": adapter_version,
+                    "environment": plan["environment"],
                     "resolvedExecutable": executable["resolvedExecutable"],
                     "executableSha256": executable["executableSha256"],
                     "serverVersion": SERVER_VERSION,
@@ -12292,6 +13760,25 @@ def tool_audit_finalize(args: dict[str, Any]) -> dict[str, Any]:
                 "contextBriefDigest": token_payload.get("contextBriefDigest"),
                 "toolVersion": SERVER_VERSION,
                 "adapterVersions": token_payload.get("adapterInventory", []),
+                "adapterResults": [
+                    {
+                        key: item.get(key)
+                        for key in (
+                            "adapterId",
+                            "capability",
+                            "status",
+                            "subjectValidated",
+                            "approvalSubjectDigest",
+                            "evidenceFingerprint",
+                            "adapterVersion",
+                            "returnCode",
+                            "mutationDetected",
+                            "outputFingerprint",
+                        )
+                    }
+                    for item in token_payload.get("adapterResults", [])
+                    if isinstance(item, dict)
+                ],
                 "profile": profile,
                 "scope": token_payload.get("requestedScope"),
                 "scopeMode": token_payload.get("scopeMode"),
@@ -17936,7 +19423,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "description": "Audit Stage 5 only: session-local receipts from jstack_performance_capture. Receipts are passed directly to the tool; no terminal token or paste ceremony is used."
                 },
                 "security_receipt": {"type": "string"},
-                "audit_receipt": {"type": "string"},
+                "audit_receipt": {
+                    "type": "string",
+                    "description": "Audit Stage 6: current complete receipt containing a passed curated dependency-analysis result; Audit and loop Stage 8+: current complete audit evidence. Receipts are passed directly between MCP tools with no terminal token or paste ceremony.",
+                },
                 "hard_gate_failures": {"type": "array", "items": {"type": "string"}, "default": []},
                 "blind_capstone": {
                     "type": "boolean",

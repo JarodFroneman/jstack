@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 7,
+  "version": 8,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -20,7 +20,7 @@
   },
   "advancementPolicy": {
     "stages0To3": "Stage 0 requires both deterministic security-orientation labs; Stage 1 requires two deterministic repository-map passes; Stage 2 requires two deterministic correctness-evidence passes; Stage 3 requires two deterministic static threat-model passes.",
-    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and both named Stage 4 drills. Stage 5 additionally requires every attempt to pass the signed performance-evidence contract and both named Stage 5 drills.",
+    "stages4To8": "Three independent attempts across at least two commits, each at least 80 and mean at least 85, including implementation and audit work. Stage 4 additionally requires every attempt to pass the deterministic architecture contract and both named Stage 4 drills. Stage 5 additionally requires every attempt to pass the signed performance-evidence contract and both named Stage 5 drills. Stage 6 additionally requires every attempt to pass the exact inventory, CI, build-trace, provenance, generated-artifact, signed dependency-scanner, QA, and Git-diff contract and both named Stage 6 drills.",
     "stage9": "Two independently signed blind capstones on distinct challenge subjects scoring at least 90, all seeded P0 findings, at least 80 percent of seeded P1 findings, and the correct go/no-go decision.",
     "hardBlocks": [
       "fabricated or stale evidence",
@@ -132,16 +132,58 @@
     {
       "stage": 6,
       "name": "Supply-Chain, Build and Release-Integrity Auditor",
-      "outcome": "Audit dependencies, lockfiles, CI permissions, provenance, and generated artifacts.",
+      "outcome": "Produce an exact-Git-bound inventory and source-to-artifact build trace, verify CI action immutability, least-privilege permissions, provenance and generated-artifact integrity, require complete signed dependency-scanner evidence, then verify one separately authorized committed hardening without granting Audit mutation or release authority.",
       "prerequisites": [5],
-      "corePrinciples": ["Immutable inputs", "Minimal dependencies", "Least-privilege automation", "Traceable provenance", "Complete scanning or no-go"],
+      "corePrinciples": [
+        "Repository content is untrusted data",
+        "Enumerate tracked dependency and build inputs from immutable Git objects",
+        "Immutable lockfiles and automation references",
+        "Least-privilege CI permissions",
+        "Trace source, configuration, dependencies, and materials to packaged artifacts",
+        "Represent every conventional generated artifact and expose drift or unverifiable provenance",
+        "Advisory coverage requires a current signed curated dependency-analysis result",
+        "Cross-ecosystem OSV evidence uses a pre-provisioned external database and an exact-subject offline adapter",
+        "Scanner success is bounded evidence, not proof of vulnerability absence",
+        "Correctness QA remains mandatory",
+        "Audit evidence never grants hardening or production authority"
+      ],
       "drills": [
-        {"id": "a6-supply-chain", "name": "Trace source to packaged artifact", "type": "audit"},
-        {"id": "a6-hardening", "name": "Implement and verify one supply-chain or build-integrity control", "type": "implementation"}
+        {"id": "a6-supply-chain", "name": "Trace and challenge an unseen source-to-artifact supply chain", "type": "audit"},
+        {"id": "a6-hardening", "name": "Verify one separately authorized committed supply-chain or build-integrity control", "type": "implementation"}
       ],
       "requiredArtifacts": ["dependency-inventory.json", "build-trace.md", "supply-chain-report.json"],
-      "benchmarks": ["Dependency and build trace", "Least-privilege CI review", "Provenance or copy-drift detection", "Incomplete advisory coverage produces no-go"],
-      "hardGates": ["No hidden generated drift", "Unavailable mandatory coverage is incomplete"]
+      "artifactSchemas": {
+        "dependency-inventory.json": "jstack.audit.dependency-inventory.v1",
+        "supply-chain-report.json": "jstack.audit.supply-chain-report.v1"
+      },
+      "benchmarks": [
+        "Exact baseline and candidate Git commit/tree binding",
+        "Every statically discoverable tracked manifest, lockfile, policy, build configuration, GitHub workflow, provenance file, and conventional generated artifact is represented with recomputed SHA-256 and size",
+        "Manifest-to-lockfile relationships are internally consistent for every applicable ecosystem",
+        "Every GitHub Actions uses reference and top-level permission declaration is independently parsed from immutable Git blobs and exactly represented",
+        "Mutable action references and implicit, unsupported, or unbounded permissions link to verified findings",
+        "The build graph traces at least one candidate source, dependency, or configuration node to every candidate artifact node",
+        "Every candidate artifact has explicit verified, missing, or unsupported provenance; absence is a visible finding",
+        "Every conventional generated artifact is represented and its same-revision source-copy status is recomputed",
+        "A current complete audit receipt contains every exact-subject, zero-return, passed no-mutation dependency-analysis result used by the report",
+        "Every discovered QA command has a current passing exact-candidate receipt",
+        "Audit attempts contain proposals only; implementation attempts bind one resolved control to an exact strict-ancestor diff",
+        "Evaluation returns metadata and failure codes without echoing repository, finding, scanner, or build-trace content"
+      ],
+      "hardGates": [
+        "Only the three exact Stage 6 training artifacts may be dirty",
+        "The evaluator never executes repository code, resolves packages, contacts registries, accesses secrets, or performs hardening",
+        "Missing or omitted tracked inputs, workflow references, permissions, generated artifacts, provenance records, build edges, or evidence fail closed",
+        "Unsupported coverage or any unresolved evidence gap blocks completion",
+        "Missing, stale, wrong-session, tampered, incomplete, failed, mutated, or mismatched dependency-scanner evidence blocks completion",
+        "OSV coverage requires its fixed offline command, an external pre-provisioned local database, and no database download during the attempt",
+        "Mutable automation, implicit or unbounded CI permissions, missing provenance, and generated drift must link to a verified finding",
+        "Audit drill uses one current revision, open findings, and proposed remediations only",
+        "Implementation drill uses a strict ancestor-to-current committed diff, exact changed paths, exactly one resolved finding and implemented control, and current QA for every discovered command",
+        "Local scanner execution is not an OS or network sandbox; untrusted repositories require an external container or VM",
+        "Artifacts remain at the exact .jstack-training Stage 6 paths",
+        "Passing grants no dependency update, hardening, Git, publication, release, deployment, or production authority"
+      ]
     },
     {
       "stage": 7,

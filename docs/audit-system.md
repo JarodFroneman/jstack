@@ -179,6 +179,11 @@ deduplicate.
   receive fixed offline flags, which do not enforce a firewall.
 - Curated analyzer execution, when supported, requires exact approval bound to
   adapter ID/version, revision, fingerprint, and policy digest.
+- Cross-ecosystem advisory analysis can use the fixed
+  `osv-scanner-offline` adapter when OSV-Scanner and a pre-populated external
+  local database identified by `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY` are
+  available. The resolved database path and executable identity are part of
+  the exact approval subject; JStack never downloads the database.
 
 Approved adapters execute trusted repository and toolchain code with the
 current user's host privileges. Post-run fingerprints detect bound-tree

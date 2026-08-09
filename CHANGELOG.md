@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.10.0-alpha.7 - 2026-08-09
+
+### Added
+
+- Implemented Audit mastery Stage 6, Supply-Chain, Build and Release-Integrity
+  Auditor, as the seventh bounded foundation phase.
+- Added closed `jstack.audit.dependency-inventory.v1` and
+  `jstack.audit.supply-chain-report.v1` contracts and published schemas.
+- Added deterministic exact-Git discovery for tracked dependency manifests,
+  lockfiles, policies, build configurations, GitHub workflows, provenance
+  files, and conventional generated artifacts across major language
+  ecosystems.
+- Added closed parsing and reconciliation for every GitHub Actions `uses:`
+  reference and top-level permission declaration, build graph and material
+  provenance validation, generated-copy drift recomputation, exact QA
+  coverage, and strict-ancestor hardening diffs.
+- Added a curated cross-ecosystem `osv-scanner-offline` dependency analyzer.
+  It is available only when the OSV executable and an external local advisory
+  database directory are present; the exact executable, database path,
+  command, environment, project subject, and result are receipt-bound.
+- Added adversarial coverage for omitted inventory inputs, dynamic or mutable
+  action references, permission gaps, hidden or misclassified generated drift,
+  malformed relationships, stale or tampered scanner receipts, non-training
+  writes, schema/curriculum binding, and Stage 6 advancement.
+
+### Changed
+
+- Audit curriculum content version is now 8. Stage 6 advancement requires
+  three independent deterministic passes across at least two commits, every
+  score at least 80, a mean score of at least 85, and both the static audit and
+  committed-hardening verification drills.
+- Final Git-bound audit receipts now include only bounded sanitized adapter
+  result metadata so Stage 6 can verify same-session dependency-analysis
+  evidence without retaining scanner output or secrets.
+- Stage 6 permits only `dependency-inventory.json`, `build-trace.md`, and
+  `supply-chain-report.json` at their exact `.jstack-training/` paths.
+- Both Stage 6 drills require current passing receipts for every discovered
+  JStack QA command. Dependency evidence never substitutes for correctness
+  evidence.
+- Preserved the five commands, 51 canonical MCP tools, mastery profile v3,
+  Python 3.9+ standard-library runtime, cross-platform packaging, and
+  token-free host-native action model.
+
+### Security
+
+- The evaluator executes no repository code, resolves no packages, contacts no
+  registry, accesses no secrets, and performs no hardening. Dependency scans
+  remain separately approved curated adapter actions bound to exact project
+  state; incomplete, failed, mutated, stale, or mismatched results fail closed.
+- Dynamic or unparseable GitHub Actions references are rejected. Mutable
+  references, implicit/unsupported/unbounded CI permissions, missing
+  provenance, and generated drift must be represented by verified findings.
+- OSV execution enforces the scanner's offline mode and rejects a missing,
+  unreadable, or repository-contained advisory database directory. Local
+  process isolation remains outside JStack's standard-library runner.
+- Local curated-adapter execution is not an OS or network sandbox. A Stage 6
+  pass proves bounded protocol integrity only; it does not prove complete
+  transitive dependencies, current advisory coverage, reproducible builds,
+  artifact authenticity, vulnerability absence, release readiness, or
+  production authority.
+
 ## 0.10.0-alpha.6 - 2026-08-05
 
 ### Added

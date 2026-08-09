@@ -38,7 +38,9 @@ Stage 2 may write only `correctness-report.json`, `invariants.md`, and
 `security-findings.json`, and `abuse-cases.md`; Audit Stage 4 may write only
 `architecture-map.md`, `maintainability-report.json`, and
 `migration-outline.md`; Audit Stage 5 may write only `benchmark-plan.md`,
-`baseline-results.json`, and `performance-findings.json` beneath
+`baseline-results.json`, and `performance-findings.json`; and Audit Stage 6 may
+write only `dependency-inventory.json`, `build-trace.md`, and
+`supply-chain-report.json` beneath
 `.jstack-training/`.
 None may perform
 network or secret access, exploit development, public disclosure, remediation,
@@ -51,7 +53,10 @@ reference a separately authorized committed candidate and current QA receipt;
 Audit does not create or commit that candidate. Stage 5 may consume signed
 performance-capture and current QA receipts created by a separately authorized
 trusted development or QA workflow; Audit never runs the benchmark, optimizes
-code, or creates the candidate.
+code, or creates the candidate. Stage 6 may consume a current complete audit
+receipt containing sanitized passed dependency-analysis adapter results and
+current QA receipts; Audit never runs the scanner, resolves packages, hardens
+CI, or creates the candidate.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -108,6 +113,26 @@ code, or creates the candidate.
    percentages, outlier removal, unsupported coverage, gaps, or non-training
    dirty paths fail closed. Audit performs no capture execution or
    optimization and grants no production authority.
+   At Stage 6, enumerate every statically discoverable tracked manifest,
+   lockfile, dependency policy, build configuration, GitHub workflow,
+   provenance file, and conventional generated artifact for both exact Git
+   revisions. Bind SHA-256 and size; represent manifest/lock relationships;
+   parse every closed-form GitHub Actions reference and top-level permission;
+   trace source/configuration/dependencies to candidate artifacts; declare
+   provenance and generated-copy status; and require a current complete
+   `supply-chain` audit receipt with passed no-mutation dependency-analysis
+   evidence plus current QA for every discovered command. Dynamic references,
+   omitted inputs, mutable or unbounded controls without verified findings,
+   missing provenance, hidden drift, stale/failed receipts, gaps, or
+   non-training changes fail closed. The audit drill proposes only. The
+   hardening drill verifies exactly one separately authorized committed
+   control against a strict-ancestor diff and matching QA. Audit performs no
+   scanning, dependency resolution, hardening, or release action and grants no
+   production authority.
+   Cross-ecosystem OSV evidence may come only from the curated offline adapter
+   in a separate trusted workflow, using a pre-provisioned external database
+   bound through `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`; never download or
+   refresh advisory data during the Stage 6 attempt.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
    audit goal, source-attributed facts, separate assumptions, and only material

@@ -2569,6 +2569,7 @@ class EvidenceTests(unittest.TestCase):
             )
             self.assertTrue(verification["valid"], verification["checks"])
             self.assertEqual("jstack.audit.receipt.v1", verification["payload"]["schemaVersion"])
+            self.assertEqual([], verification["payload"]["adapterResults"])
             (repo / "README.md").write_text("# Receipt is now stale\n", encoding="utf-8")
             stale = server.verify_receipt(
                 finalized["auditReceipt"],
@@ -3401,7 +3402,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage0_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(0, "audit")
-        self.assertEqual(7, curriculum["version"])
+        self.assertEqual(8, curriculum["version"])
         self.assertEqual("Safe Security Operator", stage["name"])
         self.assertIn("security-orientation.json", stage["requiredArtifacts"])
         self.assertEqual(
@@ -3622,7 +3623,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage1_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(1, "audit")
-        self.assertEqual(7, curriculum["version"])
+        self.assertEqual(8, curriculum["version"])
         self.assertEqual("Repository Reconnaissance and System Mapping", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE1_REPOSITORY_MAP_SCHEMA,
@@ -3988,7 +3989,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage2_curriculum_and_schemas_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(2, "audit")
-        self.assertEqual(7, curriculum["version"])
+        self.assertEqual(8, curriculum["version"])
         self.assertEqual("Correctness and Reliability Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE2_CORRECTNESS_SCHEMA,
@@ -4352,7 +4353,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage3_curriculum_schema_and_standards_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(3, "audit")
-        self.assertEqual(7, curriculum["version"])
+        self.assertEqual(8, curriculum["version"])
         self.assertEqual("Security and Threat-Modelling Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE3_SECURITY_FINDINGS_SCHEMA,
@@ -4676,7 +4677,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage4_curriculum_and_schema_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(4, "audit")
-        self.assertEqual(7, curriculum["version"])
+        self.assertEqual(8, curriculum["version"])
         self.assertEqual("Maintainability and Architecture Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE4_MAINTAINABILITY_SCHEMA,
@@ -5061,7 +5062,7 @@ class MasteryAndInstallTests(unittest.TestCase):
     def test_audit_stage5_curriculum_schemas_tool_and_advancement_are_bound(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(5, "audit")
-        self.assertEqual(7, curriculum["version"])
+        self.assertEqual(8, curriculum["version"])
         self.assertEqual("Performance and Resource-Efficiency Auditor", stage["name"])
         self.assertEqual(
             server.AUDIT_STAGE5_RESULTS_SCHEMA,

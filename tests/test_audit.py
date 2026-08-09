@@ -593,11 +593,22 @@ class CoverageAndAdapterTests(unittest.TestCase):
             tests = root / "tests"
             tests.mkdir()
             (tests / "test_core.py").write_text("# inventory only\n", encoding="utf-8")
+            (root / "package-lock.json").write_text("{}\n", encoding="utf-8")
             inventory = audit.inventory_repository(root)
             discovery_binding = binding(scopeManifestDigest=inventory["scopeManifestDigest"])
             discovery = audit.discover_adapters(inventory, discovery_binding)
             ids = {item["adapterId"] for item in discovery["adapters"]}
             self.assertIn("python-unittest-offline", ids)
+            self.assertIn("osv-scanner-offline", ids)
+            osv = next(
+                item
+                for item in discovery["adapters"]
+                if item["adapterId"] == "osv-scanner-offline"
+            )
+            self.assertEqual(
+                ["OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY"],
+                osv["requiredEnvironment"],
+            )
 
 
 class SuppressionAndOutputTests(unittest.TestCase):

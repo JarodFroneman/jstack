@@ -67,6 +67,19 @@ evidence, launch assurance, release readiness, and mastery progression.
   relative improvement, and guardrail regressions, requires current QA, returns
   only evaluation metadata, permits only three declared training artifacts,
   and grants no benchmark-execution, optimization, or production authority.
+- Audit mastery Stage 6 validates an exact tracked dependency/build inventory,
+  GitHub Actions pins and permissions, source-to-artifact graphs, provenance,
+  generated-copy drift, current sanitized dependency-analysis receipt
+  evidence, every discovered QA command, and one separately committed
+  hardening diff. The evaluator runs no repository code or registry request,
+  returns only metadata, permits only three declared training artifacts, and
+  grants no dependency-update, Git, release, deployment, or production
+  authority.
+- The optional `osv-scanner-offline` curated adapter provides cross-ecosystem
+  advisory evidence from a pre-provisioned external local database. It
+  requires `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`, enforces OSV offline mode,
+  binds the database path and executable identity, and performs no database
+  download.
 - `jstack_context_readiness` is read-only. It inspects a structured brief,
   returns at most three material questions with recommended defaults, and
   stores no raw conversation or source content in its session receipt. The

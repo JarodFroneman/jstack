@@ -271,6 +271,63 @@ production authority. Advancement requires three independent deterministic
 passes across at least two commits, every score at least 80, mean at least 85,
 and both named Stage 5 drills.
 
+## Stage 6 Deterministic Gate
+
+Stage 6 validates supply-chain and build evidence without turning Audit into a
+dependency-resolution, scanner-execution, hardening, or release agent. Its
+only permitted dirty paths are `dependency-inventory.json`, `build-trace.md`,
+and `supply-chain-report.json` beneath `.jstack-training/`. The JSON uses the
+closed `jstack.audit.dependency-inventory.v1` and
+`jstack.audit.supply-chain-report.v1` contracts; both are bound to exact
+baseline and candidate Git commits and trees, and the build trace is non-empty,
+UTF-8, secret-safe, and hash-bound.
+
+JStack enumerates the complete tracked path set at both revisions, applies a
+closed cross-ecosystem classifier, reloads every classified Git blob, and
+recomputes its SHA-256 and size. Omitted or invented manifests, lockfiles,
+dependency policies, build configurations, GitHub workflows, provenance files,
+or conventional generated artifacts fail. The structural classifier supports
+major implementation-language ecosystems but does not prove complete semantic
+or transitive dependency resolution.
+
+Every closed-form GitHub Actions `uses:` reference and top-level permission
+declaration is independently parsed and exactly reconciled. Dynamic or
+unparseable references fail closed. Mutable references, implicit or
+unsupported permissions, unbounded writes, missing provenance, and generated-
+copy drift require reciprocal verified findings. The graph traces source,
+configuration, and dependency materials to every candidate artifact. Every
+candidate artifact has explicit provenance, and every discovered generated
+copy has a same-revision exact-copy, drift, or unverifiable classification.
+
+Dependency advisory evidence must come from a separately approved curated
+adapter bound to the exact audit subject. The final audit receipt carries only
+sanitized adapter identity/status/version, subject validation, zero return
+code, and evidence digests. Stage 6
+requires a current complete same-session receipt with `supply-chain` coverage
+and passed, no-mutation `dependency-analysis` evidence, plus current passing
+receipts for every discovered QA command. Scanner output and secret values are
+never accepted as mastery artifacts. The local adapter runner is not an OS or
+network sandbox; untrusted repositories require external isolation.
+
+The optional cross-ecosystem adapter invokes OSV-Scanner in offline mode using
+a pre-provisioned external database named by
+`OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`. JStack binds the resolved database
+path and executable identity into the exact subject, rejects a database inside
+the repository, and never downloads advisory data.
+
+`a6-supply-chain` is static: baseline equals candidate, findings remain open,
+and remediations remain proposed. `a6-hardening` verifies one candidate already
+changed and committed by a separate authorized workflow. Its baseline is a
+strict ancestor, the reported paths equal the Git diff, and exactly one
+finding/control is resolved and implemented with baseline/candidate evidence
+and matching QA. The evaluator returns only metadata, counts, failure codes,
+and a digest. A pass proves bounded protocol integrity—not complete dependency
+semantics, current advisory coverage, reproducible builds, artifact
+authenticity, vulnerability absence, release readiness, or production
+authority. Advancement requires three independent deterministic passes across
+at least two commits, every score at least 80, mean at least 85, and both named
+Stage 6 drills.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -285,8 +342,9 @@ Assistance caps and independent-assessor rules match the engineering track.
 Stage 0 uses the distinct two-lab rule above; Stage 1 uses the deterministic
 repository-map rule above; Stage 2 uses the deterministic correctness-evidence
 rule above; Stage 3 uses the deterministic threat-model rule above; Stage 4
-uses the deterministic architecture rule above; and Stage 5 uses the signed
-performance-evidence rule above. Stages 6 through 8 provide separate audit and
+uses the deterministic architecture rule above; Stage 5 uses the signed
+performance-evidence rule above; and Stage 6 uses the deterministic supply-
+chain/build-integrity rule above. Stages 7 and 8 provide separate audit and
 bounded implementation drills and require repeated evidence across both work
 types and repository states. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.
