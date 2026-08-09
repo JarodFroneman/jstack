@@ -213,6 +213,48 @@ Stage 5 grants no optimization, Git, release, deployment, or production
 authority and does not prove correctness, universal performance, capacity, or
 remediation safety.
 
+### Audit mastery Stage 6
+
+Audit mastery Stage 6 permits only `dependency-inventory.json`,
+`build-trace.md`, and `supply-chain-report.json` at their exact
+`.jstack-training/` paths. The evaluator reads immutable Git objects and
+signed receipts. It never executes repository code, resolves dependencies,
+contacts a package registry, accesses secrets, hardens a target, mutates Git,
+publishes, releases, deploys, or touches production.
+
+Tracked dependency/build inputs are independently enumerated for both bound
+revisions and every represented blob's hash and size are recomputed. GitHub
+Actions references and top-level permissions are parsed from the immutable
+workflow bytes. Dynamic or unparseable references fail closed. Mutable
+references, implicit or unsupported permissions, unbounded writes, missing
+provenance, and generated-copy drift require explicit verified findings;
+omitted workflows, inputs, artifacts, or controls cannot disappear behind a
+model-authored coverage claim.
+
+Advisory evidence must come from a separately approved curated
+`dependency-analysis` adapter bound to the exact audit subject. Final audit
+receipts retain only the adapter identity, status, version, approval-subject
+digest, evidence/output fingerprints, return code, and mutation flag—never
+stdout, stderr, source previews, or secret values. Missing, failed, capped,
+stale, mutated, wrong-session, or mismatched scanner evidence is a no-go.
+Every discovered QA command also needs a current passing exact-candidate
+receipt.
+
+The optional `osv-scanner-offline` adapter requires a pre-populated external
+database path supplied through `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`. JStack
+rejects missing, unreadable, non-directory, or repository-contained paths and
+binds the resolved path and scanner executable identity to the exact subject.
+It never requests a database download. Offline mode is still process
+configuration, not a host firewall.
+
+Curated local adapter execution is not an OS or network sandbox; offline flags
+do not create a host firewall. Use a container, VM, or hardened execution host
+for untrusted repositories. A Stage 6 pass proves bounded inventory, workflow,
+graph, provenance, generated-copy, receipt, QA, and diff-contract integrity.
+It does not prove complete transitive dependency semantics, current or complete
+advisory data, reproducible builds, artifact authenticity, vulnerability
+absence, hardening safety, release readiness, or production authority.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

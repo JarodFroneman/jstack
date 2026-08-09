@@ -63,6 +63,11 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   recomputed statistics and budgets; complete performance-surface coverage;
   exact candidate diffs; current QA; guardrail regressions; and separate
   Audit/capture/optimization authority
+- deterministic audit-mastery Stage 6 validation for exact tracked dependency
+  and build-input enumeration, immutable GitHub Actions references, explicit CI
+  permissions, source-to-artifact graphs, provenance, generated-copy drift,
+  signed no-mutation dependency-analysis evidence, complete QA, exact candidate
+  diffs, and separate Audit/hardening/release authority
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -390,6 +395,53 @@ output, or samples. A pass proves bounded protocol integrity, not workload
 realism, measurement accuracy, universal performance, production capacity,
 optimization safety, release readiness, or production authority.
 
+Audit mastery Stage 6 is a static supply-chain and build-integrity assessment.
+It uses closed dependency-inventory and supply-chain-report contracts plus one
+non-empty hash-bound build trace. Baseline and candidate commits and trees are
+immutable source subjects. JStack enumerates every tracked path in each tree,
+applies a closed cross-ecosystem classifier, reloads every represented blob,
+and recomputes its SHA-256 and size. Omitted or invented manifests, lockfiles,
+policies, build configurations, GitHub workflows, provenance files, or
+conventional generated artifacts fail closed.
+
+The evaluator parses every closed-form GitHub Actions `uses:` reference and
+top-level `permissions:` declaration from the immutable workflow blob. Dynamic
+or unparseable references fail. Mutable references, implicit or unsupported
+permissions, unbounded writes, missing provenance, and generated-copy drift
+must be linked to verified findings. The submitted graph must trace source,
+configuration, or dependency material to every candidate artifact; every
+candidate artifact has an explicit provenance record, and every discovered
+generated copy is represented with recomputed exact-copy, drift, or
+unverifiable status.
+
+Dependency advisory evidence remains outside the static evaluator. A separately
+approved curated audit adapter executes against an exact project subject and
+returns bounded digests rather than scanner output. Audit finalization retains
+only its sanitized result metadata in the signed audit receipt. Stage 6
+requires that current same-session receipt to be complete, include
+`supply-chain` coverage, and contain every represented passed no-mutation
+`dependency-analysis` result with validated subject and zero return code. It
+also requires current passing receipts for
+every discovered QA command.
+
+The optional cross-ecosystem adapter uses OSV-Scanner with offline mode and a
+pre-provisioned local database outside the repository. JStack requires
+`OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`, rejects missing or repository-contained
+database paths, and binds that resolved path plus the executable identity,
+fixed command, environment, and project subject into the approval digest. It
+does not download or refresh advisory data.
+
+The audit drill keeps baseline equal to candidate and permits proposals only.
+The hardening drill verifies a candidate already changed and committed by a
+separate authorized development workflow: the baseline is a strict ancestor,
+the path set equals the Git diff, and exactly one finding/control is resolved
+with matching QA. Only the three exact Stage 6 artifact paths may be dirty.
+Evaluation returns metadata, counts, failure codes, and a digest without
+source, finding, scanner, dependency, or build-trace content. A pass proves
+bounded protocol integrity—not complete transitive dependency semantics,
+current advisory coverage, reproducible builds, artifact authenticity,
+vulnerability absence, release readiness, or production authority.
+
 ## Project Binding
 
 Runtime health is independent from project eligibility. `runtime_status`
@@ -415,7 +467,8 @@ Audit sessions additionally bind controls, profile, scope, required domains,
 adapter inventory, and a deterministic manifest of inspected inputs. Audit
 receipts bind coverage and finding digests, server evaluation time, and active
 suppression expiries plus the capability catalog, selection, goal, and selected
-capability IDs. Release-profile receipts bind complete repository scope and the
+capability IDs. Receipts retain bounded sanitized adapter-result identities,
+statuses, and evidence digests but no scanner output. Release-profile receipts bind complete repository scope and the
 release-range digest. The audit release gate is opt-in; QA and security receipt
 compatibility is unchanged.
 

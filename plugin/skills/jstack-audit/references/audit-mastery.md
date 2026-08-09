@@ -294,6 +294,85 @@ measurements—not workload realism, measurement accuracy, universal
 performance, production capacity, optimization safety, or production
 authority.
 
+## Stage 6: Supply-Chain, Build And Release-Integrity Auditor
+
+Stage 6 is an exact-input and evidence-reconciliation gate, not authority for
+Audit to run dependency tools or harden a repository. Create only these exact
+paths:
+
+- `.jstack-training/dependency-inventory.json`
+- `.jstack-training/build-trace.md`
+- `.jstack-training/supply-chain-report.json`
+
+The JSON files must conform to
+`mcp/jstack/schemas/audit-dependency-inventory.v1.schema.json` and
+`mcp/jstack/schemas/audit-supply-chain-report.v1.schema.json`. Bind both to
+exact baseline and candidate Git commits and trees and hash-bind the non-empty
+build trace. JStack independently enumerates the complete tracked path set at
+both revisions, applies its closed classifier, reloads every classified blob,
+and recomputes its SHA-256 and byte size. The inventory must represent every
+discovered manifest, lockfile, dependency policy, build configuration, GitHub
+workflow, provenance file, and conventional generated artifact. This covers
+major language ecosystems structurally; it does not prove a complete semantic
+or transitive dependency graph.
+
+Represent manifest-to-lockfile relationships and all six inventory surfaces.
+The report uses revision-bound, full-blob SHA-256 source citations. JStack
+reparses every closed-form GitHub Actions `uses:` reference and top-level
+`permissions:` declaration from immutable workflow bytes. Dynamic or
+unparseable references fail. Mutable tags, implicit or unsupported permission
+policies, and unbounded writes require reciprocal verified findings. Granular
+write scopes require an explicit bounded justification.
+
+The build graph must trace at least one source, configuration, or dependency
+node to every candidate artifact node. Every candidate artifact has a
+provenance record with its material nodes, builder identity, and verified,
+missing, or unsupported attestation status. Missing or unsupported provenance
+is a finding. Every conventionally discovered generated artifact must be
+represented. When source paths are declared, JStack reloads them from the same
+revision and recomputes whether any exact byte identity exists; otherwise the
+record is drift or unverifiable and remains linked to a finding. This exact-
+copy check does not establish semantic build reproducibility.
+
+Advisory coverage comes from a separately approved curated audit adapter, not
+the Stage 6 evaluator. Require a current complete same-session audit receipt
+whose required domains include `supply-chain`. Its bounded sanitized adapter
+results must contain every represented passed `dependency-analysis` result
+with exact adapter/version, approval-subject, evidence/output fingerprints,
+`subjectValidated=true`, `returnCode=0`, and `mutationDetected=false`.
+Missing, failed, capped, stale, mutated, or
+mismatched evidence blocks completion. Scanner stdout, stderr, dependency
+content, and secrets never enter the training artifacts or mastery record.
+The local adapter runner is not an OS or network sandbox; use an external
+container or VM for untrusted repositories. Require a current passing receipt
+for every discovered JStack QA command.
+
+For cross-ecosystem advisory coverage, a separate trusted adapter workflow may
+use only the curated `osv-scanner-offline` command with a pre-provisioned local
+database outside the repository. The MCP must receive
+`OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`; the resolved database path and
+executable identity are exact-subject inputs, and JStack does not download or
+refresh the database.
+
+For `a6-supply-chain`, baseline and candidate are the same current commit,
+findings remain open, and every remediation remains proposed. For
+`a6-hardening`, Audit verifies a candidate already changed and committed by a
+separate authorized development workflow. The baseline must be a strict
+ancestor, reported changed paths must equal the Git diff, and exactly one
+finding/control is resolved and implemented with baseline/candidate evidence
+and matching QA. Other verified risks may remain open and explicit; they may
+not be hidden as gaps or unsupported coverage.
+
+The evaluator executes no repository code, performs no network or registry
+request, and returns only subject metadata, counts, failure codes, and a
+digest—not source, dependency, scanner, finding, or build-trace content.
+Advancement requires three independent deterministic passes across at least
+two commits, every score at least 80, mean at least 85, and both named drills.
+A pass proves bounded protocol integrity—not complete transitive dependency
+semantics, current advisory coverage, reproducible builds, artifact
+authenticity, vulnerability absence, release readiness, or production
+authority.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

@@ -143,7 +143,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.10.0-alpha.6
+## What Ships In v0.10.0-alpha.7
 
 | Capability | What it provides |
 | --- | --- |
@@ -153,6 +153,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Security And Threat-Modelling Stage 3 | A closed static threat-model contract with complete STRIDE classification, exact-Git-bound citations, assets, bounded adversaries, trust boundaries, controls, reciprocal abuse cases and verified reachable attack paths, critical-blocker enforcement, pinned versioned standards mappings, secret-safe narratives, and two deterministic independent passes |
 | Maintainability And Architecture Stage 4 | A closed baseline/candidate architecture contract covering module boundaries, dependency direction, contracts and compatibility, change amplification, testability, and migration risk; static audits propose only, while implementation attempts verify one separately authorized committed remediation against the exact Git diff and current passing JStack QA evidence |
 | Performance And Resource Efficiency Stage 5 | Closed workload, capture, results, and finding contracts with signed exact-Git/workload/command/environment/sample binding; JStack recomputes percentiles, budgets, improvements, and guardrail regressions, while Audit remains non-executing and implementation evidence must come from a separately authorized committed workflow |
+| Supply-Chain, Build And Release Integrity Stage 6 | Closed exact-Git inventory and report contracts across major dependency ecosystems; JStack independently enumerates tracked inputs, parses GitHub Actions pins and permissions, verifies source-to-artifact graphs, provenance, generated-copy drift, complete signed dependency-scanner evidence (including optional offline OSV coverage), all discovered QA commands, and one separately committed hardening diff |
 | Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
@@ -370,6 +371,14 @@ Release readiness is evidence only: its result always includes
   JStack recomputes statistics and guardrail regressions, but local capture is
   not an OS or network sandbox and does not prove workload realism, measurement
   accuracy, production capacity, or production authority.
+- Audit mastery Stage 6 may write only its dependency inventory, build trace,
+  and supply-chain report under `.jstack-training/`. The evaluator reads
+  immutable Git objects, recomputes tracked-input and CI-control evidence, and
+  requires a current complete receipt for a passed curated dependency analyzer
+  plus every discovered QA command. It performs no package resolution,
+  registry access, hardening, or release action, and a pass does not prove
+  complete transitive dependencies, reproducible builds, artifact
+  authenticity, vulnerability absence, or production authority.
 - Artifact-only projects can use planning and direct operator evidence, but
   cannot receive commit-bound JStack release receipts.
 
@@ -410,6 +419,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-alpha.7 migration guide](docs/migration-0.10.0-alpha.7.md) | [Supply-Chain, Build and Release Integrity decision](docs/adr/0017-supply-chain-build-release-stage6.md) |
 | [v0.10.0-alpha.6 migration guide](docs/migration-0.10.0-alpha.6.md) | [Performance and Resource Efficiency decision](docs/adr/0016-performance-resources-stage5.md) |
 | [v0.10.0-alpha.5 migration guide](docs/migration-0.10.0-alpha.5.md) | [Maintainability and Architecture decision](docs/adr/0015-maintainability-architecture-stage4.md) |
 | [v0.10.0-alpha.4 migration guide](docs/migration-0.10.0-alpha.4.md) | [Security and Threat-Modelling decision](docs/adr/0014-security-threat-model-stage3.md) |

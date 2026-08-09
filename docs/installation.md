@@ -117,6 +117,20 @@ tool_timeout_sec = 300.0
 Do not configure the MCP from both the shared installation and the umbrella
 plugin.
 
+### Optional Stage 6 OSV advisory evidence
+
+Cross-ecosystem Audit Stage 6 evidence can use the curated
+`osv-scanner-offline` adapter. Install OSV-Scanner separately, prepare its
+local advisory database before the audit, and expose the database directory to
+the JStack MCP process as `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`. The directory
+must exist, be readable, and live outside the audited repository. Restart the
+host after changing the MCP environment.
+
+JStack invokes only the fixed offline scan command and never downloads or
+updates the database. If the executable or database is absent, the adapter is
+reported unavailable and Stage 6 fails closed rather than silently weakening
+advisory coverage.
+
 ### 3. Keep The Umbrella Plugin Uninstalled
 
 The `plugin/` directory is an alternative all-in-one distribution. Installing
@@ -176,7 +190,7 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.6`);
+  prerelease, `0.10.0-alpha.7`);
 - `tools/list` includes 51 canonical `jstack_*` tools, including
   `jstack_context_readiness` and `jstack_performance_capture`.
 
