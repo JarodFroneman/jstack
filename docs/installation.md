@@ -142,6 +142,15 @@ externally enforced container or VM with target authorization and appropriate
 egress controls. The capture value `none-observed` records an observation; it
 does not prove network isolation.
 
+### Stage 8 enterprise audit evidence
+
+Stage 8 consumes the current release-audit, QA, and security receipts directly
+between JStack tools. It writes only `audit-report.md`, `audit-result.json`,
+`audit.sarif`, and `risk-register.json` beneath `.jstack-training/`; no user
+approval token, signing command, challenge, digest, or terminal paste is part
+of the workflow. Audit remains read-only and does not implement controls,
+accept risk, commit, publish, release, deploy, or access production.
+
 ### 3. Keep The Umbrella Plugin Uninstalled
 
 The `plugin/` directory is an alternative all-in-one distribution. Installing
@@ -201,7 +210,7 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.8`);
+  prerelease, `0.10.0-alpha.9`);
 - `tools/list` includes 52 canonical `jstack_*` tools, including
   `jstack_context_readiness`, `jstack_performance_capture`, and
   `jstack_adversarial_capture`.

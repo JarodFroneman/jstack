@@ -42,7 +42,9 @@ Stage 2 may write only `correctness-report.json`, `invariants.md`, and
 write only `dependency-inventory.json`, `build-trace.md`, and
 `supply-chain-report.json`; and Audit Stage 7 may write only
 `adversarial-plan.md`, `verification-results.json`, and
-`false-positive-analysis.md` beneath
+`false-positive-analysis.md`; and Audit Stage 8 may write only
+`audit-report.md`, `audit-result.json`, `audit.sarif`, and
+`risk-register.json` beneath
 `.jstack-training/`.
 None may perform
 network or secret access, exploit development, public disclosure, remediation,
@@ -62,6 +64,9 @@ CI, or creates the candidate. Stage 7 may consume current-session signed
 adversarial-capture, QA, and security receipts created by a separately
 authorized trusted development or QA workflow; Audit never executes the
 target, implements the harness, retains payloads, or creates the candidate.
+Stage 8 may consume current release-audit, QA, and security receipts; Audit
+never creates the candidate or controls, accepts risk, or performs Git,
+publication, release, deployment, or production action.
 
 1. Read project instructions and relevant durable context.
 2. Call `jstack_runtime_status` and `jstack_detect_project`. If learning or
@@ -160,6 +165,31 @@ target, implements the harness, retains payloads, or creates the candidate.
    authorization. Audit performs no execution, exploitation, harness
    implementation, remediation, Git, release, deployment, or production
    action and makes no vulnerability-absence or zero-day-detection claim.
+   At Stage 8, reconcile exactly four outputs—`audit-report.md`,
+   `audit-result.json`, `audit.sarif`, and `risk-register.json`—against a fresh
+   current-session, exact-HEAD, complete-repository release-audit receipt. Its
+   coverage and finding digests, counts, active suppression expiries, failure
+   threshold, status, and evaluation time must match the retained result.
+   Only those exact post-finalization outputs may explain project-fingerprint
+   drift; every other dirty path fails closed. Represent every finding once,
+   ordered by priority before severity. Open verified risk is `remediate`, an
+   unverified hypothesis is `investigate`, and a finalized suppression is
+   `accepted-risk`. Require owner, reason, and future target for open risk;
+   accepted risk must exactly match the finalized fingerprint, scope, owner,
+   reason, approval, future expiry, compensating control, and residual risk.
+   Require exact deterministic SARIF and canonical Markdown and derive go/no-go
+   only from the complete release audit. The lead drill keeps baseline equal
+   to candidate. The controls drill verifies a separately committed strict-
+   ancestor candidate whose baseline audit-result commit and digest match a
+   prior passed Stage 8 attempt, paths equal the Git diff, at least one verified
+   baseline fingerprint is absent, the candidate release audit passes, and no
+   blocker, severity, or priority regression remains. Require current passing
+   QA for every discovered command and a current complete passing security
+   receipt. Audit grants no remediation, risk-acceptance, Git, publication,
+   release, deployment, or production authority and makes no vulnerability-
+   absence, zero-day-detection, standards-compliance, or production-safety
+   claim. Three independent deterministic attempts across at least two commits,
+   both drills, every score at least 80, and mean at least 85 are required.
 3. After inspection, call
    `jstack_context_readiness(workflow_mode="jstack-audit")` with the exact
    audit goal, source-attributed facts, separate assumptions, and only material

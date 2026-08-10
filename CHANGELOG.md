@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.10.0-alpha.9 - 2026-08-10
+
+### Added
+
+- Implemented Audit mastery Stage 8, Enterprise Audit Lead, as the ninth
+  bounded foundation phase.
+- Added the closed `jstack.audit.enterprise-risk-register.v1` contract and
+  published `audit-enterprise-risk-register.v1.schema.json`.
+- Added exact reconciliation across the current signed release-audit receipt,
+  finalized `jstack.audit.result.v1`, deterministic SARIF 2.1.0, canonical
+  engineering/executive Markdown, and a priority-first risk register.
+- Added deterministic current-finding coverage, open-risk owner/reason/target
+  dates, exact accepted-risk owner/reason/approval/expiry/control fields,
+  derived go/no-go logic, and metadata-only Stage 8 evaluation records.
+- Added a committed controls drill that requires a strict ancestor, exact Git
+  diff, a Git-immutable baseline audit result matching a prior passed Stage 8
+  attempt, at least one verified remediated fingerprint, a passing current
+  release audit, and no introduced blocker, severity increase, or priority
+  escalation.
+- Added adversarial tests for altered SARIF, wrong release decisions, invalid
+  risk ownership, unvalidated baselines, non-training drift, exact receipt
+  reconciliation, verified remediation, schema binding, advancement, and
+  Windows CRLF portability.
+
+### Changed
+
+- Audit curriculum content version is now 10. Stage 8 advancement requires
+  three independent deterministic passes across at least two commits, every
+  score at least 80, a mean score of at least 85, and both Stage 8 drills.
+- Stage 8 permits only `audit-report.md`, `audit-result.json`, `audit.sarif`,
+  and `risk-register.json` at their exact `.jstack-training/` paths.
+- The current audit receipt may differ from the mastery-record project
+  fingerprint only because the four exact Stage 8 outputs are written after
+  audit finalization; every other dirty path fails closed.
+- Stage 8 compares canonical Markdown across LF and CRLF checkouts and binds a
+  prior baseline by its commit plus canonical JSON SHA-256, while exact current
+  artifact bytes remain independently digest-bound.
+- Preserved the five commands, 52 canonical tools, mastery profile v3, Python
+  3.9+ standard-library runtime, cross-platform packaging, and token-free
+  host-native action model.
+
+### Security
+
+- Stage 8 requires a fresh current-session, exact-HEAD, repository-scope,
+  release-profile, complete Git audit receipt. Receipt coverage, finding,
+  count, suppression, threshold, status, and evaluation-time fields must match
+  the retained finalized result exactly.
+- Rejected, duplicate, stale, malformed, wrong-scope, future-created, or
+  expired suppressions fail closed. Accepted risk remains explicit human
+  governance evidence and is never silently inferred by JStack.
+- Audit remains read-only: it cannot implement remediation or controls, accept
+  risk for a human, change Git, publish, release, deploy, or access production.
+- A Stage 8 pass proves evidence-contract, report-projection, decision, and
+  baseline/candidate comparison integrity only. It does not prove
+  vulnerability absence, exploitability, zero-day detection, standards
+  compliance, release authorization, or production safety.
+
 ## 0.10.0-alpha.8 - 2026-08-09
 
 ### Added

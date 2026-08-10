@@ -1,7 +1,7 @@
 {
   "schemaVersion": "jstack.audit.mastery.curriculum.v1",
   "track": "audit",
-  "version": 9,
+  "version": 10,
   "scoring": {
     "weights": {
       "correctness": 30,
@@ -245,16 +245,57 @@
     {
       "stage": 8,
       "name": "Enterprise Audit Lead",
-      "outcome": "Triage findings, manage accepted risk, and produce defensible engineering and executive reports.",
+      "outcome": "Lead an exact-revision release audit by reconciling the signed finalized result, stable SARIF, explicit risk ownership, accepted-risk governance, deterministic go/no-go logic, and verified committed remediation without granting Audit implementation or production authority.",
       "prerequisites": [7],
-      "corePrinciples": ["Severity is not priority", "Accepted risk is explicit", "Ownership and expiry are mandatory", "Residual risk is stated", "Verify remediation"],
+      "corePrinciples": [
+        "Severity and delivery priority are distinct and both remain bound to the finalized finding",
+        "Every current finding appears exactly once in priority-first triage order",
+        "Accepted risk is exact-fingerprint, exact-scope, explicitly approved, owned, controlled, and time-bounded",
+        "Every open risk has a named owner, defensible reason, and future target date",
+        "Release go/no-go is derived from one complete Git-bound release audit, never caller confidence",
+        "Audit JSON, Markdown, SARIF, receipt, and risk-register semantics must agree exactly",
+        "Implementation evidence compares a Git-immutable, previously Stage 8-validated baseline audit result to a current signed candidate result",
+        "A verified remediation must disappear by stable fingerprint without introducing a blocking regression",
+        "Audit remains read-only and grants no risk-acceptance, Git, release, deployment, or production authority"
+      ],
       "drills": [
         {"id": "a8-lead", "name": "Lead a release audit and defend the decision", "type": "audit"},
         {"id": "a8-controls", "name": "Implement and verify an audit control or reporting improvement", "type": "implementation"}
       ],
       "requiredArtifacts": ["audit-report.md", "audit-result.json", "audit.sarif", "risk-register.json"],
-      "benchmarks": ["Stable fingerprints", "Valid SARIF", "Owner/reason/expiry suppressions", "Correct go/no-go", "Verified remediation"],
-      "hardGates": ["Complete audit receipt", "No invalid suppression", "No incomplete pass"]
+      "artifactSchemas": {
+        "audit-result.json": "jstack.audit.result.v1",
+        "risk-register.json": "jstack.audit.enterprise-risk-register.v1",
+        "audit.sarif": "2.1.0"
+      },
+      "benchmarks": [
+        "The exact candidate Git commit/tree and current release-profile audit receipt are cryptographically reconciled",
+        "The finalized result has complete release coverage, pass-or-fail semantics, stable core-generated finding IDs and fingerprints, exact counts, and no error or rejected suppression",
+        "SARIF 2.1.0 is the exact deterministic JStack projection with no omitted, duplicate, invented, or drifted finding",
+        "Every finding has one risk-register entry ordered by priority then severity, with a deterministic disposition",
+        "Every open finding has a named owner, meaningful reason, and future target date",
+        "Every accepted risk exactly matches the finalized suppression owner, reason, approval reference, future expiry, compensating control, and residual risk",
+        "The engineering/executive Markdown is the canonical projection of the same subject, decision, triage, comparison, and limitations",
+        "Go is possible only for a complete passing Git-bound release audit; a complete failing audit deterministically produces no-go",
+        "The controls drill uses a strict ancestor-to-current committed diff and a Git-immutable baseline audit result whose commit and digest match a prior passed Stage 8 attempt",
+        "At least one non-hypothesis baseline finding is absent from the candidate by stable fingerprint, with no introduced blocking finding, severity increase, priority escalation, or failing candidate release audit",
+        "Every discovered QA command and the security audit have current passing exact-candidate receipts",
+        "Evaluation returns only immutable subject metadata, counts, digests, decision, failure codes, and an evaluation digest"
+      ],
+      "hardGates": [
+        "Only audit-report.md, audit-result.json, audit.sarif, and risk-register.json may be dirty at their exact .jstack-training paths",
+        "The audit receipt must be current-session, fresh, Git-bound, release-profile, repository-scope, complete, and exact-current-HEAD; only the four post-audit training artifacts may explain project-fingerprint drift",
+        "The receipt coverage, finding, count, suppression, threshold, status, and evaluation-time fields must match audit-result.json exactly",
+        "Incomplete coverage, audit errors, malformed core findings, stale fingerprints, inconsistent counts, or an incomplete pass fail closed",
+        "Rejected, duplicate, stale, malformed, wrong-scope, future-created, or expired suppression evidence fails closed",
+        "Missing risk entries, duplicate fingerprints, weak ownership, missing future dates, wrong disposition, or incorrect priority-first order fails closed",
+        "Any SARIF or canonical Markdown difference, including omitted or invented findings, fails closed",
+        "The audit drill baseline equals candidate and reports no implementation diff",
+        "The controls drill requires a strict ancestor, exact Git diff, committed baseline audit-result artifact matching a prior passed Stage 8 evaluation, at least one verified remediated fingerprint, a passing candidate release audit, and no detected regression",
+        "Missing or stale QA for any discovered command, or an incomplete or failing security receipt, blocks completion",
+        "Audit never writes application or configuration code, runs remediation, accepts risk on a human's behalf, changes Git, publishes, releases, deploys, or accesses production",
+        "A pass proves evidence-contract and comparison integrity, not vulnerability absence, exploitability, zero-day detection, standards compliance, release authorization, or production safety"
+      ]
     },
     {
       "stage": 9,

@@ -691,7 +691,7 @@ class AuditAdversarialStageTests(unittest.TestCase):
     def test_curriculum_schemas_tools_and_advancement_bind_both_stage7_drills(self) -> None:
         curriculum = server.load_mastery_curriculum("audit")
         stage = server.curriculum_stage(7, "audit")
-        self.assertEqual(9, curriculum["version"])
+        self.assertEqual(10, curriculum["version"])
         self.assertEqual(
             server.AUDIT_STAGE7_RESULTS_SCHEMA,
             stage["artifactSchemas"]["verification-results.json"],

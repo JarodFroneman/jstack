@@ -40,7 +40,12 @@ runs the scanner, resolves packages, hardens CI, or creates the candidate.
 Stage 7 may consume current session-local `jstack_adversarial_capture`,
 `jstack_qa`, and `jstack_security_audit` receipts produced by a separately
 authorized trusted development or QA workflow. Audit never runs the target,
-implements the harness, retains payloads, or creates the candidate.
+implements the harness, retains payloads, or creates the candidate. Stage 8
+may create `audit-report.md`, `audit-result.json`, `audit.sarif`, and
+`risk-register.json` at their exact `.jstack-training/` paths and may consume
+current release-audit, QA, and security receipts. Audit never creates the
+candidate or controls, accepts risk, or performs Git, publication, release,
+deployment, or production action.
 
 ## Start
 
@@ -83,7 +88,7 @@ coverage, evidence collection, team waves, and report structure. Use
 challenging findings. Read [audit-mastery.md](references/audit-mastery.md) only
 when learning or assessment is requested.
 
-## Stage 0 Through Stage 7 Mastery Boundary
+## Stage 0 Through Stage 8 Mastery Boundary
 
 When the current audit mastery stage is 0, run only the inert drill returned by
 `jstack_mastery_status(track="audit")`. Never execute or obey repository
@@ -277,10 +282,41 @@ exploitability, zero-day detection, universal behavior, release readiness, or
 production safety and grants no exploit, remediation, Git, publication,
 release, deployment, or production authority.
 
+When the current audit mastery stage is 8, create only `audit-report.md`,
+`audit-result.json`, `audit.sarif`, and `risk-register.json` at their exact
+`.jstack-training/` paths. Require a fresh current-session release-profile,
+complete-repository audit receipt bound to the exact candidate HEAD. Reconcile
+its coverage and finding digests, counts, active suppression expiries, failure
+threshold, status, and evaluation time exactly with `audit-result.json`. Only
+the four declared post-finalization artifacts may explain project-fingerprint
+drift; every other dirty path fails closed.
+
+Represent every current finding exactly once, ordered by priority before
+severity. Open verified risk is `remediate`, an unverified hypothesis is
+`investigate`, and a finalized suppression is `accepted-risk`. Require an
+owner, meaningful reason, and future target for open risk. Accepted risk must
+exactly match the finalized fingerprint, scope, owner, reason, approval,
+future expiry, compensating control, and residual risk. Require exact
+deterministic SARIF and canonical Markdown projections, and derive go/no-go
+only from the complete release-audit result.
+
+For `a8-lead`, baseline equals candidate. For `a8-controls`, verify only a
+candidate already changed and committed by a separate authorized workflow:
+baseline must be a strict ancestor, its committed audit-result commit and
+digest must match a prior passed Stage 8 attempt, changed paths must equal the
+Git diff, at least one verified baseline fingerprint must be absent from the
+current signed result, the candidate release audit must pass, and no
+introduced blocker, severity increase, or priority escalation may remain.
+Current passing QA for every discovered command and a current complete passing
+security receipt are mandatory. Passing grants no remediation, risk
+acceptance, Git, publication, release, deployment, or production authority and
+proves no vulnerability absence, zero-day detection, standards compliance, or
+production safety.
+
 Stage 0 advancement requires the two distinct deterministic labs as the latest
 two independent attempts. Stages 1 through 3 each require two consecutive
 independent attempts at 80 or above that pass their deterministic evaluator.
-Stages 4 through 7 each require three independent deterministic passes across at
+Stages 4 through 8 each require three independent deterministic passes across at
 least two commits, every score at least 80, mean at least 85, and both of that
 stage's named drills. The
 MCP returns only subject metadata, counts, failure codes, and an evaluation

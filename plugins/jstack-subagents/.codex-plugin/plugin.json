@@ -1,6 +1,6 @@
 {
   "name": "jstack-subagents",
-  "version": "0.10.0-alpha.8",
+  "version": "0.10.0-alpha.9",
   "description": "Top-level JStack command that deploys the right specialist subagent team.",
   "author": {
     "name": "Jarod Froneman",

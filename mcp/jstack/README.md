@@ -82,6 +82,14 @@ evidence, launch assurance, release readiness, and mastery progression.
   performs no target execution or harness implementation; local capture is not
   an OS or network sandbox, and a pass grants no vulnerability-absence,
   exploit, remediation, release, deployment, or production claim.
+- Audit mastery Stage 8 reconciles a fresh exact-HEAD release-audit receipt
+  with the finalized result, deterministic SARIF, canonical engineering and
+  executive Markdown, and a priority-first risk register with explicit open
+  and accepted-risk governance. The controls drill compares the candidate
+  against a prior passed Git-immutable Stage 8 result and rejects blocker,
+  severity, or priority regressions. Audit remains read-only and grants no
+  remediation, risk-acceptance, Git, publication, release, deployment, or
+  production authority.
 - The optional `osv-scanner-offline` curated adapter provides cross-ecosystem
   advisory evidence from a pre-provisioned external local database. It
   requires `OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY`, enforces OSV offline mode,

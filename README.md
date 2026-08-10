@@ -143,7 +143,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.10.0-alpha.8
+## What Ships In v0.10.0-alpha.9
 
 | Capability | What it provides |
 | --- | --- |
@@ -155,6 +155,7 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Performance And Resource Efficiency Stage 5 | Closed workload, capture, results, and finding contracts with signed exact-Git/workload/command/environment/sample binding; JStack recomputes percentiles, budgets, improvements, and guardrail regressions, while Audit remains non-executing and implementation evidence must come from a separately authorized committed workflow |
 | Supply-Chain, Build And Release Integrity Stage 6 | Closed exact-Git inventory and report contracts across major dependency ecosystems; JStack independently enumerates tracked inputs, parses GitHub Actions pins and permissions, verifies source-to-artifact graphs, provenance, generated-copy drift, complete signed dependency-scanner evidence (including optional offline OSV coverage), all discovered QA commands, and one separately committed hardening diff |
 | Dynamic And Adversarial Verification Stage 7 | Closed exact-revision campaign/capture contracts with deterministic two-run outcomes, eight explicit adversarial categories, signed command/environment/case bindings, reciprocal hypothesis and false-positive analysis, current QA/security evidence, and strict baseline/candidate harness comparison while Audit remains read-only |
+| Enterprise Audit Lead Stage 8 | Exact reconciliation of a current signed Git-bound release audit, finalized finding/result contract, deterministic SARIF 2.1.0, priority-first risk ownership, explicit accepted-risk governance, derived go/no-go, canonical engineering/executive reporting, and a strict prior-validated-baseline-to-current committed remediation comparison while Audit remains read-only |
 | Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
@@ -390,6 +391,18 @@ Release readiness is evidence only: its result always includes
   of external effects is not enforced isolation, and a pass does not prove
   vulnerability absence, exploitability, zero-day detection, release
   readiness, production safety, or production authority.
+- Audit mastery Stage 8 may write only its release audit report, finalized
+  audit result, deterministic SARIF, and risk register under
+  `.jstack-training/`. The evaluator reconciles them with a fresh complete
+  release-profile receipt and permits no other dirty path. Every finding must
+  have one priority-first owner/disposition record; accepted risk requires the
+  exact owner, reason, approval, future expiry, compensating control, and
+  residual risk. The controls drill verifies a separately committed candidate
+  against a prior passed, Git-immutable Stage 8 baseline and rejects missing
+  remediation or detected regression. Audit cannot accept risk, edit code,
+  change Git, release, deploy, or access production, and a pass does not prove
+  vulnerability absence, zero-day detection, release authorization, or
+  production safety.
 - Artifact-only projects can use planning and direct operator evidence, but
   cannot receive commit-bound JStack release receipts.
 
@@ -430,6 +443,7 @@ artifact-parity, installation, and orchestration adversarial tests.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-alpha.9 migration guide](docs/migration-0.10.0-alpha.9.md) | [Enterprise Audit Lead decision](docs/adr/0019-enterprise-audit-lead-stage8.md) |
 | [v0.10.0-alpha.8 migration guide](docs/migration-0.10.0-alpha.8.md) | [Dynamic and Adversarial Verification decision](docs/adr/0018-dynamic-adversarial-verification-stage7.md) |
 | [v0.10.0-alpha.7 migration guide](docs/migration-0.10.0-alpha.7.md) | [Supply-Chain, Build and Release Integrity decision](docs/adr/0017-supply-chain-build-release-stage6.md) |
 | [v0.10.0-alpha.6 migration guide](docs/migration-0.10.0-alpha.6.md) | [Performance and Resource Efficiency decision](docs/adr/0016-performance-resources-stage5.md) |
