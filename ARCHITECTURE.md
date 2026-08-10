@@ -506,9 +506,10 @@ complete failing audit is no-go.
 
 The audit drill keeps baseline equal to candidate. The controls drill verifies
 a candidate already implemented and committed elsewhere: its baseline is a
-strict ancestor, the Git-immutable baseline result commit and digest must match
-a prior passed Stage 8 attempt, changed paths equal the Git diff, at least one
-verified baseline fingerprint is absent from the current signed result, the
+strict ancestor, the Git-immutable baseline result commit and canonical JSON
+SHA-256 must match a prior passed Stage 8 attempt, changed paths equal the Git
+diff, at least one verified baseline fingerprint is absent from the current
+signed result, the
 candidate release audit passes, and no introduced blocker, severity increase,
 or priority escalation is detected. Current passing QA for every discovered
 command and a complete passing security receipt remain mandatory. Evaluation

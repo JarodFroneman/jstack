@@ -21,7 +21,8 @@
   escalation.
 - Added adversarial tests for altered SARIF, wrong release decisions, invalid
   risk ownership, unvalidated baselines, non-training drift, exact receipt
-  reconciliation, verified remediation, schema binding, and advancement.
+  reconciliation, verified remediation, schema binding, advancement, and
+  Windows CRLF portability.
 
 ### Changed
 
@@ -33,6 +34,9 @@
 - The current audit receipt may differ from the mastery-record project
   fingerprint only because the four exact Stage 8 outputs are written after
   audit finalization; every other dirty path fails closed.
+- Stage 8 compares canonical Markdown across LF and CRLF checkouts and binds a
+  prior baseline by its commit plus canonical JSON SHA-256, while exact current
+  artifact bytes remain independently digest-bound.
 - Preserved the five commands, 52 canonical tools, mastery profile v3, Python
   3.9+ standard-library runtime, cross-platform packaging, and token-free
   host-native action model.

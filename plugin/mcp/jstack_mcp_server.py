@@ -10815,7 +10815,11 @@ def _audit_stage8_revision_json(
         ) from exc
     if not isinstance(parsed, dict):
         raise ToolError("Audit Stage 8 controls baseline audit result must be an object.")
-    return parsed, hashlib.sha256(content).hexdigest()
+    # Bind baseline meaning to a stable canonical JSON digest. Git still pins
+    # the exact immutable blob through the declared revision, while canonical
+    # hashing prevents checkout newline conversion (for example CRLF on
+    # Windows) from changing the prior-validation identity.
+    return parsed, audit_json_digest(parsed)
 
 
 def _audit_stage8_expected_decision(
@@ -11408,7 +11412,12 @@ def evaluate_audit_stage8_enterprise_lead(
         report_text = report_bytes.decode("utf-8")
     except (audit_core.AuditError, UnicodeError) as exc:
         raise ToolError("Audit Stage 8 audit-report.md could not be read safely.") from exc
-    if report_text != render_audit_stage8_report(risk_register, result):
+    # Markdown written through Windows text mode uses CRLF even though the
+    # canonical renderer is platform-independent LF. Treat those encodings as
+    # the same report while leaving the exact artifact byte digest bound in
+    # artifactBindings.
+    normalized_report_text = report_text.replace("\r\n", "\n")
+    if normalized_report_text != render_audit_stage8_report(risk_register, result):
         failures.append("auditReport.equivalence")
 
     expected_qa_keys = {item["key"] for item in discover_test_commands(project_path)}
@@ -11441,7 +11450,10 @@ def evaluate_audit_stage8_enterprise_lead(
         "auditReceiptDigest": (
             audit_verification.get("receiptDigest") if audit_verification else None
         ),
-        "auditResultDigest": artifacts.get("audit-result.json", {}).get("sha256"),
+        # This semantic SHA-256 is stable across checkout newline policies;
+        # exact current artifact bytes remain separately bound by the artifact
+        # record and the candidate commit remains the immutable Git boundary.
+        "auditResultDigest": audit_json_digest(result),
         "auditReportDigest": artifacts.get("audit-report.md", {}).get("sha256"),
         "sarifDigest": artifacts.get("audit.sarif", {}).get("sha256"),
         "riskRegisterDigest": artifacts.get("risk-register.json", {}).get("sha256"),

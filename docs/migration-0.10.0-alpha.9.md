@@ -21,8 +21,10 @@ roadmap: Enterprise Audit Lead.
 - The evaluator regenerates deterministic SARIF and canonical Markdown and
   derives go/no-go from the complete release-audit result.
 - The controls drill compares a current passing release audit against a prior
-  passed, Git-immutable Stage 8 baseline and rejects blocker, severity, or
-  priority regressions.
+  passed, Git-immutable Stage 8 baseline identified by commit plus canonical
+  JSON SHA-256, and rejects blocker, severity, or priority regressions.
+- Canonical Markdown equivalence accepts LF or CRLF checkout encoding; exact
+  current artifact bytes remain separately bound by SHA-256.
 
 ## Evidence Boundary
 

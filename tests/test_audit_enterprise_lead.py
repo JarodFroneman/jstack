@@ -316,6 +316,7 @@ def stage8_package(
     result: dict[str, Any],
     *,
     implementation: bool = False,
+    windows_report_newlines: bool = False,
     mutate_risk: Optional[Any] = None,
     mutate_sarif: Optional[Any] = None,
 ) -> dict[str, Any]:
@@ -350,7 +351,7 @@ def stage8_package(
         baseline_findings = {
             item["fingerprint"]: item for item in baseline_result["findings"]
         }
-        baseline_sha = hashlib.sha256(content).hexdigest()
+        baseline_sha = server.audit_json_digest(baseline_result)
         changed_paths = git(repo, "diff", "--name-only", f"{baseline}..{candidate}").splitlines()
     candidate_findings = {item["fingerprint"]: item for item in result["findings"]}
     shared = sorted(set(baseline_findings) & set(candidate_findings))
@@ -450,7 +451,10 @@ def stage8_package(
     }
     if mutate_risk:
         mutate_risk(risk)
-    report_path.write_text(server.render_audit_stage8_report(risk, result), encoding="utf-8")
+    report_text = server.render_audit_stage8_report(risk, result)
+    if windows_report_newlines:
+        report_text = report_text.replace("\n", "\r\n")
+    report_path.write_bytes(report_text.encode("utf-8"))
     risk["artifactBindings"]["auditReport"]["sha256"] = hashlib.sha256(
         report_path.read_bytes()
     ).hexdigest()
@@ -503,7 +507,12 @@ class AuditEnterpriseLeadStageTests(unittest.TestCase):
             base = Path(temp)
             home = base / "home"
             repo, head = make_repo(base)
-            package = stage8_package(repo, head, result_with())
+            package = stage8_package(
+                repo,
+                head,
+                result_with(),
+                windows_report_newlines=True,
+            )
             write_profile(home)
             with mock.patch.object(server.Path, "home", return_value=home):
                 recorded = server.tool_mastery_record(attempt(repo, package))
@@ -634,13 +643,17 @@ class AuditEnterpriseLeadStageTests(unittest.TestCase):
             home = base / "home"
             repo, _ = make_repo(base)
             baseline_result = result_with([finding_candidate()])
-            write_json(repo / ".jstack-training" / "audit-result.json", baseline_result)
+            baseline_path = repo / ".jstack-training" / "audit-result.json"
+            baseline_path.parent.mkdir(parents=True, exist_ok=True)
+            baseline_path.write_bytes(
+                (json.dumps(baseline_result, indent=2, sort_keys=True) + "\n")
+                .replace("\n", "\r\n")
+                .encode("utf-8")
+            )
             git(repo, "add", ".jstack-training/audit-result.json")
             git(repo, "commit", "-m", "retain baseline release audit result")
             baseline = git(repo, "rev-parse", "HEAD")
-            baseline_result_sha = hashlib.sha256(
-                (repo / ".jstack-training" / "audit-result.json").read_bytes()
-            ).hexdigest()
+            baseline_result_sha = server.audit_json_digest(baseline_result)
             (repo / "src" / "app.py").write_text(
                 "def authorize(is_owner: bool) -> bool:\n"
                 "    if not is_owner:\n"
