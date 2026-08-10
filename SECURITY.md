@@ -293,6 +293,48 @@ integrity only; it does not prove vulnerability absence, exploitability,
 zero-day detection, universal behavior, remediation safety, release readiness,
 production safety, or production authority.
 
+### Audit mastery Stage 8
+
+Audit mastery Stage 8 permits only `audit-report.md`, `audit-result.json`,
+`audit.sarif`, and `risk-register.json` at their exact `.jstack-training/`
+paths. Audit and its deterministic evaluator do not edit application or
+configuration code, implement controls or remediation, accept risk on a
+human's behalf, mutate Git, publish, release, deploy, access secrets, or touch
+production.
+
+The evaluator requires a fresh current-session receipt for the exact candidate
+HEAD, complete repository scope, and release profile. It reconciles the
+receipt's coverage digest, finding digest, counts, active suppression expiries,
+failure threshold, result status, and evaluation time against the retained
+finalized result. Because the four Stage 8 outputs are necessarily written
+after audit finalization, only those exact paths may explain a project-
+fingerprint difference; any other dirty path invalidates the exception and
+blocks the attempt.
+
+Every current finding must appear once in priority-first risk order. Open risk
+requires a named owner, meaningful reason, and future target date. Accepted
+risk must reproduce the finalized exact fingerprint and scope, owner, reason,
+approval reference, future expiry, compensating control, and residual risk.
+Rejected, duplicate, stale, malformed, wrong-scope, future-created, or expired
+suppressions fail closed. JStack derives go only from a complete passing
+release audit and derives no-go from a complete failing release audit; a
+caller cannot override that decision.
+
+SARIF must equal JStack's deterministic 2.1.0 projection and the Markdown must
+equal its canonical executive/engineering projection. The controls drill also
+requires a strict-ancestor committed candidate, an exact Git diff, a baseline
+audit-result commit and digest matching a prior passed Stage 8 attempt, at
+least one verified remediated fingerprint, a passing current release audit,
+and no introduced blocking finding, severity increase, or priority escalation.
+Current passing QA for every discovered command and a complete passing
+security receipt remain mandatory.
+
+A Stage 8 pass proves signed evidence reconciliation, report projection,
+risk-register consistency, decision correctness, and bounded remediation-
+comparison integrity only. It does not prove vulnerability absence,
+exploitability, zero-day detection, standards compliance, release
+authorization, deployment safety, or production security.
+
 ## Launch-Assurance Safety
 
 The v2 launch catalog is declarative, versioned, and selected from an explicit

@@ -73,6 +73,12 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
   reciprocal hypothesis/false-positive analysis, complete QA and security
   receipts, baseline/candidate harness comparison, and separate
   Audit/capture/harness/production authority
+- deterministic audit-mastery Stage 8 validation for exact current release-
+  audit receipt/result reconciliation, stable finding fingerprints,
+  deterministic SARIF and Markdown projections, priority-first risk ownership,
+  explicit accepted-risk governance, derived go/no-go decisions, prior-
+  validated baseline/candidate remediation comparison, complete QA/security,
+  and separate Audit/remediation/risk/release/production authority
 - semantic goal-readiness assessment and Git-bound start/revision receipts
 - durable bounded loop contracts, checkpoints, convergence breakers, and
   evidence-bound finalization
@@ -476,6 +482,39 @@ three exact Stage 7 artifact paths may be dirty. A pass proves bounded protocol
 integrity, not vulnerability absence, exploitability, zero-day detection,
 universal behavior, release readiness, production safety, or production
 authority.
+
+Audit mastery Stage 8 is an enterprise evidence-reconciliation layer over the
+existing read-only release audit. `audit-result.json` must be the exact
+finalized `jstack.audit.result.v1` whose coverage, findings, counts,
+suppressions, threshold, status, and evaluation time are signed by a fresh
+current-session receipt for the exact candidate HEAD and complete repository-
+scope release profile. Because the report, SARIF, and risk register are
+necessarily written after audit finalization, the evaluator tolerates only
+those four exact `.jstack-training/` paths as post-receipt fingerprint drift;
+any other dirty path fails closed.
+
+The risk register uses the closed
+`jstack.audit.enterprise-risk-register.v1` contract. It covers every current
+finding once, orders by priority then severity, derives remediate, investigate,
+or accepted-risk disposition, and requires owner/reason/future-target data for
+open risk. Accepted risk must exactly reproduce the finalized fingerprint,
+scope, owner, reason, approval reference, future expiry, compensating control,
+and residual risk. SARIF must equal JStack's deterministic 2.1.0 projection;
+the Markdown report must equal the canonical executive and engineering
+projection. Go is derived only from a complete passing release audit; a
+complete failing audit is no-go.
+
+The audit drill keeps baseline equal to candidate. The controls drill verifies
+a candidate already implemented and committed elsewhere: its baseline is a
+strict ancestor, the Git-immutable baseline result commit and digest must match
+a prior passed Stage 8 attempt, changed paths equal the Git diff, at least one
+verified baseline fingerprint is absent from the current signed result, the
+candidate release audit passes, and no introduced blocker, severity increase,
+or priority escalation is detected. Current passing QA for every discovered
+command and a complete passing security receipt remain mandatory. Evaluation
+retains only subject metadata, counts, digests, the derived decision, failure
+codes, and an evaluation digest. It grants no code edits, risk acceptance, Git,
+release, deployment, production action, or claim of vulnerability absence.
 
 ## Project Binding
 

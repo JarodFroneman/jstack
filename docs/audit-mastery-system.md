@@ -383,6 +383,55 @@ or production authority. Advancement requires three independent deterministic
 passes across at least two commits, every score at least 80, mean at least 85,
 and both Stage 7 drills.
 
+## Stage 8 Deterministic Gate
+
+Stage 8 turns the existing release audit outputs into one defensible enterprise
+decision package without giving Audit editing or operational authority. Only
+`audit-report.md`, `audit-result.json`, `audit.sarif`, and
+`risk-register.json` may be dirty at their exact `.jstack-training/` paths.
+The risk register uses the closed
+`jstack.audit.enterprise-risk-register.v1` schema; the finalized result remains
+the existing `jstack.audit.result.v1`, and SARIF remains 2.1.0.
+
+The current receipt must be fresh, session-signed, bound to the exact current
+HEAD, complete repository scope, and release profile. Its coverage and finding
+digests, counts, active suppression expiries, failure threshold, result status,
+and evaluation time must equal `audit-result.json`. The four Stage 8 files are
+written after audit finalization, so only those exact paths may explain a
+project-fingerprint difference. Any application, configuration, or other
+training-path drift fails closed.
+
+Every current finding appears exactly once in the risk register, ordered first
+by delivery priority and then by severity. Verified open findings are marked
+`remediate`; unverified hypotheses are marked `investigate`; finalized
+suppressions are marked `accepted-risk`. Open findings require a named owner,
+meaningful reason, and future target date. Accepted risk must exactly reproduce
+the finalized fingerprint, scope, owner, reason, approval reference, future
+expiry, compensating control, and residual risk. Rejected, duplicate, stale,
+malformed, wrong-scope, future-created, or expired suppressions fail closed.
+
+The evaluator regenerates deterministic SARIF and the canonical enterprise
+Markdown report and requires exact semantic equality. Go is derived only from
+a complete passing release audit; a complete failing audit is no-go. The audit
+drill keeps baseline equal to candidate. The controls drill verifies a
+candidate already implemented and committed by a separate workflow: baseline
+must be a strict ancestor, its committed audit-result digest and commit must
+match a prior passed Stage 8 attempt, changed paths must equal the Git diff, at
+least one verified baseline fingerprint must disappear, the current release
+audit must pass, and no introduced blocker, severity increase, or priority
+escalation may remain.
+
+Every discovered QA command needs a current passing exact-candidate receipt,
+and the security audit must be current, complete, and passing. Evaluation
+returns only exact subject metadata, artifact and receipt digests, counts,
+decision, regression state, failure codes, and an evaluation digest. A pass
+proves bounded evidence, report, decision, and comparison integrity—not
+vulnerability absence, exploitability, zero-day detection, standards
+compliance, risk acceptance, release authorization, deployment safety, or
+production authority. Advancement requires three independent deterministic
+passes across at least two commits, every score at least 80, mean at least 85,
+and both Stage 8 drills.
+
 ## Scoring And Advancement
 
 The five weighted dimensions remain:
@@ -399,10 +448,9 @@ repository-map rule above; Stage 2 uses the deterministic correctness-evidence
 rule above; Stage 3 uses the deterministic threat-model rule above; Stage 4
 uses the deterministic architecture rule above; Stage 5 uses the signed
 performance-evidence rule above; and Stage 6 uses the deterministic supply-
-chain/build-integrity rule above; and Stage 7 uses the signed deterministic
-adversarial-verification rule above. Stage 8 provides separate audit and
-bounded implementation drills and requires repeated evidence across both work
-types and repository states. Stage 9 requires two independent,
+chain/build-integrity rule above; Stage 7 uses the signed deterministic
+adversarial-verification rule above; and Stage 8 uses the deterministic
+enterprise audit-lead reconciliation rule above. Stage 9 requires two independent,
 assessor-signed blind capstones at 90 or above on distinct challenge subjects.
 
 Audit attempts at Stage 8 and above require a current, complete audit receipt.

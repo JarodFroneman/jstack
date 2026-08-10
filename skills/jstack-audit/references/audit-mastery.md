@@ -439,6 +439,48 @@ at least 85, and both named drills. A pass proves bounded protocol integrity,
 not vulnerability absence, exploitability, zero-day detection, universal
 behavior, release readiness, production safety, or production authority.
 
+## Stage 8: Enterprise Audit Lead
+
+Stage 8 reconciles one defensible release decision package while Audit remains
+read-only. Create only `audit-report.md`, `audit-result.json`, `audit.sarif`,
+and `risk-register.json` at their exact `.jstack-training/` paths. Use the
+existing `jstack.audit.result.v1`, SARIF 2.1.0, and the closed
+`jstack.audit.enterprise-risk-register.v1` contract published at
+`mcp/jstack/schemas/audit-enterprise-risk-register.v1.schema.json`.
+
+Require a fresh current-session receipt for the exact candidate HEAD, complete
+repository scope, and release profile. Its coverage and finding digests,
+counts, active suppression expiries, failure threshold, status, and evaluation
+time must equal the retained result. Only the four declared outputs may explain
+post-audit project-fingerprint drift; every other dirty path fails closed.
+
+Cover every current finding exactly once and order by priority before severity.
+Open verified risk is `remediate`, an unverified hypothesis is `investigate`,
+and a finalized suppression is `accepted-risk`. Open risk needs an owner,
+meaningful reason, and future target date. Accepted risk must exactly match the
+finding fingerprint/scope and finalized owner, reason, approval, future expiry,
+compensating control, and residual risk. Any rejected, stale, malformed,
+duplicate, wrong-scope, future-created, or expired suppression fails.
+
+The evaluator regenerates SARIF and canonical executive/engineering Markdown.
+Go requires a complete passing release audit; a complete failing audit is
+no-go. `a8-lead` keeps baseline equal to candidate. `a8-controls` verifies a
+separately committed strict-ancestor candidate: the baseline audit-result
+commit and digest must match a prior passed Stage 8 attempt, paths must equal
+the Git diff, at least one verified baseline fingerprint must be absent from
+the current signed result, the candidate release audit must pass, and no
+introduced blocker, severity increase, or priority escalation may remain.
+Current QA for every discovered command and a complete passing security receipt
+are mandatory.
+
+The evaluator returns only subject metadata, counts, digests, decision,
+regression state, failure codes, and an evaluation digest. Passing grants no
+remediation, risk acceptance, Git, publication, release, deployment, or
+production authority and proves no vulnerability absence, zero-day detection,
+standards compliance, or production safety. Advancement requires three
+independent deterministic passes across two commits, every score at least 80,
+mean at least 85, and both drills.
+
 At Stage 9, place two structured benchmark submissions in the required
 `evaluation-results.json` envelope. The MCP scores both against the pinned
 synthetic corpus, compares semantic result digests, and derives the advancement

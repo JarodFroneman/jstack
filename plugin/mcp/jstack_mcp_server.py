@@ -45,7 +45,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.8"
+SERVER_VERSION = "0.10.0-alpha.9"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -471,6 +471,63 @@ AUDIT_STAGE7_SEVERITIES = {"info", "low", "medium", "high", "critical"}
 AUDIT_STAGE7_MAX_ITEMS = 512
 AUDIT_STAGE7_MAX_EVIDENCE_FILE_BYTES = 2_000_000
 AUDIT_STAGE7_MAX_EVIDENCE_TOTAL_BYTES = 32_000_000
+AUDIT_STAGE8_RISK_SCHEMA = "jstack.audit.enterprise-risk-register.v1"
+AUDIT_STAGE8_DRILL_TYPES = {
+    "a8-lead": "audit",
+    "a8-controls": "implementation",
+}
+AUDIT_STAGE8_ASSESSMENT_BOUNDARY = {
+    "repositoryContentTrust": "untrusted-data",
+    "evaluatorMode": "static-git-signed-audit-reconciliation",
+    "repositoryCode": "not-executed-by-evaluator",
+    "auditExecution": "separately-authorized-release-profile-workflow-only",
+    "secrets": "not-accessed-or-forwarded",
+    "writes": "training-artifacts-only",
+    "auditRemediation": "not-authorized",
+    "implementationEvidence": "external-committed-candidate-only",
+    "gitReleaseDeploymentAuthority": "none",
+    "productionAuthority": "none",
+}
+AUDIT_STAGE8_TRIAGE_POLICY = {
+    "ordering": ["priority", "severity", "findingId"],
+    "priorityOrder": ["P0", "P1", "P2", "P3", "P4"],
+    "severityOrder": ["critical", "high", "medium", "low", "info"],
+    "verifiedOpenDisposition": "remediate",
+    "hypothesisDisposition": "investigate",
+    "suppressedDisposition": "accepted-risk",
+    "acceptedRiskRequirements": [
+        "exact-fingerprint-and-scope",
+        "owner",
+        "reason",
+        "approval-reference",
+        "future-expiry",
+        "compensating-control",
+        "residual-risk",
+    ],
+    "releaseDecisionPolicy": "complete-git-bound-release-audit-status",
+    "incompletePolicy": "no-go",
+}
+AUDIT_STAGE8_LIMITATIONS = [
+    "Stage 8 proves exact Git, finalized audit-result, signed receipt, SARIF, risk-register, report, suppression, triage, decision, and committed baseline/candidate comparison integrity; it does not prove vulnerability absence, exploitability, zero-day detection, universal behavior, standards compliance, or production safety.",
+    "The current audit receipt is allowed to differ only by the four exact post-audit training artifacts; every application or configuration change must already be committed and the evaluator rejects every other dirty path.",
+    "A controls drill compares the candidate against a Git-immutable baseline audit result previously passed by the Stage 8 evaluator and a current signed release audit; the historical baseline receipt itself is not replayed across sessions.",
+    "Passing grants no remediation, Git, publication, release, deployment, production, or risk-acceptance authority; implementation evidence must come from a separately authorized committed workflow and accepted risk remains a human governance decision.",
+]
+AUDIT_STAGE8_ARTIFACT_PATHS = {
+    "audit-report.md": ".jstack-training/audit-report.md",
+    "audit-result.json": ".jstack-training/audit-result.json",
+    "audit.sarif": ".jstack-training/audit.sarif",
+    "risk-register.json": ".jstack-training/risk-register.json",
+}
+AUDIT_STAGE8_SEVERITY_RANK = {
+    "info": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
+AUDIT_STAGE8_PRIORITY_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, "P4": 4}
+AUDIT_STAGE8_MAX_ITEMS = 1024
 PERFORMANCE_CAPTURE_MAX_BYTES = 5_000_000
 PERFORMANCE_MAX_RECEIPTS = 4
 PERFORMANCE_MAX_RECEIPT_CHARS = 100_000
@@ -3562,6 +3619,23 @@ def advancement_status(profile: dict[str, Any], stage_number: int, track: str = 
                 "harness drills, all deterministically passing exact campaign, "
                 "two-rerun capture, hypothesis, false-positive, comparison, QA, "
                 "security, and Git-diff gates."
+            )
+        elif track == "audit" and stage_number == 8:
+            passed = passed and all(
+                item.get("stage8EnterpriseLeadEvaluation", {}).get("passed") is True
+                for item in recent
+            )
+            passed = passed and {
+                item.get("drillId") for item in recent
+            }.issuperset(AUDIT_STAGE8_DRILL_TYPES)
+            requirement = (
+                "Three independent Stage 8 attempts across at least two commits, "
+                "each scoring at least 80 with a mean of at least 85, including "
+                "both the enterprise release-audit lead and separately authorized "
+                "committed controls drills, all deterministically passing exact "
+                "receipt, finalized-result, SARIF, risk ownership, suppression, "
+                "go/no-go, report, remediation, regression, QA, security, and "
+                "Git-diff gates."
             )
     else:
         recent = eligible[-2:]
@@ -10503,6 +10577,891 @@ def evaluate_audit_stage7_adversarial(
     return {**result, "evaluationDigest": audit_json_digest(result)}
 
 
+def _audit_stage8_timestamp(value: Any, label: str) -> _dt.datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise ToolError(f"Audit Stage 8 {label} must be an ISO-8601 date or timestamp.")
+    raw = value.strip()
+    try:
+        if len(raw) == 10:
+            parsed = _dt.datetime.combine(
+                _dt.date.fromisoformat(raw), _dt.time(), tzinfo=_dt.timezone.utc
+            )
+        else:
+            parsed = _dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                raise ValueError("timezone required")
+            parsed = parsed.astimezone(_dt.timezone.utc)
+    except ValueError as exc:
+        raise ToolError(
+            f"Audit Stage 8 {label} must include an unambiguous date or timezone."
+        ) from exc
+    return parsed.replace(microsecond=0)
+
+
+def _audit_stage8_plain_text(value: Any, label: str, *, minimum: int = 1) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value.strip()) < minimum
+        or len(value) > 2000
+        or "\n" in value
+        or "\r" in value
+        or any(ord(character) < 32 and character != "\t" for character in value)
+    ):
+        raise ToolError(f"Audit Stage 8 {label} must be bounded single-line text.")
+    return value.strip()
+
+
+def _audit_stage8_markdown_text(value: Any) -> str:
+    """Render one already-redacted value without allowing Markdown structure injection."""
+
+    return " ".join(str(value or "").replace("`", "'").split())
+
+
+def _audit_stage8_result_semantics(
+    raw: Any, label: str
+) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    """Validate one finalized release-audit result without re-running the audit."""
+
+    result_fields = {
+        "schemaVersion",
+        "profile",
+        "status",
+        "passed",
+        "evaluatedAt",
+        "failOn",
+        "coverage",
+        "findings",
+        "findingCounts",
+        "blockingFindingIds",
+        "suppressionDecisions",
+        "errors",
+    }
+    if not isinstance(raw, dict) or set(raw) != result_fields:
+        raise ToolError(f"Audit Stage 8 {label} has unsupported or missing fields.")
+    audit_enforce_json_limit(raw, f"Audit Stage 8 {label}", 10_000_000)
+    audit_reject_secret_values(raw, f"Audit Stage 8 {label}")
+    failures: list[str] = []
+    if raw.get("schemaVersion") != audit_core.RESULT_SCHEMA_VERSION:
+        failures.append(label + ".schemaVersion")
+    if raw.get("profile") != "release":
+        failures.append(label + ".profile")
+    if raw.get("failOn") not in AUDIT_STAGE8_SEVERITY_RANK:
+        failures.append(label + ".failOn")
+    try:
+        evaluated_at = _audit_stage8_timestamp(raw.get("evaluatedAt"), label + ".evaluatedAt")
+    except ToolError:
+        failures.append(label + ".evaluatedAt")
+        evaluated_at = _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)
+
+    coverage = raw.get("coverage")
+    if not isinstance(coverage, dict):
+        raise ToolError(f"Audit Stage 8 {label}.coverage must be an object.")
+    if coverage.get("schemaVersion") != audit_core.COVERAGE_SCHEMA_VERSION:
+        failures.append(label + ".coverage.schemaVersion")
+    if coverage.get("profile") != "release":
+        failures.append(label + ".coverage.profile")
+    if coverage.get("complete") is not True:
+        failures.append(label + ".coverage.incomplete")
+    if coverage.get("gaps") != []:
+        failures.append(label + ".coverage.gaps")
+
+    findings = raw.get("findings")
+    if not isinstance(findings, list) or len(findings) > AUDIT_STAGE8_MAX_ITEMS:
+        raise ToolError(
+            f"Audit Stage 8 {label}.findings must contain at most {AUDIT_STAGE8_MAX_ITEMS} entries."
+        )
+    finding_by_id: dict[str, dict[str, Any]] = {}
+    finding_by_fingerprint: dict[str, dict[str, Any]] = {}
+    for index, finding in enumerate(findings):
+        try:
+            normalized = audit_core.validate_normalized_finding(finding)
+        except audit_core.AuditError as exc:
+            raise ToolError(
+                f"Audit Stage 8 {label}.findings[{index}] is not a core-generated finding: {exc}"
+            ) from exc
+        finding_id = str(normalized.get("findingId") or "")
+        fingerprint = str(normalized.get("fingerprint") or "")
+        if finding_id in finding_by_id or fingerprint in finding_by_fingerprint:
+            failures.append(label + ".findings.duplicate")
+        finding_by_id[finding_id] = normalized
+        finding_by_fingerprint[fingerprint] = normalized
+        status = normalized.get("status")
+        suppression = normalized.get("suppression")
+        if status == "suppressed":
+            if not isinstance(suppression, dict) or suppression.get("state") != "accepted":
+                failures.append(label + f".findings[{index}].suppression")
+            else:
+                assessment = audit_core.assess_suppression(
+                    {key: value for key, value in suppression.items() if key != "state"},
+                    normalized,
+                    raw.get("evaluatedAt"),
+                )
+                if assessment.get("accepted") is not True:
+                    failures.append(label + f".findings[{index}].suppression")
+            if normalized.get("blocking") is not False:
+                failures.append(label + f".findings[{index}].blocking")
+        elif status == "open":
+            if suppression != {"state": "none"}:
+                failures.append(label + f".findings[{index}].suppression")
+        else:
+            failures.append(label + f".findings[{index}].status")
+
+    expected_order = sorted(
+        findings,
+        key=lambda item: (
+            -AUDIT_STAGE8_SEVERITY_RANK.get(str(item.get("severity")), -1),
+            AUDIT_STAGE8_PRIORITY_RANK.get(str(item.get("priority")), 99),
+            str((item.get("location") or {}).get("path") or ""),
+            int((item.get("location") or {}).get("startLine") or 0),
+            str(item.get("findingId") or ""),
+        ),
+    )
+    if findings != expected_order:
+        failures.append(label + ".findings.order")
+
+    threshold_rank = AUDIT_STAGE8_SEVERITY_RANK.get(str(raw.get("failOn")), 99)
+    blockers = [
+        item
+        for item in findings
+        if item.get("status") == "open"
+        and item.get("blocking") is True
+        and item.get("verificationState") != "unverified-hypothesis"
+        and AUDIT_STAGE8_SEVERITY_RANK.get(str(item.get("severity")), -1)
+        >= threshold_rank
+    ]
+    blocking_ids = [str(item["findingId"]) for item in blockers]
+    by_severity = {
+        severity: sum(item.get("severity") == severity for item in findings)
+        for severity in ("critical", "high", "medium", "low", "info")
+    }
+    expected_counts = {
+        "total": len(findings),
+        "blocking": len(blockers),
+        "suppressed": sum(item.get("status") == "suppressed" for item in findings),
+        "bySeverity": by_severity,
+    }
+    if raw.get("findingCounts") != expected_counts:
+        failures.append(label + ".findingCounts")
+    if raw.get("blockingFindingIds") != blocking_ids:
+        failures.append(label + ".blockingFindingIds")
+    errors = raw.get("errors")
+    if not isinstance(errors, list) or errors:
+        failures.append(label + ".errors")
+    expected_status = "fail" if blockers else "pass"
+    if raw.get("status") != expected_status:
+        failures.append(label + ".status")
+    if raw.get("passed") is not (expected_status == "pass"):
+        failures.append(label + ".passed")
+
+    expected_decisions = sorted(
+        [
+            {
+                "fingerprint": item["fingerprint"],
+                "findingId": item["findingId"],
+                "status": "applied",
+                "reason": "accepted",
+            }
+            for item in findings
+            if item.get("status") == "suppressed"
+        ],
+        key=lambda item: (
+            item["fingerprint"],
+            item["findingId"],
+            item["status"],
+            item["reason"],
+        ),
+    )
+    if raw.get("suppressionDecisions") != expected_decisions:
+        failures.append(label + ".suppressionDecisions")
+    return (
+        raw,
+        {
+            "evaluatedAt": evaluated_at,
+            "findingById": finding_by_id,
+            "findingByFingerprint": finding_by_fingerprint,
+            "blockingFindingIds": blocking_ids,
+            "findingCounts": expected_counts,
+        },
+        failures,
+    )
+
+
+def _audit_stage8_revision_json(
+    root: Path, revision: str, path: str
+) -> tuple[dict[str, Any], str]:
+    content = _audit_stage4_revision_file(
+        root, revision, path, max_bytes=10_000_000
+    )
+    if content is None:
+        raise ToolError(
+            "Audit Stage 8 controls baseline does not contain the declared audit-result artifact."
+        )
+
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ToolError(
+                    "Audit Stage 8 controls baseline audit result contains a duplicate JSON key."
+                )
+            value[key] = item
+        return value
+
+    try:
+        parsed = json.loads(content.decode("utf-8"), object_pairs_hook=reject_duplicates)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ToolError(
+            "Audit Stage 8 controls baseline audit result must be valid UTF-8 JSON."
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise ToolError("Audit Stage 8 controls baseline audit result must be an object.")
+    return parsed, hashlib.sha256(content).hexdigest()
+
+
+def _audit_stage8_expected_decision(
+    result: dict[str, Any], summary: dict[str, Any]
+) -> dict[str, Any]:
+    passed = result.get("status") == "pass"
+    return {
+        "decision": "go" if passed else "no-go",
+        "reasonCodes": [
+            "complete-release-audit-pass" if passed else "open-release-blockers"
+        ],
+        "openBlockingFindingIds": list(summary["blockingFindingIds"]),
+        "coverageComplete": result.get("coverage", {}).get("complete") is True,
+        "auditStatus": result.get("status"),
+    }
+
+
+def render_audit_stage8_report(
+    risk_register: dict[str, Any], audit_result: dict[str, Any]
+) -> str:
+    """Render the one canonical Stage 8 engineering/executive Markdown report."""
+
+    subject = risk_register["subject"]
+    decision = risk_register["releaseDecision"]
+    control = risk_register["controlChange"]
+    finding_by_fingerprint = {
+        str(item.get("fingerprint") or ""): item
+        for item in audit_result.get("findings", [])
+        if isinstance(item, dict)
+    }
+    counts = audit_result.get("findingCounts") or {}
+    lines = [
+        "# JStack Enterprise Audit Lead Report",
+        "",
+        "## Executive Decision",
+        "",
+        f"- Decision: `{decision['decision']}`",
+        f"- Audit status: `{decision['auditStatus']}`",
+        f"- Coverage complete: `{str(decision['coverageComplete']).lower()}`",
+        f"- Candidate commit: `{subject['candidateGitHead']}`",
+        f"- Current findings: `{counts.get('total', 0)}`",
+        f"- Open release blockers: `{counts.get('blocking', 0)}`",
+        f"- Accepted-risk findings: `{counts.get('suppressed', 0)}`",
+        "- Reason codes: " + ", ".join(
+            f"`{item}`" for item in decision["reasonCodes"]
+        ),
+        "",
+        "## Prioritized Risk Register",
+        "",
+    ]
+    entries = risk_register["entries"]
+    if not entries:
+        lines.append("No findings remain in the current complete release audit.")
+    for entry in entries:
+        finding = finding_by_fingerprint.get(str(entry.get("fingerprint") or ""), {})
+        location = finding.get("location") or {}
+        location_text = (
+            f"{location.get('path', 'unknown')}:"
+            f"{location.get('startLine', 'unknown')}-"
+            f"{location.get('endLine', 'unknown')}"
+        )
+        remediation = finding.get("remediation") or {}
+        lines.extend(
+            [
+                (
+                    f"### {entry['priority']} · {entry['findingId']} · "
+                    f"{_audit_stage8_markdown_text(finding.get('title') or 'Untitled finding')}"
+                ),
+                "",
+                f"- Domain: `{_audit_stage8_markdown_text(finding.get('domain') or 'unknown')}`",
+                f"- Severity: `{entry['severity']}`",
+                f"- Confidence: `{_audit_stage8_markdown_text(finding.get('confidence') or 'unknown')}`",
+                f"- Verification state: `{entry['verificationState']}`",
+                f"- Audit status: `{entry['auditStatus']}`",
+                f"- Source: {_audit_stage8_markdown_text(location_text)}",
+                f"- Claim: {_audit_stage8_markdown_text(finding.get('claim'))}",
+                f"- Impact: {_audit_stage8_markdown_text(finding.get('impact'))}",
+                f"- Disposition: `{entry['disposition']}`",
+                f"- Owner: {_audit_stage8_markdown_text(entry['owner'])}",
+                f"- Reason: {_audit_stage8_markdown_text(entry['reason'])}",
+                f"- Target date: {_audit_stage8_markdown_text(entry['targetDate'] or 'not-applicable')}",
+                f"- Accepted-risk approval: {_audit_stage8_markdown_text(entry['approvalReference'] or 'not-applicable')}",
+                f"- Accepted-risk expiry: {_audit_stage8_markdown_text(entry['expiresAt'] or 'not-applicable')}",
+                f"- Compensating control: {_audit_stage8_markdown_text(entry['compensatingControl'] or 'not-applicable')}",
+                f"- Recommended change: {_audit_stage8_markdown_text(remediation.get('recommendedChange'))}",
+                f"- Residual risk: {_audit_stage8_markdown_text(entry['residualRisk'])}",
+                f"- Verification: {_audit_stage8_markdown_text(entry['verificationPlan'])}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Control And Remediation Comparison",
+            "",
+            f"- Status: `{control['status']}`",
+            f"- Changed paths: `{len(control['changedPaths'])}`",
+            f"- Shared stable fingerprints: `{len(control['sharedFingerprints'])}`",
+            f"- Verified remediated fingerprints: `{len(control['remediatedFingerprints'])}`",
+            f"- Introduced fingerprints: `{len(control['introducedFingerprints'])}`",
+            f"- Regressions absent: `{str(control['regressionsAbsent']).lower()}`",
+            "",
+            "## Residual Boundary",
+            "",
+        ]
+    )
+    lines.extend(f"- {item}" for item in risk_register["limitations"])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def evaluate_audit_stage8_enterprise_lead(
+    risk_register: Any,
+    audit_result: Any,
+    sarif: Any,
+    project_path: Path,
+    artifacts: dict[str, dict[str, Any]],
+    qa_verifications: list[dict[str, Any]],
+    security_verification: Optional[dict[str, Any]],
+    audit_verification: Optional[dict[str, Any]],
+    drill_id: str,
+    prior_attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Reconcile one exact-revision Stage 8 enterprise audit-lead package."""
+
+    expected_type = AUDIT_STAGE8_DRILL_TYPES.get(drill_id)
+    if expected_type is None:
+        raise ToolError(f"Unsupported Audit Stage 8 drill: {drill_id}")
+    risk_fields = {
+        "schemaVersion",
+        "subject",
+        "exercise",
+        "assessmentBoundary",
+        "artifactBindings",
+        "auditReceipt",
+        "triagePolicy",
+        "entries",
+        "controlChange",
+        "releaseDecision",
+        "complete",
+        "limitations",
+    }
+    if not isinstance(risk_register, dict) or set(risk_register) != risk_fields:
+        raise ToolError(
+            "Audit Stage 8 risk-register.json has unsupported or missing fields."
+        )
+    audit_enforce_json_limit(risk_register, "Audit Stage 8 risk register", 10_000_000)
+    audit_reject_secret_values(risk_register, "Audit Stage 8 risk register")
+    result, result_summary, failures = _audit_stage8_result_semantics(
+        audit_result, "auditResult"
+    )
+    source = _audit_source_subject(project_path, "Stage 8")
+    root = source["_root"]
+
+    def exact_object(container: dict[str, Any], field: str, keys: set[str]) -> dict[str, Any]:
+        value = container.get(field)
+        if not isinstance(value, dict) or set(value) != keys:
+            raise ToolError(
+                f"Audit Stage 8 {field} has unsupported or missing fields."
+            )
+        return value
+
+    if risk_register.get("schemaVersion") != AUDIT_STAGE8_RISK_SCHEMA:
+        failures.append("schemaVersion")
+    exercise = exact_object(risk_register, "exercise", {"drillId", "type"})
+    if exercise != {"drillId": drill_id, "type": expected_type}:
+        failures.append("exercise")
+    boundary = exact_object(
+        risk_register, "assessmentBoundary", set(AUDIT_STAGE8_ASSESSMENT_BOUNDARY)
+    )
+    if boundary != AUDIT_STAGE8_ASSESSMENT_BOUNDARY:
+        failures.append("assessmentBoundary")
+    if risk_register.get("triagePolicy") != AUDIT_STAGE8_TRIAGE_POLICY:
+        failures.append("triagePolicy")
+    if risk_register.get("limitations") != AUDIT_STAGE8_LIMITATIONS:
+        failures.append("limitations")
+    if risk_register.get("complete") is not True:
+        failures.append("complete")
+
+    subject = exact_object(
+        risk_register,
+        "subject",
+        {
+            "baselineGitHead",
+            "baselineGitTree",
+            "candidateGitHead",
+            "candidateGitTree",
+        },
+    )
+    baseline = _audit_stage4_resolve_revision(root, subject.get("baselineGitHead"))
+    candidate = _audit_stage4_resolve_revision(root, subject.get("candidateGitHead"))
+    if baseline is None:
+        failures.append("subject.baseline")
+    if candidate is None:
+        failures.append("subject.candidate")
+    if baseline and subject.get("baselineGitTree") != baseline["gitTree"]:
+        failures.append("subject.baselineGitTree")
+    if candidate and subject.get("candidateGitTree") != candidate["gitTree"]:
+        failures.append("subject.candidateGitTree")
+    if candidate and (
+        candidate["gitHead"] != source["gitHead"]
+        or candidate["gitTree"] != source["gitTree"]
+    ):
+        failures.append("subject.candidate-not-current")
+    changed_paths: list[str] = []
+    if baseline and candidate:
+        if expected_type == "audit":
+            if baseline != candidate:
+                failures.append("subject.audit-baseline-candidate")
+        else:
+            ancestry = run_complete(
+                [
+                    "git",
+                    "merge-base",
+                    "--is-ancestor",
+                    baseline["gitHead"],
+                    candidate["gitHead"],
+                ],
+                root,
+                timeout=8,
+            )
+            diff = _audit_stage4_changed_paths(
+                root, baseline["gitHead"], candidate["gitHead"]
+            )
+            if baseline["gitHead"] == candidate["gitHead"]:
+                failures.append("subject.implementation-distinct-commit")
+            if not ancestry["ok"]:
+                failures.append("subject.baseline-not-ancestor")
+            if not diff:
+                failures.append("subject.implementation-empty-diff")
+            changed_paths = diff or []
+
+    bindings = exact_object(
+        risk_register, "artifactBindings", {"auditResult", "auditReport", "sarif"}
+    )
+    for binding_name, artifact_name in (
+        ("auditResult", "audit-result.json"),
+        ("auditReport", "audit-report.md"),
+        ("sarif", "audit.sarif"),
+    ):
+        binding = bindings.get(binding_name)
+        if not isinstance(binding, dict) or set(binding) != {"path", "sha256"}:
+            raise ToolError("Audit Stage 8 artifact binding is malformed.")
+        artifact = artifacts.get(artifact_name) or {}
+        if binding.get("path") != artifact.get("path"):
+            failures.append(f"artifactBindings.{binding_name}.path")
+        if binding.get("sha256") != artifact.get("sha256"):
+            failures.append(f"artifactBindings.{binding_name}.sha256")
+
+    expected_sarif = audit_core.to_sarif(result)
+    if sarif != expected_sarif:
+        failures.append("sarif.equivalence")
+
+    permitted_dirty = set(AUDIT_STAGE8_ARTIFACT_PATHS.values())
+    dirty_paths = set(git_changed_files(project_path))
+    receipt_payload = (
+        audit_verification.get("payload", {}) if audit_verification else {}
+    )
+    receipt_checks = (
+        audit_verification.get("checks", {}) if audit_verification else {}
+    )
+    required_receipt_checks = {
+        "kind",
+        "session",
+        "projectPath",
+        "gitHead",
+        "projectFingerprint",
+        "fresh",
+        "notExpired",
+        "boundedExpiry",
+    }
+    receipt_valid_except_training_artifacts = bool(
+        audit_verification
+        and required_receipt_checks.issubset(receipt_checks)
+        and all(
+            value is True
+            for key, value in receipt_checks.items()
+            if key != "projectFingerprint"
+        )
+        and dirty_paths.issubset(permitted_dirty)
+    )
+    if not receipt_valid_except_training_artifacts:
+        failures.append("auditReceipt.signature-subject-or-freshness")
+    receipt_binding = exact_object(
+        risk_register,
+        "auditReceipt",
+        {
+            "receiptDigest",
+            "schemaVersion",
+            "gitHead",
+            "projectFingerprint",
+            "profile",
+            "scopeMode",
+            "releaseScopeCovered",
+            "complete",
+            "resultStatus",
+            "failureThreshold",
+            "coverageDigest",
+            "findingDigest",
+            "evaluatedAt",
+        },
+    )
+    expected_receipt_binding = {
+        "receiptDigest": (
+            audit_verification.get("receiptDigest") if audit_verification else None
+        ),
+        "schemaVersion": receipt_payload.get("schemaVersion"),
+        "gitHead": receipt_payload.get("gitHead"),
+        "projectFingerprint": receipt_payload.get("projectFingerprint"),
+        "profile": receipt_payload.get("profile"),
+        "scopeMode": receipt_payload.get("scopeMode"),
+        "releaseScopeCovered": receipt_payload.get("releaseScopeCovered"),
+        "complete": receipt_payload.get("complete"),
+        "resultStatus": receipt_payload.get("resultStatus"),
+        "failureThreshold": receipt_payload.get("failureThreshold"),
+        "coverageDigest": receipt_payload.get("coverageDigest"),
+        "findingDigest": receipt_payload.get("findingDigest"),
+        "evaluatedAt": receipt_payload.get("evaluatedAt"),
+    }
+    if receipt_binding != expected_receipt_binding:
+        failures.append("auditReceipt.binding")
+    expected_receipt_semantics = {
+        "schemaVersion": "jstack.audit.receipt.v1",
+        "gitHead": source["gitHead"],
+        "profile": "release",
+        "scopeMode": "repository",
+        "releaseScopeCovered": True,
+        "complete": True,
+        "resultStatus": result.get("status"),
+        "failureThreshold": result.get("failOn"),
+        "coverageDigest": audit_json_digest(result.get("coverage")),
+        "findingDigest": audit_json_digest(result.get("findings")),
+        "evaluatedAt": result.get("evaluatedAt"),
+    }
+    for field, expected in expected_receipt_semantics.items():
+        if receipt_payload.get(field) != expected:
+            failures.append("auditReceipt." + field)
+    if receipt_payload.get("findingCounts") != result.get("findingCounts"):
+        failures.append("auditReceipt.findingCounts")
+    expected_active_suppressions = sorted(
+        [
+            {
+                "fingerprint": finding["fingerprint"],
+                "expiresAt": finding["suppression"]["expiresAt"],
+            }
+            for finding in result["findings"]
+            if finding.get("status") == "suppressed"
+        ],
+        key=lambda item: (item["expiresAt"], item["fingerprint"]),
+    )
+    if receipt_payload.get("activeSuppressions") != expected_active_suppressions:
+        failures.append("auditReceipt.activeSuppressions")
+
+    entries = risk_register.get("entries")
+    if not isinstance(entries, list) or len(entries) > AUDIT_STAGE8_MAX_ITEMS:
+        raise ToolError(
+            f"Audit Stage 8 entries must contain at most {AUDIT_STAGE8_MAX_ITEMS} items."
+        )
+    entry_fields = {
+        "findingId",
+        "fingerprint",
+        "severity",
+        "priority",
+        "verificationState",
+        "auditStatus",
+        "blocking",
+        "disposition",
+        "owner",
+        "reason",
+        "targetDate",
+        "approvalReference",
+        "expiresAt",
+        "compensatingControl",
+        "residualRisk",
+        "verificationPlan",
+    }
+    seen_fingerprints: set[str] = set()
+    for index, entry in enumerate(entries):
+        prefix = f"entries[{index}]"
+        if not isinstance(entry, dict) or set(entry) != entry_fields:
+            raise ToolError(f"Audit Stage 8 {prefix} is malformed.")
+        fingerprint = str(entry.get("fingerprint") or "")
+        finding = result_summary["findingByFingerprint"].get(fingerprint)
+        if finding is None or fingerprint in seen_fingerprints:
+            failures.append(prefix + ".fingerprint")
+            continue
+        seen_fingerprints.add(fingerprint)
+        for field in (
+            "findingId",
+            "fingerprint",
+            "severity",
+            "priority",
+            "verificationState",
+            "blocking",
+        ):
+            if entry.get(field) != finding.get(field):
+                failures.append(prefix + "." + field)
+        if entry.get("auditStatus") != finding.get("status"):
+            failures.append(prefix + ".auditStatus")
+        if entry.get("residualRisk") != finding.get("residualRisk"):
+            failures.append(prefix + ".residualRisk")
+        if entry.get("verificationPlan") != finding.get("verificationPlan"):
+            failures.append(prefix + ".verificationPlan")
+        if finding.get("status") == "suppressed":
+            suppression = finding["suppression"]
+            expected_values = {
+                "disposition": "accepted-risk",
+                "owner": suppression["owner"],
+                "reason": suppression["reason"],
+                "targetDate": None,
+                "approvalReference": suppression["approvalReference"],
+                "expiresAt": suppression["expiresAt"],
+                "compensatingControl": suppression["compensatingControl"],
+            }
+            for field, expected in expected_values.items():
+                if entry.get(field) != expected:
+                    failures.append(prefix + "." + field)
+            try:
+                expires = _audit_stage8_timestamp(
+                    suppression["expiresAt"], prefix + ".expiresAt"
+                )
+                if expires <= _dt.datetime.now(_dt.timezone.utc):
+                    failures.append(prefix + ".expired")
+            except ToolError:
+                failures.append(prefix + ".expiresAt")
+        else:
+            expected_disposition = (
+                "investigate"
+                if finding.get("verificationState") == "unverified-hypothesis"
+                else "remediate"
+            )
+            if entry.get("disposition") != expected_disposition:
+                failures.append(prefix + ".disposition")
+            try:
+                _audit_stage8_plain_text(entry.get("owner"), prefix + ".owner", minimum=2)
+                _audit_stage8_plain_text(entry.get("reason"), prefix + ".reason", minimum=12)
+            except ToolError:
+                failures.append(prefix + ".ownership")
+            if any(
+                entry.get(field) is not None
+                for field in ("approvalReference", "expiresAt", "compensatingControl")
+            ):
+                failures.append(prefix + ".open-risk-fields")
+            try:
+                target = _audit_stage8_timestamp(
+                    entry.get("targetDate"), prefix + ".targetDate"
+                )
+                if target <= result_summary["evaluatedAt"]:
+                    failures.append(prefix + ".targetDate")
+            except ToolError:
+                failures.append(prefix + ".targetDate")
+    if seen_fingerprints != set(result_summary["findingByFingerprint"]):
+        failures.append("entries.finding-coverage")
+    expected_entry_order = sorted(
+        entries,
+        key=lambda item: (
+            AUDIT_STAGE8_PRIORITY_RANK.get(str(item.get("priority")), 99),
+            -AUDIT_STAGE8_SEVERITY_RANK.get(str(item.get("severity")), -1),
+            str(item.get("findingId") or ""),
+        ),
+    )
+    if entries != expected_entry_order:
+        failures.append("entries.order")
+
+    candidate_findings = result_summary["findingByFingerprint"]
+    baseline_findings = candidate_findings
+    baseline_result_sha: Optional[str] = None
+    if expected_type == "implementation" and baseline:
+        baseline_raw, baseline_result_sha = _audit_stage8_revision_json(
+            root,
+            baseline["gitHead"],
+            AUDIT_STAGE8_ARTIFACT_PATHS["audit-result.json"],
+        )
+        _, baseline_summary, baseline_failures = _audit_stage8_result_semantics(
+            baseline_raw, "baselineAuditResult"
+        )
+        failures.extend(baseline_failures)
+        baseline_findings = baseline_summary["findingByFingerprint"]
+        prior_baseline_validated = any(
+            isinstance(item, dict)
+            and item.get("stage") == 8
+            and item.get("track") == "audit"
+            and (item.get("stage8EnterpriseLeadEvaluation") or {}).get("passed") is True
+            and (item.get("stage8EnterpriseLeadEvaluation") or {}).get(
+                "candidateGitHead"
+            )
+            == baseline["gitHead"]
+            and (item.get("stage8EnterpriseLeadEvaluation") or {}).get(
+                "auditResultDigest"
+            )
+            == baseline_result_sha
+            for item in prior_attempts
+        )
+        if not prior_baseline_validated:
+            failures.append("controlChange.baseline-not-prior-validated")
+    shared = sorted(set(baseline_findings) & set(candidate_findings))
+    remediated = sorted(set(baseline_findings) - set(candidate_findings))
+    introduced = sorted(set(candidate_findings) - set(baseline_findings))
+    changed_triage = sorted(
+        [
+            {
+                "fingerprint": fingerprint,
+                "baselineSeverity": baseline_findings[fingerprint]["severity"],
+                "candidateSeverity": candidate_findings[fingerprint]["severity"],
+                "baselinePriority": baseline_findings[fingerprint]["priority"],
+                "candidatePriority": candidate_findings[fingerprint]["priority"],
+                "baselineStatus": baseline_findings[fingerprint]["status"],
+                "candidateStatus": candidate_findings[fingerprint]["status"],
+            }
+            for fingerprint in shared
+            if any(
+                baseline_findings[fingerprint].get(field)
+                != candidate_findings[fingerprint].get(field)
+                for field in ("severity", "priority", "status")
+            )
+        ],
+        key=lambda item: item["fingerprint"],
+    )
+    regressions_absent = not any(
+        candidate_findings[fingerprint].get("blocking") is True
+        for fingerprint in introduced
+    ) and not any(
+        AUDIT_STAGE8_SEVERITY_RANK[candidate_findings[fingerprint]["severity"]]
+        > AUDIT_STAGE8_SEVERITY_RANK[baseline_findings[fingerprint]["severity"]]
+        or AUDIT_STAGE8_PRIORITY_RANK[candidate_findings[fingerprint]["priority"]]
+        < AUDIT_STAGE8_PRIORITY_RANK[baseline_findings[fingerprint]["priority"]]
+        for fingerprint in shared
+    )
+    control = exact_object(
+        risk_register,
+        "controlChange",
+        {
+            "status",
+            "changedPaths",
+            "baselineAuditResultPath",
+            "baselineAuditResultSha256",
+            "sharedFingerprints",
+            "remediatedFingerprints",
+            "introducedFingerprints",
+            "changedTriage",
+            "regressionsAbsent",
+        },
+    )
+    expected_control = {
+        "status": "implemented-verified" if expected_type == "implementation" else "existing-observed",
+        "changedPaths": sorted(changed_paths),
+        "baselineAuditResultPath": (
+            AUDIT_STAGE8_ARTIFACT_PATHS["audit-result.json"]
+            if expected_type == "implementation"
+            else None
+        ),
+        "baselineAuditResultSha256": (
+            baseline_result_sha if expected_type == "implementation" else None
+        ),
+        "sharedFingerprints": shared,
+        "remediatedFingerprints": remediated,
+        "introducedFingerprints": introduced,
+        "changedTriage": changed_triage,
+        "regressionsAbsent": regressions_absent,
+    }
+    if control != expected_control:
+        failures.append("controlChange")
+    if expected_type == "implementation":
+        verified_remediated = [
+            fingerprint
+            for fingerprint in remediated
+            if baseline_findings[fingerprint].get("verificationState")
+            != "unverified-hypothesis"
+        ]
+        if not verified_remediated:
+            failures.append("controlChange.verified-remediation-required")
+        if not regressions_absent:
+            failures.append("controlChange.regression")
+        if result.get("status") != "pass":
+            failures.append("controlChange.candidate-release-pass")
+
+    expected_decision = _audit_stage8_expected_decision(result, result_summary)
+    if risk_register.get("releaseDecision") != expected_decision:
+        failures.append("releaseDecision")
+
+    report_artifact = artifacts.get("audit-report.md") or {}
+    validate_mastery_text_artifact(
+        project_path, report_artifact, "Audit Stage 8 audit-report.md"
+    )
+    try:
+        report_bytes = audit_core.read_repository_file(
+            project_path,
+            str(report_artifact.get("path") or ""),
+            max_bytes=2_000_000,
+            max_seconds=30,
+        )
+        report_text = report_bytes.decode("utf-8")
+    except (audit_core.AuditError, UnicodeError) as exc:
+        raise ToolError("Audit Stage 8 audit-report.md could not be read safely.") from exc
+    if report_text != render_audit_stage8_report(risk_register, result):
+        failures.append("auditReport.equivalence")
+
+    expected_qa_keys = {item["key"] for item in discover_test_commands(project_path)}
+    valid_qa_keys = {
+        str((item.get("payload") or {}).get("commandKey"))
+        for item in qa_verifications
+        if item.get("valid")
+    }
+    if valid_qa_keys != expected_qa_keys:
+        failures.append("qaEvidence.complete")
+    security_payload = (
+        security_verification.get("payload", {}) if security_verification else {}
+    )
+    if (
+        not security_verification
+        or security_verification.get("valid") is not True
+        or security_payload.get("complete") is not True
+        or security_payload.get("passed") is not True
+    ):
+        failures.append("securityEvidence")
+
+    evaluation = {
+        "schemaVersion": "jstack.audit.stage8-evaluation.v1",
+        "exerciseType": expected_type,
+        "drillId": drill_id,
+        "baselineGitHead": baseline["gitHead"] if baseline else None,
+        "baselineGitTree": baseline["gitTree"] if baseline else None,
+        "candidateGitHead": candidate["gitHead"] if candidate else None,
+        "candidateGitTree": candidate["gitTree"] if candidate else None,
+        "auditReceiptDigest": (
+            audit_verification.get("receiptDigest") if audit_verification else None
+        ),
+        "auditResultDigest": artifacts.get("audit-result.json", {}).get("sha256"),
+        "auditReportDigest": artifacts.get("audit-report.md", {}).get("sha256"),
+        "sarifDigest": artifacts.get("audit.sarif", {}).get("sha256"),
+        "riskRegisterDigest": artifacts.get("risk-register.json", {}).get("sha256"),
+        "releaseDecision": expected_decision["decision"],
+        "findingCount": len(candidate_findings),
+        "blockingFindingCount": len(result_summary["blockingFindingIds"]),
+        "suppressedFindingCount": result_summary["findingCounts"]["suppressed"],
+        "sharedFingerprintCount": len(shared),
+        "remediatedFingerprintCount": len(remediated),
+        "introducedFingerprintCount": len(introduced),
+        "changedTriageCount": len(changed_triage),
+        "changedPathCount": len(changed_paths),
+        "qaEvidenceCount": len(valid_qa_keys),
+        "regressionsAbsent": regressions_absent,
+        "passed": not failures,
+        "failureCodes": sorted(set(failures)),
+    }
+    return {**evaluation, "evaluationDigest": audit_json_digest(evaluation)}
+
+
 def score_level(score: float) -> int:
     if score < 50:
         return 0
@@ -10780,6 +11739,10 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
     stage6_supply_chain_evaluation = None
     stage7_verification_results = None
     stage7_adversarial_evaluation = None
+    stage8_audit_result = None
+    stage8_sarif = None
+    stage8_risk_register = None
+    stage8_enterprise_lead_evaluation = None
     performance_evidence: list[dict[str, Any]] = []
     adversarial_evidence: list[dict[str, Any]] = []
     audit_verification = None
@@ -10845,6 +11808,19 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         stage7_verification_results = load_mastery_json_artifact(
             project_path,
             artifacts["verification-results.json"],
+        )
+    elif track == "audit" and stage_number == 8:
+        stage8_audit_result = load_mastery_json_artifact(
+            project_path,
+            artifacts["audit-result.json"],
+        )
+        stage8_sarif = load_mastery_json_artifact(
+            project_path,
+            artifacts["audit.sarif"],
+        )
+        stage8_risk_register = load_mastery_json_artifact(
+            project_path,
+            artifacts["risk-register.json"],
         )
     elif track == "audit" and stage_number == 9:
         if args.get("capstone_results") not in (None, {}):
@@ -11047,9 +12023,24 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 "Audit Stage 7 project state contains non-training changes: "
                 + ", ".join(disallowed_changes)
             )
+    if track == "audit" and stage_number == 8:
+        for artifact_name, expected_path in AUDIT_STAGE8_ARTIFACT_PATHS.items():
+            if artifacts.get(artifact_name, {}).get("path") != expected_path:
+                hard_blocks.append(
+                    f"Audit Stage 8 {artifact_name} must use {expected_path}."
+                )
+        permitted_changes = set(AUDIT_STAGE8_ARTIFACT_PATHS.values())
+        disallowed_changes = [
+            path for path in git_changed_files(project_path) if path not in permitted_changes
+        ]
+        if disallowed_changes:
+            hard_blocks.append(
+                "Audit Stage 8 project state contains non-training changes: "
+                + ", ".join(disallowed_changes)
+            )
     if (
         stage_number >= 2
-        and not (track == "audit" and stage_number in {2, 3, 4, 5, 6, 7})
+        and not (track == "audit" and stage_number in {2, 3, 4, 5, 6, 7, 8})
         and not state["clean"]
     ):
         hard_blocks.append("Stage 2+ evidence must be recorded from a clean committed project state.")
@@ -11241,13 +12232,37 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
                 state,
                 require_passed=False,
             )
-            payload = audit_verification.get("payload") or {}
-            if (
-                not audit_verification["valid"]
-                or payload.get("complete") is not True
-                or payload.get("resultStatus") not in {"pass", "fail"}
-            ):
-                hard_blocks.append("Audit Stage 8+ receipt is invalid, stale, or incomplete.")
+            audit_verification["receiptDigest"] = hashlib.sha256(
+                audit_receipt.encode("utf-8")
+            ).hexdigest()
+            if stage_number > 8:
+                payload = audit_verification.get("payload") or {}
+                if (
+                    not audit_verification["valid"]
+                    or payload.get("complete") is not True
+                    or payload.get("resultStatus") not in {"pass", "fail"}
+                ):
+                    hard_blocks.append("Audit Stage 8+ receipt is invalid, stale, or incomplete.")
+        if stage_number == 8:
+            assert stage8_audit_result is not None
+            assert stage8_sarif is not None
+            assert stage8_risk_register is not None
+            stage8_enterprise_lead_evaluation = evaluate_audit_stage8_enterprise_lead(
+                stage8_risk_register,
+                stage8_audit_result,
+                stage8_sarif,
+                project_path,
+                artifacts,
+                qa_verifications,
+                security_verification,
+                audit_verification,
+                drill_id,
+                list(track_state.get("attempts") or []),
+            )
+            for code in stage8_enterprise_lead_evaluation["failureCodes"]:
+                hard_blocks.append(
+                    f"Audit Stage 8 enterprise-lead gate failed: {code}."
+                )
     elif track == "loop" and stage_number >= 8:
         audit_receipt = str(args.get("audit_receipt") or "").strip()
         if not audit_receipt:
@@ -11373,6 +12388,7 @@ def tool_mastery_record(args: dict[str, Any]) -> dict[str, Any]:
         "stage5PerformanceEvaluation": stage5_performance_evaluation,
         "stage6SupplyChainEvaluation": stage6_supply_chain_evaluation,
         "stage7AdversarialEvaluation": stage7_adversarial_evaluation,
+        "stage8EnterpriseLeadEvaluation": stage8_enterprise_lead_evaluation,
         "curriculumDigest": mastery_curriculum_digest(curriculum),
         "capstoneResults": args.get("capstone_results") if stage_number == 9 and track == "engineering" else None,
         "benchmarkEvaluation": benchmark_evaluation,
@@ -20702,7 +21718,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "security_receipt": {"type": "string"},
                 "audit_receipt": {
                     "type": "string",
-                    "description": "Audit Stage 6: current complete receipt containing a passed curated dependency-analysis result; Audit and loop Stage 8+: current complete audit evidence. Receipts are passed directly between MCP tools with no terminal token or paste ceremony.",
+                    "description": "Audit Stage 6: current complete receipt containing a passed curated dependency-analysis result; Audit Stage 8: current complete Git-bound release-audit evidence reconciled against the four exact post-audit training artifacts; later audit and loop stages require current complete audit evidence. Receipts pass directly between MCP tools with no terminal token or paste ceremony.",
                 },
                 "hard_gate_failures": {"type": "array", "items": {"type": "string"}, "default": []},
                 "blind_capstone": {

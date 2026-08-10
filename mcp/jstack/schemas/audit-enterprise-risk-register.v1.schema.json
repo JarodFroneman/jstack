@@ -1,0 +1,330 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/audit-enterprise-risk-register.v1.schema.json",
+  "title": "JStack Audit Stage 8 Enterprise Risk Register",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "findingFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "gitObject": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40,64}$"
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "fingerprintList": {
+      "type": "array",
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/findingFingerprint"}
+    },
+    "nullableText": {
+      "type": ["string", "null"],
+      "maxLength": 2000
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "findingId",
+        "fingerprint",
+        "severity",
+        "priority",
+        "verificationState",
+        "auditStatus",
+        "blocking",
+        "disposition",
+        "owner",
+        "reason",
+        "targetDate",
+        "approvalReference",
+        "expiresAt",
+        "compensatingControl",
+        "residualRisk",
+        "verificationPlan"
+      ],
+      "properties": {
+        "findingId": {"type": "string", "pattern": "^JSA-[0-9A-F]{24}$"},
+        "fingerprint": {"$ref": "#/$defs/findingFingerprint"},
+        "severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+        "priority": {"enum": ["P0", "P1", "P2", "P3", "P4"]},
+        "verificationState": {
+          "enum": [
+            "test-reproduced",
+            "tool-confirmed",
+            "source-proven",
+            "reasoned-strong-evidence",
+            "unverified-hypothesis"
+          ]
+        },
+        "auditStatus": {"enum": ["open", "suppressed"]},
+        "blocking": {"type": "boolean"},
+        "disposition": {"enum": ["remediate", "investigate", "accepted-risk"]},
+        "owner": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "targetDate": {"$ref": "#/$defs/nullableText"},
+        "approvalReference": {"$ref": "#/$defs/nullableText"},
+        "expiresAt": {"$ref": "#/$defs/nullableText"},
+        "compensatingControl": {"$ref": "#/$defs/nullableText"},
+        "residualRisk": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "verificationPlan": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "triageChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fingerprint",
+        "baselineSeverity",
+        "candidateSeverity",
+        "baselinePriority",
+        "candidatePriority",
+        "baselineStatus",
+        "candidateStatus"
+      ],
+      "properties": {
+        "fingerprint": {"$ref": "#/$defs/findingFingerprint"},
+        "baselineSeverity": {"enum": ["info", "low", "medium", "high", "critical"]},
+        "candidateSeverity": {"enum": ["info", "low", "medium", "high", "critical"]},
+        "baselinePriority": {"enum": ["P0", "P1", "P2", "P3", "P4"]},
+        "candidatePriority": {"enum": ["P0", "P1", "P2", "P3", "P4"]},
+        "baselineStatus": {"enum": ["open", "suppressed"]},
+        "candidateStatus": {"enum": ["open", "suppressed"]}
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "subject",
+    "exercise",
+    "assessmentBoundary",
+    "artifactBindings",
+    "auditReceipt",
+    "triagePolicy",
+    "entries",
+    "controlChange",
+    "releaseDecision",
+    "complete",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.audit.enterprise-risk-register.v1"},
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineGitHead", "baselineGitTree", "candidateGitHead", "candidateGitTree"],
+      "properties": {
+        "baselineGitHead": {"$ref": "#/$defs/gitObject"},
+        "baselineGitTree": {"$ref": "#/$defs/gitObject"},
+        "candidateGitHead": {"$ref": "#/$defs/gitObject"},
+        "candidateGitTree": {"$ref": "#/$defs/gitObject"}
+      }
+    },
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["drillId", "type"],
+      "properties": {
+        "drillId": {"enum": ["a8-lead", "a8-controls"]},
+        "type": {"enum": ["audit", "implementation"]}
+      }
+    },
+    "assessmentBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryContentTrust",
+        "evaluatorMode",
+        "repositoryCode",
+        "auditExecution",
+        "secrets",
+        "writes",
+        "auditRemediation",
+        "implementationEvidence",
+        "gitReleaseDeploymentAuthority",
+        "productionAuthority"
+      ],
+      "properties": {
+        "repositoryContentTrust": {"const": "untrusted-data"},
+        "evaluatorMode": {"const": "static-git-signed-audit-reconciliation"},
+        "repositoryCode": {"const": "not-executed-by-evaluator"},
+        "auditExecution": {"const": "separately-authorized-release-profile-workflow-only"},
+        "secrets": {"const": "not-accessed-or-forwarded"},
+        "writes": {"const": "training-artifacts-only"},
+        "auditRemediation": {"const": "not-authorized"},
+        "implementationEvidence": {"const": "external-committed-candidate-only"},
+        "gitReleaseDeploymentAuthority": {"const": "none"},
+        "productionAuthority": {"const": "none"}
+      }
+    },
+    "artifactBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["auditResult", "auditReport", "sarif"],
+      "properties": {
+        "auditResult": {"$ref": "#/$defs/artifactBinding"},
+        "auditReport": {"$ref": "#/$defs/artifactBinding"},
+        "sarif": {"$ref": "#/$defs/artifactBinding"}
+      }
+    },
+    "auditReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receiptDigest",
+        "schemaVersion",
+        "gitHead",
+        "projectFingerprint",
+        "profile",
+        "scopeMode",
+        "releaseScopeCovered",
+        "complete",
+        "resultStatus",
+        "failureThreshold",
+        "coverageDigest",
+        "findingDigest",
+        "evaluatedAt"
+      ],
+      "properties": {
+        "receiptDigest": {"$ref": "#/$defs/sha256"},
+        "schemaVersion": {"const": "jstack.audit.receipt.v1"},
+        "gitHead": {"$ref": "#/$defs/gitObject"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "profile": {"const": "release"},
+        "scopeMode": {"const": "repository"},
+        "releaseScopeCovered": {"const": true},
+        "complete": {"const": true},
+        "resultStatus": {"enum": ["pass", "fail"]},
+        "failureThreshold": {"enum": ["info", "low", "medium", "high", "critical"]},
+        "coverageDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "findingDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "evaluatedAt": {"type": "string", "minLength": 1}
+      }
+    },
+    "triagePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordering",
+        "priorityOrder",
+        "severityOrder",
+        "verifiedOpenDisposition",
+        "hypothesisDisposition",
+        "suppressedDisposition",
+        "acceptedRiskRequirements",
+        "releaseDecisionPolicy",
+        "incompletePolicy"
+      ],
+      "properties": {
+        "ordering": {"const": ["priority", "severity", "findingId"]},
+        "priorityOrder": {"const": ["P0", "P1", "P2", "P3", "P4"]},
+        "severityOrder": {"const": ["critical", "high", "medium", "low", "info"]},
+        "verifiedOpenDisposition": {"const": "remediate"},
+        "hypothesisDisposition": {"const": "investigate"},
+        "suppressedDisposition": {"const": "accepted-risk"},
+        "acceptedRiskRequirements": {
+          "const": [
+            "exact-fingerprint-and-scope",
+            "owner",
+            "reason",
+            "approval-reference",
+            "future-expiry",
+            "compensating-control",
+            "residual-risk"
+          ]
+        },
+        "releaseDecisionPolicy": {"const": "complete-git-bound-release-audit-status"},
+        "incompletePolicy": {"const": "no-go"}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {"$ref": "#/$defs/entry"}
+    },
+    "controlChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "changedPaths",
+        "baselineAuditResultPath",
+        "baselineAuditResultSha256",
+        "sharedFingerprints",
+        "remediatedFingerprints",
+        "introducedFingerprints",
+        "changedTriage",
+        "regressionsAbsent"
+      ],
+      "properties": {
+        "status": {"enum": ["existing-observed", "implemented-verified"]},
+        "changedPaths": {
+          "type": "array",
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "baselineAuditResultPath": {"$ref": "#/$defs/nullableText"},
+        "baselineAuditResultSha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"type": "null"}
+          ]
+        },
+        "sharedFingerprints": {"$ref": "#/$defs/fingerprintList"},
+        "remediatedFingerprints": {"$ref": "#/$defs/fingerprintList"},
+        "introducedFingerprints": {"$ref": "#/$defs/fingerprintList"},
+        "changedTriage": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {"$ref": "#/$defs/triageChange"}
+        },
+        "regressionsAbsent": {"type": "boolean"}
+      }
+    },
+    "releaseDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "reasonCodes", "openBlockingFindingIds", "coverageComplete", "auditStatus"],
+      "properties": {
+        "decision": {"enum": ["go", "no-go"]},
+        "reasonCodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"enum": ["complete-release-audit-pass", "open-release-blockers"]}
+        },
+        "openBlockingFindingIds": {
+          "type": "array",
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^JSA-[0-9A-F]{24}$"}
+        },
+        "coverageComplete": {"const": true},
+        "auditStatus": {"enum": ["pass", "fail"]}
+      }
+    },
+    "complete": {"const": true},
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
