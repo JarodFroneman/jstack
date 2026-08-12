@@ -5,7 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.check_contract_compatibility import DEFAULT_FIXTURE, check_contracts
+from scripts.check_contract_compatibility import (
+    DEFAULT_FIXTURE,
+    _portable_text_digest,
+    check_contracts,
+)
 
 
 class CrossVersionContractTests(unittest.TestCase):
@@ -23,6 +27,15 @@ class CrossVersionContractTests(unittest.TestCase):
             "MCP input contract changed without a versioned successor: jstack_qa",
             errors,
         )
+
+    def test_published_text_digest_is_portable_across_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lf = root / "lf.json"
+            crlf = root / "crlf.json"
+            lf.write_bytes(b'{"schemaVersion":"v1"}\n')
+            crlf.write_bytes(b'{"schemaVersion":"v1"}\r\n')
+            self.assertEqual(_portable_text_digest(lf), _portable_text_digest(crlf))
 
 
 if __name__ == "__main__":

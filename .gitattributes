@@ -1,2 +1,3 @@
 evals/**/*.json text eol=lf
 evals/**/*.py text eol=lf
+mcp/jstack/schemas/*.json text eol=lf

@@ -21,8 +21,10 @@ def _canonical_digest(value: Any) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _raw_digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _portable_text_digest(path: Path) -> str:
+    """Hash published text contracts independently of checkout line endings."""
+    normalized = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(normalized).hexdigest()
 
 
 def _load_server() -> Any:
@@ -90,7 +92,7 @@ def check_contracts(fixture_path: Path = DEFAULT_FIXTURE) -> list[str]:
         errors.append("published core schema inventory changed")
     for name in sorted(set(current_schema_names) & set(expected_schemas)):
         path = ROOT / "mcp" / "jstack" / "schemas" / name
-        if _raw_digest(path) != expected_schemas[name]:
+        if _portable_text_digest(path) != expected_schemas[name]:
             errors.append("published v1 schema changed in place: %s" % name)
 
     for relative, markers in fixture["persistedSchemaMarkers"].items():
