@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/evals/schemas/run-envelope.v1.schema.json",
+  "title": "JStack Proof Plane Run Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "pairId",
+    "taskId",
+    "taskDigest",
+    "family",
+    "taskKind",
+    "condition",
+    "mode",
+    "repetition",
+    "evidenceClass",
+    "host",
+    "environment",
+    "source",
+    "limits",
+    "execution",
+    "outcome",
+    "coverage",
+    "artifacts",
+    "privacy"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.eval.run-envelope.v1"},
+    "runId": {"$ref": "#/$defs/identifier"},
+    "pairId": {"$ref": "#/$defs/identifier"},
+    "taskId": {"$ref": "#/$defs/identifier"},
+    "taskDigest": {"$ref": "#/$defs/sha256"},
+    "family": {"$ref": "#/$defs/family"},
+    "taskKind": {"type": "string", "enum": ["seeded-defect", "historical-replay", "clean-control"]},
+    "condition": {"type": "string", "enum": ["plain", "jstack"]},
+    "mode": {"type": "string", "enum": ["controlled", "operational"]},
+    "repetition": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "evidenceClass": {"type": "string", "enum": ["development-mock", "public", "holdout", "pilot"]},
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "model", "modelVersion", "permissionProfile", "jstackVersion"],
+      "properties": {
+        "name": {"$ref": "#/$defs/text256"},
+        "version": {"$ref": "#/$defs/text256"},
+        "model": {"$ref": "#/$defs/text256"},
+        "modelVersion": {"$ref": "#/$defs/text256"},
+        "permissionProfile": {"$ref": "#/$defs/text256"},
+        "jstackVersion": {"$ref": "#/$defs/text256"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imageDigest", "toolVersionsDigest"],
+      "properties": {
+        "imageDigest": {"$ref": "#/$defs/sha256"},
+        "toolVersionsDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baselineCommit", "candidateCommit"],
+      "properties": {
+        "baselineCommit": {"$ref": "#/$defs/gitCommit"},
+        "candidateCommit": {"$ref": "#/$defs/gitCommit"}
+      }
+    },
+    "limits": {"$ref": "#/$defs/budgets"},
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "startedAt",
+        "finishedAt",
+        "wallClockSeconds",
+        "activeSeconds",
+        "queueSeconds",
+        "tokenCount",
+        "toolCallCount",
+        "modelCostUsd",
+        "computeCostUsd",
+        "complete",
+        "truncated",
+        "includedInScore"
+      ],
+      "properties": {
+        "status": {"type": "string", "enum": ["completed", "failed", "blocked", "timed-out"]},
+        "startedAt": {"type": "string", "format": "date-time"},
+        "finishedAt": {"type": "string", "format": "date-time"},
+        "wallClockSeconds": {"type": "number", "minimum": 0},
+        "activeSeconds": {"type": "number", "minimum": 0},
+        "queueSeconds": {"type": "number", "minimum": 0},
+        "tokenCount": {"type": "integer", "minimum": 0},
+        "toolCallCount": {"type": "integer", "minimum": 0},
+        "modelCostUsd": {"type": "number", "minimum": 0, "maximum": 1000000},
+        "computeCostUsd": {"type": "number", "minimum": 0, "maximum": 1000000},
+        "complete": {"type": "boolean"},
+        "truncated": {"type": "boolean"},
+        "includedInScore": {"const": true}
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blockersPassed",
+        "successfulPatch",
+        "cleanTask",
+        "falseBlocked",
+        "knownVulnerabilities",
+        "detectedTruePositives",
+        "attemptedVulnerabilityFixes",
+        "correctPatches",
+        "reportedFindings",
+        "previouslyPassingAssertions",
+        "regressedAssertions",
+        "hiddenRegression",
+        "verifiedRisksIntercepted",
+        "postReleaseIncidents",
+        "rollbacks"
+      ],
+      "properties": {
+        "blockersPassed": {"type": "boolean"},
+        "successfulPatch": {"type": "boolean"},
+        "cleanTask": {"type": "boolean"},
+        "falseBlocked": {"type": "boolean"},
+        "knownVulnerabilities": {"$ref": "#/$defs/count"},
+        "detectedTruePositives": {"$ref": "#/$defs/count"},
+        "attemptedVulnerabilityFixes": {"$ref": "#/$defs/count"},
+        "correctPatches": {"$ref": "#/$defs/count"},
+        "reportedFindings": {"$ref": "#/$defs/count"},
+        "previouslyPassingAssertions": {"$ref": "#/$defs/count"},
+        "regressedAssertions": {"$ref": "#/$defs/count"},
+        "hiddenRegression": {"type": "boolean"},
+        "verifiedRisksIntercepted": {"$ref": "#/$defs/count"},
+        "postReleaseIncidents": {"$ref": "#/$defs/count"},
+        "rollbacks": {"$ref": "#/$defs/count"}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline", "candidate"],
+      "properties": {
+        "baseline": {"$ref": "#/$defs/coverage"},
+        "candidate": {"$ref": "#/$defs/coverage"}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hiddenTestBundleSha256", "resultSha256"],
+      "properties": {
+        "hiddenTestBundleSha256": {"$ref": "#/$defs/sha256"},
+        "resultSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containsSource", "containsPrompt", "containsModelOutput", "containsCommandOutput", "containsIdentity"],
+      "properties": {
+        "containsSource": {"const": false},
+        "containsPrompt": {"const": false},
+        "containsModelOutput": {"const": false},
+        "containsCommandOutput": {"const": false},
+        "containsIdentity": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "text256": {"type": "string", "minLength": 1, "maxLength": 256},
+    "count": {"type": "integer", "minimum": 0},
+    "family": {
+      "type": "string",
+      "enum": ["typescript-web", "python-api", "java-csharp-service", "c-cpp-system", "data-database", "legacy-repository"]
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wallClockSeconds", "tokenLimit", "costUsd", "toolCallLimit", "allowedToolsDigest"],
+      "properties": {
+        "wallClockSeconds": {"type": "integer", "minimum": 1},
+        "tokenLimit": {"type": "integer", "minimum": 1},
+        "costUsd": {"type": "number", "minimum": 0, "maximum": 1000000},
+        "toolCallLimit": {"type": "integer", "minimum": 0},
+        "allowedToolsDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "branch", "mutation"],
+      "properties": {
+        "line": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "branch": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "mutation": {"type": ["number", "null"], "minimum": 0, "maximum": 100}
+      }
+    }
+  }
+}

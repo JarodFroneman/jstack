@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "jstack.eval.corpus-manifest.v1",
+  "corpusId": "jstack.proof.public-development.v1",
+  "corpusVersion": "0.1.0",
+  "status": "development-only",
+  "description": "Public development manifest for the future JStack real-project Proof Plane. It defines six target families and 18 planned task slots but contains no real-project benchmark results in alpha.10.",
+  "benchmarkTiers": [
+    {
+      "id": "tier0",
+      "purpose": "Deterministic protocol regression over JStack's existing 12 inert audit fixtures.",
+      "availability": "available",
+      "source": "mcp/jstack/audit/benchmark-corpus/manifest.v1.json"
+    },
+    {
+      "id": "tier1",
+      "purpose": "Purpose-built full repositories with seeded defects, historical-style tasks, and clean controls.",
+      "availability": "planned",
+      "source": "Future content-addressed external corpus; not bundled with JStack core."
+    },
+    {
+      "id": "tier2",
+      "purpose": "Licensed historical issue replay from immutable public repositories.",
+      "availability": "planned",
+      "source": "Future content-addressed external corpus; not bundled with JStack core."
+    },
+    {
+      "id": "tier3",
+      "purpose": "Consented, privacy-minimised independent-team pilots on real private projects.",
+      "availability": "planned",
+      "source": "Opt-in local-first pilot records; source and private repository data are prohibited from export."
+    },
+    {
+      "id": "holdout",
+      "purpose": "Rotating sealed behavioural and security cases unavailable during model execution.",
+      "availability": "sealed",
+      "source": "Future independently controlled holdout; answer keys remain unavailable until each run completes."
+    }
+  ],
+  "targetFamilies": [
+    {
+      "id": "typescript-web",
+      "languages": ["typescript", "javascript"],
+      "plannedTaskKinds": ["seeded-defect", "historical-replay", "clean-control"],
+      "plannedTaskCount": 3,
+      "independentVerification": [
+        "Playwright or Cypress browser behaviour",
+        "API contract tests",
+        "axe accessibility evidence",
+        "console and network failure checks",
+        "authentication and XSS negative tests",
+        "performance budget"
+      ]
+    },
+    {
+      "id": "python-api",
+      "languages": ["python"],
+      "plannedTaskKinds": ["seeded-defect", "historical-replay", "clean-control"],
+      "plannedTaskCount": 3,
+      "independentVerification": [
+        "pytest behaviour tests",
+        "property or API fuzzing",
+        "OpenAPI compatibility",
+        "authorization negatives",
+        "transaction and idempotency tests"
+      ]
+    },
+    {
+      "id": "java-csharp-service",
+      "languages": ["java", "csharp"],
+      "plannedTaskKinds": ["seeded-defect", "historical-replay", "clean-control"],
+      "plannedTaskCount": 3,
+      "independentVerification": [
+        "JUnit or dotnet test",
+        "API snapshots",
+        "concurrency checks",
+        "authorization negatives",
+        "deserialization checks"
+      ]
+    },
+    {
+      "id": "c-cpp-system",
+      "languages": ["c", "cpp"],
+      "plannedTaskKinds": ["seeded-defect", "historical-replay", "clean-control"],
+      "plannedTaskCount": 3,
+      "independentVerification": [
+        "CTest behaviour tests",
+        "ASan UBSan or TSan",
+        "fuzz corpus",
+        "memory and integer safety",
+        "ABI compatibility"
+      ]
+    },
+    {
+      "id": "data-database",
+      "languages": ["sql", "python", "typescript"],
+      "plannedTaskKinds": ["seeded-defect", "historical-replay", "clean-control"],
+      "plannedTaskCount": 3,
+      "independentVerification": [
+        "isolated Postgres environment",
+        "migration up and down",
+        "row-access tests",
+        "data invariants",
+        "query-result and plan budgets"
+      ]
+    },
+    {
+      "id": "legacy-repository",
+      "languages": ["mixed", "legacy"],
+      "plannedTaskKinds": ["seeded-defect", "historical-replay", "clean-control"],
+      "plannedTaskCount": 3,
+      "independentVerification": [
+        "characterisation tests",
+        "golden outputs",
+        "protocol snapshots",
+        "old-runtime builds",
+        "differential behaviour"
+      ]
+    }
+  ],
+  "taskFiles": [],
+  "executionPlan": {
+    "planId": "not-runnable-alpha.10",
+    "evidenceClass": "none",
+    "expectedRuns": []
+  },
+  "integrity": {
+    "digestAlgorithm": "sha256-raw-bytes-v1",
+    "lockPath": "corpus/corpus-lock.json"
+  },
+  "claimBoundary": {
+    "realProjectResultsAvailable": false,
+    "hostModelComparisonAvailable": false,
+    "jstackUpliftClaimAllowed": false,
+    "zeroDayDetectionClaimAllowed": false,
+    "note": "Alpha.10 proves only that contracts, integrity checks, mock execution, and scoring are deterministic. It does not prove real-project performance, host superiority, professional-grade output, or universal zero-day detection."
+  }
+}

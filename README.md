@@ -143,10 +143,11 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.10.0-alpha.9
+## What Ships In v0.10.0-alpha.10
 
 | Capability | What it provides |
 | --- | --- |
+| Proof Foundation | Development-only closed corpus/task/run/review/score contracts, a deterministic network-free mock host and scorer, a six-family/18-slot public development manifest, raw-byte content locking, alpha.9 contract snapshots, and CI-enforced anti-bloat boundaries; it adds no installed command, MCP tool, dependency, authority, or real-project performance claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
 | Correctness And Reliability Stage 2 | Closed report and reproduction contracts for exact-Git-bound logic, state-transition, error-handling, and reliability evidence; strong claims require current source hashes, violated invariants, reciprocal static or exact-QA reproductions, complete regression plans, and two deterministic independent passes |
@@ -181,6 +182,20 @@ The four shared-gate workflows pass the gate's `readinessReceipt` and exact
 `normalizedBrief` forward as `context_readiness_receipt` and `context_brief`.
 Planning verifies the pair so sourced facts, disclosed assumptions, and exact
 Audit selectors cannot be silently changed after intake.
+
+### Development-only Proof Plane
+
+The [Proof Plane](evals/README.md) surrounds the installed product without
+expanding it. Alpha.10 validates five versioned benchmark contracts, a
+six-family public development manifest, content digests, deterministic mock
+execution and scoring, exact execution-plan completeness, and the frozen
+alpha.9 product surface. Expected runs are manifest-bound so omitted failures
+cannot vanish from the denominator, while controlled comparisons bind host,
+model, JStack, environment, allowed tools, tool-call limits, and budgets. Its
+mock results are protocol fixtures—not evidence that JStack beats plain
+prompting, that Codex beats Claude, or that JStack finds every security defect.
+Real-project tasks, host runners, external pilots, evidence bridges, and public
+aggregate reports remain later measured milestones.
 
 ## Host Compatibility
 
@@ -420,6 +435,7 @@ environment.
 | [`plugins/`](plugins/) | Five dedicated command plugins |
 | [`plugin/`](plugin/) | Optional all-in-one plugin with portable launcher |
 | [`mastery/`](mastery/) | Engineering, audit, and loop curricula |
+| [`evals/`](evals/) | Development-only Proof Plane contracts, manifest, lock, mock runner, and deterministic scorer; never installed into JStack core |
 | [`tests/`](tests/) | Unit, transport, adversarial, release, mastery, installation, and orchestration tests |
 | [`docs/`](docs/) | Operating models, protocols, migration guides, and architecture decisions |
 | [`jstack.enterprise.json`](jstack.enterprise.json) | This repository's executable JStack policy |
@@ -429,20 +445,25 @@ environment.
 ```bash
 python3 scripts/sync_artifacts.py --write
 python3 scripts/sync_artifacts.py --check
-python3 -m compileall -q mcp scripts tests
+python3 scripts/check_contract_compatibility.py
+python3 scripts/check_product_boundaries.py
+python3 -m evals.runner.cli verify-lock
+python3 -m compileall -q mcp scripts tests evals
 python3 -m unittest discover -s tests -v
 python3 mcp/jstack/smoke_test.py
 ```
 
 CI runs the same release-critical checks on Ubuntu, macOS, and Windows with
 Python 3.9 and 3.12, including capability-routing, receipt-tamper, privacy,
-artifact-parity, installation, and orchestration adversarial tests.
+artifact-parity, installation, orchestration, alpha.9 contract compatibility,
+Proof Plane integrity, and permanent product-boundary tests.
 
 ## Documentation
 
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-alpha.10 migration guide](docs/migration-0.10.0-alpha.10.md) | [Proof Foundation decision](docs/adr/0020-proof-foundation.md) |
 | [v0.10.0-alpha.9 migration guide](docs/migration-0.10.0-alpha.9.md) | [Enterprise Audit Lead decision](docs/adr/0019-enterprise-audit-lead-stage8.md) |
 | [v0.10.0-alpha.8 migration guide](docs/migration-0.10.0-alpha.8.md) | [Dynamic and Adversarial Verification decision](docs/adr/0018-dynamic-adversarial-verification-stage7.md) |
 | [v0.10.0-alpha.7 migration guide](docs/migration-0.10.0-alpha.7.md) | [Supply-Chain, Build and Release Integrity decision](docs/adr/0017-supply-chain-build-release-stage6.md) |

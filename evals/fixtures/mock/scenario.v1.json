@@ -1,0 +1,192 @@
+{
+  "schemaVersion": "jstack.eval.mock-scenario.v1",
+  "corpus": {
+    "id": "jstack.proof.mock.v1",
+    "version": "1.0.0"
+  },
+  "host": {
+    "name": "jstack-proof-mock",
+    "version": "1.0.0",
+    "model": "deterministic-fixture",
+    "modelVersion": "1",
+    "permissionProfile": "no-network-no-write",
+    "jstackVersion": "0.10.0-alpha.10"
+  },
+  "environment": {
+    "imageDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "toolVersionsDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "mode": "controlled",
+  "startedAt": "2026-08-12T00:00:00Z",
+  "limits": {
+    "wallClockSeconds": 300,
+    "tokenLimit": 5000,
+    "costUsd": 20.0,
+    "toolCallLimit": 100,
+    "allowedToolsDigest": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "tasks": [
+    {
+      "taskId": "mock-python-authz-defect",
+      "family": "python-api",
+      "taskKind": "seeded-defect",
+      "baselineCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hiddenTestBundleSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "knownVulnerabilities": 1,
+      "cleanTask": false,
+      "previouslyPassingAssertions": 100,
+      "baselineCoverage": {
+        "line": 70.0,
+        "branch": 60.0,
+        "mutation": 40.0
+      },
+      "conditions": {
+        "plain": {
+          "status": "completed",
+          "wallClockSeconds": 30.0,
+          "activeSeconds": 28.0,
+          "queueSeconds": 2.0,
+          "tokenCount": 1000,
+          "toolCallCount": 4,
+          "modelCostUsd": 1.0,
+          "computeCostUsd": 0.1,
+          "blockersPassed": false,
+          "successfulPatch": false,
+          "falseBlocked": false,
+          "detectedTruePositives": 0,
+          "attemptedVulnerabilityFixes": 0,
+          "correctPatches": 0,
+          "reportedFindings": 0,
+          "regressedAssertions": 0,
+          "hiddenRegression": false,
+          "verifiedRisksIntercepted": 0,
+          "postReleaseIncidents": 0,
+          "rollbacks": 0,
+          "candidateCoverage": {
+            "line": 70.0,
+            "branch": 60.0,
+            "mutation": 40.0
+          },
+          "reviewAccepted": false,
+          "reviewerFalseFindings": 0,
+          "reviewerEscapes": 1,
+          "reviewMinutesPerReviewer": 10.0,
+          "reviewCostUsdPerReviewer": 5.0
+        },
+        "jstack": {
+          "status": "completed",
+          "wallClockSeconds": 45.0,
+          "activeSeconds": 42.0,
+          "queueSeconds": 3.0,
+          "tokenCount": 1500,
+          "toolCallCount": 8,
+          "modelCostUsd": 1.5,
+          "computeCostUsd": 0.2,
+          "blockersPassed": true,
+          "successfulPatch": true,
+          "falseBlocked": false,
+          "detectedTruePositives": 1,
+          "attemptedVulnerabilityFixes": 1,
+          "correctPatches": 1,
+          "reportedFindings": 1,
+          "regressedAssertions": 0,
+          "hiddenRegression": false,
+          "verifiedRisksIntercepted": 1,
+          "postReleaseIncidents": 0,
+          "rollbacks": 0,
+          "candidateCoverage": {
+            "line": 75.0,
+            "branch": 65.0,
+            "mutation": 50.0
+          },
+          "reviewAccepted": true,
+          "reviewerFalseFindings": 0,
+          "reviewerEscapes": 0,
+          "reviewMinutesPerReviewer": 8.0,
+          "reviewCostUsdPerReviewer": 4.0
+        }
+      }
+    },
+    {
+      "taskId": "mock-typescript-clean-control",
+      "family": "typescript-web",
+      "taskKind": "clean-control",
+      "baselineCommit": "cccccccccccccccccccccccccccccccccccccccc",
+      "hiddenTestBundleSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "knownVulnerabilities": 0,
+      "cleanTask": true,
+      "previouslyPassingAssertions": 80,
+      "baselineCoverage": {
+        "line": 68.0,
+        "branch": 55.0,
+        "mutation": 35.0
+      },
+      "conditions": {
+        "plain": {
+          "status": "completed",
+          "wallClockSeconds": 20.0,
+          "activeSeconds": 18.0,
+          "queueSeconds": 2.0,
+          "tokenCount": 700,
+          "toolCallCount": 3,
+          "modelCostUsd": 0.7,
+          "computeCostUsd": 0.1,
+          "blockersPassed": true,
+          "successfulPatch": false,
+          "falseBlocked": false,
+          "detectedTruePositives": 0,
+          "attemptedVulnerabilityFixes": 0,
+          "correctPatches": 0,
+          "reportedFindings": 0,
+          "regressedAssertions": 0,
+          "hiddenRegression": false,
+          "verifiedRisksIntercepted": 0,
+          "postReleaseIncidents": 0,
+          "rollbacks": 0,
+          "candidateCoverage": {
+            "line": 68.0,
+            "branch": 55.0,
+            "mutation": 35.0
+          },
+          "reviewAccepted": true,
+          "reviewerFalseFindings": 0,
+          "reviewerEscapes": 0,
+          "reviewMinutesPerReviewer": 6.0,
+          "reviewCostUsdPerReviewer": 3.0
+        },
+        "jstack": {
+          "status": "completed",
+          "wallClockSeconds": 32.0,
+          "activeSeconds": 29.0,
+          "queueSeconds": 3.0,
+          "tokenCount": 1100,
+          "toolCallCount": 6,
+          "modelCostUsd": 1.1,
+          "computeCostUsd": 0.15,
+          "blockersPassed": true,
+          "successfulPatch": false,
+          "falseBlocked": false,
+          "detectedTruePositives": 0,
+          "attemptedVulnerabilityFixes": 0,
+          "correctPatches": 0,
+          "reportedFindings": 1,
+          "regressedAssertions": 0,
+          "hiddenRegression": false,
+          "verifiedRisksIntercepted": 0,
+          "postReleaseIncidents": 0,
+          "rollbacks": 0,
+          "candidateCoverage": {
+            "line": 69.0,
+            "branch": 56.0,
+            "mutation": 36.0
+          },
+          "reviewAccepted": true,
+          "reviewerFalseFindings": 1,
+          "reviewerEscapes": 0,
+          "reviewMinutesPerReviewer": 7.0,
+          "reviewCostUsdPerReviewer": 3.5
+        }
+      }
+    }
+  ]
+}

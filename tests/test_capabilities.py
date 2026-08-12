@@ -231,6 +231,13 @@ class CapabilityRegistryTests(unittest.TestCase):
             }.issubset(tool_names)
         )
         self.assertEqual(5, len(list((ROOT / "prompts").glob("*.md"))))
+        umbrella_mcp = json.loads(
+            (ROOT / "plugin" / ".mcp.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            1900,
+            umbrella_mcp["mcpServers"]["jstack"]["tool_timeout_sec"],
+        )
 
         schemas = {
             "capability-catalog.v1.schema.json": "jstack.capability.catalog.v1",

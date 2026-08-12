@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/evals/schemas/score.v1.schema.json",
+  "title": "JStack Proof Plane Deterministic Score v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "scorerVersion",
+    "corpus",
+    "inputDigests",
+    "runCounts",
+    "quality",
+    "efficiency",
+    "reviewOutcomes",
+    "conditionBreakdown",
+    "uplift",
+    "claimBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.eval.score.v1"},
+    "scorerVersion": {"const": "jstack.eval.scorer.v1"},
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "evidenceClass"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "version": {"$ref": "#/$defs/identifier"},
+        "evidenceClass": {"type": "string", "enum": ["development-mock", "public", "holdout", "pilot", "mixed"]}
+      }
+    },
+    "inputDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256", "runsSha256", "reviewsSha256"],
+      "properties": {
+        "manifestSha256": {"$ref": "#/$defs/sha256"},
+        "runsSha256": {"$ref": "#/$defs/sha256"},
+        "reviewsSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempted", "included", "completedExecution", "failed", "blocked", "timedOut"],
+      "properties": {
+        "attempted": {"$ref": "#/$defs/count"},
+        "included": {"$ref": "#/$defs/count"},
+        "completedExecution": {"$ref": "#/$defs/count"},
+        "failed": {"$ref": "#/$defs/count"},
+        "blocked": {"$ref": "#/$defs/count"},
+        "timedOut": {"$ref": "#/$defs/count"}
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskCompletion",
+        "vulnerabilityRecall",
+        "correctPatchRate",
+        "falseDiscoveryRate",
+        "cleanCaseFalseBlockerRate",
+        "taskRegressionRate",
+        "assertionRegressionRate",
+        "coverageImprovement"
+      ],
+      "properties": {
+        "taskCompletion": {"$ref": "#/$defs/rate"},
+        "vulnerabilityRecall": {"$ref": "#/$defs/rate"},
+        "correctPatchRate": {"$ref": "#/$defs/rate"},
+        "falseDiscoveryRate": {"$ref": "#/$defs/rate"},
+        "cleanCaseFalseBlockerRate": {"$ref": "#/$defs/rate"},
+        "taskRegressionRate": {"$ref": "#/$defs/rate"},
+        "assertionRegressionRate": {"$ref": "#/$defs/rate"},
+        "coverageImprovement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line", "branch", "mutation"],
+          "properties": {
+            "line": {"$ref": "#/$defs/delta"},
+            "branch": {"$ref": "#/$defs/delta"},
+            "mutation": {"$ref": "#/$defs/delta"}
+          }
+        }
+      }
+    },
+    "efficiency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["costUsd", "tokenCount", "toolCallCount", "humanReviewMinutes", "wallClockSeconds", "activeSeconds", "queueSeconds"],
+      "properties": {
+        "costUsd": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "compute", "humanReview", "total"],
+          "properties": {
+            "model": {"$ref": "#/$defs/nonnegativeNumber"},
+            "compute": {"$ref": "#/$defs/nonnegativeNumber"},
+            "humanReview": {"$ref": "#/$defs/nonnegativeNumber"},
+            "total": {"$ref": "#/$defs/nonnegativeNumber"}
+          }
+        },
+        "tokenCount": {"$ref": "#/$defs/count"},
+        "toolCallCount": {"$ref": "#/$defs/count"},
+        "humanReviewMinutes": {"$ref": "#/$defs/nonnegativeNumber"},
+        "wallClockSeconds": {"$ref": "#/$defs/timing"},
+        "activeSeconds": {"$ref": "#/$defs/timing"},
+        "queueSeconds": {"$ref": "#/$defs/timing"}
+      }
+    },
+    "reviewOutcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptedRuns", "rejectedRuns", "humanReviewEscapes", "verifiedRisksInterceptedBeforeMerge", "postReleaseIncidents", "rollbacks"],
+      "properties": {
+        "acceptedRuns": {"$ref": "#/$defs/count"},
+        "rejectedRuns": {"$ref": "#/$defs/count"},
+        "humanReviewEscapes": {"$ref": "#/$defs/count"},
+        "verifiedRisksInterceptedBeforeMerge": {"$ref": "#/$defs/count"},
+        "postReleaseIncidents": {"$ref": "#/$defs/count"},
+        "rollbacks": {"$ref": "#/$defs/count"}
+      }
+    },
+    "conditionBreakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plain", "jstack"],
+      "properties": {
+        "plain": {"$ref": "#/$defs/conditionSummary"},
+        "jstack": {"$ref": "#/$defs/conditionSummary"}
+      }
+    },
+    "uplift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controlled", "operational", "hostModelConfigurationComparisonAvailable"],
+      "properties": {
+        "controlled": {"$ref": "#/$defs/uplift"},
+        "operational": {"$ref": "#/$defs/uplift"},
+        "hostModelConfigurationComparisonAvailable": {"type": "boolean"}
+      }
+    },
+    "claimBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["marketingClaimAllowed", "universalZeroDayClaimAllowed", "note"],
+      "properties": {
+        "marketingClaimAllowed": {"const": false},
+        "universalZeroDayClaimAllowed": {"const": false},
+        "note": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0},
+    "nonnegativeNumber": {"type": "number", "minimum": 0},
+    "nullableRate": {"type": ["number", "null"], "minimum": -1, "maximum": 1},
+    "interval": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "items": false, "minItems": 2, "maxItems": 2}
+      ]
+    },
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "rate", "confidenceInterval95"],
+      "properties": {
+        "numerator": {"$ref": "#/$defs/count"},
+        "denominator": {"$ref": "#/$defs/count"},
+        "rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "confidenceInterval95": {"$ref": "#/$defs/interval"}
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "meanPercentagePoints"],
+      "properties": {
+        "sampleCount": {"$ref": "#/$defs/count"},
+        "meanPercentagePoints": {"type": ["number", "null"], "minimum": -100, "maximum": 100}
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "p50", "p90"],
+      "properties": {
+        "sampleCount": {"$ref": "#/$defs/count"},
+        "p50": {"type": ["number", "null"], "minimum": 0},
+        "p90": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "conditionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runCounts", "quality", "efficiency", "reviewOutcomes"],
+      "properties": {
+        "runCounts": {"$ref": "#/properties/runCounts"},
+        "quality": {"$ref": "#/properties/quality"},
+        "efficiency": {"$ref": "#/properties/efficiency"},
+        "reviewOutcomes": {"$ref": "#/properties/reviewOutcomes"}
+      }
+    },
+    "uplift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pairCount", "unmatchedPairCount", "plainCompletion", "jstackCompletion", "pairedDifference", "confidenceInterval95"],
+      "properties": {
+        "pairCount": {"$ref": "#/$defs/count"},
+        "unmatchedPairCount": {"$ref": "#/$defs/count"},
+        "plainCompletion": {"$ref": "#/$defs/rate"},
+        "jstackCompletion": {"$ref": "#/$defs/rate"},
+        "pairedDifference": {"$ref": "#/$defs/nullableRate"},
+        "confidenceInterval95": {"$ref": "#/$defs/interval"}
+      }
+    }
+  }
+}

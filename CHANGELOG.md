@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.10.0-alpha.10 - 2026-08-12
+
+### Added
+
+- Added a development-only `evals/` Proof Plane outside the installed MCP and
+  plugin payloads, with closed v1 corpus, task, run-envelope, blinded-review,
+  and score contracts.
+- Added a deterministic, standard-library-only mock host and scorer that
+  reports raw counts, Wilson 95% intervals, task completion, vulnerability
+  recall, correct-patch rate, false findings, clean-case false blockers,
+  regressions, line/branch/mutation deltas, cost, time, human-review escapes,
+  verified risks intercepted before merge, and paired JStack uplift.
+- Added a public development manifest for TypeScript/web, Python APIs,
+  Java/C# services, C/C++ systems, data/database projects, and legacy
+  repositories. It declares three planned task kinds per family without
+  claiming that the 18 real-project tasks or results already exist.
+- Added a raw-byte corpus lock, deterministic mock fixture, adversarial
+  contract tests, and explicit privacy/claim boundaries.
+- Added manifest-bound execution plans that reject missing or extra runs;
+  public plans require all 18 family/task-kind slots, both comparison modes,
+  exact plain/JStack pairs, and at least three repetitions per condition.
+- Added an alpha.9 public-contract snapshot covering the five commands, 52
+  canonical MCP request schemas, 52 legacy aliases, published core schemas,
+  persisted-state markers, plugin layouts, protocol versions, roles,
+  capabilities, and launch-catalog counts.
+- Added CI-enforced contract-compatibility and permanent product-boundary
+  checks.
+
+### Changed
+
+- Corrected the release checklist template to use explicit conversational
+  scope and ordinary host/provider controls. Retired challenge, token, signer,
+  permit-mailbox, and terminal-paste fields were removed.
+- Development verification now compiles `evals/`, verifies the Proof Plane
+  lock, checks alpha.9 compatibility, and enforces five commands, 52 canonical
+  tools, 11 roles, 18 capability packs, 47 launch controls, a standard-library
+  core, and exclusion of Proof Plane files from installed artifacts.
+- Increased the MCP transport timeout from 300 to 1,900 seconds across direct
+  and umbrella installations. This covers the longest permitted 1,800-second
+  capture plus bounded receipt overhead; workflow command budgets remain
+  independently bounded.
+- Preserved the installed runtime and all existing tool request contracts; the
+  release adds no command, MCP tool, vendor SDK, runtime dependency, scanner,
+  network importer, role, or external authority.
+
+### Security
+
+- Failed, blocked, and timed-out benchmark runs cannot be removed from scoring.
+  Controlled pairs must use identical task, host-model-JStack, image,
+  toolchain, allowed-tool, tool-call-limit, repetition, and budget bindings;
+  every run requires exactly two unique independent blinded reviewers, with a
+  distinct third adjudicator only for disagreement.
+- Correct-patch credit requires completed, untruncated, blocker-passing,
+  regression-free execution. Rate intervals are recomputed from raw counts,
+  and paired uplift uses a conservative distribution-free interval rather than
+  reporting false certainty from small identical samples.
+- Run envelopes prohibit source, prompts, model output, command output, and
+  human identity. The mock runner performs no project execution, network
+  access, source fetch, model call, or filesystem mutation.
+- Alpha.10 mock results prove protocol determinism only. They are not evidence
+  of real-project performance, host superiority, universal zero-day detection,
+  professional-grade output, or production readiness.
+
 ## 0.10.0-alpha.9 - 2026-08-10
 
 ### Added

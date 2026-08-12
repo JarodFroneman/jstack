@@ -3141,6 +3141,7 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertEqual(old_config, backup)
             self.assertNotIn("[mcp_servers.gstack]", updated)
             self.assertIn("[mcp_servers.jstack]", updated)
+            self.assertIn("tool_timeout_sec = 1900.0", updated)
             self.assertIn("[other]", updated)
             self.assertFalse((codex_home / "mcp" / "jstack" / "old.txt").exists())
             self.assertIn("name: jstack-audit", (codex_home / "skills" / "jstack-audit" / "SKILL.md").read_text())
@@ -5353,7 +5354,9 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertTrue((codex_home / "skills" / "jstack-audit" / "SKILL.md").exists())
             self.assertTrue((codex_home / "prompts" / "jstack-loop.md").exists())
             self.assertTrue((codex_home / "skills" / "jstack-loop" / "SKILL.md").exists())
-            self.assertIn("[mcp_servers.jstack]", (codex_home / "config.toml").read_text())
+            installed_config = (codex_home / "config.toml").read_text()
+            self.assertIn("[mcp_servers.jstack]", installed_config)
+            self.assertIn("tool_timeout_sec = 1900.0", installed_config)
 
 
 if __name__ == "__main__":

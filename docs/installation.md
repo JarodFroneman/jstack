@@ -111,8 +111,12 @@ Add one server block to `~/.codex/config.toml`, using absolute paths:
 command = "/absolute/path/to/python3"
 args = ["/absolute/path/to/.codex/mcp/jstack/jstack_mcp_server.py"]
 startup_timeout_sec = 30.0
-tool_timeout_sec = 300.0
+tool_timeout_sec = 1900.0
 ```
+
+The 1,900-second transport window covers JStack's longest permitted 1,800-second
+capture plus bounded teardown and receipt serialization. Individual command
+budgets remain independently bounded by each workflow contract.
 
 Do not configure the MCP from both the shared installation and the umbrella
 plugin.
@@ -210,7 +214,7 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.9`);
+  prerelease, `0.10.0-alpha.10`);
 - `tools/list` includes 52 canonical `jstack_*` tools, including
   `jstack_context_readiness`, `jstack_performance_capture`, and
   `jstack_adversarial_capture`.
