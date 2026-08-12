@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "jstack.eval.corpus-lock.v1",
+  "corpusId": "jstack.proof.public-development.v1",
+  "digestAlgorithm": "sha256-raw-bytes-v1",
+  "files": [
+    {
+      "path": "corpus/public/manifest.v1.json",
+      "sha256": "1ced700b028f40d4ca41b943317ddf5c0dae28ec6c677a4eb99c298aa109f803"
+    },
+    {
+      "path": "fixtures/mock/scenario.v1.json",
+      "sha256": "48c96abbf2f3e90abd0d5807d0ae5e4da7054f95d9ff2f72adce54481a2e03b4"
+    },
+    {
+      "path": "runner/contracts.py",
+      "sha256": "653f3d71b5e6e1f34fc337af874a1254f8e15e631ed6c7d0f0b1e17eb347d540"
+    },
+    {
+      "path": "runner/mock.py",
+      "sha256": "db2718cfbbeca641ddaa2f36f75919ffd3f66655cb6f9d899bb762fb4417ecdc"
+    },
+    {
+      "path": "runner/score.py",
+      "sha256": "831eb9dc92442e70fa404c34695528633ca31a4d8f694b62742ab54ac64e469e"
+    },
+    {
+      "path": "schemas/corpus-manifest.v1.schema.json",
+      "sha256": "6c915efd0ccc84824921c4ab02535f862c6f0ddd77c7ad4be32dbfd1dd458ca8"
+    },
+    {
+      "path": "schemas/human-review.v1.schema.json",
+      "sha256": "6a8488a2976761c212811cff57f3b679953d6531ab75cce48d447223f12ae32b"
+    },
+    {
+      "path": "schemas/run-envelope.v1.schema.json",
+      "sha256": "b2bd4ad352efb3e1e67567e6c646d44d8676e24b274788cae70035a80b7acf9d"
+    },
+    {
+      "path": "schemas/score.v1.schema.json",
+      "sha256": "28492729e67dc5babe52dafa36659db18981e3cd56b6446cac4c2d53913a90ad"
+    },
+    {
+      "path": "schemas/task.v1.schema.json",
+      "sha256": "634e458572ebc2f7a8fe356226d686d913f33b6164ea44be9d792596b3109fed"
+    }
+  ]
+}

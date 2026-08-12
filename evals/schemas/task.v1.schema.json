@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/evals/schemas/task.v1.schema.json",
+  "title": "JStack Proof Plane Benchmark Task v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "family",
+    "tier",
+    "taskKind",
+    "source",
+    "environment",
+    "brief",
+    "baseline",
+    "changeBoundary",
+    "budgets",
+    "holdout",
+    "invariants",
+    "expectedOutcome"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.eval.task.v1"},
+    "taskId": {"$ref": "#/$defs/identifier"},
+    "family": {"$ref": "#/$defs/family"},
+    "tier": {"type": "string", "enum": ["tier1", "tier2", "tier3", "holdout"]},
+    "taskKind": {"$ref": "#/$defs/taskKind"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["upstreamRepository", "upstreamCommit", "sourceArchiveSha256", "licenseSpdx", "redistribution"],
+      "properties": {
+        "upstreamRepository": {"type": "string", "pattern": "^https://", "maxLength": 500},
+        "upstreamCommit": {"$ref": "#/$defs/gitCommit"},
+        "sourceArchiveSha256": {"$ref": "#/$defs/sha256"},
+        "licenseSpdx": {"type": "string", "minLength": 1, "maxLength": 128},
+        "redistribution": {"type": "string", "enum": ["allowed", "cache-only", "prohibited"]}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isolation", "imageReference", "imageDigest", "toolVersions", "network"],
+      "properties": {
+        "isolation": {"type": "string", "enum": ["container", "microvm"]},
+        "imageReference": {"type": "string", "minLength": 1, "maxLength": 500},
+        "imageDigest": {"$ref": "#/$defs/sha256"},
+        "toolVersions": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 64,
+          "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 128}
+        },
+        "network": {"const": "disabled-default"}
+      }
+    },
+    "brief": {"$ref": "#/$defs/pathDigest"},
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "testResultSha256"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/gitCommit"},
+        "testResultSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "changeBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowedPaths", "forbiddenPaths", "maxChangedFiles"],
+      "properties": {
+        "allowedPaths": {"$ref": "#/$defs/pathList"},
+        "forbiddenPaths": {"$ref": "#/$defs/pathList"},
+        "maxChangedFiles": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wallClockSeconds", "tokenLimit", "costUsd"],
+      "properties": {
+        "wallClockSeconds": {"type": "integer", "minimum": 1},
+        "tokenLimit": {"type": "integer", "minimum": 1},
+        "costUsd": {"type": "number", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "holdout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hiddenTestBundleSha256", "answerKeyAccess"],
+      "properties": {
+        "hiddenTestBundleSha256": {"$ref": "#/$defs/sha256"},
+        "answerKeyAccess": {"const": "sealed-until-run-complete"}
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["security", "compatibility", "regression"],
+      "properties": {
+        "security": {"$ref": "#/$defs/invariantList"},
+        "compatibility": {"$ref": "#/$defs/invariantList"},
+        "regression": {"$ref": "#/$defs/invariantList"}
+      }
+    },
+    "expectedOutcome": {"type": "string", "enum": ["fixed", "safely-refused", "correctly-blocked"]}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^(?!/)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\).+$"
+    },
+    "family": {
+      "type": "string",
+      "enum": ["typescript-web", "python-api", "java-csharp-service", "c-cpp-system", "data-database", "legacy-repository"]
+    },
+    "taskKind": {"type": "string", "enum": ["seeded-defect", "historical-replay", "clean-control"]},
+    "pathDigest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "pathList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/relativePath"}
+    },
+    "invariantList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  }
+}

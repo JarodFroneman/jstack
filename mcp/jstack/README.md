@@ -6,6 +6,9 @@ evidence, launch assurance, release readiness, and mastery progression.
 ## Boundaries
 
 - The MCP plans and validates teams; platform tools spawn real subagents.
+- The repository's `evals/` Proof Plane is development infrastructure and is
+  not copied into this installed MCP. It adds no tool, model/scanner client,
+  network importer, execution authority, or real-project quality claim.
 - Capability packs attach task-specific methods and evidence to existing roles;
   they never grant tools, write access, path scope, or release authority.
 - It does not create repositories, change remotes, commit, push, create pull

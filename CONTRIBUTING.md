@@ -11,7 +11,10 @@ Before submitting a change:
 ~~~text
 python scripts/sync_artifacts.py --write
 python scripts/sync_artifacts.py --check
-python -m compileall -q mcp scripts tests
+python scripts/check_contract_compatibility.py
+python scripts/check_product_boundaries.py
+python -m evals.runner.cli verify-lock
+python -m compileall -q mcp scripts tests evals
 python -m unittest discover -s tests -v
 python mcp/jstack/smoke_test.py
 ~~~
@@ -22,6 +25,13 @@ copies under `plugin/`.
 
 Changes to transport, policy floors, command execution, receipts, dispatch,
 installers, or release readiness require adversarial regression tests.
+
+Proof Plane changes belong under `evals/` and must remain development-only,
+standard-library-only, network-free, non-executing, and absent from every
+installed plugin or MCP tree. Update `evals/corpus/corpus-lock.json` whenever
+any locked file changes. Do not add real-project sources,
+holdout answers, private pilot data, prompts, model output, command output, or
+human identities to this repository.
 
 Audit changes must preserve deterministic output, read-only operation, stable
 finding fingerprints, fail-closed incomplete coverage, and the existing secret

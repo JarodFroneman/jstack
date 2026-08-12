@@ -17,6 +17,10 @@ Canonical sources live in:
 - the engineering, audit, and loop curricula under `mastery/`
 - `mcp/jstack/templates/`
 
+Development-only evaluation infrastructure lives under `evals/`. It is an
+authoritative source for Proof Plane contracts and tests, but it is not part of
+the installed MCP or command-plugin runtime.
+
 `scripts/sync_artifacts.py` generates and verifies plugin copies. It operates
 only on Git-tracked and explicitly declared files, compares exact generated
 tree inventories, and rejects drift, stale generated files, BOMs, malformed
@@ -92,6 +96,37 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 The MCP never spawns platform subagents and never performs repository, Git,
 provider, deployment, or production actions. Codex's platform tools perform
 real dispatch and action execution only after the applicable JStack boundary.
+
+## Proof Plane Development Boundary
+
+The Proof Plane measures JStack from outside the installed product. Its
+alpha.10 foundation consists of five closed v1 contracts, a six-family public
+development manifest, a raw-byte content lock, and an inert deterministic mock
+runner/scorer. The existing 12-fixture synthetic audit corpus remains Tier 0;
+it validates scoring protocol behavior and is not represented as a
+repository-level host benchmark.
+
+`scripts/check_product_boundaries.py` proves that the product still has the
+five named commands, 52 canonical MCP tools, 52 compatibility aliases, 11
+roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
+standard-library core. It also rejects vendor SDKs, network-capable core
+imports, packaged `evals/` content, model or scanner execution in the Proof
+Plane, and Proof Plane filesystem mutation.
+
+`scripts/check_contract_compatibility.py` compares the current server with the
+alpha.9 snapshot: command and plugin layouts, every canonical request-schema
+digest, legacy aliases, published core-schema bytes, protocol versions, and
+persisted-state markers. Alpha.10 therefore changes the reported release
+version without changing a prior public request contract in place.
+
+The scorer consumes already-produced run and blinded-review envelopes. It
+retains failed, blocked, and timed-out runs, requires equal limits for
+controlled pairs, and reports raw counts plus intervals rather than a single
+marketing score. Envelopes contain no source, prompts, model output, command
+output, or human identity. Real repository execution, source fetching, model
+clients, external scanners, host comparisons, pilots, holdout governance, and
+evidence bridges remain outside the alpha.10 scope and cannot inherit JStack
+authority merely by integrating later.
 
 ## Adaptive Context Protocol
 

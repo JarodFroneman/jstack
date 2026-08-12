@@ -24,9 +24,15 @@ jobs:
         with:
           node-version: "22"
       - name: Compile
-        run: python -m compileall -q mcp scripts tests
+        run: python -m compileall -q mcp scripts tests evals
       - name: Verify generated artifacts
         run: python scripts/sync_artifacts.py --check
+      - name: Verify public contract compatibility
+        run: python scripts/check_contract_compatibility.py
+      - name: Verify product boundaries
+        run: python scripts/check_product_boundaries.py
+      - name: Verify Proof Plane corpus lock
+        run: python -m evals.runner.cli verify-lock
       - name: Unit and adversarial tests
         run: python -m unittest discover -s tests -v
       - name: Independent MCP smoke test

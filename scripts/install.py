@@ -173,7 +173,7 @@ def mcp_block(install_dir: Path) -> str:
 command = {json.dumps(command)}
 args = [{json.dumps(server)}]
 startup_timeout_sec = 30.0
-tool_timeout_sec = 300.0
+tool_timeout_sec = 1900.0
 """.strip()
 
 

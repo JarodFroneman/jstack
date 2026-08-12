@@ -41,7 +41,7 @@ def mcp_block() -> str:
 command = {json.dumps(command)}
 args = [{json.dumps((INSTALL_DIR / "jstack_mcp_server.py").as_posix())}]
 startup_timeout_sec = 30.0
-tool_timeout_sec = 300.0
+tool_timeout_sec = 1900.0
 """.strip()
 
 

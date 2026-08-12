@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/evals/schemas/human-review.v1.schema.json",
+  "title": "JStack Proof Plane Blinded Human Review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "protocol", "reviews", "adjudication", "consensus"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.eval.human-review.v1"},
+    "runId": {"$ref": "#/$defs/identifier"},
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blinded", "requiredReviewerCount"],
+      "properties": {
+        "blinded": {"const": true},
+        "requiredReviewerCount": {"const": 2}
+      }
+    },
+    "reviews": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewerIdDigest",
+          "independent",
+          "disposition",
+          "falseFindingCount",
+          "newCorrectnessFindings",
+          "newSecurityFindings",
+          "newOperationalFindings",
+          "reviewMinutes",
+          "reviewCostUsd"
+        ],
+        "properties": {
+          "reviewerIdDigest": {"$ref": "#/$defs/sha256"},
+          "independent": {"const": true},
+          "disposition": {"type": "string", "enum": ["accepted", "rejected"]},
+          "falseFindingCount": {"$ref": "#/$defs/count"},
+          "newCorrectnessFindings": {"$ref": "#/$defs/count"},
+          "newSecurityFindings": {"$ref": "#/$defs/count"},
+          "newOperationalFindings": {"$ref": "#/$defs/count"},
+          "reviewMinutes": {"type": "number", "minimum": 0, "maximum": 100000},
+          "reviewCostUsd": {"type": "number", "minimum": 0, "maximum": 1000000}
+        }
+      }
+    },
+    "adjudication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "completed", "adjudicatorIdDigest", "disposition"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "completed": {"type": "boolean"},
+        "adjudicatorIdDigest": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "disposition": {"type": ["string", "null"], "enum": ["accepted", "rejected", null]}
+      }
+    },
+    "consensus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted"],
+      "properties": {"accepted": {"type": "boolean"}}
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0}
+  }
+}
