@@ -2082,6 +2082,87 @@ class ProjectBindingTests(unittest.TestCase):
             self.assertEqual(str(nested.resolve()), detected["requestedPath"])
 
 
+class CrossEcosystemTestDiscoveryTests(unittest.TestCase):
+    def test_java_cmake_and_database_commands_are_ordered_and_fingerprinted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            (project / "package.json").write_text(
+                json.dumps(
+                    {
+                        "scripts": {
+                            "test": "node --test",
+                            "test:db": "node --test test/database.test.js",
+                            "migrate": "database reset --force",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for marker in ("pom.xml", "build.gradle", "settings.gradle.kts", "CMakeLists.txt", "dbt_project.yml"):
+                (project / marker).write_text("fixture\n", encoding="utf-8")
+
+            commands = server.discover_test_commands(project)
+            self.assertEqual(
+                [
+                    "npm:test",
+                    "npm:test:db",
+                    "maven:test",
+                    "gradle:test",
+                    "cmake:configure",
+                    "cmake:build",
+                    "ctest:test",
+                    "dbt:test",
+                ],
+                [command["key"] for command in commands],
+            )
+            self.assertNotIn("npm:migrate", [command["key"] for command in commands])
+            self.assertEqual(
+                ["ctest", "--test-dir", "build", "--output-on-failure", "--no-tests=error"],
+                next(command for command in commands if command["key"] == "ctest:test")["args"],
+            )
+            self.assertTrue(all(len(command["commandFingerprint"]) == 64 for command in commands))
+            self.assertTrue(all(command["executesProjectCode"] for command in commands))
+            self.assertEqual(commands, server.discover_test_commands(project))
+
+    def test_dotnet_prefers_sorted_root_solutions_over_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            for name in ("zeta.sln", "alpha.slnx", "loose.csproj"):
+                (project / name).write_text("fixture\n", encoding="utf-8")
+
+            commands = server.discover_test_commands(project)
+            self.assertEqual(
+                ["dotnet:test:alpha.slnx", "dotnet:test:zeta.sln"],
+                [command["key"] for command in commands],
+            )
+            self.assertEqual(
+                ["dotnet", "test", "alpha.slnx", "--nologo"],
+                commands[0]["args"],
+            )
+
+    def test_dotnet_falls_back_to_sorted_root_projects_and_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            for index in range(20):
+                (project / f"project-{index:02d}.csproj").write_text("fixture\n", encoding="utf-8")
+
+            commands = server.discover_test_commands(project)
+            self.assertEqual(16, len(commands))
+            self.assertEqual("dotnet:test:project-00.csproj", commands[0]["key"])
+            self.assertEqual("dotnet:test:project-15.csproj", commands[-1]["key"])
+
+    def test_migration_only_markers_do_not_create_destructive_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            project = Path(temp)
+            (project / "package.json").write_text(
+                json.dumps({"scripts": {"migrate": "db up", "db:reset": "db reset"}}),
+                encoding="utf-8",
+            )
+            (project / "migrations").mkdir()
+
+            self.assertEqual([], server.discover_test_commands(project))
+
+
 class PolicyAndDispatchTests(unittest.TestCase):
     def test_bom_policy_parses_and_cannot_weaken_floors(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

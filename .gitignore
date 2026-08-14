@@ -15,3 +15,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Local, private Proof Plane execution state. Public minimized envelopes live
+# under evals/ only after privacy and integrity validation.
+.jstack-evals/

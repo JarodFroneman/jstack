@@ -1,0 +1,39 @@
+# Loaded only through explicit `codex exec -c` overrides. User and project
+# configuration/rules are ignored by the runner.
+web_search = "disabled"
+sandbox_mode = "read-only"
+approval_policy = "never"
+history.persistence = "none"
+
+[features]
+shell_tool = false
+apps = false
+auth_elicitation = false
+plugins = false
+plugin_sharing = false
+hooks = false
+memories = false
+multi_agent = false
+unified_exec = false
+remote_plugin = false
+goals = false
+guardian_approval = false
+skill_mcp_dependency_install = false
+skill_search = false
+tool_suggest = false
+browser_use = false
+browser_use_external = false
+browser_use_full_cdp_access = false
+computer_use = false
+code_mode_host = false
+image_generation = false
+in_app_browser = false
+workspace_dependencies = false
+
+[mcp_servers.proof]
+required = true
+enabled = true
+enabled_tools = ["proof_exec", "proof_read_file", "proof_apply_patch", "proof_git_evidence"]
+startup_timeout_sec = 10
+tool_timeout_sec = 1810
+default_tools_approval_mode = "approve"

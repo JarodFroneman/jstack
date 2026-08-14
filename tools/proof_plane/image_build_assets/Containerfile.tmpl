@@ -1,0 +1,19 @@
+# Generated only from one reviewed jstack.eval.image-build-input-lock.v2 document.
+# Every ADD source is a local, content-digested canonical rootfs tar.
+FROM @@BASE_IMAGE@@
+@@COMPONENT_ADDS@@
+COPY --chmod=0500 runtime/jstack-proof-canary /usr/local/bin/jstack-proof-canary
+COPY --chmod=0500 runtime/jstack-proof-canary-launcher /usr/local/bin/jstack-proof-canary-launcher
+COPY --chmod=0500 runtime/jstack-proof-tool-report /usr/local/bin/jstack-proof-tool-report
+COPY --chmod=0500 runtime/jstack-proof-grade /usr/local/bin/jstack-proof-grade
+COPY --chmod=0400 runtime/jstack_mcp_server.py /opt/jstack/jstack_mcp_server.py
+COPY --chmod=0400 runtime/jstack_mcp_tools.json /opt/jstack/jstack_mcp_tools.json
+COPY --chmod=0400 metadata/image-build-input-lock.json /opt/jstack/image-build-input-lock.json
+COPY --chmod=0400 metadata/runtime-artifacts.json /opt/jstack/runtime-artifacts.json
+COPY --chmod=0400 metadata/base-license-evidence /usr/local/share/licenses/jstack/base-license-evidence
+COPY --chmod=0400 metadata/license-disposition /usr/local/share/licenses/jstack/license-disposition
+ENV HOME=/tmp/home
+ENV LANG=C
+ENV LC_ALL=C
+ENV PATH=/usr/local/bin:/usr/bin:/bin
+WORKDIR /workspace

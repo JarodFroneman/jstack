@@ -2038,6 +2038,26 @@ def discover_test_commands(project_path: Path) -> list[dict[str, Any]]:
                     "args": ["npm", "test"] if script_name == "test" else ["npm", "run", script_name],
                 }
             )
+    database_test_scripts = (
+        "test:db",
+        "db:test",
+        "test:database",
+        "database:test",
+        "test:migrations",
+        "migrations:test",
+    )
+    for script_name in database_test_scripts:
+        if script_name in scripts:
+            commands.append(
+                {
+                    "key": f"npm:{script_name}",
+                    "kind": "test",
+                    "label": f"npm run {script_name}",
+                    "source": "package.json database test convention",
+                    "script": scripts[script_name],
+                    "args": ["npm", "run", script_name],
+                }
+            )
     tests_dir = project_path / "tests"
     pyproject = project_path / "pyproject.toml"
     pyproject_text = pyproject.read_text(encoding="utf-8-sig", errors="replace") if pyproject.exists() else ""
@@ -2066,6 +2086,94 @@ def discover_test_commands(project_path: Path) -> list[dict[str, Any]]:
         commands.append({"key": "cargo:test", "kind": "test", "label": "cargo test", "source": "Cargo.toml", "args": ["cargo", "test"]})
     if (project_path / "go.mod").exists():
         commands.append({"key": "go:test", "kind": "test", "label": "go test ./...", "source": "go.mod", "args": ["go", "test", "./..."]})
+    if (project_path / "pom.xml").exists():
+        commands.append(
+            {
+                "key": "maven:test",
+                "kind": "test",
+                "label": "mvn --batch-mode --no-transfer-progress test",
+                "source": "pom.xml",
+                "args": ["mvn", "--batch-mode", "--no-transfer-progress", "test"],
+            }
+        )
+    gradle_markers = (
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+        "settings.gradle.kts",
+    )
+    if any((project_path / marker).exists() for marker in gradle_markers):
+        commands.append(
+            {
+                "key": "gradle:test",
+                "kind": "test",
+                "label": "gradle --no-daemon test",
+                "source": "Gradle build marker",
+                "args": ["gradle", "--no-daemon", "test"],
+            }
+        )
+    solution_targets = sorted(
+        {
+            path.name
+            for pattern in ("*.sln", "*.slnx")
+            for path in project_path.glob(pattern)
+            if path.is_file()
+        }
+    )
+    project_targets = sorted(
+        {
+            path.name
+            for pattern in ("*.csproj", "*.fsproj", "*.vbproj")
+            for path in project_path.glob(pattern)
+            if path.is_file()
+        }
+    )
+    for target in (solution_targets or project_targets)[:16]:
+        commands.append(
+            {
+                "key": f"dotnet:test:{target}",
+                "kind": "test",
+                "label": f"dotnet test {target} --nologo",
+                "source": target,
+                "args": ["dotnet", "test", target, "--nologo"],
+            }
+        )
+    if (project_path / "CMakeLists.txt").exists():
+        commands.extend(
+            [
+                {
+                    "key": "cmake:configure",
+                    "kind": "build",
+                    "label": "cmake -S . -B build -DBUILD_TESTING=ON",
+                    "source": "CMakeLists.txt",
+                    "args": ["cmake", "-S", ".", "-B", "build", "-DBUILD_TESTING=ON"],
+                },
+                {
+                    "key": "cmake:build",
+                    "kind": "build",
+                    "label": "cmake --build build",
+                    "source": "CMakeLists.txt",
+                    "args": ["cmake", "--build", "build"],
+                },
+                {
+                    "key": "ctest:test",
+                    "kind": "test",
+                    "label": "ctest --test-dir build --output-on-failure --no-tests=error",
+                    "source": "CMakeLists.txt",
+                    "args": ["ctest", "--test-dir", "build", "--output-on-failure", "--no-tests=error"],
+                },
+            ]
+        )
+    if (project_path / "dbt_project.yml").exists():
+        commands.append(
+            {
+                "key": "dbt:test",
+                "kind": "test",
+                "label": "dbt test",
+                "source": "dbt_project.yml",
+                "args": ["dbt", "test"],
+            }
+        )
     for command in commands:
         fingerprint_input = json.dumps(
             {key: command.get(key) for key in ("key", "kind", "source", "script", "args")},
