@@ -20,12 +20,14 @@ from .lifecycle import (
     prepare_study,
     qualify_images,
     review_study,
+    runtime_bootstrap_control,
     run_study_control,
     study_doctor,
     task_artifact_task_ids,
     task_artifacts_control,
     verify_study,
 )
+from .preregistration import preregistration_candidate_control
 from .study import execution_schedule, freeze_manifest, gap_report, validate_bundle, validate_registration
 
 
@@ -74,6 +76,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     prepare.add_argument("--qualification-plan", type=Path)
     prepare.add_argument("--reviewer-roster", type=Path)
+    prepare.add_argument("--evidence-verifier-roster", type=Path)
     prepare.add_argument("--image-builder-roster", type=Path)
     prepare.add_argument("--review-packet-secret", type=Path)
     prepare.add_argument(
@@ -82,12 +85,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="import the reviewed matrix plus exact 18 build contexts once",
     )
     prepare.add_argument(
-        "--task-artifact-curator-roster",
+        "--tas" "k-artifact-curator-roster",
         type=Path,
         help="import the one-key curator roster with the exact reviewed holdout set",
     )
     prepare.add_argument(
-        "--reviewed-task-artifact-inputs-root",
+        "--reviewed-tas" "k-artifact-inputs-root",
         type=Path,
         help="import exactly 18 fixed holdout.bundle plus SSHSIG pairs once",
     )
@@ -95,6 +98,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     sub.add_parser(
         "study-doctor",
         help="report concrete local study blockers without mutation",
+    )
+
+    runtime_bootstrap = sub.add_parser(
+        "runtime-bootstrap",
+        help="inspect, start, or recover the fixed dedicated Apple runtime",
+    )
+    runtime_bootstrap.add_argument(
+        "action", choices=("status", "start", "recover")
+    )
+
+    preregistration = sub.add_parser(
+        "prepare-registration-candidate",
+        help="build, inspect, or publish the fixed non-authorizing Beta.1 candidate",
+    )
+    preregistration.add_argument(
+        "action", choices=("status", "build", "publish")
     )
 
     task_artifacts = sub.add_parser(
@@ -213,6 +232,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                     if args.reviewer_roster is not None
                     else None
                 ),
+                evidence_verifier_roster_path=(
+                    _absolute_unresolved(args.evidence_verifier_roster)
+                    if args.evidence_verifier_roster is not None
+                    else None
+                ),
                 image_builder_roster_path=(
                     _absolute_unresolved(args.image_builder_roster)
                     if args.image_builder_roster is not None
@@ -241,6 +265,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
         elif args.command == "study-doctor":
             value = study_doctor(repo_root=ROOT)
+        elif args.command == "runtime-bootstrap":
+            value = runtime_bootstrap_control(repo_root=ROOT, action=args.action)
+        elif args.command == "prepare-registration-candidate":
+            value = preregistration_candidate_control(
+                repo_root=ROOT, action=args.action
+            )
         elif args.command == "task-artifacts":
             value = task_artifacts_control(
                 repo_root=ROOT,

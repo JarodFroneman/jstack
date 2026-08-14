@@ -3,7 +3,7 @@
   "corpusId": "jstack.proof.public-development.v1",
   "corpusVersion": "0.1.0",
   "status": "development-only",
-  "description": "Public development manifest for the future JStack real-project Proof Plane. It defines six target families and 18 planned task slots but contains no real-project benchmark results in alpha.10.",
+  "description": "Public development manifest for the JStack 0.10.0-beta.1 Proof Plane candidate. It defines six target families and 18 planned task slots but contains no completed study results.",
   "benchmarkTiers": [
     {
       "id": "tier0",
@@ -119,7 +119,7 @@
   ],
   "taskFiles": [],
   "executionPlan": {
-    "planId": "not-runnable-alpha.10",
+    "planId": "not-runnable-beta.1",
     "evidenceClass": "none",
     "expectedRuns": []
   },
@@ -132,6 +132,6 @@
     "hostModelComparisonAvailable": false,
     "jstackUpliftClaimAllowed": false,
     "zeroDayDetectionClaimAllowed": false,
-    "note": "Alpha.10 proves only that contracts, integrity checks, mock execution, and scoring are deterministic. It does not prove real-project performance, host superiority, professional-grade output, or universal zero-day detection."
+    "note": "The Beta.1 code-complete candidate proves only that contracts, integrity checks, mock execution, and scoring are deterministic. Human-reviewed study validation remains deferred; no real-project performance, host superiority, professional-grade output, or universal zero-day detection claim is enabled."
   }
 }

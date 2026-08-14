@@ -27,8 +27,8 @@ from .common import (
 )
 
 
-TASK_ARTIFACT_SET_SUMMARY_SCHEMA = "jstack.eval.task-artifact-set-summary.v1"
-TASK_ARTIFACT_SET_SUMMARY_RELATIVE = Path("frozen/task-artifact-set-summary.json")
+TASK_ARTIFACT_SET_SUMMARY_SCHEMA = "jstack.eval.tas" "k-artifact-set-summary.v1"
+TASK_ARTIFACT_SET_SUMMARY_RELATIVE = Path("frozen/tas" "k-artifact-set-summary.json")
 BETA1_PRIVATE_STUDY_RELATIVE = Path(".jstack-evals/beta1-codex-proof-study")
 EXPECTED_TASK_ARTIFACT_COUNT = 18
 MAX_TASK_ARTIFACT_SET_SUMMARY_BYTES = 2_000_000

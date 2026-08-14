@@ -74,10 +74,13 @@ study as a result.
     backend snapshot, post-release incidents, and rollbacks as unavailable
     unless separately observed. Required numeric v1 placeholders are
     suppressed from the Beta.1 report and never interpreted as measured zero.
-12. Do not version, tag, release, deploy, or claim uplift until all 18 images
-    qualify, all 216 attempts terminate, all 432 primary human reviews and any
-    adjudications verify, the exact scorer succeeds, and the full release gates
-    pass.
+12. The studied candidate bytes may identify themselves as
+    `0.10.0-beta.1` so registration, MCP initialization, packages, and the
+    eventual release all bind one exact version identity. Do not create the
+    release tag, publish, deploy, describe the candidate as validated, or
+    claim uplift until all 18 images qualify, all 216 attempts terminate, all
+    432 primary human reviews and any adjudications verify, the exact scorer
+    succeeds, and the full release gates pass.
 
 ## Consequences
 

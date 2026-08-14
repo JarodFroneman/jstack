@@ -214,7 +214,7 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.10`);
+  prerelease, `0.10.0-beta.1`);
 - `tools/list` includes 52 canonical `jstack_*` tools, including
   `jstack_context_readiness`, `jstack_performance_capture`, and
   `jstack_adversarial_capture`.

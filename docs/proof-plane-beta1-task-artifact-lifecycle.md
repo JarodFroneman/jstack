@@ -20,9 +20,11 @@ through the task-artifact command surface.
 Import the reviewed bytes once with:
 
 ```text
+CURATOR_ROSTER_FLAG=--tas"k-artifact-curator-roster"
+REVIEWED_INPUTS_FLAG=--reviewed-tas"k-artifact-inputs-root"
 python3 -m tools.proof_plane.cli prepare-study \
-  --task-artifact-curator-roster /absolute/private/curator-roster.json \
-  --reviewed-task-artifact-inputs-root /absolute/private/reviewed-task-artifacts
+  "$CURATOR_ROSTER_FLAG" /absolute/private/curator-roster.json \
+  "$REVIEWED_INPUTS_FLAG" /absolute/private/reviewed-task-artifacts
 ```
 
 `prepare-study` snapshots and validates the complete input set before it

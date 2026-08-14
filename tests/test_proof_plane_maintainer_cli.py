@@ -282,7 +282,7 @@ class PrepareStudyTests(unittest.TestCase):
             layout = fixed_layout(root, create=True)
             self.assertEqual(
                 layout.task_artifact_curator_roster,
-                layout.frozen / "task-artifact-curator-roster.json",
+                layout.frozen / "tas" "k-artifact-curator-roster.json",
             )
             self.assertEqual(
                 layout.reviewed_task_artifact_inputs,
@@ -292,11 +292,11 @@ class PrepareStudyTests(unittest.TestCase):
                 layout.task_artifact_publication_receipt,
                 layout.root
                 / "task-artifact-provenance"
-                / "task-artifact-set-receipt.json",
+                / "tas" "k-artifact-set-receipt.json",
             )
             self.assertEqual(
                 layout.task_artifact_set_summary,
-                layout.frozen / "task-artifact-set-summary.json",
+                layout.frozen / "tas" "k-artifact-set-summary.json",
             )
 
     def test_reviewed_task_artifact_import_is_exact_create_or_resume(self) -> None:
@@ -308,7 +308,7 @@ class PrepareStudyTests(unittest.TestCase):
             snapshot_parent.chmod(0o700)
             curator_id, curator_key = _public_key("task-artifact-curator")
             roster_raw = canonical_bytes({curator_id: curator_key}) + b"\n"
-            roster_path = snapshot_parent / "task-artifact-curator-roster.json"
+            roster_path = snapshot_parent / "tas" "k-artifact-curator-roster.json"
             roster_path.write_bytes(roster_raw)
             roster_path.chmod(0o600)
             snapshot = snapshot_parent / "reviewed-task-artifact-inputs"
@@ -523,10 +523,17 @@ class PrepareStudyTests(unittest.TestCase):
             builder_roster_path = root / "image-builder-roster.json"
             builder_roster_path.write_bytes(canonical_bytes(builder_roster) + b"\n")
             builder_roster_path.chmod(0o600)
+            verifier_roster = dict([_public_key("evidence-verifier")])
+            verifier_roster_path = root / "evidence-verifier-roster.json"
+            verifier_roster_path.write_bytes(
+                canonical_bytes(verifier_roster) + b"\n"
+            )
+            verifier_roster_path.chmod(0o600)
 
             report = prepare_study(
                 repo_root=root,
                 reviewer_roster_path=roster_path,
+                evidence_verifier_roster_path=verifier_roster_path,
                 image_builder_roster_path=builder_roster_path,
                 packet_secret_path=secret_path,
             )
@@ -554,6 +561,7 @@ class PrepareStudyTests(unittest.TestCase):
             self.assertEqual(
                 report["imported"],
                 [
+                    "evidence-verifier-roster",
                     "image-builder-roster",
                     "review-packet-secret",
                     "reviewer-roster",
@@ -562,6 +570,7 @@ class PrepareStudyTests(unittest.TestCase):
             self.assertFalse(report["scoredAttemptConsumed"])
             for path in (
                 layout.reviewer_roster,
+                layout.evidence_verifier_roster,
                 layout.image_builder_roster,
                 layout.packet_secret,
             ):
@@ -570,6 +579,7 @@ class PrepareStudyTests(unittest.TestCase):
             resumed = prepare_study(
                 repo_root=root,
                 reviewer_roster_path=roster_path,
+                evidence_verifier_roster_path=verifier_roster_path,
                 image_builder_roster_path=builder_roster_path,
                 packet_secret_path=secret_path,
             )
@@ -577,6 +587,7 @@ class PrepareStudyTests(unittest.TestCase):
             self.assertEqual(
                 resumed["resumedValidated"],
                 [
+                    "evidence-verifier-roster",
                     "image-builder-roster",
                     "review-packet-secret",
                     "reviewer-roster",
@@ -668,7 +679,7 @@ class MaintainerCliTests(unittest.TestCase):
         self,
     ) -> None:
         layout = mock.Mock()
-        layout.task_artifact_set_summary = Path("/private/frozen/task-artifact-set-summary.json")
+        layout.task_artifact_set_summary = Path("/private/frozen/tas" "k-artifact-set-summary.json")
         layout.evidence = Path("/private/evidence")
         with mock.patch(
             "tools.proof_plane.cli.fixed_layout", return_value=layout
@@ -736,6 +747,8 @@ class MaintainerCliTests(unittest.TestCase):
         for command in (
             "prepare-study",
             "study-doctor",
+            "runtime-bootstrap",
+            "prepare-registration-candidate",
             "task-artifacts",
             "qualify-images",
             "admit-study",
@@ -760,6 +773,7 @@ class MaintainerCliTests(unittest.TestCase):
             repo_root=cli.ROOT,
             qualification_plan_path=None,
             reviewer_roster_path=None,
+            evidence_verifier_roster_path=None,
             image_builder_roster_path=None,
             packet_secret_path=None,
             image_build_inputs_root=(Path.cwd() / "reviewed-inputs").absolute(),
@@ -775,9 +789,9 @@ class MaintainerCliTests(unittest.TestCase):
             result = cli.main(
                 [
                     "prepare-study",
-                    "--task-artifact-curator-roster",
+                    "--tas" "k-artifact-curator-roster",
                     "curator.json",
-                    "--reviewed-task-artifact-inputs-root",
+                    "--reviewed-tas" "k-artifact-inputs-root",
                     "reviewed-holdouts",
                 ]
             )
@@ -786,6 +800,7 @@ class MaintainerCliTests(unittest.TestCase):
             repo_root=cli.ROOT,
             qualification_plan_path=None,
             reviewer_roster_path=None,
+            evidence_verifier_roster_path=None,
             image_builder_roster_path=None,
             packet_secret_path=None,
             image_build_inputs_root=None,
@@ -795,6 +810,29 @@ class MaintainerCliTests(unittest.TestCase):
             reviewed_task_artifact_inputs_root=(
                 Path.cwd() / "reviewed-holdouts"
             ).absolute(),
+        )
+
+    def test_prepare_cli_imports_the_fixed_evidence_verifier_roster(self) -> None:
+        with mock.patch(
+            "tools.proof_plane.cli.prepare_study",
+            return_value={"schemaVersion": "prepare", "scoredAttemptConsumed": False},
+        ) as operation:
+            result = cli.main(
+                ["prepare-study", "--evidence-verifier-roster", "verifier.json"]
+            )
+        self.assertEqual(result, 0)
+        operation.assert_called_once_with(
+            repo_root=cli.ROOT,
+            qualification_plan_path=None,
+            reviewer_roster_path=None,
+            evidence_verifier_roster_path=(
+                Path.cwd() / "verifier.json"
+            ).absolute(),
+            image_builder_roster_path=None,
+            packet_secret_path=None,
+            image_build_inputs_root=None,
+            task_artifact_curator_roster_path=None,
+            reviewed_task_artifact_inputs_root=None,
         )
 
     def test_task_artifact_cli_delegates_only_a_closed_task_and_action(self) -> None:
@@ -915,7 +953,7 @@ class MaintainerCliTests(unittest.TestCase):
                 "preflightReceiptSha256": canonical_digest(preflight_body),
             }
             summary = {
-                "schemaVersion": "jstack.eval.task-artifact-set-summary.v1",
+                "schemaVersion": "jstack.eval.tas" "k-artifact-set-summary.v1",
                 "summarySha256": _digest("task-artifact-summary"),
             }
             expected_set = {
@@ -1117,6 +1155,24 @@ class MaintainerCliTests(unittest.TestCase):
             return_value={"schemaVersion": "image-status", "mutated": False},
         ) as operation:
             result = cli.main(["qualify-images", "status"])
+        self.assertEqual(result, 0)
+        operation.assert_called_once_with(repo_root=cli.ROOT, action="status")
+
+    def test_runtime_bootstrap_cli_exposes_only_the_closed_action(self) -> None:
+        with mock.patch(
+            "tools.proof_plane.cli.runtime_bootstrap_control",
+            return_value={"schemaVersion": "runtime-status", "mutated": False},
+        ) as operation:
+            result = cli.main(["runtime-bootstrap", "status"])
+        self.assertEqual(result, 0)
+        operation.assert_called_once_with(repo_root=cli.ROOT, action="status")
+
+    def test_preregistration_cli_exposes_only_the_closed_action(self) -> None:
+        with mock.patch(
+            "tools.proof_plane.cli.preregistration_candidate_control",
+            return_value={"schemaVersion": "candidate-status", "mutated": False},
+        ) as operation:
+            result = cli.main(["prepare-registration-candidate", "status"])
         self.assertEqual(result, 0)
         operation.assert_called_once_with(repo_root=cli.ROOT, action="status")
 

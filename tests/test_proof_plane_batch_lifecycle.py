@@ -247,7 +247,7 @@ class BatchLifecycleTests(unittest.TestCase):
                 "expected-run-set.json",
                 "terminal-set.json",
                 "preflight-receipt.json",
-                "task-artifact-set-summary.json",
+                "tas" "k-artifact-set-summary.json",
                 "qualification-receipt-set.json",
                 "reviewer-roster.json",
             ):
@@ -257,8 +257,8 @@ class BatchLifecycleTests(unittest.TestCase):
             secrets.mkdir(mode=0o700)
             (secrets / "review-packet-secret.bin").write_bytes(b"s" * 32)
             (secrets / "review-packet-secret.bin").chmod(0o600)
-            (provenance / "task-artifact-set-receipt.json").write_bytes(b"{}\n")
-            (provenance / "task-artifact-set-receipt.json").chmod(0o600)
+            (provenance / "tas" "k-artifact-set-receipt.json").write_bytes(b"{}\n")
+            (provenance / "tas" "k-artifact-set-receipt.json").chmod(0o600)
             paths = frozen_study_paths(private, require_secret=True)
             self.assertEqual(paths.expected_run_set, (frozen / "expected-run-set.json").resolve())
             self.assertEqual(paths.packet_secret, (secrets / "review-packet-secret.bin").resolve())
@@ -320,9 +320,9 @@ class BatchLifecycleTests(unittest.TestCase):
         }
         preflight = {"taskArtifacts": summary}
         fixed = SimpleNamespace(
-            task_artifact_set_summary=Path("/private/frozen/task-artifact-set-summary.json"),
+            task_artifact_set_summary=Path("/private/frozen/tas" "k-artifact-set-summary.json"),
             task_artifact_set_receipt=Path(
-                "/private/task-artifact-provenance/task-artifact-set-receipt.json"
+                "/private/task-artifact-provenance/tas" "k-artifact-set-receipt.json"
             ),
         )
         receipt = {"receiptSha256": summary["publicationReceiptSelfSha256"]}

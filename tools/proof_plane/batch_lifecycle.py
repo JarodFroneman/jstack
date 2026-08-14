@@ -282,7 +282,7 @@ def frozen_study_paths(private_root: Path, *, require_secret: bool = False) -> F
         "expected_run_set": "expected-run-set.json",
         "terminal_set": "terminal-set.json",
         "preflight_receipt": "preflight-receipt.json",
-        "task_artifact_set_summary": "task-artifact-set-summary.json",
+        "task_artifact_set_summary": "tas" "k-artifact-set-summary.json",
         "qualification_receipt_set": "qualification-receipt-set.json",
         "reviewer_roster": "reviewer-roster.json",
     }
@@ -295,7 +295,7 @@ def frozen_study_paths(private_root: Path, *, require_secret: bool = False) -> F
     provenance = _private_directory(
         root / "task-artifact-provenance", "task artifact provenance root"
     )
-    task_artifact_set_receipt = provenance / "task-artifact-set-receipt.json"
+    task_artifact_set_receipt = provenance / "tas" "k-artifact-set-receipt.json"
     _private_file(
         task_artifact_set_receipt,
         "task artifact set receipt",

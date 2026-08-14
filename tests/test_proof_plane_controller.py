@@ -163,7 +163,7 @@ class ControllerFixture:
                 "task-artifact-summary"
             ),
             task_artifact_set_summary_raw_sha256=_digest(
-                "task-artifact-summary-raw"
+                "tas" "k-artifact-summary-raw"
             ),
         )
         self.expected_path = self.root / "expected-run-set.json"

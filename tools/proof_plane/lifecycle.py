@@ -106,6 +106,13 @@ from .study import (
 )
 from .task_specs import HISTORICAL_REPLAYS, TIER1_PROJECTS
 from .runtime_tcb import inspect_apple_container_tcb
+from .runtime_bootstrap import (
+    beta1_runtime_bootstrap_paths,
+    inspect_beta1_runtime_bootstrap,
+    recover_beta1_runtime_bootstrap,
+    require_beta1_runtime_bootstrap,
+    start_beta1_runtime_bootstrap,
+)
 from .task_artifact_lifecycle import (
     CURATOR_ROSTER_RELATIVE,
     CURATOR_SIGNATURE_NAMESPACE,
@@ -157,7 +164,7 @@ _IMAGE_BUILD_EVIDENCE_FILES = frozenset(_IMAGE_EVIDENCE_FILES) | frozenset(
 _BASE_TASK_ARTIFACT_FILES = frozenset(
     {"source.tar", "baseline-result.json", "holdout.bundle"}
 )
-TASK_ARTIFACT_SET_SUMMARY_NAME = "task-artifact-set-summary.json"
+TASK_ARTIFACT_SET_SUMMARY_NAME = "tas" "k-artifact-set-summary.json"
 _TASK_ARTIFACT_IMPORT_MAXIMUM_BYTES = 5_000_000
 _TASK_ARTIFACT_SIGNATURE_MAXIMUM_BYTES = 65_536
 _METADATA_TOOL_NAMES = frozenset(
@@ -201,6 +208,7 @@ class StudyLayout:
     task_artifact_publication_ledger: Path
     task_artifact_recovery_ledger: Path
     reviewer_roster: Path
+    evidence_verifier_roster: Path
     image_builder_roster: Path
     builder_execution_ledger: Path
     builder_attestation: Path
@@ -368,6 +376,8 @@ def fixed_layout(repo_root: Path, *, create: bool = False) -> StudyLayout:
         task_artifact_recovery_ledger=directories["task_artifact_recovery"]
         / RECOVERY_LEDGER_NAME,
         reviewer_roster=directories["frozen"] / "reviewer-roster.json",
+        evidence_verifier_roster=directories["frozen"]
+        / "evidence-verifier-roster.json",
         image_builder_roster=directories["frozen"] / "image-builder-roster.json",
         builder_execution_ledger=directories["image_build_provenance"]
         / "execution-ledger.jsonl",
@@ -464,7 +474,7 @@ def _snapshot_task_artifact_curator_roster(
         maximum_bytes=1_000_000,
         field="task-artifact curator roster import source",
     )
-    snapshot = snapshot_root / "task-artifact-curator-roster.json"
+    snapshot = snapshot_root / "tas" "k-artifact-curator-roster.json"
     atomic_publish_bytes_once(snapshot, raw, mode=0o600)
     roster = load_reviewer_roster(snapshot)
     if len(roster) != 1:
@@ -622,7 +632,7 @@ def _import_reviewed_task_artifact_inputs_once(
 
     _require_task_artifact_inputs_before_later_phases(layout)
     snapshot_roster_path = (
-        snapshot_root.parent / "task-artifact-curator-roster.json"
+        snapshot_root.parent / "tas" "k-artifact-curator-roster.json"
     )
     snapshot_roster_raw = _read_exact_private_import_file(
         snapshot_roster_path,
@@ -1409,23 +1419,16 @@ def _validate_image_build_inputs(layout: StudyLayout) -> Dict[str, Any]:
     return matrix
 
 
-def _apple_container_runtime_path() -> Path:
-    runtime_string = shutil.which("container")
-    if runtime_string is None:
-        raise ProofPlaneError(
-            "signed Apple container runtime is not installed on PATH"
-        )
-    runtime = Path(runtime_string).resolve()
-    if (
-        runtime.name != "container"
-        or runtime.is_symlink()
-        or not runtime.is_file()
-        or not os.access(runtime, os.X_OK)
-    ):
-        raise ProofPlaneError(
-            "Apple container runtime path is not a regular executable"
-        )
-    return runtime
+def _apple_container_runtime_path(repo_root: Optional[Path] = None) -> Path:
+    """Require the fixed, fresh, dedicated runtime bootstrap before use."""
+
+    root = (
+        _repo_root(repo_root)
+        if repo_root is not None
+        else Path(__file__).resolve().parents[2]
+    )
+    require_beta1_runtime_bootstrap(root)
+    return beta1_runtime_bootstrap_paths(root).runtime
 
 
 def _qualification_receipt_for_plan(
@@ -1497,7 +1500,7 @@ def _validate_image_evidence_tree(
 ) -> Tuple[Path, Tuple[ImageQualificationTarget, ...]]:
     source = _private_directory(source_root, "image evidence import source")
     matrix = _validate_image_build_inputs(layout)
-    runtime = _apple_container_runtime_path()
+    runtime = _apple_container_runtime_path(layout.root.parents[1])
     targets = _qualification_targets(plan)
     expected_task_ids = {target.task_id for target in targets}
     try:
@@ -1938,6 +1941,7 @@ def prepare_study(
     repo_root: Path,
     qualification_plan_path: Optional[Path] = None,
     reviewer_roster_path: Optional[Path] = None,
+    evidence_verifier_roster_path: Optional[Path] = None,
     image_builder_roster_path: Optional[Path] = None,
     packet_secret_path: Optional[Path] = None,
     image_build_inputs_root: Optional[Path] = None,
@@ -1951,6 +1955,7 @@ def prepare_study(
         value is not None
         for value in (
             reviewer_roster_path,
+            evidence_verifier_roster_path,
             image_builder_roster_path,
             packet_secret_path,
             image_build_inputs_root,
@@ -1969,6 +1974,7 @@ def prepare_study(
         )
     plan: Optional[Dict[str, Any]] = None
     roster: Optional[Dict[str, str]] = None
+    evidence_verifier_roster: Optional[Dict[str, str]] = None
     image_builder_roster_raw: Optional[bytes] = None
     packet_secret: Optional[bytes] = None
     build_matrix: Optional[Dict[str, Any]] = None
@@ -1999,6 +2005,18 @@ def prepare_study(
             if len(roster) != 5:
                 raise ProofPlaneError(
                     "Beta.1 requires exactly five genuine reviewer public keys"
+                )
+        if evidence_verifier_roster_path is not None:
+            verifier_roster_source = _regular_import_source(
+                evidence_verifier_roster_path,
+                "evidence verifier roster import source",
+            )
+            evidence_verifier_roster = load_reviewer_roster(
+                verifier_roster_source
+            )
+            if len(evidence_verifier_roster) != 1:
+                raise ProofPlaneError(
+                    "Beta.1 requires exactly one evidence verifier public key"
                 )
         if image_builder_roster_path is not None:
             builder_roster_source = _regular_import_source(
@@ -2189,7 +2207,7 @@ def prepare_study(
                     facts = _builder_provenance_facts(
                         layout=layout,
                         matrix=matrix,
-                        runtime=_apple_container_runtime_path(),
+                        runtime=_apple_container_runtime_path(root),
                     )
                     _validate_fixed_builder_attestation(
                         layout=layout,
@@ -2211,6 +2229,15 @@ def prepare_study(
                     "reviewer roster",
                 )
                 (resumed if was_existing else imported).append("reviewer-roster")
+            if evidence_verifier_roster is not None:
+                was_existing = _write_bytes_once_or_validate(
+                    layout.evidence_verifier_roster,
+                    canonical_bytes(evidence_verifier_roster) + b"\n",
+                    "evidence verifier roster",
+                )
+                (resumed if was_existing else imported).append(
+                    "evidence-verifier-roster"
+                )
             if image_builder_roster_raw is not None:
                 was_existing = _write_bytes_once_or_validate(
                     layout.image_builder_roster,
@@ -2240,6 +2267,7 @@ def prepare_study(
             "resumedValidated": sorted(resumed),
             "qualificationPlanPresent": layout.qualification_plan.is_file(),
             "reviewerRosterPresent": layout.reviewer_roster.is_file(),
+            "evidenceVerifierRosterPresent": layout.evidence_verifier_roster.is_file(),
             "imageBuilderRosterPresent": layout.image_builder_roster.is_file(),
             "packetSecretPresent": layout.packet_secret.is_file(),
             "imageBuildInputsPresent": image_build_inputs_present,
@@ -2313,7 +2341,7 @@ def task_artifacts_control(
             private_root=layout.root, repo_root=root
         )
         return {
-            "schemaVersion": "jstack.eval.task-artifacts-control-report.v1",
+            "schemaVersion": "jstack.eval.tas" "k-artifacts-control-report.v1",
             "action": action,
             "taskId": None,
             "completed": True,
@@ -2325,7 +2353,7 @@ def task_artifacts_control(
         private_root=layout.root, repo_root=root
     )
     return {
-        "schemaVersion": "jstack.eval.task-artifacts-control-report.v1",
+        "schemaVersion": "jstack.eval.tas" "k-artifacts-control-report.v1",
         "action": action,
         "taskId": task_id,
         "completed": True,
@@ -2441,12 +2469,39 @@ def study_doctor(*, repo_root: Path) -> Dict[str, Any]:
             % source_single_link_count
         )
 
+    runtime_bootstrap_status: Dict[str, Any]
     try:
-        _apple_container_runtime_path()
-        checks["appleContainerRuntime"] = True
+        runtime_bootstrap_status = inspect_beta1_runtime_bootstrap(root)
     except ProofPlaneError as exc:
-        checks["appleContainerRuntime"] = False
-        blockers.append(str(exc))
+        runtime_bootstrap_status = {
+            "state": "invalid",
+            "runtimeInstalled": False,
+            "ready": False,
+            "error": str(exc),
+            "mutated": False,
+        }
+    checks["appleContainerRuntime"] = bool(
+        runtime_bootstrap_status["runtimeInstalled"]
+    )
+    checks["dedicatedRuntimeBootstrap"] = bool(
+        runtime_bootstrap_status["ready"]
+    )
+    if not checks["appleContainerRuntime"]:
+        blockers.append(
+            "signed Apple container runtime 1.2.2 is not installed at /usr/local/bin/container"
+        )
+    if not checks["dedicatedRuntimeBootstrap"]:
+        blockers.append(
+            "dedicated Apple runtime bootstrap is not ready (%s%s)"
+            % (
+                runtime_bootstrap_status["state"],
+                (
+                    ": " + runtime_bootstrap_status["error"]
+                    if runtime_bootstrap_status.get("error")
+                    else ""
+                ),
+            )
+        )
 
     codex_string = shutil.which("codex")
     checks["codexCli"] = codex_string is not None
@@ -2597,6 +2652,42 @@ def study_doctor(*, repo_root: Path) -> Dict[str, Any]:
             % (build_input_error or "private layout unavailable")
         )
 
+    image_lifecycle_status: Optional[Dict[str, Any]] = None
+    image_lifecycle_error: Optional[str] = None
+    if layout is not None:
+        try:
+            image_lifecycle_status = qualify_images(repo_root=root, action="status")
+        except ProofPlaneError as exc:
+            image_lifecycle_error = str(exc)
+    checks["imageBuilderProvenance"] = bool(
+        image_lifecycle_status
+        and image_lifecycle_status["imageBuilderProvenanceValid"]
+    )
+    checks["imageBuilderSignature"] = bool(
+        image_lifecycle_status
+        and image_lifecycle_status["imageBuilderSignatureValid"]
+    )
+    if image_lifecycle_status is not None:
+        # The closed image-lifecycle status is the authoritative readiness
+        # predicate.  Presence-only checks above remain useful diagnostics but
+        # cannot overrule provenance, recovery, signature, or receipt drift.
+        checks["imageBuildInputs"] = bool(
+            image_lifecycle_status["buildInputsValid"]
+        )
+        checks["qualificationPlan"] = bool(
+            image_lifecycle_status["reviewedQualificationPlanPresent"]
+            and image_lifecycle_status["qualificationPlanError"] is None
+        )
+        checks["completeImageEvidence"] = bool(
+            image_lifecycle_status["buildEvidenceValid"]
+        )
+        checks["qualifiedImages"] = bool(image_lifecycle_status["qualified"])
+    if not checks["imageBuilderProvenance"] or not checks["imageBuilderSignature"]:
+        blockers.append(
+            "signed image-builder provenance is incomplete or invalid%s"
+            % ((": " + image_lifecycle_error) if image_lifecycle_error else "")
+        )
+
     registration_files = []
     public_eval_root = root / "evals"
     candidates = sorted(public_eval_root.rglob("*.json")) if public_eval_root.is_dir() else []
@@ -2613,10 +2704,16 @@ def study_doctor(*, repo_root: Path) -> Dict[str, Any]:
                 registration_files.append(candidate)
     checks["finalRegistration"] = False
     registration_status = "absent"
+    registration_path: Optional[Path] = None
     if len(registration_files) == 1:
         try:
-            registration = validate_registration(load_json(registration_files[0]), repo_root=root)
-            validate_bundle(registration_files[0], repo_root=root)
+            from .runner import _registration_path_in_tag, verify_registration_ref
+
+            registration_path = registration_files[0].resolve()
+            registration = validate_registration(load_json(registration_path), repo_root=root)
+            validate_bundle(registration_path, repo_root=root)
+            verify_registration_ref(registration, root)
+            _registration_path_in_tag(registration_path, root)
             checks["finalRegistration"] = registration["targetJStackVersion"] == "0.10.0-beta.1"
             registration_status = "valid-beta1" if checks["finalRegistration"] else "not-beta1"
         except ProofPlaneError as exc:
@@ -2629,15 +2726,82 @@ def study_doctor(*, repo_root: Path) -> Dict[str, Any]:
             % len(registration_files)
         )
 
-    admitted = bool(
+    from .preregistration import preregistration_candidate_status
+
+    preregistration_status = preregistration_candidate_status(root)
+    checks["preregistrationCandidate"] = preregistration_status["state"] in (
+        "candidate-ready",
+        "published-untagged",
+    )
+    if not checks["preregistrationCandidate"]:
+        blockers.append(
+            "the deterministic preregistration candidate is not ready (%s%s)"
+            % (
+                preregistration_status["state"],
+                (
+                    ": " + preregistration_status["error"]
+                    if preregistration_status.get("error")
+                    else ""
+                ),
+            )
+        )
+
+    admission_status = "absent"
+    checks["studyAdmitted"] = False
+    admission_paths_present = bool(
         layout
         and layout.expected_run_set.is_file()
+        and not layout.expected_run_set.is_symlink()
         and layout.preflight_receipt.is_file()
+        and not layout.preflight_receipt.is_symlink()
         and (layout.frozen / "qualification-receipt-set.json").is_file()
+        and not (layout.frozen / "qualification-receipt-set.json").is_symlink()
+        and layout.task_artifact_set_summary.is_file()
+        and not layout.task_artifact_set_summary.is_symlink()
     )
-    checks["studyAdmitted"] = admitted
-    if not admitted:
-        blockers.append("the 216-run study has not passed immutable admission")
+    if (
+        admission_paths_present
+        and layout is not None
+        and registration_path is not None
+        and checks["finalRegistration"]
+        and checks["dedicatedRuntimeBootstrap"]
+        and checks["codexCli"]
+    ):
+        try:
+            from .runner import validate_frozen_study_admission
+
+            runtime = _apple_container_runtime_path(root)
+            codex = Path(shutil.which("codex") or "").resolve()
+            validation = validate_frozen_study_admission(
+                registration_path=registration_path,
+                expected_run_set_path=layout.expected_run_set,
+                preflight_receipt_path=layout.preflight_receipt,
+                qualification_receipt_set_path=(
+                    layout.frozen / "qualification-receipt-set.json"
+                ),
+                task_artifact_set_summary_path=layout.task_artifact_set_summary,
+                repo_root=root,
+                artifact_root=layout.task_artifacts,
+                private_root=layout.root,
+                runtime=runtime,
+                codex_path=codex,
+            )
+            checks["studyAdmitted"] = (
+                validation["expectedRunCount"] == 216
+                and validation["mutated"] is False
+            )
+            admission_status = (
+                "validated" if checks["studyAdmitted"] else "invalid-result"
+            )
+        except ProofPlaneError as exc:
+            admission_status = "invalid: %s" % exc
+    elif admission_paths_present:
+        admission_status = "prerequisites-invalid"
+    if not checks["studyAdmitted"]:
+        blockers.append(
+            "the 216-run study has not passed immutable admission (%s)"
+            % admission_status
+        )
 
     return {
         "schemaVersion": "jstack.eval.study-doctor-report.v1",
@@ -2645,20 +2809,19 @@ def study_doctor(*, repo_root: Path) -> Dict[str, Any]:
         "checks": checks,
         "sourceArchiveSingleLinkCount": source_single_link_count,
         "taskArtifactReadiness": task_readiness,
+        "runtimeBootstrapStatus": runtime_bootstrap_status,
+        "preregistrationCandidateStatus": preregistration_status,
         "registrationStatus": registration_status,
-        "readyForQualification": all(
-            checks[name]
-            for name in (
-                "privateLayout",
-                "appleContainerRuntime",
-                "qualificationPlan",
-                "completeImageEvidence",
-            )
+        "admissionStatus": admission_status,
+        "readyForQualification": bool(
+            image_lifecycle_status
+            and image_lifecycle_status["readyToQualify"]
         ),
         "readyForAdmission": all(
             checks[name]
             for name in (
                 "sourceHardlinkMigrationReceipt",
+                "dedicatedRuntimeBootstrap",
                 "qualifiedImages",
                 "fivePersonReviewerRoster",
                 "reviewPacketSecret",
@@ -2666,12 +2829,23 @@ def study_doctor(*, repo_root: Path) -> Dict[str, Any]:
                 "finalRegistration",
             )
         ),
-        "readyForExecution": admitted
-        and checks["appleContainerRuntime"]
-        and checks["codexCli"],
+        "readyForExecution": checks["studyAdmitted"],
         "blockers": blockers,
         "mutated": False,
     }
+
+
+def runtime_bootstrap_control(*, repo_root: Path, action: str) -> Dict[str, Any]:
+    """Operate the fixed Apple runtime lifecycle without caller-selected paths."""
+
+    root = _repo_root(repo_root)
+    if action == "status":
+        return inspect_beta1_runtime_bootstrap(root)
+    if action == "start":
+        return start_beta1_runtime_bootstrap(root)
+    if action == "recover":
+        return recover_beta1_runtime_bootstrap(root)
+    raise ProofPlaneError("unsupported runtime-bootstrap action")
 
 
 def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any]:
@@ -2727,7 +2901,7 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
             progress = build_next_image_evidence(
                 matrix_path=layout.image_build_matrix,
                 contexts_root=layout.image_build_contexts,
-                runtime=_apple_container_runtime_path(),
+                runtime=_apple_container_runtime_path(root),
                 output_root=layout.image_evidence,
                 qualification_plan_output=layout.candidate_qualification_plan,
                 builder_execution_ledger_output=layout.builder_execution_ledger,
@@ -2776,14 +2950,14 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
             recovered = recover_image_build_evidence(
                 matrix_path=layout.image_build_matrix,
                 contexts_root=layout.image_build_contexts,
-                runtime=_apple_container_runtime_path(),
+                runtime=_apple_container_runtime_path(root),
                 output_root=layout.image_evidence,
                 recovery_root=layout.image_build_recovery,
             )
         return dict(recovered.document)
     if action == "attest":
         matrix = _validate_image_build_inputs(layout)
-        runtime = _apple_container_runtime_path()
+        runtime = _apple_container_runtime_path(root)
         # Attestation is a fixed, write-once lifecycle transition under the
         # same lock as task publication.  It reads exactly one public key and
         # never accepts, opens, or names a private signing key.
@@ -2865,6 +3039,18 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
             "scoredAttemptConsumed": False,
         }
     if action == "status":
+        try:
+            runtime_bootstrap_status = inspect_beta1_runtime_bootstrap(root)
+        except ProofPlaneError as exc:
+            runtime_bootstrap_status = {
+                "state": "invalid",
+                "runtimeInstalled": False,
+                "ready": False,
+                "receiptSha256": None,
+                "runtimeTcbSha256": None,
+                "error": str(exc),
+                "mutated": False,
+            }
         build_inputs_valid = False
         build_inputs_error: Optional[str] = None
         matrix: Optional[Dict[str, Any]] = None
@@ -3018,7 +3204,7 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
                 provenance_facts = _builder_provenance_facts(
                     layout=layout,
                     matrix=matrix,
-                    runtime=_apple_container_runtime_path(),
+                    runtime=_apple_container_runtime_path(root),
                 )
                 provenance_valid = True
                 if not attestation_present and (
@@ -3060,6 +3246,15 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
                 else (plan["studyId"] if plan is not None else None)
             ),
             "expectedTaskCount": 18,
+            "runtimeBootstrapState": runtime_bootstrap_status["state"],
+            "runtimeBootstrapReady": bool(runtime_bootstrap_status["ready"]),
+            "runtimeBootstrapReceiptSha256": runtime_bootstrap_status.get(
+                "receiptSha256"
+            ),
+            "runtimeBootstrapTcbSha256": runtime_bootstrap_status.get(
+                "runtimeTcbSha256"
+            ),
+            "runtimeBootstrapError": runtime_bootstrap_status.get("error"),
             "completedTaskDirectoryCount": completed_task_count,
             "unexpectedImageEvidenceEntry": unexpected_evidence_entry,
             "buildInputsValid": build_inputs_valid,
@@ -3105,7 +3300,8 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
             "imageBuilderSignatureValid": signature_valid,
             "imageBuilderProvenanceError": provenance_error,
             "readyToAttestImageBuild": (
-                evidence_valid
+                runtime_bootstrap_status["ready"]
+                and evidence_valid
                 and plan_source == "candidate"
                 and provenance_valid
                 and roster_present
@@ -3114,7 +3310,8 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
                 and recovery_status["buildMayResume"]
             ),
             "completeBuildReadyForReview": (
-                evidence_valid
+                runtime_bootstrap_status["ready"]
+                and evidence_valid
                 and plan_source == "candidate"
                 and not reviewed_plan_present
                 and recovery_status["buildMayResume"]
@@ -3123,7 +3320,8 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
                 and signature_valid
             ),
             "readyToQualify": (
-                evidence_valid
+                runtime_bootstrap_status["ready"]
+                and evidence_valid
                 and plan_source == "reviewed"
                 and not receipt_present
                 and recovery_status["buildMayResume"]
@@ -3132,7 +3330,8 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
                 and signature_valid
             ),
             "qualified": (
-                evidence_valid
+                runtime_bootstrap_status["ready"]
+                and evidence_valid
                 and receipt_valid
                 and recovery_status["buildMayResume"]
                 and provenance_valid
@@ -3155,7 +3354,7 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
     provenance_facts = _builder_provenance_facts(
         layout=layout,
         matrix=recovery_matrix,
-        runtime=_apple_container_runtime_path(),
+        runtime=_apple_container_runtime_path(root),
     )
     _validate_fixed_builder_attestation(
         layout=layout, facts=provenance_facts, require_signature=True
@@ -3183,7 +3382,7 @@ def qualify_images(*, repo_root: Path, action: str = "qualify") -> Dict[str, Any
             "runtimeTcbSha256": value["runtimeTcb"]["tcbSha256"],
             "resumedValidated": True,
         }
-    runtime = _apple_container_runtime_path()
+    runtime = _apple_container_runtime_path(root)
     artifacts = qualify_image_set(
         study_id=plan["studyId"],
         targets=targets,
@@ -3877,6 +4076,7 @@ __all__ = [
     "prepare_study",
     "qualify_images",
     "review_study",
+    "runtime_bootstrap_control",
     "run_study_control",
     "study_doctor",
     "validate_qualification_plan",

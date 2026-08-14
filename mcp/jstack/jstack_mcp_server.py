@@ -45,7 +45,7 @@ import program as program_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-alpha.10"
+SERVER_VERSION = "0.10.0-beta.1"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -14318,7 +14318,10 @@ def tool_review(args: dict[str, Any]) -> dict[str, Any]:
 
 
 SECRET_PATTERNS = [
-    ("openai_key", re.compile(r"sk-[A-Za-z0-9_-]{20,}")),
+    # OpenAI-style keys are standalone tokens.  Without the leading boundary,
+    # long JStack identifiers such as ``jstack-beta1-...`` are false positives
+    # because their final two letters also spell ``sk``.
+    ("openai_key", re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}")),
     ("generic_api_key_assignment", re.compile(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"\n]{12,}['\"]")),
     ("private_key", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")),
     ("aws_access_key", re.compile(r"AKIA[0-9A-Z]{16}")),

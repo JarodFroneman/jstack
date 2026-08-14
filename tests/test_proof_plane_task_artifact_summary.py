@@ -128,7 +128,7 @@ class TaskArtifactSummaryTests(unittest.TestCase):
             frozen = root / "frozen"
             frozen.mkdir(mode=0o700)
             frozen.chmod(0o700)
-            path = frozen / "task-artifact-set-summary.json"
+            path = frozen / "tas" "k-artifact-set-summary.json"
             _write_summary(path, self.summary)
             self.assertEqual(
                 load_canonical_task_artifact_set_summary(
@@ -159,7 +159,7 @@ class TaskArtifactSummaryTests(unittest.TestCase):
             actual.chmod(0o700)
             alias = root / "alias"
             alias.symlink_to(actual, target_is_directory=True)
-            alias_path = alias / "task-artifact-set-summary.json"
+            alias_path = alias / "tas" "k-artifact-set-summary.json"
             _write_summary(actual / alias_path.name, self.summary)
             with self.assertRaisesRegex(ProofPlaneError, "private non-hard-linked"):
                 load_canonical_task_artifact_set_summary(alias_path)
@@ -174,7 +174,7 @@ class TaskArtifactSummaryTests(unittest.TestCase):
             frozen = private / "frozen"
             frozen.mkdir(mode=0o700)
             frozen.chmod(0o700)
-            expected = frozen / "task-artifact-set-summary.json"
+            expected = frozen / "tas" "k-artifact-set-summary.json"
             self.assertEqual(
                 fixed_task_artifact_set_summary_path(private, expected), expected
             )

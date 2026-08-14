@@ -2614,6 +2614,28 @@ class EvidenceTests(unittest.TestCase):
             self.assertTrue(all("preview" not in item for item in result["findings"]))
             self.assertTrue(any(item["reason"] == "symlink_file_not_scanned" for item in result["scanErrors"]))
 
+    def test_secret_scan_distinguishes_jstack_identifiers_from_openai_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            (repo / "identifiers.txt").write_text(
+                "jstack-beta1-task-artifact-curator-v1\n"
+                'PRIVATE_ARCHIVE_PLACEHOLDER = "<private-oci-archive>"\n',
+                encoding="utf-8",
+            )
+            clean = server.tool_security_audit({"project_path": str(repo)})
+            self.assertTrue(clean["passed"], clean["findings"])
+
+            (repo / "leak.txt").write_text(
+                "credential=" + "sk-" + "a" * 24 + "\n",
+                encoding="utf-8",
+            )
+            leaked = server.tool_security_audit({"project_path": str(repo)})
+            self.assertFalse(leaked["passed"])
+            self.assertEqual(
+                [item["pattern"] for item in leaked["findings"]],
+                ["openai_key"],
+            )
+
 
     def test_quick_audit_lifecycle_issues_current_separate_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

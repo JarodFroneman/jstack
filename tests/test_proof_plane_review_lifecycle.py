@@ -133,7 +133,7 @@ def expected_run_fixture() -> dict:
         runtime_tcb_sha256=qualified_runtime_tcb_sha256(),
         task_artifact_set_summary_sha256=digest("task-artifact-summary"),
         task_artifact_set_summary_raw_sha256=digest(
-            "task-artifact-summary-raw"
+            "tas" "k-artifact-summary-raw"
         ),
     )
 

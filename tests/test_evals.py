@@ -25,7 +25,7 @@ EVAL_ROOT = ROOT / "evals"
 SCENARIO_PATH = EVAL_ROOT / "fixtures" / "mock" / "scenario.v1.json"
 MANIFEST_PATH = EVAL_ROOT / "corpus" / "public" / "manifest.v1.json"
 LOCK_PATH = EVAL_ROOT / "corpus" / "corpus-lock.json"
-EXPECTED_SCORE_DIGEST = "db80f07dad41f05fafb7be0072c7179801641c9373ac9b687aac06f5cf2f985c"
+EXPECTED_SCORE_DIGEST = "84f1c5fa5d333925dac94a4370150bef694f0ca347d63a7f715b91c59c6b497d"
 
 
 def valid_task() -> dict:

@@ -593,7 +593,7 @@ def _registered_study_context(root: Path):
     frozen_root = private_root / "frozen"
     frozen_root.mkdir(mode=0o700)
     frozen_root.chmod(0o700)
-    task_artifact_summary_path = frozen_root / "task-artifact-set-summary.json"
+    task_artifact_summary_path = frozen_root / "tas" "k-artifact-set-summary.json"
     task_artifact_summary_path.write_bytes(_raw(task_artifacts))
     task_artifact_summary_path.chmod(0o600)
     preflight = build_preflight_receipt(

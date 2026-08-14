@@ -211,8 +211,22 @@ class BoundedProcessError(ProofPlaneError):
         self.stderr = stderr
 
 
-def probe_mcp_tool_surface(command: list[str], *, expected_count: int, name_prefix: str) -> dict[str, Any]:
-    """Initialize one frozen MCP server and digest its complete advertised tools."""
+def probe_mcp_tool_surface(
+    command: list[str],
+    *,
+    expected_count: int,
+    name_prefix: str,
+    expected_version: str,
+) -> dict[str, Any]:
+    """Initialize one frozen MCP server and bind its version and tool surface."""
+
+    if (
+        not isinstance(expected_version, str)
+        or not expected_version
+        or expected_version != expected_version.strip()
+        or len(expected_version) > 100
+    ):
+        raise ProofPlaneError("expected MCP server version is invalid")
 
     requests = [
         {
@@ -255,11 +269,22 @@ def probe_mcp_tool_surface(command: list[str], *, expected_count: int, name_pref
     initialize = by_id[1]["result"]
     if not isinstance(initialize, dict):
         raise ProofPlaneError("MCP initialize result is invalid")
+    server_info = initialize.get("serverInfo")
+    if (
+        not isinstance(server_info, dict)
+        or set(server_info) != {"name", "version"}
+        or server_info.get("name") != "jstack-mcp"
+        or server_info.get("version") != expected_version
+    ):
+        raise ProofPlaneError(
+            "MCP initialize server version differs from the frozen registration"
+        )
     return {
         "count": expected_count,
         "names": sorted(names),
         "toolsSha256": canonical_digest(canonical_tools),
         "initializeSha256": canonical_digest(initialize),
+        "serverVersion": expected_version,
     }
 
 
@@ -442,6 +467,48 @@ def codex_cli_provenance(codex_path: Path) -> str:
         values["TeamIdentifier"],
         values["CandidateCDHashFull sha256"],
     )
+
+
+def codex_cli_registration_binding(codex_path: Path) -> dict[str, str]:
+    """Derive the closed host fields used by preregistration.
+
+    The executable path is selected by the maintainer lifecycle, never by the
+    candidate document.  This helper binds the same version command, bytes,
+    and Apple signing identity that preflight later rechecks.
+    """
+
+    if (
+        not isinstance(codex_path, Path)
+        or not codex_path.is_absolute()
+        or codex_path.is_symlink()
+        or not codex_path.is_file()
+        or not os.access(codex_path, os.X_OK)
+    ):
+        raise ProofPlaneError("Codex CLI must be an absolute regular executable")
+    completed = _run(
+        [str(codex_path), "--version"], timeout=15, maximum_output=100_000
+    )
+    if completed.returncode != 0 or completed.stderr:
+        raise ProofPlaneError("Codex CLI version query failed clean execution")
+    try:
+        rendered = completed.stdout.decode("utf-8", errors="strict").strip()
+    except UnicodeError as exc:
+        raise ProofPlaneError("Codex CLI version response is not UTF-8") from exc
+    pieces = rendered.split()
+    if (
+        len(pieces) != 2
+        or pieces[0] != "codex-cli"
+        or not pieces[1]
+        or len(pieces[1]) > 100
+        or any(character in pieces[1] for character in ("\x00", "\r", "\n"))
+    ):
+        raise ProofPlaneError("Codex CLI version response is not the closed host form")
+    return {
+        "name": pieces[0],
+        "version": pieces[1],
+        "binarySha256": file_digest(codex_path),
+        "provenance": codex_cli_provenance(codex_path),
+    }
 
 
 def codex_command(
@@ -814,6 +881,7 @@ def preflight(
         [str(Path(shutil.which("python3") or "/usr/bin/python3").resolve()), str(server_path)],
         expected_count=registration["executor"]["jstackMcpToolCount"],
         name_prefix="jstack_",
+        expected_version=registration["targetJStackVersion"],
     )
     if tool_surface["toolsSha256"] != registration["executor"]["jstackMcpToolsSha256"]:
         raise ProofPlaneError("registered JStack MCP tool surface differs from the live server")
@@ -1664,6 +1732,12 @@ def _planned_attempt_evidence_paths(private_root: Path, run_id: str) -> dict[str
     }
 
 
+def planned_attempt_evidence_paths(private_root: Path, run_id: str) -> dict[str, Path]:
+    """Expose deterministic preregistration paths without creating them."""
+
+    return _planned_attempt_evidence_paths(private_root, run_id)
+
+
 def _container_absence_proven(runtime: Path, container_name: str) -> bool:
     """Independently prove an exact Apple-container ID is absent.
 
@@ -1784,6 +1858,7 @@ def _load_trusted_attempt_admission(
     private_root: Path,
     runtime: Path,
     codex_path: Path,
+    require_unstarted: bool = True,
 ) -> dict[str, Any]:
     """Derive one attempt solely from cross-bound, frozen study artifacts.
 
@@ -1793,6 +1868,8 @@ def _load_trusted_attempt_admission(
     below has passed.
     """
 
+    if not isinstance(require_unstarted, bool):
+        raise ProofPlaneError("require_unstarted must be boolean")
     if not isinstance(run_id, str) or not run_id or run_id != run_id.strip() or len(run_id) > 500:
         raise ProofPlaneError("run_id must be one bounded frozen run identifier")
     if (
@@ -2101,6 +2178,7 @@ def _load_trusted_attempt_admission(
         [str(Path(shutil.which("python3") or "/usr/bin/python3").resolve()), str(server)],
         expected_count=registration["executor"]["jstackMcpToolCount"],
         name_prefix="jstack_",
+        expected_version=registration["targetJStackVersion"],
     )
     if surface["toolsSha256"] != registration["executor"]["jstackMcpToolsSha256"]:
         raise ProofPlaneError("JStack MCP tool surface differs from the frozen registration")
@@ -2183,9 +2261,10 @@ def _load_trusted_attempt_admission(
     if broker_config["configSha256"] != evidence_bindings["configSha256ByRun"][run_id]:
         raise ProofPlaneError("proof broker configuration differs from the frozen evidence binding")
     artifact_paths = model_attempt_artifact_paths(private_root, run_id)
-    for path in (artifact_paths["root"], *planned_evidence.values()):
-        if path.exists() or path.is_symlink():
-            raise ProofPlaneError("private model-attempt artifacts already exist; retries are forbidden")
+    if require_unstarted:
+        for path in (artifact_paths["root"], *planned_evidence.values()):
+            if path.exists() or path.is_symlink():
+                raise ProofPlaneError("private model-attempt artifacts already exist; retries are forbidden")
 
     return {
         "runId": run_id,
@@ -2210,6 +2289,62 @@ def _load_trusted_attempt_admission(
         "surface": surface,
         "server": server,
         "artifactPaths": artifact_paths,
+    }
+
+
+def validate_frozen_study_admission(
+    *,
+    registration_path: Path,
+    expected_run_set_path: Path,
+    preflight_receipt_path: Path,
+    qualification_receipt_set_path: Path,
+    task_artifact_set_summary_path: Path,
+    repo_root: Path,
+    artifact_root: Path,
+    private_root: Path,
+    runtime: Path,
+    codex_path: Path,
+) -> dict[str, Any]:
+    """Revalidate the immutable whole-study admission without starting a run.
+
+    The expected-run document is validated first and selects its own first
+    frozen run identifier.  The trusted attempt loader then replays every
+    set-wide, registration, runtime, tool-surface, qualification, image-store,
+    task-artifact, and preflight join.  It creates no attempt state and accepts
+    no caller-selected run identifier.
+    """
+
+    expected_set = load_canonical_expected_run_set(expected_run_set_path)
+    expected_runs = expected_set["expectedRuns"]
+    if len(expected_runs) != 216:
+        raise ProofPlaneError("frozen admission must contain exactly 216 expected runs")
+    first = expected_runs[0]
+    if not isinstance(first, Mapping) or not isinstance(first.get("runId"), str):
+        raise ProofPlaneError("frozen admission first run identifier is invalid")
+    admission = _load_trusted_attempt_admission(
+        run_id=first["runId"],
+        registration_path=registration_path,
+        expected_run_set_path=expected_run_set_path,
+        preflight_receipt_path=preflight_receipt_path,
+        qualification_receipt_set_path=qualification_receipt_set_path,
+        task_artifact_set_summary_path=task_artifact_set_summary_path,
+        repo_root=repo_root,
+        artifact_root=artifact_root,
+        private_root=private_root,
+        runtime=runtime,
+        codex_path=codex_path,
+        require_unstarted=False,
+    )
+    return {
+        "schemaVersion": "jstack.eval.frozen-study-admission-validation.v1",
+        "studyId": admission["registration"]["studyId"],
+        "expectedRunCount": len(expected_runs),
+        "firstRunId": first["runId"],
+        "registrationSha256": admission["registrationSha256"],
+        "expectedRunSetSha256": admission["expectedRunSetSha256"],
+        "preflightReceiptSha256": admission["preflightReceiptSha256"],
+        "runtimeTcbSha256": admission["runtimeTcb"]["tcbSha256"],
+        "mutated": False,
     }
 
 
@@ -3163,14 +3298,17 @@ __all__ = [
     "attempt_container_name",
     "attempt_evidence_paths",
     "build_attempt_broker_config",
+    "codex_cli_registration_binding",
     "codex_cli_provenance",
     "codex_command",
     "compose_model_prompt",
     "isolation_canary_script",
     "model_attempt_artifact_paths",
     "parse_codex_jsonl",
+    "planned_attempt_evidence_paths",
     "preflight",
     "probe_mcp_tool_surface",
+    "validate_frozen_study_admission",
     "reconcile_consumed_attempt",
     "run_model_attempt",
     "terminalize_attempt",

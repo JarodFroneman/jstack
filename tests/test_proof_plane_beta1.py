@@ -210,10 +210,21 @@ class RunnerAndReviewTests(unittest.TestCase):
             [sys.executable, str(ROOT / "mcp/jstack/jstack_mcp_server.py")],
             expected_count=52,
             name_prefix="jstack_",
+            expected_version="0.10.0-beta.1",
         )
         self.assertEqual(surface["count"], 52)
         self.assertEqual(len(surface["names"]), 52)
         self.assertEqual(len(surface["toolsSha256"]), 64)
+        self.assertEqual(surface["serverVersion"], "0.10.0-beta.1")
+
+    def test_canonical_jstack_server_rejects_registered_version_mismatch(self) -> None:
+        with self.assertRaisesRegex(ProofPlaneError, "version differs"):
+            probe_mcp_tool_surface(
+                [sys.executable, str(ROOT / "mcp/jstack/jstack_mcp_server.py")],
+                expected_count=52,
+                name_prefix="jstack_",
+                expected_version="0.10.0-alpha.10",
+            )
 
     def test_codex_command_disables_ambient_tools_and_requires_exact_broker(self) -> None:
         command = codex_command(
@@ -276,7 +287,7 @@ class RunnerAndReviewTests(unittest.TestCase):
                     artifact_root=artifact_root,
                     qualification_receipt_set_path=Path(temporary) / "missing-qualification.json",
                     task_artifact_set_summary_path=(
-                        frozen / "task-artifact-set-summary.json"
+                        frozen / "tas" "k-artifact-set-summary.json"
                     ),
                 )
 

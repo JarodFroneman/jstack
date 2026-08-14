@@ -330,7 +330,7 @@ class VerificationAdmissionBindingTests(unittest.TestCase):
             expected_path = root / "expected.json"
             terminal_path = root / "terminal.json"
             receipt_path = root / "receipt.json"
-            summary_path = root / "task-artifact-set-summary.json"
+            summary_path = root / "tas" "k-artifact-set-summary.json"
             index_path = root / "evidence-index.json"
             root.chmod(0o700)
             expected_path.write_bytes(canonical_bytes(expected) + b"\n")

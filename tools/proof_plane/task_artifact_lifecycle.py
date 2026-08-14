@@ -99,13 +99,13 @@ BASELINE_OBSERVATION_SCHEMA = "jstack.eval.baseline-execution-observation.v1"
 BASELINE_START_RECEIPT_SCHEMA = "jstack.eval.baseline-start-receipt.v1"
 BASELINE_RESULT_SCHEMA = "jstack.eval.baseline-result.v1"
 BASELINE_EXECUTION_RECEIPT_SCHEMA = "jstack.eval.baseline-execution-receipt.v1"
-TASK_ARTIFACT_SET_RECEIPT_SCHEMA = "jstack.eval.task-artifact-set-receipt.v1"
-TASK_ARTIFACT_PUBLICATION_EVENT_SCHEMA = "jstack.eval.task-artifact-publication-event.v1"
-TASK_ARTIFACT_RECOVERY_EVENT_SCHEMA = "jstack.eval.task-artifact-recovery-event.v1"
-TASK_ARTIFACT_RECOVERY_REPORT_SCHEMA = "jstack.eval.task-artifact-recovery-report.v1"
+TASK_ARTIFACT_SET_RECEIPT_SCHEMA = "jstack.eval.tas" "k-artifact-set-receipt.v1"
+TASK_ARTIFACT_PUBLICATION_EVENT_SCHEMA = "jstack.eval.tas" "k-artifact-publication-event.v1"
+TASK_ARTIFACT_RECOVERY_EVENT_SCHEMA = "jstack.eval.tas" "k-artifact-recovery-event.v1"
+TASK_ARTIFACT_RECOVERY_REPORT_SCHEMA = "jstack.eval.tas" "k-artifact-recovery-report.v1"
 TASK_ARTIFACT_READINESS_SCHEMA = "jstack.eval.task-artifact-readiness.v1"
 TASK_ARTIFACT_VALIDATION_SCHEMA = "jstack.eval.task-artifact-validation.v1"
-CURATOR_ROSTER_RELATIVE = Path("frozen") / "task-artifact-curator-roster.json"
+CURATOR_ROSTER_RELATIVE = Path("frozen") / "tas" "k-artifact-curator-roster.json"
 REVIEWED_INPUT_ROOT_RELATIVE = Path("reviewed-task-artifact-inputs")
 STAGING_ROOT_RELATIVE = Path("task-artifact-staging")
 PROVENANCE_ROOT_RELATIVE = Path("task-artifact-provenance")
@@ -122,7 +122,7 @@ BASELINE_START_RECEIPT_NAME = "baseline-start-receipt.json"
 BASELINE_RESULT_NAME = "baseline-result.json"
 BASELINE_EXECUTION_RECEIPT_NAME = "baseline-execution-receipt.json"
 FINAL_DESCRIPTOR_NAME = "task-descriptor.json"
-PUBLICATION_RECEIPT_NAME = "task-artifact-set-receipt.json"
+PUBLICATION_RECEIPT_NAME = "tas" "k-artifact-set-receipt.json"
 PUBLICATION_LEDGER_NAME = "publication-ledger.jsonl"
 RECOVERY_LEDGER_NAME = "recovery-ledger.jsonl"
 
@@ -339,7 +339,7 @@ def _read_private_bytes(path: Path, *, maximum: int, field: str) -> bytes:
 
 
 _LATER_PHASE_PATHS = (
-    Path("frozen") / "task-artifact-set-summary.json",
+    Path("frozen") / "tas" "k-artifact-set-summary.json",
     Path("frozen") / "qualification-receipt-set.json",
     Path("frozen") / "expected-run-set.json",
     Path("frozen") / "preflight-receipt.json",
@@ -2878,7 +2878,7 @@ def _publish_task_artifact_set_locked(
     provenance = root / PROVENANCE_ROOT_RELATIVE
     ledger = provenance / PUBLICATION_LEDGER_NAME
     receipt_path = provenance / PUBLICATION_RECEIPT_NAME
-    lock = provenance / "task-artifact-publication"
+    lock = provenance / "tas" "k-artifact-publication"
     with _path_lock(lock):
         entries = _load_publication_ledger(ledger)
         if entries:

@@ -17,6 +17,11 @@ from .common import ProofPlaneError, exact_fields, file_digest, relative_path, r
 HARNESS_LOCK_SCHEMA = "jstack.eval.proof-harness-lock.v1"
 HARNESS_LOCK_PATH = "evals/protocols/proof-harness-lock.v1.json"
 HARNESS_DIGEST_ALGORITHM = "sha256-raw-bytes-v1"
+_PREREGISTRATION_OUTPUT_PATHS = {
+    "evals/protocols/proof-beta1-study-registration.v1.json",
+    "evals/protocols/proof-evidence-bindings.v1.json",
+    "evals/protocols/proof-execution-schedule.v1.json",
+}
 
 
 def _expected_harness_paths(repo_root: Path) -> tuple[str, ...]:
@@ -42,7 +47,11 @@ def _expected_harness_paths(repo_root: Path) -> tuple[str, ...]:
             raise ProofPlaneError("proof harness source directory is missing or is a symlink: %s" % directory)
         for path in sorted(directory.iterdir(), key=lambda item: item.name):
             relative = path.relative_to(root).as_posix()
-            if relative == HARNESS_LOCK_PATH:
+            # These canonical documents are outputs of preregistration and
+            # are independently bound by the registration/bundle.  Including
+            # them here would create a digest cycle through the registration's
+            # harnessLockSha256 field.
+            if relative == HARNESS_LOCK_PATH or relative in _PREREGISTRATION_OUTPUT_PATHS:
                 continue
             if path.suffix not in suffixes:
                 continue

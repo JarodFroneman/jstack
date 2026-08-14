@@ -143,11 +143,16 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Ships In v0.10.0-alpha.10
+## What Is In The v0.10.0-beta.1 Candidate
+
+> **Unreleased candidate:** the product code may identify itself as
+> `0.10.0-beta.1`, but ADR 0021's image, execution, independent-review,
+> evidence, release, and deployment gates have not yet passed. Do not treat
+> this checkout as a validated or published Beta.1 release.
 
 | Capability | What it provides |
 | --- | --- |
-| Proof Foundation | Development-only closed corpus/task/run/review/score contracts, a deterministic network-free mock host and scorer, a six-family/18-slot public development manifest, raw-byte content locking, alpha.9 contract snapshots, and CI-enforced anti-bloat boundaries; it adds no installed command, MCP tool, dependency, authority, or real-project performance claim |
+| Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance or release claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
 | Correctness And Reliability Stage 2 | Closed report and reproduction contracts for exact-Git-bound logic, state-transition, error-handling, and reliability evidence; strong claims require current source hashes, violated invariants, reciprocal static or exact-QA reproductions, complete regression plans, and two deterministic independent passes |
@@ -463,6 +468,7 @@ Proof Plane integrity, and permanent product-boundary tests.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.1 candidate migration guide](docs/migration-0.10.0-beta.1.md) | [Beta.1 Codex Proof Study decision](docs/adr/0021-beta1-codex-proof-study.md) |
 | [v0.10.0-alpha.10 migration guide](docs/migration-0.10.0-alpha.10.md) | [Proof Foundation decision](docs/adr/0020-proof-foundation.md) |
 | [v0.10.0-alpha.9 migration guide](docs/migration-0.10.0-alpha.9.md) | [Enterprise Audit Lead decision](docs/adr/0019-enterprise-audit-lead-stage8.md) |
 | [v0.10.0-alpha.8 migration guide](docs/migration-0.10.0-alpha.8.md) | [Dynamic and Adversarial Verification decision](docs/adr/0018-dynamic-adversarial-verification-stage7.md) |

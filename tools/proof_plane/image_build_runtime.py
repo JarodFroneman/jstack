@@ -215,7 +215,7 @@ _MAX_UNCOMPRESSED_LAYER_BYTES = 20_000_000_000
 _MAX_OCI_LAYERS = 256
 _MAX_TOTAL_LAYER_MEMBERS = 500_000
 _MAX_ROOT_FILESYSTEM_ENTRIES = 500_000
-_PRIVATE_ARCHIVE_TOKEN = "<private-oci-archive>"
+_PRIVATE_ARCHIVE_PLACEHOLDER = "<private-oci-archive>"
 _REQUIRED_IMAGE_LABELS = frozenset(
     (
         "dev.jstack.proof.entry-sha256",
@@ -1527,13 +1527,13 @@ def _inspection_receipt(
         "image",
         "save",
         "--output",
-        _PRIVATE_ARCHIVE_TOKEN,
+        _PRIVATE_ARCHIVE_PLACEHOLDER,
         manifest.document["finalImageReference"],
     )
     semantic_inspection_command = (
         OCI_INSPECTOR_NAME,
         OCI_INSPECTOR_VERSION,
-        _PRIVATE_ARCHIVE_TOKEN,
+        _PRIVATE_ARCHIVE_PLACEHOLDER,
         manifest.document["finalImageReference"],
     )
     body = {

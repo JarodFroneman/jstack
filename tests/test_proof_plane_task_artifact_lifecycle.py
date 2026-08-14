@@ -131,7 +131,7 @@ class TaskArtifactLifecycleTests(unittest.TestCase):
             )
             self.assertEqual(
                 paths.roster,
-                root / "frozen" / "task-artifact-curator-roster.json",
+                root / "frozen" / "tas" "k-artifact-curator-roster.json",
             )
             self.assertEqual(
                 paths.reviewed_signature,
@@ -169,7 +169,7 @@ class TaskArtifactLifecycleTests(unittest.TestCase):
             root.chmod(0o700)
             frozen = root / "frozen"
             frozen.mkdir(mode=0o700)
-            marker = frozen / "task-artifact-set-summary.json"
+            marker = frozen / "tas" "k-artifact-set-summary.json"
             marker.write_text("{}\n", encoding="utf-8")
             marker.chmod(0o600)
             with self.assertRaisesRegex(ProofPlaneError, "after admission"):

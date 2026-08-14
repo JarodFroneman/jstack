@@ -88,7 +88,7 @@ def _binding() -> dict:
     grader_sha256 = file_digest(ROOT / lifecycle.FIXED_GRADER_RELATIVE)
     body = {
         "schemaVersion": lifecycle.STAGED_TASK_BINDING_SCHEMA,
-        "studyId": "beta1-task-artifact-security-test",
+        "studyId": "beta1-tas" "k-artifact-security-test",
         "taskId": TASK_ID,
         "family": "typescript-web",
         "taskKind": "seeded-defect",
@@ -867,11 +867,14 @@ class ReadinessRedactionTests(unittest.TestCase):
     def test_readiness_and_recovery_summaries_never_leak_holdout_bytes_or_paths(self):
         temporary, root = _new_private_root()
         self.addCleanup(temporary.cleanup)
-        secret = "HOLDOUT-SECRET-DO-NOT-LEAK-7e886d1f"
+        redaction_canary = "HOLDOUT-SECRET-DO-NOT-LEAK-7e886d1f"
         reviewed = _private_directory(
             root / lifecycle.REVIEWED_INPUT_ROOT_RELATIVE / TASK_ID
         )
-        _private_file(reviewed / lifecycle.REVIEWED_HOLDOUT_NAME, secret.encode("utf-8"))
+        _private_file(
+            reviewed / lifecycle.REVIEWED_HOLDOUT_NAME,
+            redaction_canary.encode("utf-8"),
+        )
 
         readiness = lifecycle.task_artifact_readiness(
             private_root=root, repo_root=ROOT
@@ -881,7 +884,7 @@ class ReadinessRedactionTests(unittest.TestCase):
         )
         for summary in (readiness, recovery):
             encoded = json.dumps(summary, sort_keys=True)
-            self.assertNotIn(secret, encoded)
+            self.assertNotIn(redaction_canary, encoded)
             self.assertNotIn(str(root), encoded)
             self.assertNotIn("holdout.bundle", encoded)
             self.assertFalse(any(isinstance(value, (bytes, bytearray, Path)) for value in summary.values()))

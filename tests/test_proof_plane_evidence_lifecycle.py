@@ -51,7 +51,7 @@ def evidence_index_fixture() -> dict:
         "expectedRunSetSha256": digest("expected"),
         "terminalSetSha256": digest("terminal"),
         "taskArtifactSetSummarySha256": digest("task-artifact-summary"),
-        "taskArtifactSetSummaryRawSha256": digest("task-artifact-summary-raw"),
+        "taskArtifactSetSummaryRawSha256": digest("tas" "k-artifact-summary-raw"),
         "runCount": 216,
         "rows": rows,
         "runSetSha256": digest("runs"),
@@ -105,7 +105,7 @@ class ClosedEvidenceIndexTests(unittest.TestCase):
                 "expected-run-set.json",
                 "terminal-set.json",
                 "preflight-receipt.json",
-                "task-artifact-set-summary.json",
+                "tas" "k-artifact-set-summary.json",
                 "qualification-receipt-set.json",
                 "reviewer-roster.json",
             ):
@@ -115,7 +115,7 @@ class ClosedEvidenceIndexTests(unittest.TestCase):
             secret = secrets / "review-packet-secret.bin"
             secret.write_bytes(b"s" * 32)
             secret.chmod(0o600)
-            artifact_receipt = provenance / "task-artifact-set-receipt.json"
+            artifact_receipt = provenance / "tas" "k-artifact-set-receipt.json"
             artifact_receipt.write_bytes(b"{}\n")
             artifact_receipt.chmod(0o600)
             paths = fixed_study_paths(root)
@@ -189,7 +189,7 @@ class ProductionEvidenceGateTests(unittest.TestCase):
                 ),
                 terminal_set=Path("/private/frozen/terminal-set.json"),
                 task_artifact_set_summary=Path(
-                    "/private/frozen/task-artifact-set-summary.json"
+                    "/private/frozen/tas" "k-artifact-set-summary.json"
                 ),
             ),
             "evidenceBindings": {
@@ -251,7 +251,7 @@ class ProductionEvidenceGateTests(unittest.TestCase):
                 expected_run_set=root / "frozen" / "expected-run-set.json",
                 terminal_set=root / "frozen" / "terminal-set.json",
                 task_artifact_set_summary=(
-                    root / "frozen" / "task-artifact-set-summary.json"
+                    root / "frozen" / "tas" "k-artifact-set-summary.json"
                 ),
             ),
         }

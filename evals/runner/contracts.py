@@ -260,7 +260,7 @@ def validate_manifest(value: Mapping[str, Any]) -> Dict[str, Any]:
     _identifier(value["corpusId"], "manifest.corpusId")
     _identifier(value["corpusVersion"], "manifest.corpusVersion")
     if value["status"] != "development-only":
-        raise ContractError("alpha.10 manifest status must be development-only")
+        raise ContractError("Beta.1 candidate manifest status must be development-only")
     _text(value["description"], "manifest.description", maximum=2_000)
 
     tiers = _array(value["benchmarkTiers"], "manifest.benchmarkTiers", maximum=5)

@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.10.0-beta.1 - Unreleased code-complete candidate
+
+### Added
+
+- Added the uninstalled Beta.1 Proof Plane maintainer lifecycle for sealed
+  image construction and qualification, task-artifact curation and baseline
+  reproduction, immutable 216-cell admission and execution, delayed holdout
+  grading, signed blinded review, evidence assembly, and independent final
+  verification.
+- Added exact six-family, 18-task public briefs plus source, image, runtime,
+  holdout, reviewer, controller, grader, and evidence contracts with
+  fail-closed recovery and atomic publication rules.
+- Added Apple container host/runtime TCB inspection, OCI/rootfs inspection,
+  guest execution-TCB binding, immutable image-store observations, signed
+  builder provenance, and dedicated task-artifact lifecycle evidence.
+- Added a fixed fresh-root Apple runtime bootstrap lifecycle and a deterministic,
+  non-authorizing preregistration-candidate builder with crash-safe private and
+  public publication receipts. Neither surface installs the runtime, creates a
+  tag, starts a study attempt, or publishes a release implicitly.
+- Added the Beta.1 migration and rollback guide and ADR 0021's explicit
+  distinction between candidate version identity and release authorization.
+
+### Changed
+
+- Advanced every installable version-bearing artifact and MCP initialize
+  response to `0.10.0-beta.1` while retaining five commands, 52 canonical
+  tools, Python 3.9 compatibility, the standard-library core, and alpha.9
+  public-contract compatibility.
+- Kept the Proof Plane outside installed MCP and plugin artifacts. Product
+  synchronization and boundary checks reject any accidental packaging of
+  private study authority.
+- Tightened live preregistration and attempt admission to bind the MCP server
+  version as well as its exact bytes and 52-tool surface.
+
+### Security
+
+- The code-complete candidate is not a validated release. The 18 image
+  qualifications, 216 attempts, 432 independent human reviews, final evidence
+  signature, release, publication, deployment, and global installation remain
+  deliberately deferred and cannot be inferred from passing product tests.
+- No test fixture, self-digest, model-authored review, or partial study output
+  can satisfy the accepted Beta.1 release gate.
+
 ## 0.10.0-alpha.10 - 2026-08-12
 
 ### Added

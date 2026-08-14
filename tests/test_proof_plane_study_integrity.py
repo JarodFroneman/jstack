@@ -66,7 +66,7 @@ def gap_report(registration_path: Path, **kwargs):
         registration_path,
         expected_run_set_path=root / "expected-run-set.json",
         terminal_set_path=root / "terminal-set.json",
-        task_artifact_set_summary_path=root / "task-artifact-set-summary.json",
+        task_artifact_set_summary_path=root / "tas" "k-artifact-set-summary.json",
         evidence_index_path=root / "evidence-index.json",
         **kwargs,
     )
@@ -541,7 +541,7 @@ def _complete_study(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     task_artifact_digests = task_artifact_set_summary_digests(
         task_artifact_summary
     )
-    task_artifact_summary_path = root / "task-artifact-set-summary.json"
+    task_artifact_summary_path = root / "tas" "k-artifact-set-summary.json"
     task_artifact_summary_path.write_bytes(
         canonical_bytes(task_artifact_summary) + b"\n"
     )

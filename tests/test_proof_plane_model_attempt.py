@@ -170,7 +170,7 @@ class TrustedAttemptAdmissionTests(unittest.TestCase):
             frozen = private / "frozen"
             frozen.mkdir(mode=0o700)
             task_artifact_summary_path = (
-                frozen / "task-artifact-set-summary.json"
+                frozen / "tas" "k-artifact-set-summary.json"
             )
             task_artifact_summary_path.write_text("{}\n", encoding="utf-8")
             task_artifact_summary_path.chmod(0o600)
@@ -270,6 +270,7 @@ class TrustedAttemptAdmissionTests(unittest.TestCase):
             }
             registration = {
                 "studyId": "beta1-study",
+                "targetJStackVersion": "0.10.0-beta.1",
                 "manifestPath": manifest_path.name,
                 "registrationRef": "refs/tags/proof-beta1-registration-test",
                 "schedule": {"seedSha256": "5" * 64},
@@ -816,7 +817,7 @@ class ModelAttemptOrchestrationTests(unittest.TestCase):
         frozen = private / "frozen"
         frozen.mkdir(mode=0o700)
         frozen.chmod(0o700)
-        task_artifact_summary_path = frozen / "task-artifact-set-summary.json"
+        task_artifact_summary_path = frozen / "tas" "k-artifact-set-summary.json"
         task_artifact_summary_path.write_text("{}\n", encoding="utf-8")
         task_artifact_summary_path.chmod(0o600)
         image_store_observation = _image_store_observation(
