@@ -55,10 +55,77 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:TEMP = Join-Path $env:USERPROFILE 'AppData\Local\Temp'
+          # GitHub's hosted USERPROFILE grants broader inherited access than
+          # the installer's fail-closed ACL policy permits. Give the tests a
+          # dedicated profile boundary with only the current runner identity.
+          $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+          $inheritance = (
+            [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+            [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+          )
+          function Set-JStackTestProfileAcl {
+            param(
+              [string]$Path,
+              [switch]$AllowAuthenticatedUsers
+            )
+            New-Item -ItemType Directory -Force -Path $Path | Out-Null
+            $profileAcl = [System.Security.AccessControl.DirectorySecurity]::new()
+            $profileAcl.SetOwner($currentUser)
+            $profileAcl.SetAccessRuleProtection($true, $false)
+            $profileRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+              $currentUser,
+              [System.Security.AccessControl.FileSystemRights]::FullControl,
+              $inheritance,
+              [System.Security.AccessControl.PropagationFlags]::None,
+              [System.Security.AccessControl.AccessControlType]::Allow
+            )
+            $profileAcl.AddAccessRule($profileRule)
+            if ($AllowAuthenticatedUsers) {
+              $authenticatedUsers = [System.Security.Principal.SecurityIdentifier]::new(
+                'S-1-5-11'
+              )
+              $broadRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+                $authenticatedUsers,
+                [System.Security.AccessControl.FileSystemRights]::FullControl,
+                $inheritance,
+                [System.Security.AccessControl.PropagationFlags]::None,
+                [System.Security.AccessControl.AccessControlType]::Allow
+              )
+              $profileAcl.AddAccessRule($broadRule)
+            }
+            Set-Acl -LiteralPath $Path -AclObject $profileAcl
+          }
+
+          $broadProfileRoot = Join-Path $env:RUNNER_TEMP 'jstack-broad-profile'
+          Set-JStackTestProfileAcl -Path $broadProfileRoot -AllowAuthenticatedUsers
+          $env:USERPROFILE = $broadProfileRoot
+          $negativeProbe = @'
+          import os
+          from pathlib import Path
+          from scripts import install
+
+          try:
+              install._validate_windows_install_root(Path(os.environ["USERPROFILE"]))
+          except RuntimeError as exc:
+              expected = "is not verifiably user-private; installation stopped safely."
+              if expected not in str(exc):
+                  raise AssertionError(f"unexpected ACL rejection: {exc}") from exc
+          else:
+              raise AssertionError("broad Windows profile ACL was accepted")
+          '@
+          $negativeProbe | python -
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $profileRoot = Join-Path $env:RUNNER_TEMP 'jstack-private-profile'
+          Set-JStackTestProfileAcl -Path $profileRoot
+          $env:USERPROFILE = $profileRoot
+          $env:TEMP = Join-Path $profileRoot 'AppData\Local\Temp'
           $env:TMP = $env:TEMP
+          $env:TMPDIR = $env:TEMP
           New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
-          python -c "import os,tempfile; root=os.path.normcase(os.environ['USERPROFILE']); value=os.path.normcase(tempfile.gettempdir()); assert os.path.commonpath((root,value)) == root, (root,value)"
+          python -c "import os,tempfile; from pathlib import Path; from scripts import install; root=os.path.normcase(os.environ['USERPROFILE']); value=os.path.normcase(tempfile.gettempdir()); install._validate_windows_install_root(Path(value)); assert os.path.commonpath((root,value)) == root, (root,value)"
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
