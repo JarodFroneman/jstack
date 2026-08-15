@@ -291,6 +291,13 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual("new = true\n", target.read_text(encoding="utf-8"))
             self.assertEqual("old = true\n", retained.read_text(encoding="utf-8"))
             self.assertEqual(2, acl_script.call_count)
+            self.assertTrue(
+                all(
+                    "$PSHOME\\Modules\\Microsoft.PowerShell.Security\\"
+                    "Microsoft.PowerShell.Security.psd1" in call.args[0]
+                    for call in acl_script.call_args_list
+                )
+            )
             copy_environment = acl_script.call_args_list[0].args[1]
             verify_environment = acl_script.call_args_list[1].args[1]
             self.assertEqual(str(target), copy_environment["JSTACK_ACL_SOURCE"])
@@ -459,6 +466,11 @@ class InstallerTests(unittest.TestCase):
 
         runner.assert_called_once()
         call = runner.call_args
+        self.assertIn(
+            "$PSHOME\\Modules\\Microsoft.PowerShell.Utility\\"
+            "Microsoft.PowerShell.Utility.psd1",
+            call.args[0],
+        )
         self.assertIn("foreach ($path in @($paths))", call.args[0])
         self.assertEqual({}, call.args[1])
         self.assertTrue(call.kwargs["input_text"].isascii())
@@ -539,7 +551,15 @@ class InstallerTests(unittest.TestCase):
 
         script = runner.call_args.args[0]
         self.assertIn("$acl.GetOwner", script)
-        self.assertIn("$allowType = [System.Security.AccessControl.AccessControlType]::Allow", script)
+        self.assertIn(
+            "$PSHOME\\Modules\\Microsoft.PowerShell.Security\\"
+            "Microsoft.PowerShell.Security.psd1",
+            script,
+        )
+        self.assertIn(
+            "$allowType = [System.Security.AccessControl.AccessControlType]::Allow",
+            script,
+        )
         self.assertIn(
             "$inheritOnlyFlag = "
             "[System.Security.AccessControl.PropagationFlags]::InheritOnly",

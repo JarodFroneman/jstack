@@ -242,6 +242,8 @@ def _run_windows_acl_script(
 def _windows_private_acl_script(invocation: str) -> str:
     return r"""
 $ErrorActionPreference = 'Stop'
+$securityModule = "$PSHOME\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1"
+Import-Module -Name $securityModule -Force -ErrorAction Stop
 function Assert-JStackPrivateAcl {
     param([string]$Path)
     $acl = Get-Acl -LiteralPath $Path
@@ -294,6 +296,8 @@ def _ensure_windows_private_acls(paths: list[Path], *, label: str) -> None:
         return
     script = _windows_private_acl_script(
         r"""
+$utilityModule = "$PSHOME\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1"
+Import-Module -Name $utilityModule -Force -ErrorAction Stop
 $paths = ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())
 foreach ($path in @($paths)) {
     Assert-JStackPrivateAcl -Path $path
@@ -430,6 +434,8 @@ def _preserve_windows_file_acl(source: Path, destination: Path) -> None:
             )
         script = r"""
 $ErrorActionPreference = 'Stop'
+$securityModule = "$PSHOME\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1"
+Import-Module -Name $securityModule -Force -ErrorAction Stop
 $acl = Get-Acl -LiteralPath $env:JSTACK_ACL_SOURCE
 Set-Acl -LiteralPath $env:JSTACK_ACL_DESTINATION -AclObject $acl
 """
