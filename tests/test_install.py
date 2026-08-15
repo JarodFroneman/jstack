@@ -727,9 +727,17 @@ class InstallerTests(unittest.TestCase):
             external = base / "external-agents.md"
             external.write_bytes(b"external\n")
             (codex_home / "AGENTS.md").symlink_to(external)
+            expected_error = (
+                RuntimeError if os.name == "nt" else install_module.ManagedAgentsError
+            )
+            expected_message = (
+                "Windows JStack managed path requires real non-reparse descendants"
+                if os.name == "nt"
+                else "linked or reparse-point AGENTS"
+            )
             with self.assertRaisesRegex(
-                install_module.ManagedAgentsError,
-                "linked or reparse-point AGENTS",
+                expected_error,
+                expected_message,
             ):
                 install_module.install(ROOT, codex_home, manage_agents=True)
             self.assertEqual(b"external\n", external.read_bytes())
@@ -1822,14 +1830,28 @@ class InstallerTests(unittest.TestCase):
                 return result
 
             try:
-                with mock.patch.object(
+                patch_state_match = mock.patch.object(
                     install_module,
                     "_install_file_state_matches",
                     side_effect=mutate_after_validation,
-                ):
-                    install_module.install(ROOT, codex_home)
+                )
+                if os.name == "nt":
+                    with patch_state_match, self.assertRaisesRegex(
+                        install_module.InstallPreimageDrift,
+                        "could not be displaced safely",
+                    ):
+                        install_module.install(ROOT, codex_home)
+                else:
+                    with patch_state_match:
+                        install_module.install(ROOT, codex_home)
             finally:
                 os.close(descriptor)
+
+            if os.name == "nt":
+                self.assertFalse(mutated)
+                self.assertEqual(original, config.read_bytes())
+                self.assertFalse(any(codex_home.glob(".jstack-install-*")))
+                return
 
             self.assertTrue(mutated)
             recovered_configs = list(
