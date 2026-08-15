@@ -69,9 +69,12 @@ jobs:
               [switch]$AllowAuthenticatedUsers
             )
             New-Item -ItemType Directory -Force -Path $Path | Out-Null
-            $profileAcl = [System.Security.AccessControl.DirectorySecurity]::new()
-            $profileAcl.SetOwner($currentUser)
+            $profileAcl = Get-Acl -LiteralPath $Path
             $profileAcl.SetAccessRuleProtection($true, $false)
+            foreach ($existingRule in @($profileAcl.Access)) {
+              [void]$profileAcl.RemoveAccessRuleSpecific($existingRule)
+            }
+            $profileAcl.SetOwner($currentUser)
             $profileRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
               $currentUser,
               [System.Security.AccessControl.FileSystemRights]::FullControl,
@@ -94,6 +97,13 @@ jobs:
               $profileAcl.AddAccessRule($broadRule)
             }
             Set-Acl -LiteralPath $Path -AclObject $profileAcl
+            $appliedAcl = Get-Acl -LiteralPath $Path
+            $sections = (
+              [System.Security.AccessControl.AccessControlSections]::Owner -bor
+              [System.Security.AccessControl.AccessControlSections]::Access
+            )
+            $appliedSddl = $appliedAcl.GetSecurityDescriptorSddlForm($sections)
+            Write-Host ('JStack CI ACL fixture {0}: {1}' -f $Path, $appliedSddl)
           }
 
           $broadProfileRoot = Join-Path $env:RUNNER_TEMP 'jstack-broad-profile'
@@ -121,6 +131,82 @@ jobs:
           $profileRoot = Join-Path $env:RUNNER_TEMP 'jstack-private-profile'
           Set-JStackTestProfileAcl -Path $profileRoot
           $env:USERPROFILE = $profileRoot
+          $env:JSTACK_ACL_PATH = $profileRoot
+          $privateAclProbe = @'
+          $ErrorActionPreference = 'Stop'
+          $acl = Get-Acl -LiteralPath $env:JSTACK_ACL_PATH
+          $current = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          $owner = $acl.GetOwner(
+            [System.Security.Principal.SecurityIdentifier]
+          ).Value
+          $allowed = @($current, 'S-1-5-18', 'S-1-5-32-544')
+          $rules = @($acl.Access)
+          if ($rules.Count -gt 16) {
+            throw "JSTACK_CI_PRIVATE_ACL_TOO_MANY_ACES:$($rules.Count)"
+          }
+          $entries = @(
+            foreach ($rule in $rules) {
+              $sid = $rule.IdentityReference.Translate(
+                [System.Security.Principal.SecurityIdentifier]
+              ).Value
+              [ordered]@{
+                sid = $sid
+                type = [string]$rule.AccessControlType
+                rights = [string]$rule.FileSystemRights
+                inherited = [bool]$rule.IsInherited
+                inheritance = [string]$rule.InheritanceFlags
+                propagation = [string]$rule.PropagationFlags
+              }
+            }
+          )
+          $diagnostic = [ordered]@{
+            path = $env:JSTACK_ACL_PATH
+            currentSid = $current
+            ownerSid = $owner
+            protected = [bool]$acl.AreAccessRulesProtected
+            aceCount = $rules.Count
+            aces = $entries
+          }
+          Write-Output (
+            'JStack CI private ACL diagnostic: ' +
+            ($diagnostic | ConvertTo-Json -Compress -Depth 4)
+          )
+          if (-not $acl.AreAccessRulesProtected) {
+            throw 'JSTACK_CI_PRIVATE_ACL_NOT_PROTECTED'
+          }
+          if ($allowed -notcontains $owner) {
+            throw "JSTACK_CI_PRIVATE_ACL_OWNER_REJECTED:$owner"
+          }
+          $allowType = [System.Security.AccessControl.AccessControlType]::Allow
+          $inheritOnlyFlag = [System.Security.AccessControl.PropagationFlags]::InheritOnly
+          foreach ($rule in $rules) {
+            if ($rule.AccessControlType -ne $allowType) {
+              continue
+            }
+            $sid = $rule.IdentityReference.Translate(
+              [System.Security.Principal.SecurityIdentifier]
+            ).Value
+            $isInheritOnly = [bool](
+              $rule.PropagationFlags -band $inheritOnlyFlag
+            )
+            $creatorOwner = (
+              $sid -eq 'S-1-3-0' -and
+              $isInheritOnly
+            )
+            if (($allowed -notcontains $sid) -and -not $creatorOwner) {
+              throw "JSTACK_CI_PRIVATE_ACL_ALLOW_SID_REJECTED:$sid"
+            }
+          }
+          '@
+          $encodedProbe = [Convert]::ToBase64String(
+            [Text.Encoding]::Unicode.GetBytes($privateAclProbe)
+          )
+          $directProbeOutput = & powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $encodedProbe 2>&1
+          $directProbeExit = $LASTEXITCODE
+          $directProbeOutput | ForEach-Object { Write-Host $_ }
+          if ($directProbeExit -ne 0) {
+            throw "JSTACK_CI_PRIVATE_ACL_DIRECT_PROBE_FAILED:$directProbeExit"
+          }
           $env:TEMP = Join-Path $profileRoot 'AppData\Local\Temp'
           $env:TMP = $env:TEMP
           $env:TMPDIR = $env:TEMP
