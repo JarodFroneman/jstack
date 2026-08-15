@@ -4,10 +4,12 @@ import copy
 import json
 import os
 import stat
+import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from evals.runner.contracts import TARGET_FAMILIES, TASK_KINDS, canonical_digest, validate_manifest
 from tools.proof_plane.broker import ProofBroker, RuntimeClient, broker_config_digest, validate_broker_config
@@ -35,6 +37,70 @@ from tools.proof_plane.task_specs import HISTORICAL_REPLAYS, inventory
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BETA1_TAG = "v0.10.0-beta.1"
+BETA1_COMMIT = "7c38496febbd6aa60b51e119287e92d63a9f32ca"
+
+
+def export_frozen_beta1_server(destination: Path) -> Path:
+    """Export only the immutable Beta.1 MCP tree from its annotated release tag."""
+
+    object_type = subprocess.run(
+        ["git", "-C", str(ROOT), "cat-file", "-t", BETA1_TAG],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if object_type != "tag":
+        raise AssertionError(f"{BETA1_TAG} must be an annotated tag, got {object_type!r}")
+    commit = subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", f"{BETA1_TAG}^{{}}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if commit != BETA1_COMMIT:
+        raise AssertionError(
+            f"{BETA1_TAG} resolved to {commit!r}, expected frozen commit {BETA1_COMMIT!r}"
+        )
+
+    archive = destination / "jstack-beta1-mcp.tar"
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "archive",
+            "--format=tar",
+            f"--output={archive}",
+            f"{BETA1_TAG}^{{}}",
+            "mcp/jstack",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    with tarfile.open(archive, mode="r:") as bundle:
+        for member in bundle.getmembers():
+            relative = PurePosixPath(member.name)
+            if relative.is_absolute() or ".." in relative.parts:
+                raise AssertionError(f"unsafe path in {BETA1_TAG} archive: {member.name!r}")
+            target = destination.joinpath(*relative.parts)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            if not member.isfile():
+                raise AssertionError(
+                    f"unsupported member type in {BETA1_TAG} archive: {member.name!r}"
+                )
+            source = bundle.extractfile(member)
+            if source is None:
+                raise AssertionError(f"unable to read {member.name!r} from {BETA1_TAG}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read())
+
+    server = destination / "mcp" / "jstack" / "jstack_mcp_server.py"
+    if not server.is_file():
+        raise AssertionError(f"{BETA1_TAG} does not contain the canonical MCP server")
+    return server
 
 
 def fake_task(family: str, kind: str, ordinal: int) -> dict:
@@ -206,25 +272,29 @@ class BrokerTests(unittest.TestCase):
 
 class RunnerAndReviewTests(unittest.TestCase):
     def test_canonical_jstack_server_exposes_one_digest_bound_52_tool_surface(self) -> None:
-        surface = probe_mcp_tool_surface(
-            [sys.executable, str(ROOT / "mcp/jstack/jstack_mcp_server.py")],
-            expected_count=52,
-            name_prefix="jstack_",
-            expected_version="0.10.0-beta.1",
-        )
+        with tempfile.TemporaryDirectory() as temporary:
+            server = export_frozen_beta1_server(Path(temporary))
+            surface = probe_mcp_tool_surface(
+                [sys.executable, str(server)],
+                expected_count=52,
+                name_prefix="jstack_",
+                expected_version="0.10.0-beta.1",
+            )
         self.assertEqual(surface["count"], 52)
         self.assertEqual(len(surface["names"]), 52)
         self.assertEqual(len(surface["toolsSha256"]), 64)
         self.assertEqual(surface["serverVersion"], "0.10.0-beta.1")
 
     def test_canonical_jstack_server_rejects_registered_version_mismatch(self) -> None:
-        with self.assertRaisesRegex(ProofPlaneError, "version differs"):
-            probe_mcp_tool_surface(
-                [sys.executable, str(ROOT / "mcp/jstack/jstack_mcp_server.py")],
-                expected_count=52,
-                name_prefix="jstack_",
-                expected_version="0.10.0-alpha.10",
-            )
+        with tempfile.TemporaryDirectory() as temporary:
+            server = export_frozen_beta1_server(Path(temporary))
+            with self.assertRaisesRegex(ProofPlaneError, "version differs"):
+                probe_mcp_tool_surface(
+                    [sys.executable, str(server)],
+                    expected_count=52,
+                    name_prefix="jstack_",
+                    expected_version="0.10.0-alpha.10",
+                )
 
     def test_codex_command_disables_ambient_tools_and_requires_exact_broker(self) -> None:
         command = codex_command(

@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-catalog.v1.schema.json",
+  "title": "JStack Product Interface System catalogue v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "catalogVersion",
+    "identity",
+    "precedence",
+    "profiles",
+    "universalRequirements",
+    "domainDefaults",
+    "platformAdapters",
+    "evidencePolicy"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.catalog.v1"},
+    "catalogVersion": {"const": "1.0.0"},
+    "identity": {"$ref": "#/$defs/identity"},
+    "precedence": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/precedenceExplicit"},
+        {"$ref": "#/$defs/precedenceExisting"},
+        {"$ref": "#/$defs/precedenceDomain"},
+        {"$ref": "#/$defs/precedenceFallback"}
+      ],
+      "items": false
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/editorialProfile"},
+        {"$ref": "#/$defs/creativeProfile"}
+      ],
+      "items": false
+    },
+    "universalRequirements": {"$ref": "#/$defs/universalRequirements"},
+    "domainDefaults": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/creativeDomainDefault"},
+        {"$ref": "#/$defs/editorialDomainDefault"}
+      ],
+      "items": false
+    },
+    "platformAdapters": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "prefixItems": [
+        {"$ref": "#/$defs/webAdapter"},
+        {"$ref": "#/$defs/webviewAdapter"},
+        {"$ref": "#/$defs/iosAdapter"},
+        {"$ref": "#/$defs/androidAdapter"},
+        {"$ref": "#/$defs/reactNativeAdapter"},
+        {"$ref": "#/$defs/flutterAdapter"},
+        {"$ref": "#/$defs/electronAdapter"},
+        {"$ref": "#/$defs/tauriAdapter"},
+        {"$ref": "#/$defs/macosAdapter"},
+        {"$ref": "#/$defs/windowsAdapter"},
+        {"$ref": "#/$defs/linuxAdapter"}
+      ],
+      "items": false
+    },
+    "evidencePolicy": {"$ref": "#/$defs/evidencePolicy"}
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "originalityNotice", "designIntent"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "originalityNotice": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "[Dd]oes not copy"
+        },
+        "designIntent": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "precedenceExplicit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "source", "rule"],
+      "properties": {
+        "rank": {"const": 1},
+        "source": {"const": "explicit-user-direction"},
+        "rule": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "precedenceExisting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "source", "rule"],
+      "properties": {
+        "rank": {"const": 2},
+        "source": {"const": "established-project-system"},
+        "rule": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "precedenceDomain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "source", "rule"],
+      "properties": {
+        "rank": {"const": 3},
+        "source": {"const": "domain-default"},
+        "rule": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "precedenceFallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rank", "source", "rule"],
+      "properties": {
+        "rank": {"const": 4},
+        "source": {"const": "editorial-fallback"},
+        "rule": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "radiusTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["small", "medium", "large", "pill"],
+      "properties": {
+        "small": {"type": "integer", "minimum": 4, "maximum": 12},
+        "medium": {"type": "integer", "minimum": 4, "maximum": 12},
+        "large": {"type": "integer", "minimum": 4, "maximum": 12},
+        "pill": {"const": 999}
+      }
+    },
+    "motionDurations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [{"const": 120}, {"const": 180}, {"const": 240}],
+      "items": false
+    },
+    "editorialType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bodyLineHeight", "displayTrackingEm", "labelTrackingEm", "numericStyle"],
+      "properties": {
+        "bodyLineHeight": {"type": "number", "minimum": 1, "maximum": 2},
+        "displayTrackingEm": {"type": "number", "minimum": 0},
+        "labelTrackingEm": {"type": "number", "minimum": 0},
+        "numericStyle": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "creativeType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bodyLineHeight", "displayTrackingEm", "labelTrackingEm", "numericStyle"],
+      "properties": {
+        "bodyLineHeight": {"type": "number", "minimum": 1, "maximum": 2},
+        "displayTrackingEm": {"type": "number", "minimum": 0},
+        "labelTrackingEm": {"type": "number", "minimum": 0},
+        "numericStyle": {"type": "string", "minLength": 1, "maxLength": 200}
+      }
+    },
+    "editorialColor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "minimumTextContrast", "semanticColorsRequired", "darkThemeAvoidsPureBlack"],
+      "properties": {
+        "strategy": {"type": "string", "minLength": 1, "maxLength": 200},
+        "minimumTextContrast": {"const": "WCAG-2.2-AA"},
+        "semanticColorsRequired": {"const": true},
+        "darkThemeAvoidsPureBlack": {"const": true}
+      }
+    },
+    "creativeColor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "minimumTextContrast", "semanticColorsRequired", "selectionMustNotRelyOnColorAlone"],
+      "properties": {
+        "strategy": {"type": "string", "minLength": 1, "maxLength": 200},
+        "minimumTextContrast": {"const": "WCAG-2.2-AA"},
+        "semanticColorsRequired": {"const": true},
+        "selectionMustNotRelyOnColorAlone": {"const": true}
+      }
+    },
+    "profileMotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durationMs", "style", "reducedMotionRequired"],
+      "properties": {
+        "durationMs": {"$ref": "#/$defs/motionDurations"},
+        "style": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reducedMotionRequired": {"const": true}
+      }
+    },
+    "editorialDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spacingBasePx", "density", "contentMeasureCh", "radiusPx", "type", "color", "motion"],
+      "properties": {
+        "spacingBasePx": {"const": 4},
+        "density": {"const": "comfortable"},
+        "contentMeasureCh": {"type": "integer", "minimum": 1, "maximum": 200},
+        "radiusPx": {"$ref": "#/$defs/radiusTokens"},
+        "type": {"$ref": "#/$defs/editorialType"},
+        "color": {"$ref": "#/$defs/editorialColor"},
+        "motion": {"$ref": "#/$defs/profileMotion"}
+      }
+    },
+    "creativeDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spacingBasePx", "density", "canvasPriority", "radiusPx", "type", "color", "motion"],
+      "properties": {
+        "spacingBasePx": {"const": 4},
+        "density": {"const": "adaptive-compact"},
+        "canvasPriority": {"const": "primary"},
+        "radiusPx": {"$ref": "#/$defs/radiusTokens"},
+        "type": {"$ref": "#/$defs/creativeType"},
+        "color": {"$ref": "#/$defs/creativeColor"},
+        "motion": {"$ref": "#/$defs/profileMotion"}
+      }
+    },
+    "profileStringList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "editorialProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "bestFor", "character", "defaults"],
+      "properties": {
+        "id": {"const": "editorial-calm"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 100},
+        "bestFor": {"$ref": "#/$defs/profileStringList"},
+        "character": {"$ref": "#/$defs/profileStringList"},
+        "defaults": {"$ref": "#/$defs/editorialDefaults"}
+      }
+    },
+    "creativeProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "bestFor", "character", "defaults"],
+      "properties": {
+        "id": {"const": "creative-canvas"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 100},
+        "bestFor": {"$ref": "#/$defs/profileStringList"},
+        "character": {"$ref": "#/$defs/profileStringList"},
+        "defaults": {"$ref": "#/$defs/creativeDefaults"}
+      }
+    },
+    "themeRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["greenfieldRequired", "existingProductRule"],
+      "properties": {
+        "greenfieldRequired": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [{"const": "light"}, {"const": "dark"}],
+          "items": false
+        },
+        "existingProductRule": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "requirementList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "universalRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preserveAndExtend",
+        "unsolicitedRedesignAllowed",
+        "spacingBasePx",
+        "separatorWidthPx",
+        "radiusRangePx",
+        "motionDurationMs",
+        "negativeLetterSpacingAllowed",
+        "platformNativeSemanticsRequired",
+        "themes",
+        "interaction",
+        "accessibility",
+        "quality",
+        "compositionGuardrails"
+      ],
+      "properties": {
+        "preserveAndExtend": {"const": true},
+        "unsolicitedRedesignAllowed": {"const": false},
+        "spacingBasePx": {"const": 4},
+        "separatorWidthPx": {"const": 1},
+        "radiusRangePx": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [{"const": 4}, {"const": 12}],
+          "items": false
+        },
+        "motionDurationMs": {"$ref": "#/$defs/motionDurations"},
+        "negativeLetterSpacingAllowed": {"const": false},
+        "platformNativeSemanticsRequired": {"const": true},
+        "themes": {"$ref": "#/$defs/themeRequirements"},
+        "interaction": {"$ref": "#/$defs/requirementList"},
+        "accessibility": {"$ref": "#/$defs/requirementList"},
+        "quality": {"$ref": "#/$defs/requirementList"},
+        "compositionGuardrails": {"$ref": "#/$defs/requirementList"}
+      }
+    },
+    "creativeDomainDefault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "surfaceKinds"],
+      "properties": {
+        "profile": {"const": "creative-canvas"},
+        "surfaceKinds": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {"const": "canvas"},
+            {"const": "editor"},
+            {"const": "timeline"},
+            {"const": "media-workspace"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "editorialDomainDefault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "surfaceKinds"],
+      "properties": {
+        "profile": {"const": "editorial-calm"},
+        "surfaceKinds": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {"const": "route"},
+            {"const": "screen"},
+            {"const": "window"},
+            {"const": "webview"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "fullEvidence": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {"const": "png-screenshot"},
+        {"const": "critical-flow"},
+        {"const": "keyboard-focus"},
+        {"const": "accessibility"},
+        {"const": "reduced-motion"},
+        {"const": "text-fit-overflow"}
+      ],
+      "items": false
+    },
+    "mobileEvidence": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"const": "png-screenshot"},
+        {"const": "critical-flow"},
+        {"const": "accessibility"},
+        {"const": "text-fit-overflow"}
+      ],
+      "items": false
+    },
+    "webAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "web"}, "status": {"const": "qualified"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "webviewAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "webview"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "iosAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "ios"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/mobileEvidence"}}
+    },
+    "androidAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "android"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/mobileEvidence"}}
+    },
+    "reactNativeAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "react-native"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/mobileEvidence"}}
+    },
+    "flutterAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "flutter"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/mobileEvidence"}}
+    },
+    "electronAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "electron"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "tauriAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "tauri"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "macosAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "macos"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "windowsAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "windows"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "linuxAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence"],
+      "properties": {"id": {"const": "linux"}, "status": {"const": "contract-only"}, "evidence": {"$ref": "#/$defs/fullEvidence"}}
+    },
+    "evidencePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestSchemaVersion",
+        "finalizationSchemaVersion",
+        "maximumManifestBytes",
+        "maximumArtifactBytes",
+        "maximumArtifacts",
+        "maximumMatrixCells",
+        "maximumAgeMinutes",
+        "allowedImageFormat",
+        "rawArtifactContentReturned",
+        "humanAestheticApprovalRequired",
+        "structuredProductObservationRequired",
+        "producerHonestyCertified",
+        "semanticTruthCertified"
+      ],
+      "properties": {
+        "manifestSchemaVersion": {"const": "jstack.ui.evidence.v1"},
+        "finalizationSchemaVersion": {"const": "jstack.ui.finalization.v1"},
+        "maximumManifestBytes": {"const": 2000000},
+        "maximumArtifactBytes": {"const": 25000000},
+        "maximumArtifacts": {"const": 640},
+        "maximumMatrixCells": {"const": 256},
+        "maximumAgeMinutes": {"const": 1440},
+        "allowedImageFormat": {"const": "png"},
+        "rawArtifactContentReturned": {"const": false},
+        "humanAestheticApprovalRequired": {"const": false},
+        "structuredProductObservationRequired": {"const": true},
+        "producerHonestyCertified": {"const": false},
+        "semanticTruthCertified": {"const": false}
+      }
+    }
+  }
+}

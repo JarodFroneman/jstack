@@ -1,0 +1,103 @@
+{
+  "schemaVersion": "jstack.ui.eval-task-set.v1",
+  "purpose": "Non-authorizing representative tasks for Product Interface routing and blind review outside the Beta.1 Proof Plane.",
+  "tasks": [
+    {
+      "id": "backend-api-negative",
+      "goal": "Refactor the account API pagination without changing any user-facing interface.",
+      "domain": "backend",
+      "expected": {
+        "applicable": false,
+        "precedenceSource": null,
+        "defaultProfile": null,
+        "surfaceProfiles": [],
+        "platforms": [],
+        "themes": []
+      },
+      "reviewFocus": ["non-ui-backward-compatibility"]
+    },
+    {
+      "id": "creative-media-timeline",
+      "goal": "Build a desktop motion editor with a resizable canvas, timeline, inspector, keyboard shortcuts, and recoverable empty and error states.",
+      "domain": "creative-media",
+      "expected": {
+        "applicable": true,
+        "precedenceSource": "domain-default",
+        "defaultProfile": "creative-canvas",
+        "surfaceProfiles": [
+          {"surfaceId": "motion-workspace", "profile": "creative-canvas"},
+          {"surfaceId": "timeline", "profile": "creative-canvas"}
+        ],
+        "platforms": ["electron"],
+        "themes": ["light", "dark"]
+      },
+      "reviewFocus": ["hierarchy", "coherence", "accessibility", "platform-fit", "non-generic-authorship"]
+    },
+    {
+      "id": "existing-system-settings",
+      "goal": "Add organization security settings to an established component library without redesigning adjacent screens.",
+      "domain": "saas-settings",
+      "expected": {
+        "applicable": true,
+        "precedenceSource": "established-project-system",
+        "defaultProfile": "editorial-calm",
+        "surfaceProfiles": [
+          {"surfaceId": "security-settings", "profile": "editorial-calm"}
+        ],
+        "platforms": ["web"],
+        "themes": ["light", "dark"]
+      },
+      "reviewFocus": ["preserve-and-extend", "coherence", "responsiveness", "accessibility"]
+    },
+    {
+      "id": "finance-operations-dashboard",
+      "goal": "Create a finance operations dashboard with dense tables, filters, reconciliation states, and accessible exception handling.",
+      "domain": "finance-operations",
+      "expected": {
+        "applicable": true,
+        "precedenceSource": "domain-default",
+        "defaultProfile": "editorial-calm",
+        "surfaceProfiles": [
+          {"surfaceId": "operations-dashboard", "profile": "editorial-calm"}
+        ],
+        "platforms": ["web"],
+        "themes": ["light", "dark"]
+      },
+      "reviewFocus": ["hierarchy", "coherence", "responsiveness", "accessibility", "non-generic-authorship"]
+    },
+    {
+      "id": "hybrid-content-studio",
+      "goal": "Build a publishing studio with an editorial application shell around a visual canvas and media timeline.",
+      "domain": "hybrid-creative",
+      "expected": {
+        "applicable": true,
+        "precedenceSource": "domain-default",
+        "defaultProfile": "editorial-calm",
+        "surfaceProfiles": [
+          {"surfaceId": "studio-shell", "profile": "editorial-calm"},
+          {"surfaceId": "story-canvas", "profile": "creative-canvas"},
+          {"surfaceId": "media-timeline", "profile": "creative-canvas"}
+        ],
+        "platforms": ["web"],
+        "themes": ["light", "dark"]
+      },
+      "reviewFocus": ["hierarchy", "coherence", "responsiveness", "accessibility", "non-generic-authorship"]
+    },
+    {
+      "id": "native-mobile-checkout",
+      "goal": "Design a native checkout flow for iOS and Android with platform-appropriate navigation, keyboard behavior, focus, validation, and recovery.",
+      "domain": "commerce",
+      "expected": {
+        "applicable": true,
+        "precedenceSource": "domain-default",
+        "defaultProfile": "editorial-calm",
+        "surfaceProfiles": [
+          {"surfaceId": "checkout", "profile": "editorial-calm"}
+        ],
+        "platforms": ["ios", "android"],
+        "themes": ["light", "dark"]
+      },
+      "reviewFocus": ["hierarchy", "accessibility", "platform-fit", "non-generic-authorship"]
+    }
+  ]
+}

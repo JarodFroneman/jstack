@@ -3126,17 +3126,15 @@ class MasteryAndInstallTests(unittest.TestCase):
             target.mkdir()
             (source / "version.txt").write_text("new\n", encoding="utf-8")
             (target / "version.txt").write_text("old\n", encoding="utf-8")
-            real_replace = install_module.os.replace
-            calls = {"count": 0}
-
-            def fail_after_backup(source_path: object, target_path: object) -> None:
-                calls["count"] += 1
-                if calls["count"] == 2:
-                    raise OSError("synthetic install failure")
-                real_replace(source_path, target_path)
-
-            with mock.patch.object(install_module.os, "replace", side_effect=fail_after_backup):
-                with self.assertRaisesRegex(OSError, "synthetic install failure"):
+            with mock.patch.object(
+                install_module,
+                "_rename_tree_noreplace",
+                side_effect=OSError("synthetic install failure"),
+            ):
+                with self.assertRaisesRegex(
+                    install_module.InstallPreimageDrift,
+                    "changed during atomic activation",
+                ):
                     install_module.copytree_replace(source, target)
             self.assertEqual("old\n", (target / "version.txt").read_text(encoding="utf-8"))
             self.assertFalse(any(root.glob(".target.jstack-*")))
@@ -3175,17 +3173,30 @@ class MasteryAndInstallTests(unittest.TestCase):
                 "mcp": (codex_home / "mcp" / "jstack" / "old.txt").read_bytes(),
                 "config": (codex_home / "config.toml").read_bytes(),
             }
-            real_copytree_replace = install_module.copytree_replace
+            real_copytree_replace = install_module.copytree_replace_cas
             calls = {"count": 0}
 
-            def fail_late(source: Path, target: Path) -> None:
+            def fail_late(
+                source: Path,
+                target: Path,
+                expected: object,
+                *,
+                retain_preimage: Path | None = None,
+                label: str = "install tree",
+            ) -> object:
                 calls["count"] += 1
                 if calls["count"] == 4:
                     raise OSError("synthetic transaction failure")
-                real_copytree_replace(source, target)
+                return real_copytree_replace(
+                    source,
+                    target,
+                    expected,
+                    retain_preimage=retain_preimage,
+                    label=label,
+                )
 
             with mock.patch.object(
-                install_module, "copytree_replace", side_effect=fail_late
+                install_module, "copytree_replace_cas", side_effect=fail_late
             ):
                 with self.assertRaisesRegex(OSError, "synthetic transaction failure"):
                     install_module.install(ROOT, codex_home)

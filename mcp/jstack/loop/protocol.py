@@ -28,12 +28,16 @@ except (ImportError, ValueError):  # Support the packaged top-level server layou
 
 
 LOOP_CONTRACT_SCHEMA = "jstack.loop.contract.v1"
+LOOP_CONTRACT_SCHEMA_V2 = "jstack.loop.contract.v2"
+LOOP_CONTRACT_SCHEMAS = (LOOP_CONTRACT_SCHEMA, LOOP_CONTRACT_SCHEMA_V2)
 LOOP_SNAPSHOT_SCHEMA = "jstack.loop.snapshot.v1"
 LOOP_EVENT_SCHEMA = "jstack.loop.event.v1"
 LOOP_STATUS_SCHEMA = "jstack.loop.status.v1"
 GOAL_CONTEXT_SCHEMA = "jstack.loop.goal-context.v1"
 GOAL_READINESS_SCHEMA = "jstack.loop.goal-readiness.v1"
 GOAL_READINESS_RECEIPT_SCHEMA = "jstack.loop.goal-readiness-receipt.v1"
+UI_CONTRACT_BINDING_SCHEMA = "jstack.loop.ui-contract-binding.v1"
+UI_EVIDENCE_SCHEMA = "jstack.loop.ui-evidence.v1"
 
 EXECUTION_MODES = ("single-lead", "smart-subagents", "full-team")
 AUTONOMY_LEVELS = ("L0", "L1", "L2", "L3")
@@ -46,6 +50,7 @@ VERIFIER_TYPES = (
     "review",
     "artifact",
     "human",
+    "ui",
 )
 TERMINAL_STATUSES = {"succeeded", "stopped"}
 WRITE_AUTONOMY = {"L2", "L3"}
@@ -87,6 +92,8 @@ DEFAULT_LIMITS = {
 
 _LOOP_ID = re.compile(r"^loop-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{12}$")
 _CRITERION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_LOWER_SHA256 = re.compile(r"^[a-f0-9]{64}$")
+_GIT_OBJECT_ID = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
 _VAGUE_GOAL = re.compile(
     r"\b(?:enterprise[- ]ready|production[- ]ready|make it better|make it work|"
     r"fix it|finish it|complete it|do everything|improve|optimi[sz]e)\b",
@@ -144,6 +151,7 @@ GOAL_READINESS_MATERIAL_FIELDS = {
     "tokenBudget",
     "goalContext",
     "capabilityContract",
+    "uiContract",
 }
 
 
@@ -197,6 +205,150 @@ def _text(value: Any, field: str, *, maximum: int, required: bool = True) -> str
     return result
 
 
+def _normalize_ui_contract_binding(value: Any) -> Optional[dict[str, str]]:
+    """Validate the receipt-derived UI binding supplied internally by the server."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise LoopError("ui_contract_binding must be a server-routed object.")
+    fields = {
+        "schemaVersion",
+        "contractSha256",
+        "catalogSha256",
+        "baselineGitHead",
+        "baselineProjectFingerprint",
+        "baselinePolicyDigest",
+    }
+    missing = sorted(fields - set(value))
+    unknown = sorted(set(value) - fields)
+    if missing:
+        raise LoopError(
+            "ui_contract_binding is missing fields: " + ", ".join(missing)
+        )
+    if unknown:
+        raise LoopError(
+            "ui_contract_binding contains unsupported fields: " + ", ".join(unknown)
+        )
+    if value.get("schemaVersion") != UI_CONTRACT_BINDING_SCHEMA:
+        raise LoopError("ui_contract_binding.schemaVersion is unsupported.")
+    normalized = {"schemaVersion": UI_CONTRACT_BINDING_SCHEMA}
+    for field in (
+        "contractSha256",
+        "catalogSha256",
+        "baselineProjectFingerprint",
+        "baselinePolicyDigest",
+    ):
+        digest = _text(value.get(field), f"ui_contract_binding.{field}", maximum=64)
+        if not _LOWER_SHA256.fullmatch(digest):
+            raise LoopError(
+                f"ui_contract_binding.{field} must be a lowercase SHA-256 digest."
+            )
+        normalized[field] = digest
+    baseline = _text(
+        value.get("baselineGitHead"),
+        "ui_contract_binding.baselineGitHead",
+        maximum=64,
+    )
+    if not _GIT_OBJECT_ID.fullmatch(baseline):
+        raise LoopError(
+            "ui_contract_binding.baselineGitHead must be a lowercase Git object id."
+        )
+    normalized["baselineGitHead"] = baseline
+    return normalized
+
+
+def _contract_schema_supported(contract: Any) -> bool:
+    if not isinstance(contract, dict):
+        return False
+    schema = contract.get("schemaVersion")
+    if schema == LOOP_CONTRACT_SCHEMA:
+        return "uiContract" not in contract
+    if schema != LOOP_CONTRACT_SCHEMA_V2:
+        return False
+    try:
+        normalized = _normalize_ui_contract_binding(contract.get("uiContract"))
+    except LoopError:
+        return False
+    project = contract.get("project")
+    policy = contract.get("policy")
+    return (
+        normalized is not None
+        and normalized == contract.get("uiContract")
+        and isinstance(project, dict)
+        and isinstance(policy, dict)
+        and normalized["baselineGitHead"] == project.get("baselineCommit")
+        and normalized["baselineProjectFingerprint"]
+        == project.get("baselineFingerprint")
+        and normalized["baselinePolicyDigest"] == policy.get("digest")
+    )
+
+
+def _matched_ui_evidence(
+    contract: dict[str, Any], value: Any
+) -> Optional[dict[str, Any]]:
+    """Return one exact receipt summary only when it matches the v2 UI contract."""
+    binding = contract.get("uiContract")
+    if (
+        contract.get("schemaVersion") != LOOP_CONTRACT_SCHEMA_V2
+        or not isinstance(binding, dict)
+        or not isinstance(value, dict)
+    ):
+        return None
+    fields = {
+        "type",
+        "schemaVersion",
+        "receiptDigest",
+        "contractSha256",
+        "catalogSha256",
+        "baseCommit",
+        "gitHead",
+        "projectFingerprint",
+        "evidenceManifestSha256",
+        "buildSha256",
+        "runtimeSha256",
+        "complete",
+        "passed",
+        "executionAuthorized",
+    }
+    if set(value) != fields:
+        return None
+    digest_fields = (
+        "receiptDigest",
+        "contractSha256",
+        "catalogSha256",
+        "projectFingerprint",
+        "evidenceManifestSha256",
+        "buildSha256",
+        "runtimeSha256",
+    )
+    if any(
+        not isinstance(value.get(field), str)
+        or not _LOWER_SHA256.fullmatch(value[field])
+        for field in digest_fields
+    ):
+        return None
+    if any(
+        not isinstance(value.get(field), str)
+        or not _GIT_OBJECT_ID.fullmatch(value[field])
+        for field in ("baseCommit", "gitHead")
+    ):
+        return None
+    checks = {
+        "type": value.get("type") == "ui-finalization-receipt",
+        "schema": value.get("schemaVersion") == UI_EVIDENCE_SCHEMA,
+        "contract": value.get("contractSha256")
+        == binding.get("contractSha256"),
+        "catalog": value.get("catalogSha256")
+        == binding.get("catalogSha256"),
+        "baseline": value.get("baseCommit") == binding.get("baselineGitHead"),
+        "candidate": value.get("gitHead") != value.get("baseCommit"),
+        "complete": value.get("complete") is True,
+        "passed": value.get("passed") is True,
+        "noAuthority": value.get("executionAuthorized") is False,
+    }
+    return dict(value) if all(checks.values()) else None
+
+
 def _string_list(
     value: Any,
     field: str,
@@ -246,14 +398,22 @@ def _normalize_capability_contract(
         "loopControls",
         "permissionInvariant",
     }
+    schema_version = value.get("schemaVersion")
+    if schema_version == "jstack.loop.capability-contract.v2":
+        required.add("uiProduct")
     missing = sorted(required - set(value))
     unknown = sorted(set(value) - required)
     if missing:
         raise LoopError("capability_contract is missing fields: " + ", ".join(missing))
     if unknown:
         raise LoopError("capability_contract contains unsupported fields: " + ", ".join(unknown))
-    if value.get("schemaVersion") != "jstack.loop.capability-contract.v1":
+    if schema_version not in {
+        "jstack.loop.capability-contract.v1",
+        "jstack.loop.capability-contract.v2",
+    }:
         raise LoopError("capability_contract.schemaVersion is unsupported.")
+    if schema_version == "jstack.loop.capability-contract.v2" and value.get("uiProduct") is not True:
+        raise LoopError("capability_contract.uiProduct must be true for v2 routing.")
     catalog_version = _text(
         value.get("catalogVersion"),
         "capability_contract.catalogVersion",
@@ -330,8 +490,8 @@ def _normalize_capability_contract(
     )
     if "never expands" not in permission_invariant.lower():
         raise LoopError("capability_contract must preserve the no-permission-expansion invariant.")
-    return {
-        "schemaVersion": "jstack.loop.capability-contract.v1",
+    normalized = {
+        "schemaVersion": schema_version,
         "catalogVersion": catalog_version,
         **digests,
         "executionMode": execution_mode,
@@ -342,6 +502,9 @@ def _normalize_capability_contract(
         "loopControls": loop_controls,
         "permissionInvariant": permission_invariant,
     }
+    if schema_version == "jstack.loop.capability-contract.v2":
+        normalized["uiProduct"] = True
+    return normalized
 
 
 def _normalize_relative_path(value: Any, field: str, *, allow_glob: bool) -> str:
@@ -430,6 +593,7 @@ def _normalize_criteria(value: Any) -> list[dict[str, Any]]:
             "review": {"type"},
             "artifact": {"type", "path", "sha256"},
             "human": {"type", "approvalKey"},
+            "ui": {"type"},
         }[verifier_type]
         unknown_verifier = sorted(set(verifier_raw) - allowed_fields)
         if unknown_verifier:
@@ -1047,7 +1211,7 @@ def _goal_readiness_questions(
 
 
 def goal_readiness_contract_payload(contract: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         "goal": contract["goal"],
         "nonGoals": contract["nonGoals"],
         "executionMode": contract["executionMode"],
@@ -1062,6 +1226,9 @@ def goal_readiness_contract_payload(contract: dict[str, Any]) -> dict[str, Any]:
         "goalContext": contract.get("goalContext"),
         "capabilityContract": contract.get("capabilityContract"),
     }
+    if contract.get("schemaVersion") == LOOP_CONTRACT_SCHEMA_V2:
+        payload["uiContract"] = contract.get("uiContract")
+    return payload
 
 
 def goal_readiness_contract_digest(contract: dict[str, Any]) -> str:
@@ -1070,7 +1237,7 @@ def goal_readiness_contract_digest(contract: dict[str, Any]) -> str:
 
 def _goal_contract_preview(contract: dict[str, Any]) -> dict[str, Any]:
     context = contract["goalContext"]
-    return {
+    preview = {
         "goal": contract["goal"],
         "domain": context["domainStatement"],
         "domainTags": context["domainTags"],
@@ -1085,6 +1252,9 @@ def _goal_contract_preview(contract: dict[str, Any]) -> dict[str, Any]:
         "limits": contract["limits"],
         "capabilityContract": contract.get("capabilityContract"),
     }
+    if contract.get("schemaVersion") == LOOP_CONTRACT_SCHEMA_V2:
+        preview["uiContract"] = contract.get("uiContract")
+    return preview
 
 
 def assess_goal_readiness(
@@ -1269,7 +1439,11 @@ def bind_goal_readiness(
 
 
 def _criterion_composition_checks(
-    criteria: list[dict[str, Any]], autonomy: str, risk: str
+    criteria: list[dict[str, Any]],
+    autonomy: str,
+    risk: str,
+    *,
+    ui_bound: bool = False,
 ) -> None:
     types = {item["verifier"]["type"] for item in criteria}
     machine_types = types - {"human"}
@@ -1277,6 +1451,14 @@ def _criterion_composition_checks(
         raise LoopError("A loop contract may contain at most 20 artifact criteria.")
     if not machine_types:
         raise LoopError("At least one acceptance criterion must be machine-verifiable.")
+    if ui_bound and "ui" not in types:
+        raise LoopError(
+            "UI-bound loop contracts require a dedicated ui acceptance criterion."
+        )
+    if not ui_bound and "ui" in types:
+        raise LoopError(
+            "A ui acceptance criterion requires a server-routed ui_contract_binding."
+        )
     if autonomy in WRITE_AUTONOMY and "review" not in types:
         raise LoopError("Write-capable loops require a deterministic review criterion.")
     if autonomy in WRITE_AUTONOMY and not (machine_types - {"review"}):
@@ -1326,9 +1508,15 @@ def _normalize_contract_input(
         goal=goal,
         execution_mode=execution_mode,
     )
+    ui_contract = _normalize_ui_contract_binding(args.get("ui_contract_binding"))
 
     criteria = _normalize_criteria(args.get("acceptance_criteria"))
-    _criterion_composition_checks(criteria, autonomy, risk)
+    _criterion_composition_checks(
+        criteria,
+        autonomy,
+        risk,
+        ui_bound=ui_contract is not None,
+    )
     non_goals = _string_list(args.get("non_goals"), "non_goals", maximum_items=50)
     if (
         goal_context is not None
@@ -1403,8 +1591,10 @@ def _normalize_contract_input(
         if not isinstance(token_budget, int) or isinstance(token_budget, bool) or token_budget <= 0:
             raise LoopError("token_budget must be a positive integer when the user explicitly supplies one.")
 
-    return {
-        "schemaVersion": LOOP_CONTRACT_SCHEMA,
+    contract = {
+        "schemaVersion": (
+            LOOP_CONTRACT_SCHEMA_V2 if ui_contract is not None else LOOP_CONTRACT_SCHEMA
+        ),
         "revision": 1,
         "goal": goal,
         "nonGoals": non_goals,
@@ -1438,6 +1628,13 @@ def _normalize_contract_input(
             "toolVersion": subject.get("toolVersion"),
         },
     }
+    if ui_contract is not None:
+        contract["uiContract"] = ui_contract
+        if require_clean_start and not _contract_schema_supported(contract):
+            raise LoopError(
+                "ui_contract_binding does not match the loop baseline Git, project, or policy identity."
+            )
+    return contract
 
 
 def _safe_state_directory(path: Path) -> None:
@@ -1627,7 +1824,7 @@ class LoopService:
         for number in range(1, revision + 1):
             item = _read_json(contracts_dir / f"{number:04d}.json", "contract history")
             checks = {
-                "schema": item.get("schemaVersion") == LOOP_CONTRACT_SCHEMA,
+                "schema": _contract_schema_supported(item),
                 "loop": item.get("loopId") == contract.get("loopId"),
                 "revision": item.get("revision") == number,
                 "project": item.get("project", {}).get("gitRoot") == str(self.project_root),
@@ -1680,7 +1877,7 @@ class LoopService:
             raise LoopError("Loop pending transaction is malformed.")
         self._validate_event_values(events)
         checks = {
-            "contractSchema": contract.get("schemaVersion") == LOOP_CONTRACT_SCHEMA,
+            "contractSchema": _contract_schema_supported(contract),
             "snapshotSchema": snapshot.get("schemaVersion") == LOOP_SNAPSHOT_SCHEMA,
             "loop": contract.get("loopId") == snapshot.get("loopId") == events[-1].get("loopId"),
             "project": contract.get("project", {}).get("gitRoot") == str(self.project_root),
@@ -1704,7 +1901,7 @@ class LoopService:
         contract = _read_json(loop_dir / "contract.json", "contract")
         snapshot = _read_json(loop_dir / "snapshot.json", "snapshot")
         events = self._events(loop_dir)
-        if contract.get("schemaVersion") != LOOP_CONTRACT_SCHEMA:
+        if not _contract_schema_supported(contract):
             raise LoopError("Loop contract schema is unsupported.")
         if snapshot.get("schemaVersion") != LOOP_SNAPSHOT_SCHEMA:
             raise LoopError("Loop snapshot schema is unsupported.")
@@ -2024,7 +2221,7 @@ class LoopService:
     def _public(self, contract: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
         satisfied = [item["id"] for item in snapshot.get("criteria", []) if item.get("satisfied")]
         active_elapsed_seconds = self._active_elapsed_seconds(snapshot)
-        return {
+        result = {
             "schemaVersion": LOOP_STATUS_SCHEMA,
             "loopId": snapshot["loopId"],
             "status": snapshot["status"],
@@ -2069,6 +2266,9 @@ class LoopService:
             "latestEventHash": snapshot["latestEventHash"],
             "updatedAt": snapshot["updatedAt"],
         }
+        if contract.get("schemaVersion") == LOOP_CONTRACT_SCHEMA_V2:
+            result["uiContract"] = contract.get("uiContract")
+        return result
 
     def status(self, loop_id: Optional[str] = None) -> dict[str, Any]:
         with _DirectoryLock(self.lock_path):
@@ -2089,6 +2289,7 @@ class LoopService:
         audits = evidence.get("audit", [])
         launch = evidence.get("launch")
         review = evidence.get("review")
+        ui = _matched_ui_evidence(contract, evidence.get("ui"))
         artifacts = {item.get("path"): item for item in evidence.get("artifacts", [])}
         approvals = snapshot.get("completionApprovals", {})
         results: list[dict[str, Any]] = []
@@ -2121,6 +2322,8 @@ class LoopService:
                 matched = [launch]
             elif verifier_type == "review" and review and review.get("passed") is True:
                 matched = [review]
+            elif verifier_type == "ui" and ui is not None:
+                matched = [ui]
             elif verifier_type == "artifact":
                 artifact = artifacts.get(verifier["path"])
                 if artifact and artifact.get("exists") is True:
@@ -2404,6 +2607,9 @@ class LoopService:
                 "capability_contract": args.get(
                     "capability_contract", old.get("capabilityContract")
                 ),
+                "ui_contract_binding": args.get(
+                    "ui_contract_binding", old.get("uiContract")
+                ),
                 "mode_approval_reference": args.get("mode_approval_reference") or old["approvals"].get("mode"),
                 "autonomy_approval_reference": args.get("autonomy_approval_reference") or old["approvals"].get("autonomy"),
                 "risk_approval_reference": args.get("risk_approval_reference") or old["approvals"].get("risk"),
@@ -2422,6 +2628,10 @@ class LoopService:
                 **old["project"],
                 "worktreeAttested": worktree,
             }
+            if not _contract_schema_supported(new):
+                raise LoopError(
+                    "The revised UI contract does not match the loop baseline identity."
+                )
             if (
                 old["autonomyLevel"] not in WRITE_AUTONOMY
                 and new["autonomyLevel"] in WRITE_AUTONOMY
@@ -2449,6 +2659,8 @@ class LoopService:
                 )
                 if new[field] != old.get(field)
             ]
+            if new.get("uiContract") != old.get("uiContract"):
+                changed_fields.append("uiContract")
             material_changed = bool(
                 set(changed_fields) & GOAL_READINESS_MATERIAL_FIELDS
             )
@@ -2748,7 +2960,7 @@ class LoopService:
             ]
             if len(completion_events) != 1:
                 raise LoopError("Loop completion event history is malformed.")
-            return {
+            result = {
                 "schemaVersion": "jstack.loop.completion-attestation.v1",
                 "loopId": loop_id,
                 "projectPath": str(self.project_root),
@@ -2764,3 +2976,25 @@ class LoopService:
                 "riskTier": contract["riskTier"],
                 "passed": True,
             }
+            if contract.get("schemaVersion") == LOOP_CONTRACT_SCHEMA_V2:
+                ui_evidence = [
+                    item["evidence"][0]
+                    for item in snapshot.get("criteria", [])
+                    if isinstance(item, dict)
+                    and item.get("satisfied") is True
+                    and isinstance(item.get("evidence"), list)
+                    and len(item["evidence"]) == 1
+                    and _matched_ui_evidence(contract, item["evidence"][0])
+                    is not None
+                ]
+                if not ui_evidence or any(
+                    item != ui_evidence[0] for item in ui_evidence[1:]
+                ):
+                    raise LoopError(
+                        "UI loop completion state has no single consistent UI receipt binding."
+                    )
+                result["uiContract"] = contract["uiContract"]
+                result["uiFinalizationReceiptDigest"] = ui_evidence[0][
+                    "receiptDigest"
+                ]
+            return result

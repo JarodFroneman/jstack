@@ -30,7 +30,7 @@ import time
 import traceback
 import urllib.parse
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 
 _SERVER_DIR = Path(__file__).resolve().parent
@@ -42,10 +42,11 @@ import context_readiness as context_readiness_core
 import launch as launch_core
 import loop as loop_core
 import program as program_core
+import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.1"
+SERVER_VERSION = "0.10.0-beta.2"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -75,6 +76,29 @@ LAUNCH_RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
 LAUNCH_HINT_MAX_FILES = 5_000
 LAUNCH_HINT_MAX_FILE_BYTES = 256_000
 LAUNCH_HINT_MAX_TOTAL_BYTES = 8_000_000
+UI_RECEIPT_MAX_CHARS = 250_000
+UI_CONTRACT_MAX_AGE_SECONDS = 24 * 60 * 60
+UI_CONTRACT_HMAC_KEY_BYTES = 32
+UI_CONTRACT_HMAC_DOMAIN = b"jstack.ui-contract.hmac.v1\0"
+UI_HINT_MAX_FILES = 5_000
+UI_HINT_MAX_FILE_BYTES = 256_000
+UI_HINT_MAX_TOTAL_BYTES = 8_000_000
+UI_HINT_MAX_ASSET_BYTES = 25_000_000
+UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES = 1_000_000
+UI_INTENT_PATTERNS = (
+    r"\bui\b", r"\bux\b", r"front[- ]?end", r"user[- ]facing",
+    r"interface", r"visual", r"layout", r"responsive", r"screen",
+    r"website", r"web app", r"mobile app", r"homepage", r"landing page",
+    r"navbar", r"navigation", r"sidebar", r"header", r"footer", r"menu",
+    r"button", r"modal", r"dialog", r"tooltip", r"\bforms?\b", r"dashboard",
+    r"dark mode", r"light mode", r"theme", r"typograph", r"font",
+    r"css", r"spacing", r"animation", r"microinteraction", r"design system",
+    r"\b(?:react|vue|svelte|angular|solidjs|swiftui|jetpack compose|flutter)\b",
+    r"\b(?:gui|desktop app|native app|web page|checkout page)\b",
+    r"\b(?:ios|android)\s+(?:app|activity|screen|view|interface)\b",
+    r"\b(?:activity|view controller)\b",
+    r"\b(?:logo|favicon|app icon|brand icon|brand asset)\b",
+)
 AUDIT_CAPSTONE_ATTESTATION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 AUDIT_CAPSTONE_ATTESTATION_SCHEMA = "jstack.audit.capstone-attestation.v1"
 AUDIT_CAPSTONE_ASSESSOR_KEY_ENV = "JSTACK_AUDIT_ASSESSOR_HMAC_KEY"
@@ -578,6 +602,8 @@ GIT_REQUIRED_TOOLS = [
     "jstack_program_revise",
     "jstack_program_cancel",
     "jstack_program_finalize",
+    "jstack_ui_contract",
+    "jstack_ui_finalize",
 ]
 ARTIFACT_ONLY_RELEASE_BLOCKER = (
     "Git-backed JStack release readiness is unavailable until the authoritative source has a committed git repository."
@@ -851,6 +877,7 @@ def process_environment(args: list[str], cwd: Path) -> tuple[list[str], Optional
             "GIT_ATTR_NOSYSTEM": "1",
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_NO_REPLACE_OBJECTS": "1",
         }
     )
     hardened = [
@@ -1883,6 +1910,1137 @@ def evidence_subject(project_path: Path, base_ref: Optional[str] = None) -> dict
     }
 
 
+def _ui_git_identity(project_path: Path, state: Optional[dict[str, Any]] = None) -> dict[str, str]:
+    state = state or project_state(project_path)
+    root = Path(state["gitRoot"])
+    common = run_complete(["git", "rev-parse", "--git-common-dir"], root, timeout=8)
+    tree = run_complete(["git", "rev-parse", "HEAD^{tree}"], root, timeout=8)
+    if not common["ok"] or not tree["ok"]:
+        raise ToolError("Could not derive the Product Interface Git identity.")
+    common_text = _git_text(common).strip()
+    common_path = Path(common_text)
+    if not common_path.is_absolute():
+        common_path = root / common_path
+    common_path = common_path.resolve()
+    tree_oid = _git_text(tree).strip()
+    if not re.fullmatch(r"[0-9a-f]{40,64}", tree_oid):
+        raise ToolError("Git returned an unsupported tree object identity.")
+    return {
+        "gitRoot": str(root),
+        "commonDir": str(common_path),
+        "gitHead": str(state["gitHead"]),
+        "projectFingerprint": str(state["projectFingerprint"]),
+        "treeSha256": hashlib.sha256(tree_oid.encode("ascii")).hexdigest(),
+        "policyDigest": str(
+            state.get("policyDigest") or evidence_subject(root)["policyDigest"]
+        ),
+    }
+
+
+UI_PATH_ONLY_ASSET_SUFFIXES = {
+    ".avif", ".gif", ".icns", ".ico", ".jpeg", ".jpg", ".otf", ".png",
+    ".svg", ".svgz", ".ttf", ".webmanifest", ".webp", ".woff", ".woff2",
+}
+UI_STRONG_TEXT_SUFFIXES = {
+    ".aspx", ".astro", ".axaml", ".css", ".cshtml", ".ejs", ".erb", ".ftl", ".glade",
+    ".handlebars", ".hbs", ".htm", ".html", ".jsx", ".less", ".liquid",
+    ".mdx", ".mustache", ".njk", ".nunjucks", ".pcss", ".php", ".pug",
+    ".qml", ".razor", ".sass", ".scss", ".storyboard", ".styl", ".stylus",
+    ".svelte", ".twig", ".tsx", ".ui", ".vue", ".xaml", ".xib", ".jsp", ".jspx",
+}
+UI_AMBIGUOUS_SOURCE_SUFFIXES = {
+    ".c", ".cc", ".cjs", ".cpp", ".cs", ".csproj", ".cts", ".dart", ".gradle",
+    ".h", ".hpp", ".java", ".js", ".kt", ".kts", ".m", ".mjs", ".mm",
+    ".mts", ".py", ".resx", ".rs", ".swift", ".ts", ".xml",
+}
+
+
+def _ui_file_candidate_kind(
+    relative: str,
+    *,
+    scoped: bool = True,
+    context_platforms: Iterable[str] = (),
+) -> Optional[str]:
+    normalized = relative.replace("\\", "/")
+    suffix = Path(normalized).suffix.lower()
+    if suffix in UI_STRONG_TEXT_SUFFIXES:
+        return "strong-text"
+    name = Path(normalized).name.lower()
+    if name in {
+        "package.json", "pubspec.yaml", "cargo.toml", "tailwind.config.js",
+        "tailwind.config.cjs", "tailwind.config.mjs", "tailwind.config.ts",
+    }:
+        return "strong-text"
+    ui_path = bool(
+        re.search(
+            r"(^|/)(?:assets?|images?|icons?|public|static|fonts?|resources?|tokens?|design-tokens?|themes?|styles?|design-system|ui|components|Assets\.xcassets)(/|[._-])|(^|/)(?:[^/]+/)?src/main/res/(?:layout|values[^/]*|drawable[^/]*|mipmap[^/]*|font)(/|$)",
+            normalized,
+            re.IGNORECASE,
+        )
+    )
+    conventional_asset_name = bool(
+        re.fullmatch(
+            r"(?:logo(?:[._-].*)?|favicon(?:[._-].*)?|site\.webmanifest|manifest\.webmanifest|app-icon(?:[._-].*)?)",
+            Path(normalized).name,
+            re.IGNORECASE,
+        )
+    )
+    if (ui_path or conventional_asset_name or suffix == ".webmanifest") and suffix in UI_PATH_ONLY_ASSET_SUFFIXES:
+        return "path-only"
+    if ui_path and suffix in {".json", ".yaml", ".yml", ".toml"}:
+        return "strong-text"
+    contextual_path = bool(
+        re.search(
+            r"(^|/)(?:app|pages|routes|frontend|client|web|website|components|views|screens|ui|webview|electron|renderer|react-native|src-tauri|tauri|ios|swiftui|macos|appkit|android|compose|flutter|widgets?|gtk|qt)(/|[._-])",
+            normalized,
+            re.IGNORECASE,
+        )
+    )
+    contextual_name = bool(
+        re.search(
+            r"(?:view|screen|window|widget|component|page|layout|theme|style|app|form|controller)",
+            Path(normalized).stem,
+            re.IGNORECASE,
+        )
+    )
+    # A conventional native `main` file is worth inspecting for a scoped
+    # change, but is too weak a signal for a whole-repository scan.  Its
+    # contents still have to match a UI framework before the change activates
+    # Product Interface routing.
+    weak_entrypoint_name = scoped and Path(normalized).stem.lower() == "main"
+    if suffix not in UI_AMBIGUOUS_SOURCE_SUFFIXES:
+        return None
+    context = {str(item) for item in context_platforms}
+    contextual_suffixes = {
+        "flutter": {".dart"},
+        "ios": {".swift", ".m", ".mm"},
+        "macos": {".swift", ".m", ".mm"},
+        "android": {".gradle", ".java", ".kt", ".kts", ".xml"},
+        "windows": {".cs", ".resx", ".xaml"},
+        "linux": {".c", ".cc", ".cpp", ".h", ".hpp", ".py"},
+        "tauri": {".rs"},
+        "react-native": {".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"},
+        "electron": {".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"},
+        "webview": {".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"},
+    }
+    if any(
+        platform in context and suffix in suffixes
+        for platform, suffixes in contextual_suffixes.items()
+    ):
+        return "ambiguous-text"
+    backend_context = bool(
+        re.search(
+            r"(^|/)(?:api|backend|server|services?|workers?|scripts?|cli|tests?|fixtures?|migrations?|database|db)(/|[._-])",
+            normalized,
+            re.IGNORECASE,
+        )
+        or re.fullmatch(
+            r"(?:api|backend|server|service|worker|cli|migration|database|db)(?:[._-].*)?",
+            Path(normalized).stem,
+            re.IGNORECASE,
+        )
+    )
+    if backend_context and not contextual_path and not contextual_name:
+        return None
+    if contextual_path or contextual_name or weak_entrypoint_name:
+        return "ambiguous-text"
+    # JavaScript and TypeScript are common at repository roots and under generic
+    # src/ directories, so changed-file routing inspects their bounded contents.
+    if scoped and suffix in {".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"}:
+        return "ambiguous-text"
+    return None
+
+
+def _ui_file_candidate(
+    relative: str,
+    *,
+    scoped: bool = True,
+    context_platforms: Iterable[str] = (),
+) -> bool:
+    return _ui_file_candidate_kind(
+        relative,
+        scoped=scoped,
+        context_platforms=context_platforms,
+    ) is not None
+
+
+def _ui_ambiguous_text_is_ui(relative: str, raw: bytes) -> bool:
+    observed = ui_core.detect_product_ui(
+        [(relative, raw.decode("utf-8", errors="ignore"))]
+    )
+    return bool(observed["applicable"])
+
+
+def _ui_read_worktree_text_candidate(
+    root: Path,
+    relative: str,
+    candidate_kind: Optional[str],
+    *,
+    side: str,
+) -> Optional[bytes]:
+    """Read a UI candidate, cheaply dismissing a bounded oversized weak source."""
+    try:
+        return audit_core.read_repository_file(
+            root,
+            relative,
+            max_bytes=UI_HINT_MAX_FILE_BYTES,
+            max_seconds=10,
+        )
+    except audit_core.AuditError as first_error:
+        if candidate_kind != "ambiguous-text":
+            raise ToolError(
+                f"Product Interface detection could not safely read the {side} repository file: {relative}"
+            ) from first_error
+        try:
+            probe = audit_core.read_repository_file(
+                root,
+                relative,
+                max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
+                max_seconds=10,
+            )
+        except audit_core.AuditError as exc:
+            raise ToolError(
+                f"Product Interface detection could not safely classify the oversized {side} UI-capable file: {relative}"
+            ) from exc
+        if _ui_ambiguous_text_is_ui(relative, probe):
+            raise ToolError(
+                f"Product Interface detection could not safely read the {side} side of oversized UI-capable file: {relative}"
+            ) from first_error
+        return None
+
+
+def _ui_read_revision_text_candidate(
+    root: Path,
+    revision: str,
+    relative: str,
+    candidate_kind: Optional[str],
+    *,
+    side: str,
+) -> tuple[bool, Optional[bytes]]:
+    """Return (present, bytes); bounded oversized non-UI weak sources return None bytes."""
+    size = _ui_revision_blob_size(root, revision, relative)
+    if size is None:
+        return False, None
+    raw = _audit_stage4_revision_file(
+        root,
+        revision,
+        relative,
+        max_bytes=UI_HINT_MAX_FILE_BYTES,
+    )
+    if raw is not None:
+        return True, raw
+    if candidate_kind != "ambiguous-text" or size > UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES:
+        raise ToolError(
+            f"Product Interface detection could not safely read the {side} side of changed UI-capable file: {relative}"
+        )
+    probe = _audit_stage4_revision_file(
+        root,
+        revision,
+        relative,
+        max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
+    )
+    if probe is None:
+        raise ToolError(
+            f"Product Interface detection could not safely read the {side} side of changed UI-capable file: {relative}"
+        )
+    if _ui_ambiguous_text_is_ui(relative, probe):
+        raise ToolError(
+            f"Product Interface detection could not safely read the {side} side of oversized UI-capable file: {relative}"
+        )
+    return True, None
+
+
+def _ui_validate_path_only_repository_file(root: Path, relative: str) -> int:
+    try:
+        size, _ = audit_core.digest_repository_file(
+            root,
+            relative,
+            max_bytes=UI_HINT_MAX_ASSET_BYTES,
+            max_seconds=15,
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(
+            f"Product Interface path-only asset is not one bounded stable regular file: {relative}"
+        ) from exc
+    return size
+
+
+def _ui_revision_blob_size(root: Path, revision: str, relative: str) -> Optional[int]:
+    result = run_complete(
+        ["git", "ls-tree", "-z", "-l", revision, "--", relative],
+        root,
+        timeout=8,
+        max_bytes=100_000,
+    )
+    if not result["ok"]:
+        return None
+    entries = [item for item in result["stdout"].split(b"\0") if item]
+    if len(entries) != 1:
+        return None
+    try:
+        metadata, raw_path = entries[0].split(b"\t", 1)
+        mode, kind, object_id, size_text = metadata.decode("ascii").split()
+        decoded_path = decode_git_relative_path(raw_path, "UI revision asset")
+        size = int(size_text)
+    except (UnicodeError, ValueError, ToolError):
+        return None
+    if (
+        decoded_path != relative
+        or mode not in {"100644", "100755"}
+        or kind != "blob"
+        or not re.fullmatch(r"[0-9a-f]{40,64}", object_id)
+        or not 0 <= size <= UI_HINT_MAX_ASSET_BYTES
+    ):
+        return None
+    return size
+
+
+def _ui_collect_documents(
+    project_path: Path,
+    paths: Optional[list[str]] = None,
+    *,
+    status: Optional[dict[str, Any]] = None,
+) -> list[tuple[str, str]]:
+    root = Path(git_root(project_path) or project_path).resolve()
+    unscoped = paths is None
+    if paths is None:
+        listed = run_complete(
+            ["git", "ls-files", "-z"], root, timeout=20, max_bytes=10_000_000
+        )
+        if not listed["ok"]:
+            raise ToolError("Could not enumerate files for Product Interface detection.")
+        paths = [
+            decode_git_relative_path(raw, "UI detection")
+            for raw in listed["stdout"].split(b"\0")
+            if raw
+        ]
+    normalized_paths = sorted({path.replace("\\", "/") for path in paths})
+    context_by_path = _ui_repository_context_by_path(root, normalized_paths)
+    selected = sorted(
+        {
+            path
+            for path in normalized_paths
+            if _ui_file_candidate(
+                path,
+                scoped=not unscoped,
+                context_platforms=context_by_path.get(path, ()),
+            )
+        }
+    )
+    candidate_count = len(selected)
+    if len(selected) > UI_HINT_MAX_FILES:
+        if not unscoped:
+            raise ToolError(
+                f"Product Interface detection exceeds the {UI_HINT_MAX_FILES}-file safety limit."
+            )
+        selected = selected[:UI_HINT_MAX_FILES]
+    if status is not None:
+        status.update(
+            {
+                "candidateFileCount": candidate_count,
+                "inspectionTruncated": candidate_count > len(selected),
+            }
+        )
+    total = 0
+    documents: list[tuple[str, str]] = []
+    for relative in selected:
+        candidate_kind = _ui_file_candidate_kind(
+            relative,
+            scoped=not unscoped,
+            context_platforms=context_by_path.get(relative, ()),
+        )
+        candidate = root / relative
+        if not candidate.exists():
+            continue
+        if candidate_kind == "path-only":
+            _ui_validate_path_only_repository_file(root, relative)
+            documents.append((relative, ""))
+            continue
+        raw = _ui_read_worktree_text_candidate(
+            root,
+            relative,
+            candidate_kind,
+            side="selected",
+        )
+        if raw is None:
+            continue
+        total += len(raw)
+        if total > UI_HINT_MAX_TOTAL_BYTES:
+            raise ToolError(
+                f"Product Interface detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
+            )
+        documents.append((relative, raw.decode("utf-8", errors="ignore")))
+    return documents
+
+
+def _ui_change_records(
+    project_path: Path, baseline_head: str, candidate_head: str
+) -> list[dict[str, Optional[str]]]:
+    result = run_complete(
+        [
+            "git",
+            "diff",
+            "--raw",
+            "-z",
+            "--full-index",
+            "--no-abbrev",
+            "--find-renames=50%",
+            baseline_head,
+            candidate_head,
+            "--",
+        ],
+        project_path,
+        timeout=30,
+        max_bytes=20_000_000,
+    )
+    if not result["ok"]:
+        raise ToolError("Could not enumerate the exact Product Interface candidate change set.")
+    tokens = result["stdout"].split(b"\0")
+    if tokens and tokens[-1] == b"":
+        tokens.pop()
+    records: list[dict[str, Optional[str]]] = []
+    index = 0
+    while index < len(tokens):
+        try:
+            header = tokens[index].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise ToolError("Git returned an invalid Product Interface change status.") from exc
+        index += 1
+        fields = header.split()
+        if len(fields) != 5 or not fields[0].startswith(":"):
+            raise ToolError("Git returned an invalid Product Interface raw change record.")
+        baseline_mode = fields[0][1:]
+        candidate_mode = fields[1]
+        baseline_oid, candidate_oid, status = fields[2:]
+        if (
+            not re.fullmatch(r"[0-7]{6}", baseline_mode)
+            or not re.fullmatch(r"[0-7]{6}", candidate_mode)
+            or not re.fullmatch(r"[0-9a-f]{40,64}", baseline_oid)
+            or not re.fullmatch(r"[0-9a-f]{40,64}", candidate_oid)
+        ):
+            raise ToolError("Git returned invalid Product Interface object metadata.")
+        kind = status[:1]
+        if kind in {"R", "C"}:
+            if index + 1 >= len(tokens):
+                raise ToolError("Git returned a truncated Product Interface rename record.")
+            before = decode_git_relative_path(tokens[index], "UI baseline path")
+            after = decode_git_relative_path(tokens[index + 1], "UI candidate path")
+            index += 2
+        elif kind in {"A", "M", "D", "T"}:
+            if index >= len(tokens):
+                raise ToolError("Git returned a truncated Product Interface change record.")
+            path = decode_git_relative_path(tokens[index], "UI changed path")
+            index += 1
+            before = None if kind == "A" else path
+            after = None if kind == "D" else path
+        else:
+            raise ToolError(
+                f"Git returned unsupported Product Interface change status: {status}"
+            )
+        records.append({
+            "status": status,
+            "baselinePath": before,
+            "candidatePath": after,
+            "baselineMode": baseline_mode,
+            "candidateMode": candidate_mode,
+        })
+    if len(records) > UI_HINT_MAX_FILES:
+        raise ToolError(
+            f"Product Interface candidate changes exceed the {UI_HINT_MAX_FILES}-file safety limit."
+        )
+    return records
+
+
+def _ui_collect_changed_documents(
+    project_path: Path,
+    baseline_head: str,
+    records: list[dict[str, Optional[str]]],
+) -> list[tuple[str, str]]:
+    root = Path(git_root(project_path) or project_path).resolve()
+    baseline_paths = sorted({
+        str(record["baselinePath"])
+        for record in records
+        if record["baselinePath"] is not None
+    })
+    candidate_paths = sorted({
+        str(record["candidatePath"])
+        for record in records
+        if record["candidatePath"] is not None
+    })
+    baseline_context_by_path = _ui_repository_context_by_path(
+        root, baseline_paths, revision=baseline_head
+    )
+    candidate_context_by_path = _ui_repository_context_by_path(
+        root, candidate_paths
+    )
+    documents: list[tuple[str, str]] = []
+    total = 0
+    for record in records:
+        if "160000" in {record.get("baselineMode"), record.get("candidateMode")}:
+            continue
+        baseline_path = record["baselinePath"]
+        candidate_path = record["candidatePath"]
+        if baseline_path is not None:
+            baseline_kind = _ui_file_candidate_kind(
+                baseline_path,
+                context_platforms=baseline_context_by_path.get(baseline_path, ()),
+            )
+            if baseline_kind == "path-only":
+                if _ui_revision_blob_size(root, baseline_head, baseline_path) is None:
+                    raise ToolError(
+                        f"Could not safely bind the baseline path-only UI asset: {baseline_path}"
+                    )
+                documents.append((baseline_path, ""))
+            elif baseline_kind is not None:
+                present, raw = _ui_read_revision_text_candidate(
+                    root,
+                    baseline_head,
+                    baseline_path,
+                    baseline_kind,
+                    side="baseline",
+                )
+                if not present:
+                    raise ToolError(
+                        f"Could not safely read the baseline side of changed UI-capable file: {baseline_path}"
+                    )
+                if raw is not None:
+                    total += len(raw)
+                    documents.append((baseline_path, raw.decode("utf-8", errors="ignore")))
+        if candidate_path is not None:
+            candidate_kind = _ui_file_candidate_kind(
+                candidate_path,
+                context_platforms=candidate_context_by_path.get(candidate_path, ()),
+            )
+            if candidate_kind == "path-only":
+                _ui_validate_path_only_repository_file(root, candidate_path)
+                documents.append((candidate_path, ""))
+            elif candidate_kind is not None:
+                raw = _ui_read_worktree_text_candidate(
+                    root,
+                    candidate_path,
+                    candidate_kind,
+                    side="candidate",
+                )
+                if raw is not None:
+                    total += len(raw)
+                    documents.append((candidate_path, raw.decode("utf-8", errors="ignore")))
+        if total > UI_HINT_MAX_TOTAL_BYTES:
+            raise ToolError(
+                f"Product Interface candidate detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
+            )
+    return documents
+
+
+def _ui_collect_scoped_documents(
+    project_path: Path,
+    baseline_head: str,
+    paths: list[str],
+) -> list[tuple[str, str]]:
+    """Read both sides of a bounded changed path set for routing decisions."""
+    root = Path(git_root(project_path) or project_path).resolve()
+    normalized_paths = sorted({path.replace("\\", "/") for path in paths})
+    baseline_context_by_path = _ui_repository_context_by_path(
+        root, normalized_paths, revision=baseline_head
+    )
+    candidate_context_by_path = _ui_repository_context_by_path(
+        root, normalized_paths
+    )
+    selected = sorted({
+        path
+        for path in normalized_paths
+        if (
+            _ui_file_candidate(
+                path,
+                context_platforms=baseline_context_by_path.get(path, ()),
+            )
+            or _ui_file_candidate(
+                path,
+                context_platforms=candidate_context_by_path.get(path, ()),
+            )
+        )
+    })
+    if len(selected) > UI_HINT_MAX_FILES:
+        raise ToolError(
+            f"Product Interface detection exceeds the {UI_HINT_MAX_FILES}-file safety limit."
+        )
+    documents: list[tuple[str, str]] = []
+    total = 0
+    for relative in selected:
+        baseline_kind = _ui_file_candidate_kind(
+            relative,
+            context_platforms=baseline_context_by_path.get(relative, ()),
+        )
+        candidate_kind = _ui_file_candidate_kind(
+            relative,
+            context_platforms=candidate_context_by_path.get(relative, ()),
+        )
+        if baseline_kind == "path-only" or candidate_kind == "path-only":
+            baseline_present = _ui_revision_blob_size(root, baseline_head, relative) is not None
+            if baseline_present and baseline_kind == "path-only":
+                documents.append((relative, ""))
+            candidate = root / relative
+            if candidate.exists() and candidate_kind == "path-only":
+                _ui_validate_path_only_repository_file(root, relative)
+                documents.append((relative, ""))
+            elif not baseline_present:
+                raise ToolError(
+                    f"Product Interface detection could not bind either side of changed path: {relative}"
+                )
+            continue
+        baseline_present, baseline_raw = _ui_read_revision_text_candidate(
+            root,
+            baseline_head,
+            relative,
+            baseline_kind,
+            side="baseline",
+        ) if baseline_kind is not None else (
+            _ui_revision_blob_size(root, baseline_head, relative) is not None,
+            None,
+        )
+        if baseline_raw is not None:
+            total += len(baseline_raw)
+            documents.append((relative, baseline_raw.decode("utf-8", errors="ignore")))
+        candidate = root / relative
+        if candidate.exists() and candidate_kind is not None:
+            candidate_raw = _ui_read_worktree_text_candidate(
+                root,
+                relative,
+                candidate_kind,
+                side="changed",
+            )
+            if candidate_raw is not None:
+                total += len(candidate_raw)
+                documents.append((relative, candidate_raw.decode("utf-8", errors="ignore")))
+        elif not baseline_present:
+            raise ToolError(
+                f"Product Interface detection could not bind either side of changed path: {relative}"
+            )
+        if total > UI_HINT_MAX_TOTAL_BYTES:
+            raise ToolError(
+                f"Product Interface detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
+            )
+    return documents
+
+
+def _ui_repository_context_entries(
+    project_path: Path,
+    *,
+    revision: Optional[str] = None,
+) -> list[tuple[str, str]]:
+    root = Path(git_root(project_path) or project_path).resolve()
+    command = (
+        ["git", "ls-files", "-z"]
+        if revision is None
+        else ["git", "ls-tree", "-r", "-z", "--name-only", revision, "--"]
+    )
+    listed = run_complete(
+        command, root, timeout=20, max_bytes=10_000_000
+    )
+    if not listed["ok"]:
+        side = "baseline " if revision is not None else ""
+        raise ToolError(
+            f"Could not enumerate {side}Product Interface wrapper context."
+        )
+    paths = [
+        decode_git_relative_path(raw, "UI wrapper context")
+        for raw in listed["stdout"].split(b"\0")
+        if raw
+    ]
+    entries: set[tuple[str, str]] = set()
+    xcode_prefixes: set[str] = set()
+
+    def add_for_segment(normalized: str, segment: str, platform: str) -> None:
+        parts = normalized.split("/")
+        lowered = [part.lower() for part in parts]
+        if segment.lower() in lowered:
+            index = lowered.index(segment.lower())
+            entries.add(("/".join(parts[:index]), platform))
+
+    for path in paths:
+        normalized = path.replace("\\", "/")
+        for segment in ("src-tauri", "tauri"):
+            add_for_segment(normalized, segment, "tauri")
+        for segment in ("electron", "main-process", "renderer-process"):
+            add_for_segment(normalized, segment, "electron")
+        add_for_segment(normalized, "react-native", "react-native")
+        add_for_segment(normalized, "flutter", "flutter")
+        add_for_segment(normalized, "webview", "webview")
+        lowered_name = Path(normalized).name.lower()
+        parent = Path(normalized).parent.as_posix()
+        prefix = "" if parent == "." else parent
+        if lowered_name == "tauri.conf.json":
+            entries.add((prefix, "tauri"))
+        if lowered_name.startswith("react-native.config."):
+            entries.add((prefix, "react-native"))
+        if re.search(
+            r"(^|/)(?:capacitor\.config\.(?:js|ts|json)|ionic\.config\.json|config\.xml)$|(^|/)(?:cordova|capacitor|ionic)(/|[._-])",
+            normalized,
+            re.IGNORECASE,
+        ):
+            entries.add((prefix, "webview"))
+        android_match = re.search(
+            r"(^|/)(?P<module>[^/]+)/src/main/(?:AndroidManifest\.xml|java(?:/|$)|kotlin(?:/|$)|res(?:/|$))",
+            normalized,
+            re.IGNORECASE,
+        )
+        if android_match:
+            module_end = android_match.start("module") + len(android_match.group("module"))
+            entries.add((normalized[:module_end], "android"))
+        path_parts = normalized.split("/")
+        for index, part in enumerate(path_parts):
+            if part.lower().endswith((".xcodeproj", ".xcworkspace")):
+                project_prefix = "/".join(path_parts[:index])
+                xcode_prefixes.add(project_prefix)
+        if lowered_name.endswith((".qml", ".ui", ".glade")):
+            # Qt/GTK resource trees are commonly siblings of the form source,
+            # so bind their context at the repository root.
+            entries.add(("", "linux"))
+
+    package_paths = sorted(
+        path for path in paths if Path(path).name.lower() == "package.json"
+    )
+    if len(package_paths) > 256:
+        raise ToolError("Product Interface wrapper context exceeds 256 package manifests.")
+    context_bytes = 0
+
+    def read_context_document(relative: str) -> bytes:
+        nonlocal context_bytes
+        try:
+            if revision is None:
+                raw = audit_core.read_repository_file(
+                    root,
+                    relative,
+                    max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
+                    max_seconds=10,
+                )
+            else:
+                raw = _audit_stage4_revision_file(
+                    root,
+                    revision,
+                    relative,
+                    max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
+                )
+                if raw is None:
+                    raise ToolError(
+                        f"Could not safely read baseline {relative} for Product Interface wrapper context."
+                    )
+            context_bytes += len(raw)
+            if context_bytes > UI_HINT_MAX_TOTAL_BYTES:
+                raise ToolError(
+                    "Product Interface wrapper manifests exceed the aggregate byte limit."
+                )
+            return raw
+        except (audit_core.AuditError, UnicodeError) as exc:
+            raise ToolError(
+                f"Could not safely read {relative} for Product Interface wrapper context."
+            ) from exc
+
+    xcode_projects = sorted(
+        path
+        for path in paths
+        if path.lower().endswith(".xcodeproj/project.pbxproj")
+    )
+    if len(xcode_projects) > 256:
+        raise ToolError("Product Interface Xcode context exceeds 256 project manifests.")
+    xcode_platforms_by_prefix: dict[str, set[str]] = {
+        prefix: set() for prefix in xcode_prefixes
+    }
+    for project_path in xcode_projects:
+        try:
+            project_text = read_context_document(project_path).decode("utf-8")
+        except UnicodeError as exc:
+            raise ToolError(
+                f"Could not safely parse {project_path} for Product Interface Xcode context."
+            ) from exc
+        project_parts = project_path.replace("\\", "/").split("/")
+        project_prefix = ""
+        for index, part in enumerate(project_parts):
+            if part.lower().endswith(".xcodeproj"):
+                project_prefix = "/".join(project_parts[:index])
+                break
+        detected_xcode_platforms: set[str] = set()
+        if re.search(
+            r"\b(?:SDKROOT\s*=\s*(?:iphoneos|iphonesimulator)|"
+            r"IPHONEOS_DEPLOYMENT_TARGET\s*=|TARGETED_DEVICE_FAMILY\s*=)",
+            project_text,
+            re.IGNORECASE,
+        ) or re.search(
+            r"\bSUPPORTED_PLATFORMS\s*=\s*[^;]*(?:iphoneos|iphonesimulator)",
+            project_text,
+            re.IGNORECASE,
+        ):
+            detected_xcode_platforms.add("ios")
+        if re.search(
+            r"\b(?:SDKROOT\s*=\s*macosx|MACOSX_DEPLOYMENT_TARGET\s*=)",
+            project_text,
+            re.IGNORECASE,
+        ) or re.search(
+            r"\bSUPPORTED_PLATFORMS\s*=\s*[^;]*macosx",
+            project_text,
+            re.IGNORECASE,
+        ):
+            detected_xcode_platforms.add("macos")
+        if not detected_xcode_platforms:
+            detected_xcode_platforms.update(("ios", "macos"))
+        xcode_platforms_by_prefix.setdefault(project_prefix, set()).update(
+            detected_xcode_platforms
+        )
+    for prefix, detected_platforms in xcode_platforms_by_prefix.items():
+        if not detected_platforms:
+            detected_platforms.update(("ios", "macos"))
+        for platform in detected_platforms:
+            entries.add((prefix, platform))
+
+    for package_path in package_paths:
+        try:
+            package = json.loads(read_context_document(package_path).decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ToolError(
+                f"Could not safely parse {package_path} for Product Interface wrapper context."
+            ) from exc
+        if not isinstance(package, dict):
+            raise ToolError(
+                f"{package_path} must be an object for Product Interface wrapper context."
+            )
+        dependency_names: set[str] = set()
+        for field in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            value = package.get(field, {})
+            if value is not None and not isinstance(value, dict):
+                raise ToolError(
+                    f"{package_path} {field} must be an object when present."
+                )
+            dependency_names.update(str(name) for name in (value or {}))
+        package_parent = Path(package_path).parent.as_posix()
+        package_prefix = "" if package_parent == "." else package_parent
+        if "electron" in dependency_names:
+            entries.add((package_prefix, "electron"))
+        if "react-native" in dependency_names:
+            entries.add((package_prefix, "react-native"))
+        if dependency_names & {"@capacitor/core", "cordova", "cordova-lib", "@ionic/core", "@ionic/react", "@ionic/vue"}:
+            entries.add((package_prefix, "webview"))
+
+    pubspec_paths = sorted(
+        path for path in paths if Path(path).name.lower() == "pubspec.yaml"
+    )
+    csproj_paths = sorted(path for path in paths if path.lower().endswith(".csproj"))
+    if len(pubspec_paths) > 256 or len(csproj_paths) > 256:
+        raise ToolError("Product Interface native project context exceeds 256 manifests per kind.")
+    for pubspec_path in pubspec_paths:
+        try:
+            pubspec = read_context_document(pubspec_path).decode("utf-8")
+        except UnicodeError as exc:
+            raise ToolError(
+                f"Could not safely parse {pubspec_path} for Product Interface wrapper context."
+            ) from exc
+        if re.search(r"(?m)^\s*sdk\s*:\s*flutter\s*(?:#.*)?$", pubspec):
+            parent = Path(pubspec_path).parent.as_posix()
+            entries.add(("" if parent == "." else parent, "flutter"))
+    windows_project_pattern = re.compile(
+        r"<(?:UseWPF|UseWindowsForms)>\s*true\s*</(?:UseWPF|UseWindowsForms)>"
+        r"|Microsoft\.(?:WindowsAppSDK|NET\.Sdk\.(?:Razor|BlazorWebAssembly))"
+        r"|(?:PackageReference|Sdk)[^>]+(?:Avalonia|WinUI)",
+        re.IGNORECASE,
+    )
+    for csproj_path in csproj_paths:
+        try:
+            csproj = read_context_document(csproj_path).decode("utf-8")
+        except UnicodeError as exc:
+            raise ToolError(
+                f"Could not safely parse {csproj_path} for Product Interface wrapper context."
+            ) from exc
+        if windows_project_pattern.search(csproj):
+            parent = Path(csproj_path).parent.as_posix()
+            entries.add(("" if parent == "." else parent, "windows"))
+    return sorted(entries)
+
+
+def _ui_context_entry_applies(prefix: str, relative: str) -> bool:
+    return not prefix or relative == prefix or relative.startswith(prefix + "/")
+
+
+def _ui_repository_context_platforms(
+    project_path: Path,
+    paths: Optional[list[str]] = None,
+    *,
+    revision: Optional[str] = None,
+) -> list[str]:
+    entries = _ui_repository_context_entries(project_path, revision=revision)
+    selected = None if paths is None else [path.replace("\\", "/") for path in paths]
+    contexts = {
+        platform
+        for prefix, platform in entries
+        if selected is None
+        or any(_ui_context_entry_applies(prefix, path) for path in selected)
+    }
+    return [
+        platform
+        for platform in (
+            "webview", "ios", "android", "react-native", "flutter", "electron",
+            "tauri", "macos", "windows", "linux",
+        )
+        if platform in contexts
+    ]
+
+
+def _ui_repository_context_by_path(
+    project_path: Path,
+    paths: list[str],
+    *,
+    revision: Optional[str] = None,
+) -> dict[str, list[str]]:
+    entries = _ui_repository_context_entries(project_path, revision=revision)
+    result: dict[str, list[str]] = {}
+    for raw_path in paths:
+        relative = raw_path.replace("\\", "/")
+        contexts = {
+            platform
+            for prefix, platform in entries
+            if _ui_context_entry_applies(prefix, relative)
+        }
+        if contexts:
+            result[relative] = [
+                platform
+                for platform in (
+                    "webview", "ios", "android", "react-native", "flutter",
+                    "electron", "tauri", "macos", "windows", "linux",
+                )
+                if platform in contexts
+            ]
+    return result
+
+
+def _ui_merge_repository_context_by_path(
+    *context_maps: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    merged: dict[str, set[str]] = {}
+    for context_map in context_maps:
+        for path, platforms in context_map.items():
+            merged.setdefault(path, set()).update(platforms)
+    order = (
+        "webview", "ios", "android", "react-native", "flutter", "electron",
+        "tauri", "macos", "windows", "linux",
+    )
+    return {
+        path: [platform for platform in order if platform in platforms]
+        for path, platforms in sorted(merged.items())
+    }
+
+
+def _ui_changed_repository_context_by_path(
+    project_path: Path,
+    baseline_head: str,
+    records: list[dict[str, Optional[str]]],
+) -> dict[str, list[str]]:
+    baseline_paths = sorted({
+        str(record["baselinePath"])
+        for record in records
+        if record["baselinePath"] is not None
+    })
+    candidate_paths = sorted({
+        str(record["candidatePath"])
+        for record in records
+        if record["candidatePath"] is not None
+    })
+    return _ui_merge_repository_context_by_path(
+        _ui_repository_context_by_path(
+            project_path, baseline_paths, revision=baseline_head
+        ),
+        _ui_repository_context_by_path(project_path, candidate_paths),
+    )
+
+
+def _ui_detection(project_path: Path, paths: Optional[list[str]] = None) -> dict[str, Any]:
+    status: dict[str, Any] = {}
+    documents = _ui_collect_documents(project_path, paths, status=status)
+    document_paths = [path for path, _ in documents]
+    return ui_core.detect_product_ui(
+        documents,
+        candidate_file_count=status["candidateFileCount"],
+        inspection_truncated=status["inspectionTruncated"],
+        context_platforms_by_path=_ui_repository_context_by_path(
+            project_path, document_paths
+        ),
+    )
+
+
+def _ui_applicability(
+    project_path: Path,
+    *,
+    goal: str = "",
+    paths: Optional[list[str]] = None,
+    baseline_head: Optional[str] = None,
+) -> dict[str, Any]:
+    gitlink_change = False
+    if paths is not None and baseline_head:
+        current_state = project_state(project_path)
+        if current_state["clean"]:
+            selected_paths = {path.replace("\\", "/") for path in paths}
+            records = [
+                record
+                for record in _ui_change_records(
+                    Path(current_state["gitRoot"]),
+                    baseline_head,
+                    str(current_state["gitHead"]),
+                )
+                if record["baselinePath"] in selected_paths
+                or record["candidatePath"] in selected_paths
+            ]
+            gitlink_change = any(
+                "160000" in {
+                    record.get("baselineMode"), record.get("candidateMode")
+                }
+                for record in records
+            )
+            documents = _ui_collect_changed_documents(
+                project_path, baseline_head, records
+            )
+            repository_context = _ui_changed_repository_context_by_path(
+                project_path, baseline_head, records
+            )
+        else:
+            documents = _ui_collect_scoped_documents(
+                project_path, baseline_head, paths
+            )
+            normalized_paths = sorted({
+                path.replace("\\", "/") for path in paths
+            })
+            repository_context = _ui_merge_repository_context_by_path(
+                _ui_repository_context_by_path(
+                    project_path, normalized_paths, revision=baseline_head
+                ),
+                _ui_repository_context_by_path(project_path, normalized_paths),
+            )
+        detection = ui_core.detect_product_ui(
+            documents,
+            context_platforms_by_path=repository_context,
+        )
+    else:
+        detection = _ui_detection(project_path, paths)
+    explicit_ui = any(re.search(pattern, goal, re.IGNORECASE) for pattern in UI_INTENT_PATTERNS)
+    changed_scope = paths is not None
+    if gitlink_change:
+        state = "review-required"
+        reason = "changed-gitlink-requires-independent-ui-resolution"
+    elif explicit_ui or (changed_scope and detection["applicable"]):
+        state = "required"
+        reason = "explicit-ui-goal" if explicit_ui else "changed-ui-paths"
+    elif changed_scope:
+        state = "inactive"
+        reason = "no-ui-evidence-in-change-set"
+    elif detection["applicable"] or detection["inspectionTruncated"]:
+        state = "review-required"
+        reason = (
+            "unscoped-ui-inspection-truncated"
+            if detection["inspectionTruncated"]
+            else "repository-ui-capability-without-scoped-change"
+        )
+    else:
+        state = "inactive"
+        reason = "no-ui-evidence"
+    result = {
+        "schemaVersion": "jstack.ui.applicability.v1",
+        "state": state,
+        "reason": reason,
+        "goalDigest": hashlib.sha256(goal.strip().encode("utf-8")).hexdigest(),
+        "changedScopeEvaluated": changed_scope,
+        "detection": detection,
+    }
+    result["applicabilitySha256"] = ui_core.canonical_digest(result)
+    return result
+
+
+def _ui_evidence_root(project_path: Path) -> Path:
+    state = project_state(project_path)
+    identity = _ui_git_identity(project_path, state)
+    project_key = hashlib.sha256(
+        (identity["commonDir"] + "\0" + identity["gitRoot"]).encode("utf-8")
+    ).hexdigest()[:24]
+    return Path.home() / ".jstack" / "evidence" / "ui" / project_key
+
+
+def _validate_ui_evidence_root_authority(root: Path) -> None:
+    """Reject aliasing or permissive components below the fixed user home."""
+    home = Path.home()
+    try:
+        relative = root.relative_to(home)
+    except ValueError as exc:
+        raise ToolError("The Product Interface evidence root is outside the fixed user home.") from exc
+    current = home
+    paths = [home]
+    for part in relative.parts:
+        current = current / part
+        paths.append(current)
+    uid = os.getuid() if hasattr(os, "getuid") else None
+    for index, path in enumerate(paths):
+        try:
+            metadata = path.lstat()
+        except OSError as exc:
+            raise ToolError(
+                "The complete fixed Product Interface evidence directory chain must already exist."
+            ) from exc
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise ToolError(
+                "The Product Interface evidence directory chain may not contain symlinks or non-directories."
+            )
+        if uid is not None and metadata.st_uid != uid:
+            raise ToolError(
+                "The Product Interface evidence directory chain must be current-user owned."
+            )
+        if index > 0 and stat.S_IMODE(metadata.st_mode) & 0o077:
+            raise ToolError(
+                "Product Interface evidence directories below the home must be private mode 0700."
+            )
+
+
+def _ui_candidate_delta(project_path: Path, baseline_head: str) -> dict[str, Any]:
+    state = project_state(project_path)
+    identity = _ui_git_identity(project_path, state)
+    if state["gitHead"] == baseline_head:
+        raise ToolError("UI finalization requires a distinct committed candidate after the baseline.")
+    ancestor = run_complete(
+        ["git", "merge-base", "--is-ancestor", baseline_head, state["gitHead"]],
+        project_path,
+        timeout=15,
+    )
+    if ancestor["returncode"] != 0:
+        raise ToolError("The UI candidate must be a strict descendant of the contracted baseline.")
+    records = _ui_change_records(project_path, baseline_head, state["gitHead"])
+    committed = sorted(
+        {
+            path
+            for record in records
+            for path in (record["baselinePath"], record["candidatePath"])
+            if path is not None
+        }
+    )
+    diff = run_complete(
+        [
+            "git",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--binary",
+            "--full-index",
+            f"{baseline_head}..{state['gitHead']}",
+            "--",
+        ],
+        project_path,
+        timeout=30,
+        max_bytes=100_000_000,
+    )
+    if not diff["ok"]:
+        raise ToolError("Could not derive the exact Product Interface baseline-to-candidate diff.")
+    return {
+        **identity,
+        "clean": bool(state["clean"]),
+        "changedPaths": committed,
+        "changedPathsSha256": ui_core.canonical_digest(committed),
+        "changeRecords": records,
+        "changeRecordsSha256": ui_core.canonical_digest(records),
+        "diffSha256": hashlib.sha256(diff["stdout"]).hexdigest(),
+    }
+
+
 def _b64encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
@@ -1898,6 +3056,276 @@ def issue_receipt(payload: dict[str, Any]) -> str:
     encoded = _b64encode(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8"))
     signature = _b64encode(hmac.new(_RECEIPT_SECRET, encoded.encode("ascii"), hashlib.sha256).digest())
     return f"{encoded}.{signature}"
+
+
+def _ui_contract_key_path() -> Path:
+    return Path.home() / ".jstack" / "keys" / "ui-contract-hmac-v1"
+
+
+def _ui_contract_key_metadata_valid(
+    metadata: os.stat_result,
+    *,
+    directory: bool,
+    private_directory: bool = True,
+) -> bool:
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    expected_mode = 0o700 if directory else 0o600
+    if not expected_type(metadata.st_mode):
+        return False
+    if not directory and (
+        metadata.st_nlink != 1 or metadata.st_size != UI_CONTRACT_HMAC_KEY_BYTES
+    ):
+        return False
+    if os.name == "posix":
+        if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
+            return False
+        actual_mode = stat.S_IMODE(metadata.st_mode)
+        if directory and not private_directory:
+            if actual_mode & 0o022:
+                return False
+        elif actual_mode != expected_mode:
+            return False
+    return True
+
+
+def _ui_contract_hmac_key_posix(path: Path, *, create: bool) -> bytes:
+    """Create/read the durable UI-contract key without following child links."""
+    home = Path.home()
+    try:
+        relative = path.relative_to(home)
+    except ValueError as exc:
+        raise ToolError("The Product Interface contract key must remain below the user home.") from exc
+    if tuple(relative.parts) != (".jstack", "keys", "ui-contract-hmac-v1"):
+        raise ToolError("The Product Interface contract key path is not the fixed JStack path.")
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    try:
+        current_fd = os.open(str(home), directory_flags)
+    except OSError as exc:
+        raise ToolError("The user home could not be opened for Product Interface key validation.") from exc
+    try:
+        for component in (".jstack", "keys"):
+            if create:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=current_fd)
+                    os.fsync(current_fd)
+                except FileExistsError:
+                    pass
+            try:
+                child_fd = os.open(
+                    component,
+                    directory_flags | nofollow,
+                    dir_fd=current_fd,
+                )
+            except OSError as exc:
+                raise ToolError(
+                    "The Product Interface contract key directory is missing, linked, or inaccessible."
+                ) from exc
+            metadata = os.fstat(child_fd)
+            if not _ui_contract_key_metadata_valid(
+                metadata,
+                directory=True,
+                private_directory=component == "keys",
+            ):
+                os.close(child_fd)
+                raise ToolError(
+                    "Product Interface key directories must be current-user real directories; the key directory must be mode 0700 and its JStack parent must not be group/world writable."
+                )
+            os.close(current_fd)
+            current_fd = child_fd
+
+        key_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+            | nofollow
+        )
+        try:
+            key_fd = os.open(path.name, key_flags, dir_fd=current_fd)
+        except FileNotFoundError:
+            if not create:
+                raise ToolError(
+                    "The Product Interface contract key does not exist; create a contract before verifying one."
+                )
+            secret = secrets.token_bytes(UI_CONTRACT_HMAC_KEY_BYTES)
+            create_flags = (
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_CLOEXEC", 0)
+                | nofollow
+            )
+            try:
+                created_fd = os.open(
+                    path.name,
+                    create_flags,
+                    0o600,
+                    dir_fd=current_fd,
+                )
+            except FileExistsError:
+                key_fd = os.open(path.name, key_flags, dir_fd=current_fd)
+            except OSError as exc:
+                raise ToolError("The Product Interface contract key could not be created safely.") from exc
+            else:
+                try:
+                    written = 0
+                    while written < len(secret):
+                        count = os.write(created_fd, secret[written:])
+                        if count <= 0:
+                            raise OSError("short key write")
+                        written += count
+                    os.fsync(created_fd)
+                except OSError as exc:
+                    raise ToolError("The Product Interface contract key could not be written durably.") from exc
+                finally:
+                    os.close(created_fd)
+                os.fsync(current_fd)
+                key_fd = os.open(path.name, key_flags, dir_fd=current_fd)
+        except OSError as exc:
+            raise ToolError(
+                "The Product Interface contract key is missing, linked, or inaccessible."
+            ) from exc
+        try:
+            before = os.fstat(key_fd)
+            if not _ui_contract_key_metadata_valid(before, directory=False):
+                raise ToolError(
+                    "The Product Interface contract key must be a current-user mode-0600, single-link, 32-byte regular file."
+                )
+            chunks: list[bytes] = []
+            remaining = UI_CONTRACT_HMAC_KEY_BYTES + 1
+            while remaining:
+                chunk = os.read(key_fd, remaining)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(key_fd)
+            stable_fields = (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_nlink",
+                "st_size",
+                "st_uid",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+            if any(getattr(before, field) != getattr(after, field) for field in stable_fields):
+                raise ToolError("The Product Interface contract key changed while it was read.")
+            try:
+                entry = os.stat(path.name, dir_fd=current_fd, follow_symlinks=False)
+                reopened_fd = os.open(path.name, key_flags, dir_fd=current_fd)
+            except OSError as exc:
+                raise ToolError(
+                    "The Product Interface contract key directory entry changed while it was read."
+                ) from exc
+            try:
+                reopened = os.fstat(reopened_fd)
+            finally:
+                os.close(reopened_fd)
+            if any(
+                getattr(after, field) != getattr(entry, field)
+                or getattr(after, field) != getattr(reopened, field)
+                for field in stable_fields
+            ):
+                raise ToolError(
+                    "The Product Interface contract key identity changed while it was read."
+                )
+            key = b"".join(chunks)
+            if len(key) != UI_CONTRACT_HMAC_KEY_BYTES:
+                raise ToolError("The Product Interface contract key has an invalid length.")
+            return key
+        finally:
+            os.close(key_fd)
+    finally:
+        os.close(current_fd)
+
+
+def _ui_contract_key_is_durable() -> bool:
+    return bool(
+        os.name == "posix"
+        and os.supports_dir_fd
+        and os.open in os.supports_dir_fd
+    )
+
+
+def _ui_contract_hmac_key(*, create: bool = False) -> bytes:
+    path = _ui_contract_key_path()
+    if _ui_contract_key_is_durable():
+        return _ui_contract_hmac_key_posix(path, create=create)
+    # The generic portable filesystem API cannot verify Windows DACLs or
+    # reparse-point ancestry with the same descriptor guarantees. Keep the
+    # contract usable within one server session without persisting a forgeable
+    # secret; cross-session durability is explicitly POSIX-only in v1.
+    return _RECEIPT_SECRET
+
+
+def _ui_contract_signing_key(*, create: bool = False) -> bytes:
+    return hmac.new(
+        _ui_contract_hmac_key(create=create),
+        UI_CONTRACT_HMAC_DOMAIN,
+        hashlib.sha256,
+    ).digest()
+
+
+def issue_ui_contract_receipt(payload: dict[str, Any]) -> str:
+    key = _ui_contract_signing_key(create=True)
+    body = dict(payload)
+    body["serverSession"] = SERVER_SESSION_ID
+    body["issuedAt"] = now_iso()
+    body["keyIdSha256"] = hashlib.sha256(key).hexdigest()
+    body["keyDurability"] = (
+        "posix-user-key-v1"
+        if _ui_contract_key_is_durable()
+        else "server-session-v1"
+    )
+    encoded = _b64encode(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+    signature = _b64encode(
+        hmac.new(key, encoded.encode("ascii"), hashlib.sha256).digest()
+    )
+    return f"{encoded}.{signature}"
+
+
+def verify_ui_contract_receipt(token: str, *, require_fresh: bool) -> dict[str, Any]:
+    try:
+        encoded, supplied_signature = token.split(".", 1)
+        key = _ui_contract_signing_key()
+        expected_signature = _b64encode(
+            hmac.new(key, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("timezone-aware timestamps required")
+    except Exception as exc:
+        raise ToolError("Product Interface contract receipt is malformed or has an invalid durable signature.") from exc
+    now = _dt.datetime.now(_dt.timezone.utc)
+    checks = {
+        "kind": payload.get("kind") == "ui-contract",
+        "issuerSession": bool(
+            re.fullmatch(r"[0-9a-f]{32}", str(payload.get("serverSession") or ""))
+        ),
+        "keyId": payload.get("keyIdSha256") == hashlib.sha256(key).hexdigest(),
+        "keyDurability": payload.get("keyDurability")
+        == (
+            "posix-user-key-v1"
+            if _ui_contract_key_is_durable()
+            else "server-session-v1"
+        ),
+        "issued": issued <= now,
+        "boundedExpiry": 0 < (expires - issued).total_seconds() <= UI_CONTRACT_MAX_AGE_SECONDS,
+    }
+    if require_fresh:
+        checks["fresh"] = issued <= now < expires
+    if not all(checks.values()):
+        state = "stale" if require_fresh else "invalid"
+        raise ToolError(f"Product Interface contract receipt is {state} or fails its durable binding.")
+    return payload
 
 
 def verify_signed_session_token(token: str, expected_kind: str) -> dict[str, Any]:
@@ -1989,8 +3417,39 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def path_matches_patterns(path: str, patterns: list[str]) -> bool:
-    normalized = path.replace("\\", "/")
-    return any(fnmatch.fnmatch(normalized, pattern.replace("\\", "/")) for pattern in patterns)
+    normalized = tuple(part for part in path.replace("\\", "/").split("/") if part)
+
+    def matches(pattern: str) -> bool:
+        pattern_parts = tuple(
+            part for part in pattern.replace("\\", "/").split("/") if part
+        )
+        memo: dict[tuple[int, int], bool] = {}
+
+        def visit(path_index: int, pattern_index: int) -> bool:
+            key = (path_index, pattern_index)
+            if key in memo:
+                return memo[key]
+            if pattern_index == len(pattern_parts):
+                result = path_index == len(normalized)
+            elif pattern_parts[pattern_index] == "**":
+                result = visit(path_index, pattern_index + 1) or (
+                    path_index < len(normalized)
+                    and visit(path_index + 1, pattern_index)
+                )
+            else:
+                result = (
+                    path_index < len(normalized)
+                    and fnmatch.fnmatchcase(
+                        normalized[path_index], pattern_parts[pattern_index]
+                    )
+                    and visit(path_index + 1, pattern_index + 1)
+                )
+            memo[key] = result
+            return result
+
+        return visit(0, 0)
+
+    return any(matches(pattern) for pattern in patterns)
 
 
 def goal_is_sensitive(goal: str, policy: dict[str, Any]) -> bool:
@@ -2500,8 +3959,8 @@ WORK_CLASSIFICATIONS = [
     {
         "id": "ui_product",
         "label": "UI/product-sensitive change",
-        "patterns": [r"\bui\b", r"\bux\b", r"visual", r"layout", r"frontend", r"design", r"responsive", r"screen"],
-        "skills": ["plan-design-review", "design-review", "design-consultation", "qa", "browse", "context-save"],
+        "patterns": list(UI_INTENT_PATTERNS),
+        "skills": ["product-ui-design", "plan-design-review", "design-review", "design-consultation", "qa", "browse", "context-save"],
         "requiredGates": ["context", "planning", "build", "product-ui-qa", "quality", "handoff"],
         "releaseBlockers": ["No visual/browser QA for user-facing UI changes."],
     },
@@ -3167,7 +4626,14 @@ def choose_agent_team(
         prioritize("docs")
     if not specialist_priority and (mode_requested == "smart-subagents" or quality_level == "enterprise"):
         prioritize("investigator", "reviewer")
-    selected_ids = ["lead"] + specialist_priority[: int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])]
+    selected_specialists = specialist_priority[
+        : int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"])
+    ]
+    if "ui_product" in classification_ids:
+        for mandatory_role in ("product", "qa", "reviewer"):
+            if mandatory_role not in selected_specialists:
+                selected_specialists.append(mandatory_role)
+    selected_ids = ["lead", *selected_specialists]
 
     capability_plan = specialist_capability_plan(
         goal, classifications, selected_ids, capability_ids
@@ -3181,10 +4647,17 @@ def choose_agent_team(
         "mode": mode,
         "requestedMode": mode_requested,
         "executionMode": execution_mode,
-        "reason": "Right-sized team selected from task risk classes; smart mode is capped at three specialists.",
+        "reason": (
+            "Product Interface work requires Product/UX, QA, and Reviewer ownership; additional risk specialists are retained with an explicit risk-based Lead justification."
+            if "ui_product" in classification_ids
+            else "Right-sized team selected from task risk classes; smart mode is capped at three specialists."
+        ),
         "dispatchRequired": dispatch_required,
         "dispatchRequirement": dispatch_requirement_text(dispatch_required, goal),
-        "maxAgents": 1 + int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"]),
+        "maxAgents": max(
+            len(selected_ids),
+            1 + int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"]),
+        ),
         "specialistCount": specialist_count,
         "requiresLeadJustification": specialist_count > int(TEAM_DISPATCH_POLICY["defaultMaxSpecialists"]),
         "agents": agents,
@@ -3366,6 +4839,35 @@ def classify_work(goal: str) -> list[dict[str, Any]]:
     return matched
 
 
+def classifications_with_product_interface(
+    classifications: list[dict[str, Any]],
+    *,
+    required: bool,
+) -> list[dict[str, Any]]:
+    """Merge repository-evidenced UI work into deterministic routing."""
+    if not required or any(item.get("id") == "ui_product" for item in classifications):
+        return classifications
+    ui_classification = next(
+        item for item in WORK_CLASSIFICATIONS if item["id"] == "ui_product"
+    )
+    return [*classifications, classification_public(ui_classification)]
+
+
+def skills_with_classifications(
+    goal: str,
+    classifications: list[dict[str, Any]],
+    *,
+    quality_level: str,
+) -> list[str]:
+    """Keep normal text routing while honoring evidence-derived classifications."""
+    selected = choose_skills(goal, quality_level=quality_level)
+    for classification in classifications:
+        for skill in classification.get("skills", []):
+            if skill not in selected:
+                selected.append(skill)
+    return selected
+
+
 def choose_skills(goal: str, quality_level: str = "enterprise") -> list[str]:
     goal_l = goal.lower()
     selected: list[str] = []
@@ -3394,7 +4896,8 @@ def choose_skills(goal: str, quality_level: str = "enterprise") -> list[str]:
         ("qa|test|verify|does this work|smoke", "qa"),
         ("review|pr|diff|code quality", "review"),
         ("health|lint|typecheck|quality", "health"),
-        ("design|ui|ux|visual|layout|responsive", "design-review"),
+        ("|".join(UI_INTENT_PATTERNS), "product-ui-design"),
+        ("|".join(UI_INTENT_PATTERNS), "design-review"),
         ("brand|product design|design system", "design-consultation"),
         ("browser|click|screenshot|local app", "browse"),
         ("benchmark|performance|slow|core web vitals", "benchmark"),
@@ -12595,6 +14098,16 @@ def tool_detect_project(args: dict[str, Any]) -> dict[str, Any]:
         project_path / "gstack.yml",
     ]
     project_config = [str(path) for path in project_config_paths if path.exists()]
+    product_interface = (
+        _ui_applicability(project_path)
+        if binding["evidenceMode"] == "git"
+        else {
+            "schemaVersion": "jstack.ui.applicability.v1",
+            "state": "unavailable",
+            "reason": "git-required",
+            "detection": None,
+        }
+    )
     return {
         **binding,
         "jstackRoot": str(j_root) if j_root else None,
@@ -12606,6 +14119,7 @@ def tool_detect_project(args: dict[str, Any]) -> dict[str, Any]:
         "skillCount": len(skill_files()),
         "projectConfig": project_config,
         "testCommands": discover_test_commands(project_path),
+        "productInterface": product_interface,
     }
 
 
@@ -12855,7 +14369,35 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         )
     capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
-    selected = choose_skills(goal, quality_level=quality_level)
+    detected = tool_detect_project({"project_path": binding["requestedPath"]})
+    if binding["evidenceMode"] == "git":
+        ui_change_evidence = git_change_evidence(
+            Path(binding["gitRoot"]),
+            str(args.get("base_ref") or "").strip() or None,
+        )
+        changed_ui_scope = ui_change_evidence["files"]
+        ui_applicability = _ui_applicability(
+            Path(binding["gitRoot"]),
+            goal=goal,
+            paths=changed_ui_scope if changed_ui_scope else None,
+            baseline_head=(
+                str(ui_change_evidence.get("baseCommit") or "").strip() or None
+            ),
+        )
+    else:
+        ui_applicability = {
+            "schemaVersion": "jstack.ui.applicability.v1",
+            "state": "unavailable",
+            "reason": "git-required",
+            "detection": None,
+        }
+    classifications = classifications_with_product_interface(
+        classifications,
+        required=ui_applicability["state"] == "required",
+    )
+    selected = skills_with_classifications(
+        goal, classifications, quality_level=quality_level
+    )
     team_plan = choose_agent_team(
         goal,
         classifications,
@@ -12863,7 +14405,6 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         team_mode=team_mode,
         capability_ids=capability_ids,
     )
-    detected = tool_detect_project({"project_path": binding["requestedPath"]})
     steps = [
         {
             "gate": "Classify",
@@ -12967,6 +14508,22 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
                 "doneWhen": "Every required artifact-only evidence item is captured, failures are explicit, and no commit-bound receipt is claimed.",
             },
         )
+    if ui_applicability["state"] == "required":
+        for step in steps:
+            if step["gate"] == "Product/UI/QA":
+                step.update(
+                    {
+                        "skill": "product-ui-design -> design-review -> qa -> browse",
+                        "purpose": (
+                            "Apply the Product Interface System automatically, preserve and extend any established design system, "
+                            "and gather profile-aware visual, interaction, accessibility, and runtime evidence."
+                        ),
+                        "doneWhen": (
+                            "The scoped UI has a baseline contract and the exact candidate has a current passing Product Interface finalization receipt."
+                        ),
+                    }
+                )
+                break
     release_blockers: list[str] = []
     required_gates: list[str] = []
     for classification in classifications:
@@ -12998,6 +14555,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
             "instruction": "Run jstack_context_readiness after inspecting project context, or use the stronger loop/program goal-readiness contract when it owns orchestration, before executing this plan.",
         },
         "classifications": classifications,
+        "productInterface": ui_applicability,
         "project": detected,
         "projectBinding": binding,
         "gitRequiredTools": GIT_REQUIRED_TOOLS,
@@ -13036,7 +14594,7 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
     if quality_level not in {"standard", "enterprise"}:
         raise ToolError("quality_level must be 'standard' or 'enterprise'.")
     team_mode = normalize_team_mode(args.get("team_mode"))
-    binding = None
+    binding = resolve_project_binding(args.get("project_path"))
     workflow_mode = str(
         args.get("context_workflow_mode") or context_workflow_for_team_mode(team_mode)
     ).strip()
@@ -13044,7 +14602,6 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
         raise ToolError("context_workflow_mode is not supported.")
     context_readiness = None
     if args.get("context_readiness_receipt"):
-        binding = resolve_project_binding(args.get("project_path"))
         context_readiness = verify_context_readiness_receipt(
             str(args["context_readiness_receipt"]),
             goal=goal,
@@ -13054,6 +14611,32 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
         )
     capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
+    team_change_evidence = (
+        git_change_evidence(Path(binding["gitRoot"]))
+        if binding["evidenceMode"] == "git"
+        else None
+    )
+    ui_applicability = (
+        _ui_applicability(
+            Path(binding["gitRoot"]),
+            goal=goal,
+            paths=(team_change_evidence["files"] or None),
+            baseline_head=(
+                str(team_change_evidence.get("baseCommit") or "").strip() or None
+            ),
+        )
+        if binding["evidenceMode"] == "git"
+        else {
+            "schemaVersion": "jstack.ui.applicability.v1",
+            "state": "unavailable",
+            "reason": "git-required",
+            "detection": None,
+        }
+    )
+    classifications = classifications_with_product_interface(
+        classifications,
+        required=ui_applicability["state"] == "required",
+    )
     return {
         "goal": goal,
         "qualityLevel": quality_level,
@@ -13065,6 +14648,7 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
             "instruction": "Run jstack_context_readiness after inspecting project context and before dispatching this team.",
         },
         "classifications": classifications,
+        "productInterface": ui_applicability,
         "team": choose_agent_team(
             goal,
             classifications,
@@ -13272,7 +14856,6 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
     explicit_release_requested = bool(args.get("explicit_release_requested") or False)
     coordination_packet = args.get("coordination_packet")
     classifications = classify_work(goal) if goal else []
-    classification_ids = {item["id"] for item in classifications}
     blockers: list[str] = []
     warnings: list[str] = []
 
@@ -13289,12 +14872,46 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
     else:
         known_role_ids = [agent_id for agent_id in ids if agent_id in allowed_ids]
         if known_role_ids:
-            expected_capability_plan = specialist_capability_plan(
-                goal,
+            explicit_capability_ids = [
+                str(item) for item in (args.get("capability_ids") or [])
+            ]
+            candidate_classifications = [
                 classifications,
-                known_role_ids,
-                [str(item) for item in (args.get("capability_ids") or [])],
+                classifications_with_product_interface(
+                    classifications, required=True
+                ),
+            ]
+            candidate_plans = [
+                specialist_capability_plan(
+                    goal,
+                    candidate,
+                    known_role_ids,
+                    explicit_capability_ids,
+                )
+                for candidate in candidate_classifications
+            ]
+            packet_selection_digest = (
+                str(
+                    (coordination_packet.get("capabilityPlan") or {}).get(
+                        "selectionDigest"
+                    )
+                    or ""
+                )
+                if isinstance(coordination_packet, dict)
+                and isinstance(coordination_packet.get("capabilityPlan"), dict)
+                else ""
             )
+            selected_index = 0
+            if packet_selection_digest:
+                for index, candidate_plan in enumerate(candidate_plans):
+                    if (
+                        candidate_plan.get("selectionDigest")
+                        == packet_selection_digest
+                    ):
+                        selected_index = index
+                        break
+            classifications = candidate_classifications[selected_index]
+            expected_capability_plan = candidate_plans[selected_index]
             expected_by_role = capability_assignments_by_role(expected_capability_plan)
             for agent in agents:
                 if agent["id"] not in allowed_ids:
@@ -13324,6 +14941,7 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
                         f"Agent '{agent['id']}' capabilityIds do not match deterministic routing: expected "
                         + ", ".join(expected_ids)
                     )
+    classification_ids = {item["id"] for item in classifications}
     if team_mode == "smart-subagents":
         high_risk_requirements = {
             "production_release": {"devops", "security", "qa"},
@@ -13336,6 +14954,8 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
         precedence = ["production_release", "security_compliance", "ui_product", "data_financial", "architecture", "product"]
         primary = next((item for item in precedence if item in classification_ids), None)
         required_roles = set(high_risk_requirements[primary]) if primary else set()
+        if "ui_product" in classification_ids:
+            required_roles.update({"product", "qa", "reviewer"})
         if primary is None and "normal" in classification_ids:
             required_roles.update({"investigator", "reviewer"})
         missing_required = sorted(required_roles - set(ids))
@@ -13566,8 +15186,12 @@ def _deterministic_specialist_team(
     goal: str,
     team_mode: str,
     explicit_capability_ids: list[str],
+    *,
+    ui_product: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    classifications = classify_work(goal)
+    classifications = classifications_with_product_interface(
+        classify_work(goal), required=ui_product
+    )
     team = choose_agent_team(
         goal,
         classifications,
@@ -13576,6 +15200,45 @@ def _deterministic_specialist_team(
         capability_ids=explicit_capability_ids,
     )
     return classifications, team
+
+
+def _deterministic_specialist_team_for_roles(
+    goal: str,
+    team_mode: str,
+    explicit_capability_ids: list[str],
+    supplied_role_ids: list[str],
+    *,
+    capability_selection_digest: Optional[str] = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Accept either ordinary or UI-strengthened routing without new public fields."""
+    candidates = [
+        _deterministic_specialist_team(
+            goal, team_mode, explicit_capability_ids, ui_product=ui_product
+        )
+        for ui_product in (False, True)
+    ]
+    for classifications, team in candidates:
+        routed = [str(agent["id"]) for agent in team["agents"]]
+        selection_digest = str(team["capabilityPlan"]["selectionDigest"])
+        if supplied_role_ids == routed and (
+            capability_selection_digest is None
+            or capability_selection_digest == selection_digest
+        ):
+            return classifications, team
+    raise ToolError(
+        "team_role_ids and capability_selection_digest must exactly match deterministic ordinary or Product Interface JStack routing."
+    )
+
+
+def _optional_capability_selection_digest(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    digest = str(value or "").strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ToolError(
+            "capability_selection_digest must be the lowercase SHA-256 selectionDigest returned by JStack planning."
+        )
+    return digest
 
 
 def _validate_specialist_result(
@@ -13770,16 +15433,18 @@ def tool_specialist_result(args: dict[str, Any]) -> dict[str, Any]:
     if team_mode == "auto":
         raise ToolError("team_mode must be a resolved single-lead, smart-subagents, or full-team mode.")
     explicit_capability_ids = [str(item) for item in (args.get("explicit_capability_ids") or [])]
-    _, team = _deterministic_specialist_team(
-        goal, team_mode, explicit_capability_ids
+    supplied_role_ids = _specialist_role_ids(args.get("team_role_ids"))
+    selection_digest = _optional_capability_selection_digest(
+        args.get("capability_selection_digest")
+    )
+    _, team = _deterministic_specialist_team_for_roles(
+        goal,
+        team_mode,
+        explicit_capability_ids,
+        supplied_role_ids,
+        capability_selection_digest=selection_digest,
     )
     expected_role_ids = [str(agent["id"]) for agent in team["agents"]]
-    supplied_role_ids = _specialist_role_ids(args.get("team_role_ids"))
-    if supplied_role_ids != expected_role_ids:
-        raise ToolError(
-            "team_role_ids must exactly match deterministic JStack routing: "
-            + ", ".join(expected_role_ids)
-        )
     role_id = str(args.get("role_id") or "").strip()
     if role_id not in expected_role_ids:
         raise ToolError(f"role_id '{role_id}' is not in the deterministic team plan.")
@@ -13915,8 +15580,8 @@ def tool_specialist_handoff_check(args: dict[str, Any]) -> dict[str, Any]:
     if team_mode == "auto":
         raise ToolError("team_mode must be resolved before specialist handoff validation.")
     explicit_capability_ids = [str(item) for item in (args.get("explicit_capability_ids") or [])]
-    _, team = _deterministic_specialist_team(
-        goal, team_mode, explicit_capability_ids
+    selection_digest = _optional_capability_selection_digest(
+        args.get("capability_selection_digest")
     )
     expected_agents_raw = args.get("expected_agents")
     if not isinstance(expected_agents_raw, list) or not expected_agents_raw:
@@ -13928,12 +15593,14 @@ def tool_specialist_handoff_check(args: dict[str, Any]) -> dict[str, Any]:
     expected_role_ids = [str(item["roleId"]) for item in expected_agents_raw]
     if len(expected_role_ids) != len(set(expected_role_ids)):
         raise ToolError("expected_agents may not contain duplicate roleId values.")
+    _, team = _deterministic_specialist_team_for_roles(
+        goal,
+        team_mode,
+        explicit_capability_ids,
+        expected_role_ids,
+        capability_selection_digest=selection_digest,
+    )
     routed_role_ids = [str(agent["id"]) for agent in team["agents"]]
-    if expected_role_ids != routed_role_ids:
-        raise ToolError(
-            "expected_agents role order must exactly match deterministic JStack routing: "
-            + ", ".join(routed_role_ids)
-        )
     routed_assignments = capability_assignments_by_role(team["capabilityPlan"])
     expected_by_role: dict[str, list[str]] = {}
     for index, expected in enumerate(expected_agents_raw):
@@ -16677,6 +18344,12 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
     policy = load_enterprise_policy(project_path)
     change_evidence = git_change_evidence(project_path, str(args.get("base_ref") or "").strip() or None)
     changed_files = change_evidence["files"]
+    ui_applicability = _ui_applicability(
+        project_path,
+        goal=goal,
+        paths=changed_files,
+        baseline_head=str(change_evidence.get("baseCommit") or "").strip() or None,
+    )
     protected_patterns = [str(item) for item in policy.get("protectedPaths", [])]
     protected_matches = [path for path in changed_files if path_matches_patterns(path, protected_patterns)]
     classifications = classify_work(goal) if goal else []
@@ -16700,8 +18373,10 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
         required_actions.append("Run jstack_security_audit and perform a human security/compliance review before release.")
     if "data_financial" in classification_ids:
         required_actions.append("Document data source, contract assumptions, failure modes, and reconciliation/rollback path.")
-    if "ui_product" in classification_ids:
-        required_actions.append("Capture browser/visual QA evidence for changed user-facing flows.")
+    if "ui_product" in classification_ids or ui_applicability["state"] == "required":
+        required_actions.append(
+            "Create a Product Interface contract before implementation and a current passing UI finalization receipt before UI completion or release."
+        )
     ignored_legacy_fields = list(policy.get("_ignoredLegacyFields") or [])
     if ignored_legacy_fields:
         warnings.append(
@@ -16726,6 +18401,7 @@ def tool_policy_check(args: dict[str, Any]) -> dict[str, Any]:
         "explicitReleaseRequested": explicit_release_requested,
         "protectedPathApproval": protected_path_approval,
         "classifications": classifications,
+        "productInterface": ui_applicability,
         "changedFiles": changed_files,
         "changeEvidence": change_evidence,
         "protectedPatterns": protected_patterns,
@@ -17282,6 +18958,545 @@ def _launch_session_payload(
             "Launch assessment token no longer matches the current catalogue, policy, or applicability contract."
         )
     return payload, subject, policy, selection
+
+
+def _ui_existing_system(project_path: Path, value: Any) -> dict[str, Any]:
+    if value is None:
+        return {"present": False, "id": None, "evidence": [], "supportedThemes": []}
+    expected = {"present", "id", "evidence_paths", "supported_themes"}
+    if not isinstance(value, dict) or set(value) != expected:
+        raise ToolError(
+            "existing_system must contain exactly present, id, evidence_paths, and supported_themes."
+        )
+    present = value.get("present")
+    if not isinstance(present, bool):
+        raise ToolError("existing_system.present must be boolean.")
+    if not present:
+        if value.get("id") is not None or value.get("evidence_paths") != [] or value.get("supported_themes") != []:
+            raise ToolError(
+                "An absent existing system must use id=null, evidence_paths=[], and supported_themes=[]."
+            )
+        return {"present": False, "id": None, "evidence": [], "supportedThemes": []}
+    system_id = str(value.get("id") or "").strip()
+    paths = value.get("evidence_paths")
+    themes = value.get("supported_themes")
+    if not system_id or len(system_id) > 160:
+        raise ToolError("existing_system.id must be a bounded non-empty identifier.")
+    if (
+        not isinstance(paths, list)
+        or not 1 <= len(paths) <= ui_core.registry.MAX_EXISTING_SYSTEM_EVIDENCE
+        or not all(isinstance(item, str) for item in paths)
+    ):
+        raise ToolError(
+            "existing_system.evidence_paths must contain one to 256 repository-relative paths."
+        )
+    if len(paths) != len(set(paths)):
+        raise ToolError("existing_system.evidence_paths must not contain duplicates.")
+    if not isinstance(themes, list) or not themes or not all(isinstance(item, str) for item in themes):
+        raise ToolError("existing_system.supported_themes must declare the established themes.")
+    rows: list[dict[str, Any]] = []
+    for index, raw_path in enumerate(paths):
+        try:
+            relative = decode_git_relative_path(raw_path.encode("utf-8"), "existing-system evidence")
+            size, digest = audit_core.digest_repository_file(
+                project_path,
+                relative,
+                max_bytes=10_000_000,
+                max_seconds=15,
+            )
+        except (UnicodeEncodeError, audit_core.AuditError) as exc:
+            raise ToolError(
+                f"existing_system.evidence_paths[{index}] is not one safe stable regular repository file."
+            ) from exc
+        rows.append(
+            {
+                "pathSha256": hashlib.sha256(relative.encode("utf-8")).hexdigest(),
+                "sha256": digest,
+                "size": size,
+            }
+        )
+    return {
+        "present": True,
+        "id": system_id,
+        "evidence": sorted(rows, key=lambda item: item["pathSha256"]),
+        "supportedThemes": themes,
+    }
+
+
+def _ui_global_established_system_paths(
+    project_path: Path,
+    tracked_paths: list[str],
+) -> list[str]:
+    """Select one content-qualified representative per detected project system."""
+    candidates = sorted(
+        path
+        for path in tracked_paths
+        if ui_core.is_established_system_path(path)
+        and _ui_file_candidate_kind(path, scoped=True) is not None
+    )
+    if not candidates:
+        return []
+    detection = _ui_detection(project_path, candidates)
+    if detection.get("inspectionTruncated"):
+        raise ToolError(
+            "Global Product Interface design-system detection was incomplete. "
+            "Narrow or reorganize the system sources before issuing a contract."
+        )
+    representatives = {
+        str(row["matchedFiles"][0])
+        for row in detection["establishedSystemHints"]
+        if isinstance(row.get("matchedFiles"), list) and row["matchedFiles"]
+    }
+    return sorted(representatives)
+
+
+def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    subject_before = evidence_subject(project_path)
+    if not subject_before["clean"]:
+        raise ToolError(
+            "A formal Product Interface contract requires a clean committed baseline. Commit or remove local changes first."
+        )
+    expected_fingerprint = str(args.get("project_fingerprint") or "").strip()
+    if expected_fingerprint != subject_before["projectFingerprint"]:
+        raise ToolError(
+            "project_fingerprint is stale or does not match the server-derived baseline fingerprint."
+        )
+    baseline = _ui_git_identity(project_path, subject_before)
+    raw_allowed_paths = args.get("allowed_paths")
+    if (
+        not isinstance(raw_allowed_paths, list)
+        or not 1 <= len(raw_allowed_paths) <= ui_core.registry.MAX_ALLOWED_PATHS
+        or not all(isinstance(item, str) for item in raw_allowed_paths)
+    ):
+        raise ToolError(
+            "allowed_paths must contain one to 100 repository-relative UI source glob patterns."
+        )
+    try:
+        allowed_paths = ui_core.normalize_allowed_paths(raw_allowed_paths)
+    except ui_core.UIError as exc:
+        raise ToolError(str(exc)) from exc
+    listed = run_complete(
+        ["git", "ls-files", "-z"],
+        project_path,
+        timeout=20,
+        max_bytes=10_000_000,
+    )
+    if not listed["ok"]:
+        raise ToolError("Could not enumerate the contracted Product Interface baseline scope.")
+    tracked_paths = [
+        decode_git_relative_path(raw, "UI contract baseline")
+        for raw in listed["stdout"].split(b"\0")
+        if raw
+    ]
+    raw_existing_system = args.get("existing_system")
+    existing_paths = (
+        raw_existing_system.get("evidence_paths", [])
+        if isinstance(raw_existing_system, dict)
+        else []
+    )
+    global_system_paths = _ui_global_established_system_paths(
+        project_path,
+        tracked_paths,
+    )
+    detection_paths = sorted(
+        {
+            path
+            for path in tracked_paths
+            if path_matches_patterns(path, allowed_paths)
+        }
+        | {
+            str(path)
+            for path in existing_paths
+            if isinstance(path, str)
+        }
+        | set(global_system_paths)
+    )
+    detection = _ui_detection(project_path, detection_paths)
+    existing_system = _ui_existing_system(project_path, raw_existing_system)
+    if existing_system["present"] and not bool(args.get("redesign_approved", False)):
+        evidence_path_digests = {
+            row["pathSha256"] for row in existing_system["evidence"]
+        }
+        missing_global_system_paths = [
+            path
+            for path in global_system_paths
+            if hashlib.sha256(path.encode("utf-8")).hexdigest()
+            not in evidence_path_digests
+        ]
+        if missing_global_system_paths:
+            raise ToolError(
+                "existing_system.evidence_paths must cover every globally detected design-system marker representative: "
+                + ", ".join(missing_global_system_paths)
+            )
+    viewports = args.get("viewports")
+    if viewports is None:
+        viewports = [
+            {"id": "desktop-wide", "width": 1440, "height": 900, "dpr": 1, "primary": False},
+            {"id": "desktop", "width": 1280, "height": 800, "dpr": 1, "primary": True},
+            {"id": "mobile", "width": 390, "height": 844, "dpr": 1, "primary": False},
+        ]
+    try:
+        contract = ui_core.build_contract(
+            goal=args.get("goal"),
+            baseline=baseline,
+            detection=detection,
+            surfaces=args.get("surfaces"),
+            platforms=args.get("platforms"),
+            themes=args.get("themes"),
+            viewports=viewports,
+            allowed_paths=allowed_paths,
+            platform_exclusions=args.get("platform_exclusions"),
+            explicit_profile=args.get("profile_override"),
+            surface_profiles=args.get("surface_profiles"),
+            existing_system=existing_system,
+            redesign_approved=args.get("redesign_approved", False),
+            redesign_approval_reference=args.get("redesign_approval_reference"),
+        )
+    except ui_core.UIError as exc:
+        raise ToolError(str(exc)) from exc
+    subject_after = evidence_subject(project_path)
+    identity_after = _ui_git_identity(project_path, subject_after)
+    if subject_after != subject_before or identity_after != baseline:
+        raise ToolError(
+            "The repository or Product Interface policy changed while the UI contract was being derived."
+        )
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=UI_CONTRACT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    token = issue_ui_contract_receipt(
+        {
+            "kind": "ui-contract",
+            "schemaVersion": "jstack.ui.contract-receipt.v1",
+            "projectPath": subject_before["gitRoot"],
+            "gitHead": subject_before["gitHead"],
+            "projectFingerprint": subject_before["projectFingerprint"],
+            "policyDigest": subject_before["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "contract": contract,
+            "contractSha256": contract["contractSha256"],
+            "catalogSha256": contract["catalog"]["sha256"],
+            "expiresAt": expires,
+            "passed": False,
+        }
+    )
+    if len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError(
+            "The Product Interface contract exceeds the bounded 250000-character receipt limit. Narrow allowed_paths, surfaces, viewports, or platform scope before implementation."
+        )
+    evidence_root = _ui_evidence_root(project_path)
+    return {
+        "schemaVersion": "jstack.ui.contract-response.v1",
+        "projectPath": str(project_path),
+        "baseline": baseline,
+        "catalog": contract["catalog"],
+        "detection": detection,
+        "profileResolution": contract["profileResolution"],
+        "allowedPaths": contract["allowedPaths"],
+        "platformExclusions": contract["platformExclusions"],
+        "requirements": contract["requirements"],
+        "surfaces": contract["surfaces"],
+        "platforms": contract["platforms"],
+        "themes": contract["themes"],
+        "viewports": contract["viewports"],
+        "evidenceMatrix": contract["evidenceMatrix"],
+        "contractSha256": contract["contractSha256"],
+        "uiContractReceipt": token,
+        "expiresAt": expires,
+        "evidenceRoot": str(evidence_root),
+        "evidenceRootPolicy": {
+            "serverSelected": True,
+            "outsideRepository": True,
+            "directoryMode": "0700",
+            "fileMode": "0600",
+            "relativeManifestOnly": True,
+            "rawScreenshotContentReturned": False,
+        },
+        "executionAuthorized": False,
+        "limitations": [
+            "This receipt freezes semantic UI requirements at a clean Git baseline; it does not execute or approve implementation work.",
+            "Profile defaults are original JStack guidance influenced by general craft qualities, not copied vendor themes, layouts, branding, assets, or source code.",
+            (
+                "The self-contained contract receipt remains verifiable across MCP restarts using a private per-user POSIX key; retain the opaque receipt unchanged."
+                if _ui_contract_key_is_durable()
+                else "This platform cannot safely persist the contract-signing key with stdlib-only filesystem guarantees, so the receipt is valid only in the current MCP server session."
+            ),
+        ],
+    }
+
+
+def _ui_contract_payload(
+    project_path: Path,
+    token: str,
+    *,
+    require_fresh: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not token or len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("ui_contract_receipt must be one bounded signed receipt.")
+    payload = verify_ui_contract_receipt(token, require_fresh=require_fresh)
+    contract_raw = payload.get("contract")
+    try:
+        contract = ui_core.validate_contract(contract_raw)
+    except ui_core.UIError as exc:
+        raise ToolError(str(exc)) from exc
+    baseline = contract["baseline"]
+    checks = {
+        "schemaVersion": payload.get("schemaVersion") == "jstack.ui.contract-receipt.v1",
+        "projectPath": payload.get("projectPath") == str(project_path),
+        "gitRoot": baseline.get("gitRoot") == str(project_path),
+        "gitHead": payload.get("gitHead") == baseline.get("gitHead"),
+        "projectFingerprint": payload.get("projectFingerprint")
+        == baseline.get("projectFingerprint"),
+        "contractSha256": payload.get("contractSha256") == contract["contractSha256"],
+        "catalogSha256": payload.get("catalogSha256") == ui_core.canonical_digest(ui_core.load_catalog()),
+        "policyDigest": payload.get("policyDigest") == baseline.get("policyDigest"),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "notFinalization": payload.get("passed") is False,
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "UI contract receipt no longer matches this project, server, or Product Interface catalogue."
+        )
+    return payload, contract
+
+
+def _validate_ui_candidate_scope(
+    candidate_delta: dict[str, Any],
+    candidate_scope: dict[str, Any],
+    contract: dict[str, Any],
+) -> list[str]:
+    if any(
+        "160000" in {record.get("baselineMode"), record.get("candidateMode")}
+        for record in candidate_delta["changeRecords"]
+    ):
+        raise ToolError(
+            "UI finalization cannot authorize a changed Git submodule without an independently bounded submodule Product Interface contract."
+        )
+    candidate_ui_paths = list(candidate_scope["matchedPaths"])
+    if not candidate_delta["changeRecords"] or not candidate_ui_paths:
+        raise ToolError(
+            "UI finalization requires at least one baseline-to-candidate change to a detected contracted UI path."
+        )
+    path_violations = [
+        path
+        for path in candidate_ui_paths
+        if not path_matches_patterns(path, contract["allowedPaths"])
+    ]
+    if path_violations:
+        raise ToolError(
+            "Detected candidate UI paths escape the contracted allowed_paths boundary: "
+            + ", ".join(path_violations)
+        )
+    target_platforms = set(contract["platforms"])
+    excluded_platforms = {
+        row["platform"] for row in contract["platformExclusions"]
+    }
+    detected_candidate_platforms = set(candidate_scope["platforms"])
+    uncovered_platforms = sorted(
+        detected_candidate_platforms - target_platforms - excluded_platforms
+    )
+    if uncovered_platforms:
+        raise ToolError(
+            "The candidate adds or changes UI platforms outside the contracted evidence scope: "
+            + ", ".join(uncovered_platforms)
+        )
+    mixed_excluded_paths = sorted(
+        (
+            row["path"],
+            sorted(set(row["platforms"]) & excluded_platforms),
+        )
+        for row in candidate_scope["pathPlatforms"]
+        if set(row["platforms"]) & target_platforms
+        and set(row["platforms"]) & excluded_platforms
+    )
+    if mixed_excluded_paths:
+        raise ToolError(
+            "Candidate UI paths also affect explicitly excluded platform adapters; "
+            "evidence for one adapter cannot qualify another: "
+            + ", ".join(
+                f"{path} ({'/'.join(platforms)})"
+                for path, platforms in mixed_excluded_paths
+            )
+        )
+    excluded_only_paths = sorted(
+        row["path"]
+        for row in candidate_scope["pathPlatforms"]
+        if not (set(row["platforms"]) & target_platforms)
+    )
+    if excluded_only_paths:
+        raise ToolError(
+            "Candidate UI paths map only to excluded, non-target platforms: "
+            + ", ".join(excluded_only_paths)
+        )
+    contracted_surface_kinds = {row["kind"] for row in contract["surfaces"]}
+    uncovered_surface_kinds = sorted(
+        set(candidate_scope["creativeSurfaceKinds"]) - contracted_surface_kinds
+    )
+    if uncovered_surface_kinds:
+        raise ToolError(
+            "The candidate adds or changes creative UI surface classes outside the contract: "
+            + ", ".join(uncovered_surface_kinds)
+        )
+    return candidate_ui_paths
+
+
+def tool_ui_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    token = str(args.get("ui_contract_receipt") or "").strip()
+    _, contract = _ui_contract_payload(project_path, token, require_fresh=False)
+    baseline = contract["baseline"]
+    candidate_before = _ui_candidate_delta(project_path, baseline["gitHead"])
+    if not candidate_before["clean"]:
+        raise ToolError(
+            "UI finalization requires a clean committed candidate with no hidden index flags or untracked files."
+        )
+    if candidate_before["commonDir"] != baseline["commonDir"] or candidate_before["gitRoot"] != baseline["gitRoot"]:
+        raise ToolError("UI contract cannot be transplanted to another repository or worktree identity.")
+    current_subject = evidence_subject(project_path, baseline["gitHead"])
+    if current_subject["policyDigest"] != baseline["policyDigest"]:
+        raise ToolError("Project policy changed after the UI baseline contract was issued.")
+    candidate_documents = _ui_collect_changed_documents(
+        project_path,
+        baseline["gitHead"],
+        candidate_before["changeRecords"],
+    )
+    repository_context = _ui_changed_repository_context_by_path(
+        project_path,
+        baseline["gitHead"],
+        candidate_before["changeRecords"],
+    )
+    candidate_detection = ui_core.detect_product_ui(
+        candidate_documents, context_platforms_by_path=repository_context
+    )
+    candidate_scope = ui_core.detect_product_ui_scope(
+        candidate_documents, context_platforms_by_path=repository_context
+    )
+    candidate_ui_paths = _validate_ui_candidate_scope(
+        candidate_before, candidate_scope, contract
+    )
+    qa_receipt = str(args.get("qa_receipt") or "").strip()
+    qa_verification = verify_receipt(
+        qa_receipt,
+        "qa",
+        current_subject,
+        expected_subject=current_subject,
+    )
+    qa_payload = qa_verification["payload"]
+    command_key = str(args.get("build_command_key") or "").strip()
+    current_commands = {item["key"]: item for item in discover_test_commands(project_path)}
+    selected = current_commands.get(command_key)
+    if (
+        not qa_verification["valid"]
+        or selected is None
+        or qa_payload.get("commandKey") != command_key
+        or qa_payload.get("commandFingerprint") != selected["commandFingerprint"]
+    ):
+        raise ToolError(
+            "UI finalization requires a current passing QA receipt for the exact discovered build/test command."
+        )
+    build_sha256 = str(args.get("build_sha256") or "").strip()
+    runtime_sha256 = str(args.get("runtime_sha256") or "").strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", build_sha256) or not re.fullmatch(r"[0-9a-f]{64}", runtime_sha256):
+        raise ToolError("build_sha256 and runtime_sha256 must be lowercase SHA-256 digests.")
+    expected_candidate = {
+        "gitHead": candidate_before["gitHead"],
+        "treeSha256": candidate_before["treeSha256"],
+        "projectFingerprint": candidate_before["projectFingerprint"],
+        "buildCommandKey": command_key,
+        "buildCommandSha256": selected["commandFingerprint"],
+        "buildSha256": build_sha256,
+        "runtimeSha256": runtime_sha256,
+    }
+    manifest_relative = str(args.get("evidence_manifest") or "").strip()
+    evidence_root = _ui_evidence_root(project_path)
+    _validate_ui_evidence_root_authority(evidence_root)
+    try:
+        evidence_first = ui_core.load_and_validate_evidence(
+            evidence_root,
+            manifest_relative,
+            contract=contract,
+            expected_candidate=expected_candidate,
+        )
+        evidence_second = ui_core.load_and_validate_evidence(
+            evidence_root,
+            manifest_relative,
+            contract=contract,
+            expected_candidate=expected_candidate,
+        )
+    except ui_core.EvidenceError as exc:
+        raise ToolError(str(exc)) from exc
+    if evidence_first != evidence_second:
+        raise ToolError("UI evidence changed during final verification.")
+    candidate_after = _ui_candidate_delta(project_path, baseline["gitHead"])
+    if candidate_after != candidate_before:
+        raise ToolError("The candidate Git state changed during UI finalization.")
+    receipt_payload = {
+        "kind": "ui-finalization",
+        "schemaVersion": "jstack.ui.finalization-receipt.v1",
+        "projectPath": str(project_path),
+        "gitHead": candidate_after["gitHead"],
+        "projectFingerprint": candidate_after["projectFingerprint"],
+        "baseCommit": baseline["gitHead"],
+        "policyDigest": baseline["policyDigest"],
+        "toolVersion": SERVER_VERSION,
+        "treeSha256": candidate_after["treeSha256"],
+        "commonDirSha256": hashlib.sha256(candidate_after["commonDir"].encode("utf-8")).hexdigest(),
+        "changedPathsSha256": candidate_after["changedPathsSha256"],
+        "changeRecordsSha256": candidate_after["changeRecordsSha256"],
+        "diffSha256": candidate_after["diffSha256"],
+        "candidateDetectionSha256": candidate_detection["detectionSha256"],
+        "candidateDetectionScopeSha256": candidate_scope["scopeSha256"],
+        "candidateUiPathsSha256": ui_core.canonical_digest(candidate_ui_paths),
+        "contractSha256": contract["contractSha256"],
+        "catalogSha256": contract["catalog"]["sha256"],
+        "evidenceManifestSha256": evidence_first["manifestSha256"],
+        "evidenceManifestRawSha256": evidence_first["manifestRawSha256"],
+        "captureSetSha256": evidence_first["captureSetSha256"],
+        "checkSetSha256": evidence_first["checkSetSha256"],
+        "productObservationSetSha256": evidence_first["productObservationSetSha256"],
+        "buildCommandKey": command_key,
+        "buildCommandSha256": selected["commandFingerprint"],
+        "buildSha256": build_sha256,
+        "runtimeSha256": runtime_sha256,
+        "qaReceiptSha256": hashlib.sha256(qa_receipt.encode("utf-8")).hexdigest(),
+        "complete": True,
+        "passed": True,
+        "executionAuthorized": False,
+    }
+    final_receipt = issue_receipt(receipt_payload)
+    return {
+        "schemaVersion": "jstack.ui.finalization.v1",
+        "projectPath": str(project_path),
+        "baseline": baseline,
+        "candidate": {
+            key: candidate_after[key]
+            for key in (
+                "gitHead", "treeSha256", "projectFingerprint", "changedPathsSha256",
+                "changeRecordsSha256", "diffSha256"
+            )
+        },
+        "catalog": contract["catalog"],
+        "contract": {
+            "sha256": contract["contractSha256"],
+            "defaultProfile": contract["profileResolution"]["defaultProfile"],
+            "surfaceCount": len(contract["surfaces"]),
+            "matrixCellCount": len(contract["evidenceMatrix"]),
+        },
+        "evidence": evidence_first,
+        "passed": True,
+        "blockers": [],
+        "warnings": [] if evidence_first["humanAestheticApprovalProvided"] else [
+            "Independent human aesthetic approval was not supplied; it remains optional and is not implied."
+        ],
+        "uiReceipt": final_receipt,
+        "executionAuthorized": False,
+        "limitations": [
+            "JStack verified bounded evidence bytes, matrix coverage, objective result records, Git/build bindings, and accountable observation digests.",
+            "Screenshot hashes do not independently prove that the producer displayed the declared route or that its visual judgment was honest.",
+            "This receipt does not replace QA, security, audit, launch assurance, release approval, rollback, monitoring, or deployment evidence and authorizes no action.",
+        ],
+    }
 
 
 def tool_launch_assess(args: dict[str, Any]) -> dict[str, Any]:
@@ -18379,6 +20594,65 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     elif audit_required:
         blockers.append("Release policy requires a current complete passing release-profile audit receipt.")
 
+    release_change_evidence = (
+        git_change_evidence(project_path, base_ref) if base_ref else None
+    )
+    release_changed_files = (
+        release_change_evidence["files"] if release_change_evidence else []
+    )
+    ui_applicability = _ui_applicability(
+        project_path,
+        goal=str(args.get("goal") or ""),
+        paths=release_changed_files,
+        baseline_head=(
+            str(release_change_evidence.get("baseCommit") or "").strip()
+            if release_change_evidence
+            else None
+        ),
+    )
+    ui_required = ui_applicability["state"] == "required"
+    if ui_applicability["state"] == "review-required":
+        blockers.append(
+            "The release delta has unresolved Product Interface applicability and cannot be released until its bounded UI scope is resolved."
+        )
+    ui_receipt = str(args.get("ui_receipt") or "").strip()
+    verified_ui: Optional[dict[str, Any]] = None
+    ui_passes_release = False
+    if ui_receipt:
+        if len(ui_receipt) > UI_RECEIPT_MAX_CHARS:
+            raise ToolError("ui_receipt exceeds the bounded receipt size.")
+        verified_ui = verify_receipt(
+            ui_receipt,
+            "ui-finalization",
+            subject,
+            expected_subject=subject,
+            require_passed=False,
+        )
+        ui_payload = verified_ui.get("payload") or {}
+        ui_passes_release = (
+            verified_ui["valid"]
+            and ui_payload.get("schemaVersion")
+            == "jstack.ui.finalization-receipt.v1"
+            and ui_payload.get("baseCommit") == subject.get("baseCommit")
+            and ui_payload.get("complete") is True
+            and ui_payload.get("passed") is True
+            and ui_payload.get("executionAuthorized") is False
+            and ui_payload.get("catalogSha256")
+            == ui_core.canonical_digest(ui_core.load_catalog())
+        )
+        if ui_required and not ui_passes_release:
+            blockers.append(
+                "The release delta changes Product Interface surfaces and requires a current complete passing UI finalization receipt for this exact candidate."
+            )
+        elif not ui_passes_release:
+            warnings.append(
+                "An optional UI finalization receipt was supplied but is not current, complete, passing, or baseline-matched."
+            )
+    elif ui_required:
+        blockers.append(
+            "The release delta changes Product Interface surfaces and requires a receipt from jstack_ui_finalize."
+        )
+
     if not explicit_release_requested:
         blockers.append(
             "Release readiness requires an explicit user request for this evidence assessment. This flag never authorizes a release action."
@@ -18430,11 +20704,19 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "requiredByLaunchSurfaces": release_audit_surfaces,
             "verification": verified_audit,
         },
+        "productInterfaceEvidence": {
+            "applicability": ui_applicability,
+            "required": ui_required,
+            "verification": verified_ui,
+            "passesRelease": ui_passes_release,
+            "doesNotReplaceQaSecurityAuditOrLaunch": True,
+        },
         "preflight": preflight,
         "shipCheck": ship,
         "releaseStandard": [
             "No unresolved blockers.",
             "Tests and security checks are evidenced or explicitly blocked.",
+            "Changed user-facing UI surfaces have a current candidate-bound Product Interface finalization receipt.",
             "Applicable launch controls are resolved by current typed evidence, explicit not-applicable proof, or a bounded non-blocker waiver.",
             "Rollback and monitoring are documented before production.",
             "External actions stay within explicit user scope and normal host/provider permissions; JStack adds no approval token or terminal ceremony.",
@@ -18643,6 +20925,8 @@ def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
         "security_receipt",
         "audit_receipts",
         "launch_receipt",
+        "ui_contract_receipt",
+        "ui_receipt",
         "specialist_handoff_receipt",
         "goal_readiness_receipt",
         "program_readiness_receipt",
@@ -18883,6 +21167,80 @@ def _loop_receipt_evidence(
                         },
                     }
                 )
+
+    ui_receipt = str(args.get("ui_receipt") or "").strip()
+    if len(ui_receipt) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("ui_receipt exceeds the bounded Product Interface evidence limit.")
+    if ui_receipt:
+        digest = _receipt_digest(ui_receipt)
+        try:
+            verification = verify_receipt(
+                ui_receipt,
+                "ui-finalization",
+                subject,
+                expected_subject=subject,
+                require_passed=False,
+            )
+        except ToolError:
+            invalid.append(
+                {
+                    "kind": "ui",
+                    "receiptDigest": digest,
+                    "reason": "malformed-or-wrong-session",
+                }
+            )
+        else:
+            payload = verification["payload"]
+            ui_checks = {
+                "schemaVersion": payload.get("schemaVersion")
+                == "jstack.ui.finalization-receipt.v1",
+                "baseCommit": payload.get("baseCommit") == subject.get("baseCommit"),
+                "complete": payload.get("complete") is True,
+                "passed": payload.get("passed") is True,
+                "noAuthority": payload.get("executionAuthorized") is False,
+                "contractSha256": bool(
+                    re.fullmatch(r"[0-9a-f]{64}", str(payload.get("contractSha256") or ""))
+                ),
+                "catalogSha256": payload.get("catalogSha256")
+                == ui_core.canonical_digest(ui_core.load_catalog()),
+                "evidenceManifestSha256": bool(
+                    re.fullmatch(
+                        r"[0-9a-f]{64}",
+                        str(payload.get("evidenceManifestSha256") or ""),
+                    )
+                ),
+                "buildSha256": bool(
+                    re.fullmatch(r"[0-9a-f]{64}", str(payload.get("buildSha256") or ""))
+                ),
+                "runtimeSha256": bool(
+                    re.fullmatch(r"[0-9a-f]{64}", str(payload.get("runtimeSha256") or ""))
+                ),
+            }
+            if verification["valid"] and all(ui_checks.values()):
+                evidence["ui"] = {
+                    "type": "ui-finalization-receipt",
+                    "schemaVersion": loop_core.UI_EVIDENCE_SCHEMA,
+                    "receiptDigest": digest,
+                    "contractSha256": payload["contractSha256"],
+                    "catalogSha256": payload["catalogSha256"],
+                    "baseCommit": payload["baseCommit"],
+                    "gitHead": payload["gitHead"],
+                    "projectFingerprint": payload["projectFingerprint"],
+                    "evidenceManifestSha256": payload["evidenceManifestSha256"],
+                    "buildSha256": payload["buildSha256"],
+                    "runtimeSha256": payload["runtimeSha256"],
+                    "complete": True,
+                    "passed": True,
+                    "executionAuthorized": False,
+                }
+            else:
+                invalid.append(
+                    {
+                        "kind": "ui",
+                        "receiptDigest": digest,
+                        "checks": {**verification["checks"], **ui_checks},
+                    }
+                )
     specialist_handoff_receipt = str(
         args.get("specialist_handoff_receipt") or ""
     ).strip()
@@ -19017,6 +21375,12 @@ def _loop_iteration_evidence(
             "The loop baseline is no longer the exact Git merge base of HEAD. Stop this loop and start a new contract after the branch, reset, or rebase is resolved."
         )
     changed_files = change_evidence["files"]
+    product_interface = _enforce_iteration_ui_route(
+        project_path,
+        loop_status,
+        baseline=baseline,
+        changed_files=changed_files,
+    )
     policy = load_enterprise_policy(project_path)
     protected_patterns = [str(item) for item in policy.get("protectedPaths", [])]
     protected_files = [
@@ -19071,6 +21435,7 @@ def _loop_iteration_evidence(
         "policy": policy,
         "changedFiles": changed_files,
         "protectedFiles": protected_files,
+        "productInterface": product_interface,
         "evidence": evidence,
     }
 
@@ -19103,14 +21468,23 @@ def _loop_capability_contract(
     goal: str,
     execution_mode: str,
     explicit_capability_ids: list[str],
+    *,
+    ui_product: bool = False,
 ) -> dict[str, Any]:
     _, team = _deterministic_specialist_team(
-        goal, execution_mode, explicit_capability_ids
+        goal,
+        execution_mode,
+        explicit_capability_ids,
+        ui_product=ui_product,
     )
     capability_plan = team["capabilityPlan"]
     assignments = capability_assignments_by_role(capability_plan)
-    return {
-        "schemaVersion": "jstack.loop.capability-contract.v1",
+    contract = {
+        "schemaVersion": (
+            "jstack.loop.capability-contract.v2"
+            if ui_product
+            else "jstack.loop.capability-contract.v1"
+        ),
         "catalogVersion": capability_plan["catalogVersion"],
         "catalogDigest": capability_plan["catalogDigest"],
         "selectionDigest": capability_plan["selectionDigest"],
@@ -19129,6 +21503,9 @@ def _loop_capability_contract(
         "loopControls": capability_plan["loopControls"],
         "permissionInvariant": capability_plan["permissionInvariant"],
     }
+    if ui_product:
+        contract["uiProduct"] = True
+    return contract
 
 
 def _loop_capability_contract_matches(loop_status: dict[str, Any]) -> Optional[bool]:
@@ -19142,6 +21519,7 @@ def _loop_capability_contract_matches(loop_status: dict[str, Any]) -> Optional[b
             str(item)
             for item in capability_contract.get("explicitCapabilityIds") or []
         ],
+        ui_product=isinstance(loop_status.get("uiContract"), dict),
     )
     return expected == capability_contract
 
@@ -19149,6 +21527,8 @@ def _loop_capability_contract_matches(loop_status: dict[str, Any]) -> Optional[b
 def _loop_args_with_capabilities(
     args: dict[str, Any],
     prior_status: Optional[dict[str, Any]] = None,
+    *,
+    ui_product: Optional[bool] = None,
 ) -> dict[str, Any]:
     enriched = dict(args)
     goal = str(args.get("goal") or (prior_status or {}).get("goal") or "").strip()
@@ -19167,12 +21547,449 @@ def _loop_args_with_capabilities(
     if not isinstance(raw_capability_ids, list):
         raise ToolError("capability_ids must be an array.")
     explicit_capability_ids = [str(item) for item in raw_capability_ids]
+    if ui_product is None:
+        ui_product = isinstance((prior_status or {}).get("uiContract"), dict)
     enriched["goal"] = goal
     enriched["execution_mode"] = execution_mode
     enriched["capability_contract"] = _loop_capability_contract(
-        goal, execution_mode, explicit_capability_ids
+        goal,
+        execution_mode,
+        explicit_capability_ids,
+        ui_product=ui_product,
     )
     return enriched
+
+
+def _loop_ui_contract_binding(
+    project_path: Path,
+    subject: dict[str, Any],
+    receipt: Any,
+) -> dict[str, str]:
+    token = str(receipt or "").strip()
+    _, contract = _ui_contract_payload(project_path, token)
+    baseline = contract["baseline"]
+    checks = {
+        "gitRoot": baseline.get("gitRoot") == subject.get("gitRoot"),
+        "gitHead": baseline.get("gitHead") == subject.get("gitHead"),
+        "projectFingerprint": baseline.get("projectFingerprint")
+        == subject.get("projectFingerprint"),
+        "policyDigest": baseline.get("policyDigest") == subject.get("policyDigest"),
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "The Product Interface contract receipt must bind the exact clean loop baseline project state."
+        )
+    return {
+        "schemaVersion": loop_core.UI_CONTRACT_BINDING_SCHEMA,
+        "contractSha256": contract["contractSha256"],
+        "catalogSha256": contract["catalog"]["sha256"],
+        "baselineGitHead": baseline["gitHead"],
+        "baselineProjectFingerprint": baseline["projectFingerprint"],
+        "baselinePolicyDigest": baseline["policyDigest"],
+    }
+
+
+def _loop_args_with_ui_contract(
+    args: dict[str, Any],
+    project_path: Path,
+    subject: dict[str, Any],
+    prior_status: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    enriched = dict(args)
+    receipt = args.get("ui_contract_receipt")
+    if receipt is not None:
+        enriched["ui_contract_binding"] = _loop_ui_contract_binding(
+            project_path, subject, receipt
+        )
+    elif isinstance((prior_status or {}).get("uiContract"), dict):
+        enriched["ui_contract_binding"] = dict(prior_status["uiContract"])
+    enriched.pop("ui_contract_receipt", None)
+    return enriched
+
+
+def _has_public_ui_verifier(criteria: Any) -> bool:
+    return isinstance(criteria, list) and any(
+        isinstance(item, dict)
+        and isinstance(item.get("verifier"), dict)
+        and item["verifier"].get("type") == "ui"
+        for item in criteria
+    )
+
+
+def _ui_contract_scope_paths(
+    project_path: Path, path_patterns: Any
+) -> Optional[list[str]]:
+    """Resolve declared contract globs to tracked paths without widening scope."""
+    if path_patterns is None:
+        return None
+    if (
+        not isinstance(path_patterns, list)
+        or len(path_patterns) > 100
+        or not all(isinstance(item, str) for item in path_patterns)
+    ):
+        return None
+    patterns = [item.replace("\\", "/") for item in path_patterns]
+    root = Path(git_root(project_path) or project_path).resolve()
+    listed = run_complete(
+        ["git", "ls-files", "-z"], root, timeout=20, max_bytes=10_000_000
+    )
+    if not listed["ok"]:
+        raise ToolError(
+            "Could not enumerate the declared Product Interface contract scope."
+        )
+    tracked = [
+        decode_git_relative_path(raw, "Product Interface contract scope")
+        for raw in listed["stdout"].split(b"\0")
+        if raw
+    ]
+    return sorted(
+        path for path in tracked if path_matches_patterns(path, patterns)
+    )
+
+
+def _ui_contract_applicability(
+    project_path: Path,
+    *,
+    goals: list[str],
+    path_patterns: Any,
+) -> dict[str, Any]:
+    """Classify a future loop/program contract from its goal and declared scope."""
+    combined_goal = "\n".join(
+        item.strip() for item in goals if isinstance(item, str) and item.strip()
+    )
+    scoped_paths = _ui_contract_scope_paths(project_path, path_patterns)
+    scoped_gitlinks: list[str] = []
+    if scoped_paths:
+        root = Path(git_root(project_path) or project_path).resolve()
+        listed = run_complete(
+            ["git", "ls-files", "-s", "-z"],
+            root,
+            timeout=20,
+            max_bytes=20_000_000,
+        )
+        if not listed["ok"]:
+            raise ToolError(
+                "Could not inspect the declared Product Interface scope for Git submodules."
+            )
+        selected = set(scoped_paths)
+        for raw in listed["stdout"].split(b"\0"):
+            if not raw:
+                continue
+            header, separator, encoded_path = raw.partition(b"\t")
+            fields = header.split()
+            if (
+                not separator
+                or len(fields) != 3
+                or fields[0] not in {b"100644", b"100755", b"120000", b"160000"}
+            ):
+                raise ToolError(
+                    "Git returned invalid index metadata for Product Interface scope resolution."
+                )
+            relative = decode_git_relative_path(
+                encoded_path, "Product Interface scoped index"
+            )
+            if fields[0] == b"160000" and relative in selected:
+                scoped_gitlinks.append(relative)
+    applicability = _ui_applicability(
+        project_path,
+        goal=combined_goal,
+        paths=scoped_paths,
+    )
+    if scoped_gitlinks:
+        applicability = {
+            "schemaVersion": "jstack.ui.applicability.v1",
+            "state": "review-required",
+            "reason": "declared-scope-includes-gitlink",
+            "goalDigest": hashlib.sha256(combined_goal.encode("utf-8")).hexdigest(),
+            "changedScopeEvaluated": True,
+            "detection": applicability["detection"],
+        }
+        applicability["applicabilitySha256"] = ui_core.canonical_digest(
+            applicability
+        )
+    if isinstance(path_patterns, list) and all(
+        isinstance(item, str) for item in path_patterns
+    ):
+        declared_documents = [
+            (item.replace("\\", "/"), "")
+            for item in path_patterns
+            if item and len(item) <= 500
+        ]
+        declared_paths = [path for path, _ in declared_documents]
+        declared_detection = ui_core.detect_product_ui(
+            declared_documents,
+            context_platforms_by_path=_ui_repository_context_by_path(
+                project_path, declared_paths
+            ),
+        )
+        if (
+            not scoped_gitlinks
+            and applicability["state"] == "inactive"
+            and declared_detection["applicable"]
+        ):
+            applicability = {
+                "schemaVersion": "jstack.ui.applicability.v1",
+                "state": "required",
+                "reason": "declared-ui-scope",
+                "goalDigest": hashlib.sha256(
+                    combined_goal.encode("utf-8")
+                ).hexdigest(),
+                "changedScopeEvaluated": True,
+                "detection": declared_detection,
+            }
+            applicability["applicabilitySha256"] = ui_core.canonical_digest(
+                applicability
+            )
+    return applicability
+
+
+def _loop_ui_contract_inputs(
+    args: dict[str, Any], prior_status: Optional[dict[str, Any]] = None
+) -> tuple[list[str], Any, Any]:
+    goal = args.get("goal")
+    if goal is None and prior_status is not None:
+        goal = prior_status.get("goal")
+    if "allowed_paths" in args:
+        path_patterns = args.get("allowed_paths")
+    elif prior_status is not None:
+        path_patterns = prior_status.get("allowedPaths")
+    else:
+        path_patterns = None
+    if "acceptance_criteria" in args:
+        criteria = args.get("acceptance_criteria")
+    elif prior_status is not None:
+        criteria = prior_status.get("acceptanceCriteria")
+    else:
+        criteria = None
+    return [str(goal or "")], path_patterns, criteria
+
+
+def _program_ui_contract_inputs(
+    args: dict[str, Any], prior_status: Optional[dict[str, Any]] = None
+) -> tuple[list[str], Any, Any]:
+    goal = args.get("goal")
+    if goal is None and prior_status is not None:
+        goal = prior_status.get("goal")
+    if "phases" in args:
+        phases = args.get("phases")
+        normalized = False
+    elif prior_status is not None:
+        phases = prior_status.get("phases")
+        normalized = True
+    else:
+        phases = None
+        normalized = False
+    goals = [str(goal or "")]
+    path_patterns: Any = None
+    if isinstance(phases, list):
+        path_patterns = []
+        for phase in phases:
+            if not isinstance(phase, dict):
+                path_patterns = None
+                break
+            goals.append(str(phase.get("goal") or ""))
+            field = "allowedPaths" if normalized else "allowed_paths"
+            value = phase.get(field, [])
+            if not isinstance(value, list):
+                path_patterns = None
+                break
+            path_patterns.extend(value)
+    if "final_acceptance_criteria" in args:
+        criteria = args.get("final_acceptance_criteria")
+    elif prior_status is not None:
+        criteria = prior_status.get("finalAcceptanceCriteria")
+    else:
+        criteria = None
+    return goals, path_patterns, criteria
+
+
+def _ui_readiness_gaps(
+    applicability: dict[str, Any], *, ui_bound: bool, has_ui_verifier: bool
+) -> list[str]:
+    state = applicability["state"]
+    if state == "review-required":
+        return ["product-interface-scope-review"]
+    if ui_bound:
+        return [] if has_ui_verifier else ["product-interface-verifier"]
+    if has_ui_verifier:
+        return ["product-interface-contract"]
+    if state == "inactive":
+        return []
+    gaps: list[str] = []
+    if not ui_bound:
+        gaps.append("product-interface-contract")
+    if not has_ui_verifier:
+        gaps.append("product-interface-verifier")
+    return gaps
+
+
+def _ui_readiness_questions(gaps: list[str], *, program: bool) -> list[dict[str, Any]]:
+    questions: list[dict[str, Any]] = []
+    for gap in gaps:
+        if gap == "product-interface-contract":
+            question = (
+                "Create a Product Interface contract with jstack_ui_contract and supply its exact ui_contract_receipt for this baseline."
+            )
+            why = (
+                "Automatic routing classified the goal or declared path scope as Product Interface work, so a v1 contract would omit its required semantic UI boundary."
+            )
+            recommended = (
+                "Use the smallest accurate surface, platform, theme, viewport, and allowed-path contract, then retry readiness with that receipt."
+            )
+        elif gap == "product-interface-verifier":
+            location = "final acceptance" if program else "loop acceptance"
+            question = f"Add a dedicated ui verifier to the {location} criteria."
+            why = (
+                "A Product Interface receipt freezes requirements, but completion also needs exact candidate-bound UI finalization evidence."
+            )
+            recommended = (
+                "Add one criterion whose verifier type is ui; keep QA, review, security, audit, and launch criteria separate."
+            )
+        elif gap == "product-interface-new-loop":
+            question = (
+                "Stop this v1 loop and start a new UI-bound loop from the current baseline."
+            )
+            why = (
+                "The frozen loop revision input cannot add a Product Interface receipt, so upgrading this existing non-UI contract in place would bypass the public MCP boundary."
+            )
+            recommended = (
+                "Run jstack_ui_contract, then pass its ui_contract_receipt plus a dedicated ui verifier through jstack_loop_goal_readiness and jstack_loop_start."
+            )
+        else:
+            question = (
+                "Narrow the goal and allowed path scope so Product Interface applicability can be decided before starting."
+            )
+            why = (
+                "Repository evidence indicates UI capability, but the proposed contract has no bounded scope that proves whether interface work is included."
+            )
+            recommended = (
+                "Declare the smallest accurate allowed paths; if UI remains in scope, obtain jstack_ui_contract and add a dedicated ui verifier."
+            )
+        item: dict[str, Any] = {
+            "id": gap,
+            "question": question,
+            "why": why,
+            "recommendedDefault": recommended,
+        }
+        if program:
+            item["blocking"] = True
+        else:
+            item.update(
+                {
+                    "category": "product-interface",
+                    "priority": "blocking",
+                    "resolves": [gap],
+                }
+            )
+        questions.append(item)
+    return questions[:3]
+
+
+def _ui_readiness_block(gaps: list[str], *, program: bool) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "schemaVersion": (
+            program_core.PROGRAM_READINESS_SCHEMA
+            if program
+            else loop_core.GOAL_READINESS_SCHEMA
+        ),
+        "status": "needs_context",
+        "ready": False,
+        "gaps": gaps,
+        "questions": _ui_readiness_questions(gaps, program=program),
+        "receiptIssued": False,
+    }
+    if not program:
+        result.update(
+            {
+                "confirmationRequired": False,
+                "readinessDigest": None,
+            }
+        )
+    return result
+
+
+def _merge_ui_readiness_block(
+    assessment: dict[str, Any], gaps: list[str], *, program: bool
+) -> dict[str, Any]:
+    block = _ui_readiness_block(gaps, program=program)
+    merged = dict(assessment)
+    merged.update({"status": "needs_context", "ready": False})
+    merged["gaps"] = list(
+        dict.fromkeys([*gaps, *(assessment.get("gaps") or [])])
+    )
+    merged["questions"] = [
+        *block["questions"], *(assessment.get("questions") or [])
+    ][:3]
+    merged["receiptIssued"] = False
+    if not program:
+        merged["confirmationRequired"] = False
+        merged["readinessDigest"] = None
+    return merged
+
+
+def _enforce_ui_contract_route(
+    applicability: dict[str, Any],
+    *,
+    ui_bound: bool,
+    has_ui_verifier: bool,
+    operation: str,
+) -> None:
+    gaps = _ui_readiness_gaps(
+        applicability,
+        ui_bound=ui_bound,
+        has_ui_verifier=has_ui_verifier,
+    )
+    if not gaps:
+        return
+    if applicability["state"] == "review-required":
+        raise ToolError(
+            f"{operation} is review-required for Product Interface applicability. Narrow the goal and allowed paths, rerun readiness, and if UI remains in scope obtain jstack_ui_contract and add a dedicated ui verifier."
+        )
+    missing = []
+    if "product-interface-contract" in gaps:
+        missing.append("a valid ui_contract_receipt from jstack_ui_contract")
+    if "product-interface-verifier" in gaps:
+        missing.append("a dedicated ui acceptance verifier")
+    raise ToolError(
+        f"Automatic Product Interface routing requires {operation} to include "
+        + " and ".join(missing)
+        + "."
+    )
+
+
+def _enforce_iteration_ui_route(
+    project_path: Path,
+    loop_status: dict[str, Any],
+    *,
+    baseline: str,
+    changed_files: list[str],
+) -> dict[str, Any]:
+    """Reclassify the exact delta so UI work cannot emerge under a v1 contract."""
+    applicability = _ui_applicability(
+        project_path,
+        goal=str(loop_status.get("goal") or ""),
+        paths=changed_files,
+        baseline_head=baseline,
+    )
+    ui_bound = isinstance(loop_status.get("uiContract"), dict)
+    has_ui_verifier = _has_public_ui_verifier(
+        loop_status.get("acceptanceCriteria")
+    )
+    if ui_bound:
+        if not has_ui_verifier:
+            raise ToolError(
+                "The Product Interface loop binding is missing its dedicated ui verifier. Stop and replace the invalid loop contract."
+            )
+        return applicability
+    if applicability["state"] == "inactive":
+        return applicability
+    if applicability["state"] == "review-required":
+        raise ToolError(
+            "The actual baseline-to-candidate delta became review-required for Product Interface scope after this non-UI contract was frozen. Stop it, resolve the UI scope, and start a new UI-bound loop or program from a clean baseline."
+        )
+    raise ToolError(
+        "Product Interface work emerged in the actual baseline-to-candidate delta after this non-UI contract was frozen. Stop it and start a new UI-bound loop or program with jstack_ui_contract and a dedicated ui verifier; checkpoint or completion under the v1 contract is not allowed."
+    )
 
 
 def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
@@ -19189,20 +22006,62 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             raise ToolError("Terminal loops cannot receive a revised goal-readiness receipt.")
         prior_contract_digest = status["contractDigest"]
         prior_status = status
-    enriched_args = _loop_args_with_capabilities(args, prior_status)
-    assessment = _loop_call(
-        lambda: loop_core.assess_goal_readiness(
-            enriched_args,
-            project_root=str(project_path),
-            subject=subject,
-            worktree=worktree["isLinkedWorktree"],
-            policy_source=policy.get("_sourcePath"),
-            policy_digest=subject["policyDigest"],
-            loop_id=loop_id,
-            prior_contract_digest=prior_contract_digest,
-        )
+    enriched_args = _loop_args_with_ui_contract(
+        args, project_path, subject, prior_status
     )
+    ui_goals, ui_paths, ui_criteria = _loop_ui_contract_inputs(
+        args, prior_status
+    )
+    ui_applicability = _ui_contract_applicability(
+        project_path, goals=ui_goals, path_patterns=ui_paths
+    )
+    ui_bound = isinstance(enriched_args.get("ui_contract_binding"), dict)
+    enriched_args = _loop_args_with_capabilities(
+        enriched_args,
+        prior_status,
+        ui_product=ui_bound or ui_applicability["state"] == "required",
+    )
+    has_ui_verifier = _has_public_ui_verifier(ui_criteria)
+    ui_gaps = _ui_readiness_gaps(
+        ui_applicability,
+        ui_bound=ui_bound,
+        has_ui_verifier=has_ui_verifier,
+    )
+    if (
+        prior_status is not None
+        and not isinstance(prior_status.get("uiContract"), dict)
+        and ui_applicability["state"] != "inactive"
+    ):
+        return _ui_readiness_block(
+            ["product-interface-new-loop"], program=False
+        )
+    if ui_bound != has_ui_verifier:
+        return _ui_readiness_block(
+            ui_gaps,
+            program=False,
+        )
+    try:
+        assessment = _loop_call(
+            lambda: loop_core.assess_goal_readiness(
+                enriched_args,
+                project_root=str(project_path),
+                subject=subject,
+                worktree=worktree["isLinkedWorktree"],
+                policy_source=policy.get("_sourcePath"),
+                policy_digest=subject["policyDigest"],
+                loop_id=loop_id,
+                prior_contract_digest=prior_contract_digest,
+            )
+        )
+    except ToolError:
+        if ui_gaps:
+            return _ui_readiness_block(ui_gaps, program=False)
+        raise
     assessment.pop("_contract", None)
+    if ui_gaps:
+        return _merge_ui_readiness_block(
+            assessment, ui_gaps, program=False
+        )
     if assessment.get("ready") is not True:
         assessment["receiptIssued"] = False
         return assessment
@@ -19260,10 +22119,25 @@ def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
     _reject_loop_secret_inputs(args)
     project_path = require_project_path(args.get("project_path"))
     subject, policy, worktree = stable_loop_contract_context(project_path)
+    enriched_args = _loop_args_with_ui_contract(args, project_path, subject)
+    ui_goals, ui_paths, ui_criteria = _loop_ui_contract_inputs(args)
+    ui_applicability = _ui_contract_applicability(
+        project_path, goals=ui_goals, path_patterns=ui_paths
+    )
+    ui_bound = isinstance(enriched_args.get("ui_contract_binding"), dict)
+    enriched_args = _loop_args_with_capabilities(
+        enriched_args,
+        ui_product=ui_bound or ui_applicability["state"] == "required",
+    )
+    _enforce_ui_contract_route(
+        ui_applicability,
+        ui_bound=ui_bound,
+        has_ui_verifier=_has_public_ui_verifier(ui_criteria),
+        operation="loop start",
+    )
     readiness_attestation = _verified_goal_readiness_attestation(
         args.get("goal_readiness_receipt"), subject
     )
-    enriched_args = _loop_args_with_capabilities(args)
     service = _loop_service(project_path)
     result = _loop_call(
         lambda: service.start(
@@ -19311,6 +22185,12 @@ def tool_loop_status(args: dict[str, Any]) -> dict[str, Any]:
     result["capabilityCatalogMatchesContract"] = (
         _loop_capability_contract_matches(result)
     )
+    result["productInterfaceCatalogMatchesContract"] = (
+        None
+        if result.get("uiContract") is None
+        else result["uiContract"].get("catalogSha256")
+        == ui_core.canonical_digest(ui_core.load_catalog())
+    )
     return result
 
 
@@ -19341,15 +22221,40 @@ def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
     _reject_loop_secret_inputs(args)
     project_path = require_project_path(args.get("project_path"))
     subject, policy, worktree = stable_loop_contract_context(project_path)
+    service = _loop_service(project_path)
+    loop_id = str(args.get("loop_id") or "")
+    prior_status = _loop_call(lambda: service.status(loop_id))
+    enriched_args = _loop_args_with_ui_contract(
+        args, project_path, subject, prior_status
+    )
+    ui_goals, ui_paths, ui_criteria = _loop_ui_contract_inputs(
+        args, prior_status
+    )
+    ui_applicability = _ui_contract_applicability(
+        project_path, goals=ui_goals, path_patterns=ui_paths
+    )
+    prior_ui_bound = isinstance(prior_status.get("uiContract"), dict)
+    ui_bound = isinstance(enriched_args.get("ui_contract_binding"), dict)
+    enriched_args = _loop_args_with_capabilities(
+        enriched_args,
+        prior_status,
+        ui_product=ui_bound or ui_applicability["state"] == "required",
+    )
+    if not prior_ui_bound and ui_applicability["state"] != "inactive":
+        raise ToolError(
+            "The revised loop is Product Interface applicable, but the frozen public loop revision contract cannot add ui_contract_receipt. Stop this loop and start a new UI-bound loop through jstack_ui_contract, jstack_loop_goal_readiness, and jstack_loop_start with a dedicated ui verifier."
+        )
+    _enforce_ui_contract_route(
+        ui_applicability,
+        ui_bound=ui_bound,
+        has_ui_verifier=_has_public_ui_verifier(ui_criteria),
+        operation="loop revision",
+    )
     readiness_attestation = None
     if args.get("goal_readiness_receipt") is not None:
         readiness_attestation = _verified_goal_readiness_attestation(
             args.get("goal_readiness_receipt"), subject
         )
-    service = _loop_service(project_path)
-    loop_id = str(args.get("loop_id") or "")
-    prior_status = _loop_call(lambda: service.status(loop_id))
-    enriched_args = _loop_args_with_capabilities(args, prior_status)
     return _loop_call(
         lambda: service.revise(
             loop_id,
@@ -19431,6 +22336,12 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "specialistHandoffReceiptDigest": (
                 context["evidence"].get("specialistHandoff") or {}
             ).get("receiptDigest"),
+            "uiFinalizationReceiptDigest": (
+                context["evidence"].get("ui") or {}
+            ).get("receiptDigest"),
+            "uiContractSha256": (result.get("uiContract") or {}).get(
+                "contractSha256"
+            ),
             "autonomyLevel": result["autonomyLevel"],
             "riskTier": result["riskTier"],
             "passed": True,
@@ -19446,6 +22357,25 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
 
 def _program_service(project_path: Path) -> program_core.ProgramService:
     return program_core.ProgramService(Path.home(), project_path)
+
+
+def _program_args_with_ui_contract(
+    args: dict[str, Any],
+    project_path: Path,
+    subject: dict[str, Any],
+    prior_status: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Replace a public opaque receipt with one exact server-derived UI binding."""
+    enriched = dict(args)
+    receipt = args.get("ui_contract_receipt")
+    if receipt is not None:
+        enriched["ui_contract_binding"] = _loop_ui_contract_binding(
+            project_path, subject, receipt
+        )
+    elif isinstance((prior_status or {}).get("uiContract"), dict):
+        enriched["ui_contract_binding"] = dict(prior_status["uiContract"])
+    enriched.pop("ui_contract_receipt", None)
+    return enriched
 
 
 def _program_operation_id(args: dict[str, Any]) -> str:
@@ -19719,8 +22649,12 @@ def _program_child_integrity(
                 raise ToolError("missing child binding")
             child_project = require_project_path(child.get("projectPath"))
             worktree = git_worktree_attestation(child_project)
+            child_service = _loop_service(child_project)
+            child_status = _loop_call(
+                lambda: child_service.status(str(child.get("loopId") or ""))
+            )
             attestation = _loop_call(
-                lambda: _loop_service(child_project).completion_attestation(
+                lambda: child_service.completion_attestation(
                     str(child.get("loopId") or "")
                 )
             )
@@ -19738,6 +22672,33 @@ def _program_child_integrity(
                 == proof.get("loopLatestEventHash"),
                 "passed": attestation.get("passed") is True,
             }
+            child_ui_contract = child.get("uiContract")
+            if isinstance(child_ui_contract, dict):
+                checks.update(
+                    {
+                        "uiProofSchema": proof.get("schemaVersion")
+                        == program_core.PHASE_COMPLETION_PROOF_SCHEMA_V2,
+                        "uiStatusContract": child_status.get("uiContract")
+                        == child_ui_contract,
+                        "uiAttestationContract": attestation.get("uiContract")
+                        == child_ui_contract,
+                        "uiProofContract": proof.get("uiContract")
+                        == child_ui_contract,
+                        "uiReceipt": proof.get(
+                            "loopUiFinalizationReceiptDigest"
+                        )
+                        == attestation.get("uiFinalizationReceiptDigest"),
+                    }
+                )
+            else:
+                checks.update(
+                    {
+                        "nonUiProofSchema": proof.get("schemaVersion")
+                        == program_core.PHASE_COMPLETION_PROOF_SCHEMA,
+                        "nonUiStatus": child_status.get("uiContract") is None,
+                        "nonUiAttestation": attestation.get("uiContract") is None,
+                    }
+                )
             if verify_outputs:
                 current_outputs = _program_phase_output_digests(
                     child_project, phase.get("outputs") or []
@@ -19805,7 +22766,63 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     _reject_loop_secret_inputs(args)
     project_path = require_project_path(args.get("project_path"))
     subject, policy, worktree = stable_loop_contract_context(project_path)
-    policy_gaps = _program_policy_gaps(args, policy)
+    service = _program_service(project_path)
+    program_id = str(args.get("program_id") or "").strip() or None
+    prior_contract_digest = None
+    prior_status = None
+    if program_id:
+        status = _program_call(lambda: service.status(program_id))
+        if status["status"] in {"completed", "cancelled"}:
+            raise ToolError("Terminal programs cannot receive a revised readiness receipt.")
+        prior_contract_digest = status["contractDigest"]
+        prior_status = status
+    enriched_args = _program_args_with_ui_contract(
+        args, project_path, subject, prior_status
+    )
+    ui_goals, ui_paths, ui_criteria = _program_ui_contract_inputs(
+        args, prior_status
+    )
+    ui_applicability = _ui_contract_applicability(
+        project_path, goals=ui_goals, path_patterns=ui_paths
+    )
+    ui_gaps = _ui_readiness_gaps(
+        ui_applicability,
+        ui_bound=isinstance(enriched_args.get("ui_contract_binding"), dict),
+        has_ui_verifier=_has_public_ui_verifier(ui_criteria),
+    )
+    if ui_gaps:
+        contract_gaps = [
+            field
+            for field in (
+                "goal",
+                "owner",
+                "stakeholders",
+                "phases",
+                "final_acceptance_criteria",
+            )
+            if enriched_args.get(field) is None
+            or enriched_args.get(field) == ""
+            or enriched_args.get(field) == []
+        ]
+        if contract_gaps:
+            incomplete_assessment = _program_call(
+                lambda: program_core.assess_program_readiness(
+                    enriched_args,
+                    project_root=str(project_path),
+                    subject=subject,
+                    policy_source=policy.get("_sourcePath"),
+                    policy_digest=subject["policyDigest"],
+                    common_dir_digest=worktree["commonDirDigest"],
+                    program_policy=policy.get("program"),
+                    program_id=program_id,
+                    prior_contract_digest=prior_contract_digest,
+                )
+            )
+            return _merge_ui_readiness_block(
+                incomplete_assessment, ui_gaps, program=True
+            )
+        return _ui_readiness_block(ui_gaps, program=True)
+    policy_gaps = _program_policy_gaps(enriched_args, policy)
     if policy_gaps:
         return {
             "schemaVersion": program_core.PROGRAM_READINESS_SCHEMA,
@@ -19824,17 +22841,9 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             ],
             "receiptIssued": False,
         }
-    service = _program_service(project_path)
-    program_id = str(args.get("program_id") or "").strip() or None
-    prior_contract_digest = None
-    if program_id:
-        status = _program_call(lambda: service.status(program_id))
-        if status["status"] in {"completed", "cancelled"}:
-            raise ToolError("Terminal programs cannot receive a revised readiness receipt.")
-        prior_contract_digest = status["contractDigest"]
     assessment = _program_call(
         lambda: program_core.assess_program_readiness(
-            args,
+            enriched_args,
             project_root=str(project_path),
             subject=subject,
             policy_source=policy.get("_sourcePath"),
@@ -19908,7 +22917,18 @@ def tool_program_start(args: dict[str, Any]) -> dict[str, Any]:
     subject, policy, worktree = stable_loop_contract_context(project_path)
     if subject.get("clean") is not True:
         raise ToolError("Program orchestration must start from a clean Git worktree.")
-    policy_gaps = _program_policy_gaps(args, policy)
+    enriched_args = _program_args_with_ui_contract(args, project_path, subject)
+    ui_goals, ui_paths, ui_criteria = _program_ui_contract_inputs(args)
+    ui_applicability = _ui_contract_applicability(
+        project_path, goals=ui_goals, path_patterns=ui_paths
+    )
+    _enforce_ui_contract_route(
+        ui_applicability,
+        ui_bound=isinstance(enriched_args.get("ui_contract_binding"), dict),
+        has_ui_verifier=_has_public_ui_verifier(ui_criteria),
+        operation="program start",
+    )
+    policy_gaps = _program_policy_gaps(enriched_args, policy)
     if policy_gaps:
         raise ToolError(
             "Program contract does not satisfy policy: "
@@ -19920,7 +22940,7 @@ def tool_program_start(args: dict[str, Any]) -> dict[str, Any]:
     service = _program_service(project_path)
     result = _program_call(
         lambda: service.start(
-            args,
+            enriched_args,
             subject=subject,
             policy_source=policy.get("_sourcePath"),
             policy_digest=subject["policyDigest"],
@@ -19999,6 +23019,8 @@ def tool_program_phase_bind(args: dict[str, Any]) -> dict[str, Any]:
         "blockedActions": child_status["blockedActions"],
         "acceptanceCriteria": child_status["acceptanceCriteria"],
     }
+    if isinstance(child_status.get("uiContract"), dict):
+        child["uiContract"] = dict(child_status["uiContract"])
     result = _program_call(
         lambda: _program_service(project_path).bind_phase(
             program_id, phase_id, child, operation_id=operation_id
@@ -20042,11 +23064,35 @@ def tool_program_phase_complete(args: dict[str, Any]) -> dict[str, Any]:
         or payload.get("latestEventHash") != durable["latestEventHash"]
     ):
         raise ToolError("Child loop completion receipt and durable loop state do not match.")
+    child_ui_contract = child.get("uiContract")
+    ui_receipt_digest = payload.get("uiFinalizationReceiptDigest")
+    if isinstance(child_ui_contract, dict):
+        ui_checks = {
+            "contract": durable.get("uiContract") == child_ui_contract,
+            "contractSha256": payload.get("uiContractSha256")
+            == child_ui_contract.get("contractSha256"),
+            "receiptDigest": isinstance(ui_receipt_digest, str)
+            and bool(re.fullmatch(r"[0-9a-f]{64}", ui_receipt_digest)),
+            "durableReceipt": durable.get("uiFinalizationReceiptDigest")
+            == ui_receipt_digest,
+        }
+        if not all(ui_checks.values()):
+            raise ToolError(
+                "UI child loop completion does not bind the exact durable Product Interface contract and receipt."
+            )
+    elif ui_receipt_digest is not None or durable.get("uiContract") is not None:
+        raise ToolError(
+            "A non-UI child loop may not supply Product Interface completion evidence."
+        )
     output_digests = _program_phase_output_digests(
         child_project, phase.get("outputs") or []
     )
     proof = {
-        "schemaVersion": program_core.PHASE_COMPLETION_PROOF_SCHEMA,
+        "schemaVersion": (
+            program_core.PHASE_COMPLETION_PROOF_SCHEMA_V2
+            if isinstance(child_ui_contract, dict)
+            else program_core.PHASE_COMPLETION_PROOF_SCHEMA
+        ),
         "programId": program_id,
         "phaseId": phase_id,
         "phaseDigest": phase["phaseDigest"],
@@ -20059,6 +23105,9 @@ def tool_program_phase_complete(args: dict[str, Any]) -> dict[str, Any]:
         "completedAt": durable["completedAt"],
         "passed": True,
     }
+    if isinstance(child_ui_contract, dict):
+        proof["uiContract"] = child_ui_contract
+        proof["loopUiFinalizationReceiptDigest"] = ui_receipt_digest
     result = _program_call(
         lambda: _program_service(project_path).complete_phase(
             program_id,
@@ -20210,7 +23259,25 @@ def tool_program_revise(args: dict[str, Any]) -> dict[str, Any]:
     operation_id = _program_operation_id(args)
     project_path = require_project_path(args.get("project_path"))
     subject, policy, worktree = stable_loop_contract_context(project_path)
-    policy_gaps = _program_policy_gaps(args, policy)
+    service = _program_service(project_path)
+    program_id = str(args.get("program_id") or "")
+    prior_status = _program_call(lambda: service.status(program_id))
+    enriched_args = _program_args_with_ui_contract(
+        args, project_path, subject, prior_status
+    )
+    ui_goals, ui_paths, ui_criteria = _program_ui_contract_inputs(
+        args, prior_status
+    )
+    ui_applicability = _ui_contract_applicability(
+        project_path, goals=ui_goals, path_patterns=ui_paths
+    )
+    _enforce_ui_contract_route(
+        ui_applicability,
+        ui_bound=isinstance(enriched_args.get("ui_contract_binding"), dict),
+        has_ui_verifier=_has_public_ui_verifier(ui_criteria),
+        operation="program revision",
+    )
+    policy_gaps = _program_policy_gaps(enriched_args, policy)
     if policy_gaps:
         raise ToolError(
             "Revised program contract does not satisfy policy: "
@@ -20220,9 +23287,9 @@ def tool_program_revise(args: dict[str, Any]) -> dict[str, Any]:
         args.get("program_readiness_receipt"), subject
     )
     result = _program_call(
-        lambda: _program_service(project_path).revise(
-            str(args.get("program_id") or ""),
-            args,
+        lambda: service.revise(
+            program_id,
+            enriched_args,
             subject=subject,
             policy_source=policy.get("_sourcePath"),
             policy_digest=subject["policyDigest"],
@@ -20273,12 +23340,20 @@ def tool_program_finalize(args: dict[str, Any]) -> dict[str, Any]:
     if status["status"] not in {"validating", "completed"}:
         raise ToolError("Program is not ready for final acceptance.")
     pseudo_loop = {
+        "schemaVersion": (
+            loop_core.LOOP_CONTRACT_SCHEMA_V2
+            if isinstance(status.get("uiContract"), dict)
+            else loop_core.LOOP_CONTRACT_SCHEMA
+        ),
         "baselineCommit": status["baselineCommit"],
+        "goal": status.get("goal"),
         "acceptanceCriteria": status["finalAcceptanceCriteria"],
     }
+    if isinstance(status.get("uiContract"), dict):
+        pseudo_loop["uiContract"] = status["uiContract"]
     context = _loop_iteration_evidence(project_path, pseudo_loop, args)
     criteria = loop_core.LoopService._evaluate_criteria(
-        {"acceptanceCriteria": status["finalAcceptanceCriteria"]},
+        pseudo_loop,
         {"completionApprovals": {}},
         context["evidence"],
     )
@@ -20315,10 +23390,14 @@ def tool_program_finalize(args: dict[str, Any]) -> dict[str, Any]:
         + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
     ).replace(microsecond=0).isoformat()
     proof = result.get("completionProof") or {}
-    receipt = issue_receipt(
-        {
+    ui_bound = proof.get("schemaVersion") == program_core.PROGRAM_COMPLETION_PROOF_SCHEMA_V2
+    receipt_payload = {
             "kind": "program",
-            "schemaVersion": "jstack.program.receipt.v1",
+            "schemaVersion": (
+                "jstack.program.receipt.v2"
+                if ui_bound
+                else "jstack.program.receipt.v1"
+            ),
             "expiresAt": expires_at,
             "projectPath": receipt_subject["gitRoot"],
             "gitHead": receipt_subject["gitHead"],
@@ -20334,7 +23413,19 @@ def tool_program_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "phaseProofDigests": proof.get("phaseProofDigests"),
             "passed": True,
         }
-    )
+    if ui_bound:
+        receipt_payload.update(
+            {
+                "uiContractSha256": (proof.get("uiContract") or {}).get(
+                    "contractSha256"
+                ),
+                "uiEvidenceDigest": proof.get("uiEvidenceDigest"),
+                "uiFinalizationReceiptDigest": proof.get(
+                    "uiFinalizationReceiptDigest"
+                ),
+            }
+        )
+    receipt = issue_receipt(receipt_payload)
     result["completionReceipt"] = receipt
     result["receiptMeaning"] = (
         "Session-local proof that every program phase, final gate, child proof, output, and final acceptance criterion was current. "
@@ -20350,7 +23441,7 @@ LOOP_VERIFIER_SCHEMA: dict[str, Any] = {
     "properties": {
         "type": {
             "type": "string",
-            "enum": ["qa", "security", "audit", "launch", "review", "artifact", "human"],
+            "enum": ["qa", "security", "audit", "launch", "review", "artifact", "human", "ui"],
         },
         "commandKey": {"type": "string"},
         "profile": {
@@ -20487,6 +23578,11 @@ LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "maxLength": LOOP_MAX_RECEIPT_CHARS,
         "description": "A current passing receipt from jstack_launch_finalize, bound to the exact target environment, declared surfaces, policy, catalog, Git state, and loop/program baseline.",
+    },
+    "ui_receipt": {
+        "type": "string",
+        "maxLength": UI_RECEIPT_MAX_CHARS,
+        "description": "A current candidate-bound receipt from jstack_ui_finalize. It satisfies only a dedicated ui criterion and never substitutes for QA, audit, security, launch, or human evidence.",
     },
     "audit_receipts": {
         "type": "array",
@@ -20750,7 +23846,7 @@ PROGRAM_VERIFIER_SCHEMA: dict[str, Any] = {
     "properties": {
         "type": {
             "type": "string",
-            "enum": ["qa", "security", "audit", "launch", "review", "artifact"],
+            "enum": ["qa", "security", "audit", "launch", "review", "artifact", "ui"],
         },
         "commandKey": {"type": "string", "maxLength": 200},
         "profile": {
@@ -20945,6 +24041,11 @@ PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
     "program_readiness_receipt": {
         "type": "string",
         "maxLength": PROGRAM_MAX_RECEIPT_CHARS,
+    },
+    "ui_contract_receipt": {
+        "type": "string",
+        "maxLength": UI_RECEIPT_MAX_CHARS,
+        "description": "Opaque receipt returned by jstack_ui_contract for this exact program baseline and policy state.",
     },
     "revision_approval_reference": {"type": "string", "maxLength": 500},
 }
@@ -21208,6 +24309,13 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "maxItems": 14,
                     "items": {"type": "string", "maxLength": 64},
                 },
+                "capability_selection_digest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": (
+                        "Optional exact selectionDigest from jstack_plan, jstack_team_plan, or a loop capability contract. Required to disambiguate Product Interface routing when ordinary and UI plans use the same role roster."
+                    ),
+                },
                 "write_scope": {
                     "type": "array",
                     "maxItems": 100,
@@ -21257,6 +24365,13 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "array",
                     "maxItems": 14,
                     "items": {"type": "string", "maxLength": 64},
+                },
+                "capability_selection_digest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "description": (
+                        "Optional exact selectionDigest from jstack_plan, jstack_team_plan, or a loop capability contract. Required to disambiguate Product Interface routing when ordinary and UI plans use the same role roster."
+                    ),
                 },
                 "resolutions": {
                     "type": "array",
@@ -21593,6 +24708,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "limits": LOOP_LIMITS_SCHEMA,
                 "token_budget": {"type": "integer", "minimum": 1},
                 "goal_context": LOOP_GOAL_CONTEXT_SCHEMA,
+                "ui_contract_receipt": {
+                    "type": "string",
+                    "maxLength": UI_RECEIPT_MAX_CHARS,
+                    "description": "Optional clean-baseline receipt from jstack_ui_contract. Supplying it creates an explicit loop contract v2 and requires a ui acceptance criterion.",
+                },
                 "mode_approval_reference": {"type": "string"},
                 "autonomy_approval_reference": {"type": "string"},
                 "risk_approval_reference": {"type": "string"},
@@ -21650,6 +24770,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "goal_readiness_receipt": {
                     "type": "string",
                     "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                },
+                "ui_contract_receipt": {
+                    "type": "string",
+                    "maxLength": UI_RECEIPT_MAX_CHARS,
+                    "description": "The same Product Interface baseline receipt bound into goal readiness for a UI loop.",
                 },
                 "mode_approval_reference": {"type": "string"},
                 "autonomy_approval_reference": {"type": "string"},
@@ -22516,6 +25641,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "maxLength": LAUNCH_MAX_RECEIPT_CHARS,
                 },
+                "ui_receipt": {
+                    "type": "string",
+                    "maxLength": UI_RECEIPT_MAX_CHARS,
+                    "description": "Current jstack_ui_finalize receipt; required automatically when repository evidence shows UI changes in the release delta.",
+                },
             },
         },
         "handler": tool_release_readiness,
@@ -22548,6 +25678,137 @@ for _name, _meta in list(TOOLS.items()):
             _alias_meta = dict(_meta)
             _alias_meta["description"] = str(_alias_meta["description"]).replace("gstack", "jstack").replace("Gstack", "JStack")
             TOOLS[_alias] = _alias_meta
+
+
+# Product Interface tools are intentionally canonical-only. The frozen 52
+# gstack_* aliases remain byte-compatible while the live JStack surface grows.
+TOOLS.update(
+    {
+        "jstack_ui_contract": {
+            "description": "Create a clean-baseline, Git-bound Product Interface System contract with original editorial-calm or creative-canvas profiles, preserve-and-extend precedence, per-surface platform mapping, and a complete objective evidence matrix. This tool performs no UI implementation or external action; on POSIX it creates or reads one private per-user contract-signing key beneath ~/.jstack.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["goal", "project_fingerprint", "surfaces", "platforms", "themes", "allowed_paths", "existing_system"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "goal": {"type": "string", "minLength": 1, "maxLength": 4000},
+                    "project_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Expected server-derived clean baseline fingerprint; never trusted without recomputation."},
+                    "profile_override": {"type": "string", "enum": list(ui_core.PROFILE_IDS)},
+                    "surfaces": {
+                        "type": "array", "minItems": 1, "maxItems": 64,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["id", "kind", "locator", "critical", "states", "stateExclusions", "platforms"],
+                            "properties": {
+                                "id": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+                                "kind": {"type": "string", "enum": list(ui_core.registry.SURFACE_KINDS)},
+                                "locator": {"type": "string", "minLength": 1, "maxLength": 500},
+                                "critical": {"type": "boolean"},
+                                "states": {"type": "array", "minItems": 1, "maxItems": len(ui_core.registry.STATE_IDS), "items": {"type": "string", "enum": list(ui_core.registry.STATE_IDS)}},
+                                "stateExclusions": {
+                                    "type": "array", "minItems": 0,
+                                    "maxItems": len(ui_core.registry.STATE_IDS) - 1,
+                                    "items": {
+                                        "type": "object", "additionalProperties": False,
+                                        "required": ["state", "reason"],
+                                        "properties": {
+                                            "state": {"type": "string", "enum": list(ui_core.registry.STATE_IDS)},
+                                            "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+                                        },
+                                    },
+                                },
+                                "platforms": {"type": "array", "minItems": 1, "maxItems": len(ui_core.registry.PLATFORM_IDS), "items": {"type": "string", "enum": list(ui_core.registry.PLATFORM_IDS)}},
+                            },
+                        },
+                    },
+                    "platforms": {"type": "array", "minItems": 1, "maxItems": len(ui_core.registry.PLATFORM_IDS), "items": {"type": "string", "enum": list(ui_core.registry.PLATFORM_IDS)}},
+                    "themes": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "string", "enum": list(ui_core.registry.THEME_IDS)}},
+                    "allowed_paths": {
+                        "type": "array", "minItems": 1, "maxItems": ui_core.registry.MAX_ALLOWED_PATHS,
+                        "items": {"type": "string", "minLength": 1, "maxLength": 500},
+                        "description": "Exact repository-relative UI source glob boundary; the finalizer rejects detected changed UI paths outside it.",
+                    },
+                    "platform_exclusions": {
+                        "type": "array", "maxItems": len(ui_core.registry.PLATFORM_IDS),
+                        "description": "Explicit reasons for every detected baseline platform intentionally outside the target contract.",
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["platform", "reason"],
+                            "properties": {
+                                "platform": {"type": "string", "enum": list(ui_core.registry.PLATFORM_IDS)},
+                                "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+                            },
+                        },
+                    },
+                    "viewports": {
+                        "type": "array", "minItems": 1, "maxItems": 12,
+                        "description": "Defaults to 1440x900, 1280x800 primary, and 390x844 when omitted.",
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["id", "width", "height", "dpr", "primary"],
+                            "properties": {
+                                "id": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+                                "width": {"type": "integer", "minimum": 240, "maximum": 7680},
+                                "height": {"type": "integer", "minimum": 240, "maximum": 7680},
+                                "dpr": {"type": "number", "minimum": 1, "maximum": 4},
+                                "primary": {"type": "boolean"},
+                            },
+                        },
+                    },
+                    "surface_profiles": {
+                        "type": "array", "maxItems": 64,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["surfaceId", "profile"],
+                            "properties": {
+                                "surfaceId": {"type": "string"},
+                                "profile": {"type": "string", "enum": list(ui_core.PROFILE_IDS)},
+                            },
+                        },
+                    },
+                    "existing_system": {
+                        "type": "object", "additionalProperties": False,
+                        "required": ["present", "id", "evidence_paths", "supported_themes"],
+                        "properties": {
+                            "present": {"type": "boolean"},
+                            "id": {"type": ["string", "null"]},
+                            "evidence_paths": {"type": "array", "maxItems": 256, "items": {"type": "string"}},
+                            "supported_themes": {"type": "array", "maxItems": 2, "items": {"type": "string", "enum": list(ui_core.registry.THEME_IDS)}},
+                        },
+                    },
+                    "redesign_approved": {"type": "boolean", "default": False},
+                    "redesign_approval_reference": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000,
+                        "description": "Required with redesign_approved; an accountable reference to the user's explicit redesign direction. Only its SHA-256 is retained.",
+                    },
+                },
+            },
+            "handler": tool_ui_contract,
+            "readOnlyHint": False,
+        },
+        "jstack_ui_finalize": {
+            "description": "Validate a signed Product Interface contract against a clean descendant candidate, a current exact-command QA receipt, fixed private screenshot evidence, objective interaction/accessibility checks, and accountable Product observations. Returns evidence only and authorizes no release or deployment action.",
+            "inputSchema": {
+                "type": "object", "additionalProperties": False,
+                "required": ["ui_contract_receipt", "evidence_manifest", "qa_receipt", "build_command_key", "build_sha256", "runtime_sha256"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "ui_contract_receipt": {"type": "string", "minLength": 1, "maxLength": UI_RECEIPT_MAX_CHARS},
+                    "evidence_manifest": {"type": "string", "minLength": 1, "maxLength": 500, "description": "Safe relative path beneath the server-selected private UI evidence root."},
+                    "qa_receipt": {"type": "string", "minLength": 1, "maxLength": UI_RECEIPT_MAX_CHARS},
+                    "build_command_key": {"type": "string", "minLength": 1, "maxLength": 200},
+                    "build_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "runtime_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                },
+            },
+            "handler": tool_ui_finalize,
+            "readOnlyHint": True,
+        },
+    }
+)
 
 
 def tool_definitions() -> list[dict[str, Any]]:

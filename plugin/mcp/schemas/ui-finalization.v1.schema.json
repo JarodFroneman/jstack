@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-finalization.v1.schema.json",
+  "title": "JStack Product Interface finalization v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "projectPath",
+    "baseline",
+    "candidate",
+    "catalog",
+    "contract",
+    "evidence",
+    "passed",
+    "blockers",
+    "warnings",
+    "uiReceipt",
+    "executionAuthorized",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.finalization.v1"},
+    "projectPath": {"type": "string", "minLength": 1},
+    "baseline": {"$ref": "#/$defs/baseline"},
+    "candidate": {"$ref": "#/$defs/finalCandidate"},
+    "catalog": {"$ref": "#/$defs/catalogBinding"},
+    "contract": {"$ref": "#/$defs/contractSummary"},
+    "evidence": {"$ref": "#/$defs/evidenceValidation"},
+    "passed": {"const": true},
+    "blockers": {
+      "type": "array",
+      "maxItems": 0,
+      "items": {"type": "string"}
+    },
+    "warnings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    },
+    "uiReceipt": {"type": "string", "minLength": 1, "maxLength": 250000},
+    "executionAuthorized": {"const": false},
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "profile": {"type": "string", "enum": ["editorial-calm", "creative-canvas"]},
+    "timestamp": {"type": "string", "format": "date-time", "minLength": 1, "maxLength": 100},
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitRoot", "commonDir", "gitHead", "projectFingerprint", "treeSha256", "policyDigest"],
+      "properties": {
+        "gitRoot": {"type": "string", "minLength": 1},
+        "commonDir": {"type": "string", "minLength": 1},
+        "gitHead": {"$ref": "#/$defs/gitOid"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "treeSha256": {"$ref": "#/$defs/sha256"},
+        "policyDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "finalCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitHead", "treeSha256", "projectFingerprint", "changedPathsSha256", "changeRecordsSha256", "diffSha256"],
+      "properties": {
+        "gitHead": {"$ref": "#/$defs/gitOid"},
+        "treeSha256": {"$ref": "#/$defs/sha256"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "changedPathsSha256": {"$ref": "#/$defs/sha256"},
+        "changeRecordsSha256": {"$ref": "#/$defs/sha256"},
+        "diffSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "catalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "sha256"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.catalog.v1"},
+        "version": {"const": "1.0.0"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "contractSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "defaultProfile", "surfaceCount", "matrixCellCount"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "defaultProfile": {"$ref": "#/$defs/profile"},
+        "surfaceCount": {"type": "integer", "minimum": 1, "maximum": 64},
+        "matrixCellCount": {"type": "integer", "minimum": 1, "maximum": 256}
+      }
+    },
+    "evidenceCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gitHead",
+        "treeSha256",
+        "projectFingerprint",
+        "buildCommandKey",
+        "buildCommandSha256",
+        "buildSha256",
+        "runtimeSha256"
+      ],
+      "properties": {
+        "gitHead": {"$ref": "#/$defs/gitOid"},
+        "treeSha256": {"$ref": "#/$defs/sha256"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "buildCommandKey": {"type": "string", "minLength": 1, "maxLength": 200},
+        "buildCommandSha256": {"$ref": "#/$defs/sha256"},
+        "buildSha256": {"$ref": "#/$defs/sha256"},
+        "runtimeSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidenceValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "manifestSha256",
+        "manifestRawSha256",
+        "contractSha256",
+        "catalogSha256",
+        "candidate",
+        "capturedAt",
+        "captureCount",
+        "captureSetSha256",
+        "checkCount",
+        "checkSetSha256",
+        "productObservationCount",
+        "productObservationSetSha256",
+        "humanAestheticApprovalProvided",
+        "artifactBytes",
+        "complete",
+        "truncated",
+        "rawArtifactContentReturned",
+        "producerHonestyCertified",
+        "semanticTruthCertified"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.evidence-validation.v1"},
+        "manifestSha256": {"$ref": "#/$defs/sha256"},
+        "manifestRawSha256": {"$ref": "#/$defs/sha256"},
+        "contractSha256": {"$ref": "#/$defs/sha256"},
+        "catalogSha256": {"$ref": "#/$defs/sha256"},
+        "candidate": {"$ref": "#/$defs/evidenceCandidate"},
+        "capturedAt": {"$ref": "#/$defs/timestamp"},
+        "captureCount": {"type": "integer", "minimum": 1, "maximum": 256},
+        "captureSetSha256": {"$ref": "#/$defs/sha256"},
+        "checkCount": {"type": "integer", "minimum": 1, "maximum": 256},
+        "checkSetSha256": {"$ref": "#/$defs/sha256"},
+        "productObservationCount": {"type": "integer", "minimum": 1, "maximum": 128},
+        "productObservationSetSha256": {"$ref": "#/$defs/sha256"},
+        "humanAestheticApprovalProvided": {"const": false},
+        "artifactBytes": {"type": "integer", "minimum": 1, "maximum": 250000000},
+        "complete": {"const": true},
+        "truncated": {"const": false},
+        "rawArtifactContentReturned": {"const": false},
+        "producerHonestyCertified": {"const": false},
+        "semanticTruthCertified": {"const": false}
+      }
+    }
+  }
+}

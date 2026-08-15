@@ -16,13 +16,19 @@ jobs:
         python: ["3.9", "3.12"]
     runs-on: ${{ matrix.os }}
     steps:
+      # Full history and annotated tags are required so the frozen Beta.1
+      # Proof Plane runtime test can export its exact release boundary.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install test-only schema validator
+        run: python -m pip install --disable-pip-version-check jsonschema==4.23.0
       - name: Compile
         env:
           PYTHONPYCACHEPREFIX: ${{ runner.temp }}/jstack-pycache
@@ -49,6 +55,103 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # GitHub's hosted USERPROFILE grants broader inherited access than
+          # the installer's fail-closed ACL policy permits. Give the tests a
+          # dedicated profile boundary with only the current runner identity.
+          $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+          $inheritance = (
+            [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+            [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+          )
+          function Set-JStackTestProfileAcl {
+            param(
+              [string]$Path,
+              [switch]$AllowAuthenticatedUsers
+            )
+            New-Item -ItemType Directory -Force -Path $Path | Out-Null
+            $profileAcl = Get-Acl -LiteralPath $Path
+            $profileAcl.SetAccessRuleProtection($true, $false)
+            foreach ($existingRule in @($profileAcl.Access)) {
+              [void]$profileAcl.RemoveAccessRuleSpecific($existingRule)
+            }
+            $profileAcl.SetOwner($currentUser)
+            $profileRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+              $currentUser,
+              [System.Security.AccessControl.FileSystemRights]::FullControl,
+              $inheritance,
+              [System.Security.AccessControl.PropagationFlags]::None,
+              [System.Security.AccessControl.AccessControlType]::Allow
+            )
+            $profileAcl.AddAccessRule($profileRule)
+            if ($AllowAuthenticatedUsers) {
+              $authenticatedUsers = [System.Security.Principal.SecurityIdentifier]::new(
+                'S-1-5-11'
+              )
+              $broadRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+                $authenticatedUsers,
+                [System.Security.AccessControl.FileSystemRights]::FullControl,
+                $inheritance,
+                [System.Security.AccessControl.PropagationFlags]::None,
+                [System.Security.AccessControl.AccessControlType]::Allow
+              )
+              $profileAcl.AddAccessRule($broadRule)
+            }
+            Set-Acl -LiteralPath $Path -AclObject $profileAcl
+            $appliedAcl = Get-Acl -LiteralPath $Path
+            $sections = (
+              [System.Security.AccessControl.AccessControlSections]::Owner -bor
+              [System.Security.AccessControl.AccessControlSections]::Access
+            )
+            $appliedSddl = $appliedAcl.GetSecurityDescriptorSddlForm($sections)
+            Write-Host ('JStack CI ACL fixture {0}: {1}' -f $Path, $appliedSddl)
+          }
+
+          $broadProfileRoot = Join-Path $env:RUNNER_TEMP 'jstack-broad-profile'
+          Set-JStackTestProfileAcl -Path $broadProfileRoot -AllowAuthenticatedUsers
+          $env:USERPROFILE = $broadProfileRoot
+          $negativeProbe = @'
+          import os
+          from pathlib import Path
+          from scripts import install
+
+          try:
+              install._validate_windows_install_root(Path(os.environ["USERPROFILE"]))
+          except RuntimeError as exc:
+              expected = "is not verifiably user-private; installation stopped safely."
+              if expected not in str(exc):
+                  raise AssertionError(f"unexpected ACL rejection: {exc}") from exc
+          else:
+              raise AssertionError("broad Windows profile ACL was accepted")
+          '@
+          $negativeProbe | python -
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $profileRoot = Join-Path $env:RUNNER_TEMP 'jstack-private-profile'
+          Set-JStackTestProfileAcl -Path $profileRoot
+          $env:USERPROFILE = $profileRoot
+          $env:TEMP = Join-Path $profileRoot 'AppData\Local\Temp'
+          $env:TMP = $env:TEMP
+          $env:TMPDIR = $env:TEMP
+          Set-JStackTestProfileAcl -Path $env:TEMP
+          $privateTempProbe = @'
+          import os
+          import tempfile
+          from pathlib import Path
+
+          from scripts import install
+
+          root = os.path.normcase(os.environ["USERPROFILE"])
+          with tempfile.TemporaryDirectory() as temporary_directory:
+              value = os.path.normcase(temporary_directory)
+              install._validate_windows_install_root(Path(value))
+              assert os.path.commonpath((root, value)) == root, (root, value)
+          '@
+          $privateTempProbe | python -
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
           $modules = @(
             Get-ChildItem -Path tests -Filter 'test_*.py' -File |
               Where-Object { $_.Name -notlike 'test_proof_plane_*' } |

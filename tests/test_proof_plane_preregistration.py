@@ -26,6 +26,7 @@ from tools.proof_plane.common import (
     file_digest,
 )
 from tools.proof_plane.image_build_inputs import validate_repository_runtime_assets
+from tests.proof_plane_beta1_fixture import export_frozen_beta1_checkout
 
 
 def _digest(label: str) -> str:
@@ -299,16 +300,7 @@ class PreregistrationLifecycleTests(unittest.TestCase):
     def test_real_derivation_builds_exact_18_task_216_run_bundle(self) -> None:
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
-            repo = Path(temporary).resolve() / "repo"
-
-            def ignore(_directory, names):
-                return {
-                    name
-                    for name in names
-                    if name in {".git", ".jstack-evals", "__pycache__", ".pytest_cache"}
-                }
-
-            shutil.copytree(root, repo, symlinks=True, ignore=ignore)
+            repo = export_frozen_beta1_checkout(Path(temporary).resolve())
             qualification = copy.deepcopy(_receipt_set())
             qualification["studyId"] = "jstack-beta1-codex-216"
             qualification["policySha256"] = file_digest(

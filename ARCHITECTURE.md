@@ -107,17 +107,18 @@ it validates scoring protocol behavior and is not represented as a
 repository-level host benchmark.
 
 `scripts/check_product_boundaries.py` proves that the product still has the
-five named commands, 52 canonical MCP tools, 52 compatibility aliases, 11
+five named commands, 54 canonical MCP tools, the frozen 52 compatibility aliases, 11
 roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
 standard-library core. It also rejects vendor SDKs, network-capable core
 imports, packaged `evals/` content, model or scanner execution in the Proof
 Plane, and Proof Plane filesystem mutation.
 
 `scripts/check_contract_compatibility.py` compares the current server with the
-alpha.9 snapshot: command and plugin layouts, every canonical request-schema
-digest, legacy aliases, published core-schema bytes, protocol versions, and
-persisted-state markers. Alpha.10 therefore changes the reported release
-version without changing a prior public request contract in place.
+alpha.9 snapshot: command and plugin layouts, legacy request-schema digests,
+legacy aliases, published core-schema bytes, protocol versions, and persisted
+state markers. Beta.2 admits only the declared Product Interface successor
+fields/enums on affected legacy requests plus the two canonical-only UI tools;
+all other prior request schemas remain frozen.
 
 The scorer consumes already-produced run and blinded-review envelopes. It
 retains failed, blocked, and timed-out runs, requires equal limits for

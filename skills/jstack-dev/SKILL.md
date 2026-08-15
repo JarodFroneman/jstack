@@ -204,8 +204,11 @@ independently usable.
 - In Git mode, create a `jstack.specialist.result.v1` result and
   `jstack.specialist.telemetry.v1` metadata envelope for every routed role,
   including the Lead. Call `jstack_specialist_result` with the exact team role
-  and capability IDs, then call `jstack_specialist_handoff_check` before the
-  final completion claim.
+  and capability IDs, and pass the routed capability plan's exact
+  `selectionDigest` as `capability_selection_digest` to both receipt tools;
+  this is mandatory when ordinary and Product Interface routing share a role
+  roster. Then call `jstack_specialist_handoff_check` before the final
+  completion claim.
 - Telemetry contains identifiers, timestamps, status, tool names/statuses,
   evidence references, and optional counts only. Never store raw prompts,
   messages, tool arguments, command output, model output, secrets, or source

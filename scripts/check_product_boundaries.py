@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -52,7 +53,20 @@ CAPABILITIES = {
     "product-observability",
     "privacy-legal-evidence",
 }
-CORE_LOCAL_IMPORTS = {"audit", "capabilities", "context_readiness", "launch", "loop", "program"}
+ADDITIVE_CANONICAL_TOOLS = {"jstack_ui_contract", "jstack_ui_finalize"}
+CONTRACT_FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "v0.10.0-alpha.9.json"
+FROZEN_CANONICAL_TOOL_COUNT = 52
+FROZEN_ALIAS_COUNT = 52
+LIVE_CANONICAL_TOOL_COUNT = 54
+CORE_LOCAL_IMPORTS = {
+    "audit",
+    "capabilities",
+    "context_readiness",
+    "launch",
+    "loop",
+    "program",
+    "ui",
+}
 CORE_STDLIB_IMPORTS = {
     "__future__",
     "argparse",
@@ -74,6 +88,7 @@ CORE_STDLIB_IMPORTS = {
     "shutil",
     "signal",
     "stat",
+    "struct",
     "subprocess",
     "sys",
     "tempfile",
@@ -83,6 +98,7 @@ CORE_STDLIB_IMPORTS = {
     "typing",
     "urllib",
     "uuid",
+    "zlib",
 }
 NETWORK_IMPORTS = {"aiohttp", "ftplib", "http", "httpx", "requests", "smtplib", "socket", "urllib3"}
 VENDOR_IMPORTS = {"anthropic", "azure", "boto3", "github", "gitlab", "google", "openai", "semgrep", "snyk", "trivy"}
@@ -152,14 +168,27 @@ def check_boundaries() -> list[str]:
     server = _load_module("jstack_boundary_server", ROOT / "mcp" / "jstack" / "jstack_mcp_server.py")
     canonical = {name for name in server.TOOLS if name.startswith("jstack_")}
     aliases = {name for name in server.TOOLS if name.startswith("gstack_")}
-    if len(canonical) != 52:
-        errors.append("canonical MCP tool inventory must remain frozen at 52")
-    if len(aliases) != 52:
-        errors.append("legacy MCP alias inventory must remain at 52")
-    for name in canonical:
+    fixture = json.loads(CONTRACT_FIXTURE.read_text(encoding="utf-8"))
+    frozen_canonical = set(fixture["canonicalToolInputSchemaSha256"])
+    frozen_aliases = set(fixture["legacyAliases"])
+    expected_canonical = frozen_canonical | ADDITIVE_CANONICAL_TOOLS
+    if len(frozen_canonical) != FROZEN_CANONICAL_TOOL_COUNT:
+        errors.append("frozen canonical MCP snapshot must remain at 52 tools")
+    if len(frozen_aliases) != FROZEN_ALIAS_COUNT:
+        errors.append("frozen legacy MCP alias snapshot must remain at 52 tools")
+    if len(canonical) != LIVE_CANONICAL_TOOL_COUNT or canonical != expected_canonical:
+        errors.append(
+            "canonical MCP tool inventory must be the frozen 52 plus exactly the two Product Interface System tools"
+        )
+    if len(aliases) != FROZEN_ALIAS_COUNT or aliases != frozen_aliases:
+        errors.append("legacy MCP alias inventory must remain the exact frozen 52")
+    if any(name.startswith("gstack_ui_") for name in aliases):
+        errors.append("Product Interface System tools must not gain gstack aliases")
+    for name in sorted(frozen_canonical):
         alias = "gstack_" + name[len("jstack_") :]
         if (
             alias not in aliases
+            or name not in canonical
             or server.TOOLS[alias]["inputSchema"] != server.TOOLS[name]["inputSchema"]
             or server.TOOLS[alias]["handler"] is not server.TOOLS[name]["handler"]
         ):
@@ -226,7 +255,10 @@ def main() -> int:
     if errors:
         sys.stderr.write("\n".join(errors) + "\n")
         return 1
-    print("JStack product boundaries are intact: five commands, 52 tools, stdlib core, no packaged Proof Plane authority.")
+    print(
+        "JStack product boundaries are intact: five commands, 54 canonical tools, "
+        "52 frozen aliases, stdlib core, no packaged Proof Plane authority."
+    )
     return 0
 
 

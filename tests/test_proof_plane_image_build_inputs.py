@@ -42,9 +42,11 @@ from tools.proof_plane.image_build_inputs import (
 from tools.proof_plane.image_foundation import validate_image_build_matrix
 from tools.proof_plane.signatures import normalize_openssh_public_key, reviewer_id_digest
 from tools.proof_plane.task_specs import TIER1_PROJECTS
+from tests.proof_plane_beta1_fixture import export_frozen_beta1_checkout
 
 
-ROOT = Path(__file__).resolve().parents[1]
+LIVE_ROOT = Path(__file__).resolve().parents[1]
+ROOT = LIVE_ROOT
 
 
 def _digest(label: str) -> str:
@@ -366,6 +368,20 @@ class ReviewedInputFixture:
 
 
 class ImageBuildInputsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls._beta1_temp = tempfile.TemporaryDirectory()
+        globals()["ROOT"] = export_frozen_beta1_checkout(
+            Path(cls._beta1_temp.name)
+        )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        globals()["ROOT"] = LIVE_ROOT
+        cls._beta1_temp.cleanup()
+        super().tearDownClass()
+
     def test_checked_in_plan_is_exact_canonical_18_task_inventory(self) -> None:
         plan = load_image_build_input_plan(ROOT)
         self.assertEqual(plan["taskCount"], 18)

@@ -89,7 +89,10 @@ writes, delegation, approvals, or release authority. Every wave returns one
 `jstack.specialist.result.v1` plus metadata-only
 `jstack.specialist.telemetry.v1` per role, including a Lead result. The Lead
 calls `jstack_specialist_result` for all 11 exact role/capability assignments,
-then `jstack_specialist_handoff_check`. Do not retain raw prompts, messages,
+then `jstack_specialist_handoff_check`, passing the routed capability plan's
+exact `selectionDigest` as `capability_selection_digest` to both tools. This is
+mandatory for full-team Product Interface work because all 11 role IDs alone
+cannot identify the UI-strengthened capability plan. Do not retain raw prompts, messages,
 tool arguments, command/model output, source contents, or secrets. Missing,
 stale, partial, permission-unsafe, capability-drifted, or contradictory receipt
 sets block handoff until explicitly reconciled with evidence.

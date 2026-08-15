@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-product-observation.v1.schema.json",
+  "title": "JStack Product Interface structured observation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "findingId",
+    "surfaceId",
+    "profile",
+    "category",
+    "severity",
+    "status",
+    "reviewerType",
+    "reviewerIdSha256",
+    "observedAt",
+    "buildSha256",
+    "runtimeSha256",
+    "producerSha256",
+    "summary",
+    "details",
+    "recommendation"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.product-observation.v1"},
+    "findingId": {"type": "string", "minLength": 1, "maxLength": 100},
+    "surfaceId": {"$ref": "#/$defs/identifier"},
+    "profile": {"type": "string", "enum": ["editorial-calm", "creative-canvas"]},
+    "category": {
+      "type": "string",
+      "enum": ["hierarchy", "coherence", "responsiveness", "accessibility", "platform-fit", "generic-ai-styling", "other"]
+    },
+    "severity": {"type": "string", "enum": ["info", "advisory", "blocker"]},
+    "status": {"type": "string", "enum": ["pass", "advisory", "blocker"]},
+    "reviewerType": {"const": "agent"},
+    "reviewerIdSha256": {"$ref": "#/$defs/sha256"},
+    "observedAt": {"$ref": "#/$defs/timestamp"},
+    "buildSha256": {"$ref": "#/$defs/sha256"},
+    "runtimeSha256": {"$ref": "#/$defs/sha256"},
+    "producerSha256": {"$ref": "#/$defs/sha256"},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "details": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "recommendation": {"type": "string", "minLength": 1, "maxLength": 4000}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+    "timestamp": {"type": "string", "format": "date-time", "minLength": 1, "maxLength": 100}
+  }
+}

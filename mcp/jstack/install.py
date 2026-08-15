@@ -1,105 +1,112 @@
 #!/usr/bin/env python3
-"""Install the local jstack MCP server into Codex config.toml."""
+"""Route source-checkout installs through JStack's transactional installer."""
 
 from __future__ import annotations
 
 import json
-import os
-import shutil
+import re
+import subprocess
 import sys
-import uuid
 from pathlib import Path
+from typing import Optional
 
 
 SOURCE_DIR = Path(__file__).resolve().parent
-CODEX_HOME = Path.home() / ".codex"
-INSTALL_DIR = CODEX_HOME / "mcp" / "jstack"
-CONFIG_PATH = CODEX_HOME / "config.toml"
+_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$")
+_RELEASE_LAYOUT_FILES = (
+    "scripts/install.py",
+    "scripts/check_product_boundaries.py",
+    "plugin/.codex-plugin/plugin.json",
+    "plugins/j-stack-dev/.codex-plugin/plugin.json",
+    "plugins/jstack-audit/.codex-plugin/plugin.json",
+    "plugins/jstack-full-team/.codex-plugin/plugin.json",
+    "plugins/jstack-loop/.codex-plugin/plugin.json",
+    "plugins/jstack-subagents/.codex-plugin/plugin.json",
+    "prompts/j-stack-dev.md",
+    "prompts/jstack-audit.md",
+    "prompts/jstack-full-team.md",
+    "prompts/jstack-loop.md",
+    "prompts/jstack-subagents.md",
+    "skills/jstack-dev/SKILL.md",
+    "skills/jstack-audit/SKILL.md",
+    "skills/jstack-loop/SKILL.md",
+    "skills/product-ui-design/SKILL.md",
+    "mcp/jstack/ui/evidence.py",
+    "mcp/jstack/schemas/ui-evidence.v1.schema.json",
+    "mcp/jstack/schemas/ui-objective-result.v1.schema.json",
+    "mcp/jstack/schemas/ui-product-observation.v1.schema.json",
+    "mastery/curriculum.v1.json",
+    "mastery/audit-curriculum.v1.json",
+    "mastery/loop-curriculum.v1.json",
+)
 
 
-def remove_existing_block(config: str) -> str:
-    lines = config.splitlines()
-    output: list[str] = []
-    skip = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped in {"[mcp_servers.gstack]", "[mcp_servers.jstack]"}:
-            skip = True
-            continue
-        if skip and stripped.startswith("[") and stripped not in {"[mcp_servers.gstack.env]", "[mcp_servers.jstack.env]"}:
-            skip = False
-        if skip:
-            continue
-        output.append(line)
-    return "\n".join(output).rstrip() + "\n"
-
-
-def mcp_block() -> str:
-    command = Path(sys.executable).as_posix()
-    return f"""
-[mcp_servers.jstack]
-command = {json.dumps(command)}
-args = [{json.dumps((INSTALL_DIR / "jstack_mcp_server.py").as_posix())}]
-startup_timeout_sec = 30.0
-tool_timeout_sec = 1900.0
-""".strip()
-
-
-def atomic_write_text(path: Path, content: str) -> None:
-    if path.is_symlink():
-        raise RuntimeError(f"Refusing to write through symlink: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.parent / f".{path.name}.jstack-{uuid.uuid4().hex}"
-    temporary.write_text(content, encoding="utf-8")
-    temporary.chmod(0o600)
-    os.replace(temporary, path)
-
-
-def atomic_copytree(source: Path, target: Path) -> None:
-    if target.is_symlink():
-        raise RuntimeError(f"Refusing to replace symlink install target: {target}")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    staging = target.parent / f".{target.name}.jstack-stage-{uuid.uuid4().hex}"
-    backup = target.parent / f".{target.name}.jstack-rollback-{uuid.uuid4().hex}"
-    shutil.copytree(source, staging, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
-    replaced = False
+def _complete_release_layout(repository_root: Path) -> bool:
+    """Recognize a complete release checkout, not an installed MCP subtree."""
     try:
-        if target.exists():
-            os.replace(target, backup)
-            replaced = True
-        os.replace(staging, target)
-        if backup.exists():
-            shutil.rmtree(backup)
-    except Exception:
-        if target.exists() and not target.is_symlink():
-            shutil.rmtree(target)
-        if replaced and backup.exists():
-            os.replace(backup, target)
-        raise
-    finally:
-        if staging.exists():
-            shutil.rmtree(staging)
+        version_path = repository_root / "VERSION"
+        if not version_path.is_file() or version_path.stat().st_size > 128:
+            return False
+        version = version_path.read_text(encoding="utf-8").strip()
+        if not _VERSION_PATTERN.fullmatch(version):
+            return False
+        if any(not (repository_root / relative).is_file() for relative in _RELEASE_LAYOUT_FILES):
+            return False
+        for relative in (
+            "plugin/.codex-plugin/plugin.json",
+            "plugins/j-stack-dev/.codex-plugin/plugin.json",
+            "plugins/jstack-audit/.codex-plugin/plugin.json",
+            "plugins/jstack-full-team/.codex-plugin/plugin.json",
+            "plugins/jstack-loop/.codex-plugin/plugin.json",
+            "plugins/jstack-subagents/.codex-plugin/plugin.json",
+        ):
+            manifest_path = repository_root / relative
+            if manifest_path.stat().st_size > 64_000:
+                return False
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(manifest, dict) or manifest.get("version") != version:
+                return False
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return True
 
 
-def main() -> int:
-    CODEX_HOME.mkdir(parents=True, exist_ok=True)
-    if not CONFIG_PATH.exists():
-        atomic_write_text(CONFIG_PATH, "")
-    if INSTALL_DIR.resolve() != SOURCE_DIR.resolve():
-        atomic_copytree(SOURCE_DIR, INSTALL_DIR)
+def repository_installer() -> Optional[Path]:
+    """Return the trusted checkout installer, never an installed MCP neighbor."""
+    repository_root = SOURCE_DIR.parents[1]
+    installer = repository_root / "scripts" / "install.py"
+    if _complete_release_layout(repository_root):
+        return installer
+    return None
 
-    original = CONFIG_PATH.read_text(encoding="utf-8")
-    backup = CONFIG_PATH.with_suffix(".toml.jstack-mcp-backup")
-    atomic_write_text(backup, original)
 
-    updated = remove_existing_block(original)
-    updated = updated.rstrip() + "\n\n" + mcp_block() + "\n"
-    atomic_write_text(CONFIG_PATH, updated)
-    print(f"Installed jstack MCP server to {INSTALL_DIR}")
-    print(f"Updated Codex config: {CONFIG_PATH}")
-    print(f"Backup written: {backup}")
-    print("Restart Codex or start a new thread for the MCP tools to appear.")
-    return 0
+def main(argv: Optional[list[str]] = None) -> int:
+    installer = repository_installer()
+    if installer is None:
+        print(
+            "This installed MCP copy is not a standalone updater. "
+            "Download or clone an immutable JStack release and run its "
+            "top-level scripts/install.py so every payload and config change "
+            "uses the transactional installer.",
+            file=sys.stderr,
+        )
+        return 2
+    repository_root = installer.parent.parent
+    forwarded = list(sys.argv[1:]) if argv is None else list(argv)
+    if any(argument.startswith("--repo") for argument in forwarded):
+        print(
+            "The MCP compatibility router owns --repo-root; pass installer options only.",
+            file=sys.stderr,
+        )
+        return 2
+    command = [
+        sys.executable,
+        str(installer),
+        "--repo-root",
+        str(repository_root),
+        *forwarded,
+    ]
+    return subprocess.run(command, check=False).returncode
 
 
 if __name__ == "__main__":

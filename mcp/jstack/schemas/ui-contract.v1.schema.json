@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-contract.v1.schema.json",
+  "title": "JStack Product Interface contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "goal",
+    "catalog",
+    "baseline",
+    "detection",
+    "profileResolution",
+    "allowedPaths",
+    "platformExclusions",
+    "platforms",
+    "themes",
+    "viewports",
+    "surfaces",
+    "evidenceMatrix",
+    "requirements",
+    "contractSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.contract.v1"},
+    "goal": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "catalog": {"$ref": "#/$defs/catalogBinding"},
+    "baseline": {"$ref": "#/$defs/baseline"},
+    "detection": {"$ref": "#/$defs/detection"},
+    "profileResolution": {"$ref": "#/$defs/profileResolution"},
+    "allowedPaths": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 500}
+    },
+    "platformExclusions": {
+      "type": "array",
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/platformExclusion"}
+    },
+    "platforms": {"$ref": "#/$defs/platformList"},
+    "themes": {"$ref": "#/$defs/themeList"},
+    "viewports": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/viewport"},
+      "contains": {"properties": {"primary": {"const": true}}, "required": ["primary"]},
+      "minContains": 1,
+      "maxContains": 1
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/surface"}
+    },
+    "evidenceMatrix": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/evidenceCell"}
+    },
+    "requirements": {"$ref": "#/$defs/universalRequirements"},
+    "contractSha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+    "profile": {"type": "string", "enum": ["editorial-calm", "creative-canvas"]},
+    "platform": {
+      "type": "string",
+      "enum": ["web", "webview", "ios", "android", "react-native", "flutter", "electron", "tauri", "macos", "windows", "linux"]
+    },
+    "platformExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "reason"],
+      "properties": {
+        "platform": {"$ref": "#/$defs/platform"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "theme": {"type": "string", "enum": ["light", "dark"]},
+    "state": {
+      "type": "string",
+      "enum": ["normal", "hover", "focus", "pressed", "loading", "empty", "error", "disabled", "selected", "success", "destructive"]
+    },
+    "surfaceKind": {
+      "type": "string",
+      "enum": ["route", "screen", "window", "webview", "canvas", "editor", "timeline", "media-workspace"]
+    },
+    "catalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "sha256"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.catalog.v1"},
+        "version": {"const": "1.0.0"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gitRoot", "commonDir", "gitHead", "projectFingerprint", "treeSha256", "policyDigest"],
+      "properties": {
+        "gitRoot": {"type": "string", "minLength": 1},
+        "commonDir": {"type": "string", "minLength": 1},
+        "gitHead": {"$ref": "#/$defs/gitOid"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "treeSha256": {"$ref": "#/$defs/sha256"},
+        "policyDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "matchedFiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "detectionPlatform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "matchedFiles", "markers"],
+      "properties": {
+        "id": {"$ref": "#/$defs/platform"},
+        "matchedFiles": {"$ref": "#/$defs/matchedFiles"},
+        "markers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "android-view", "angular", "appkit", "browser-dom", "compose-path", "electron",
+              "electron-path", "flutter", "flutter-path", "gtk-qt", "jsx", "linux-ui",
+              "lit-web-component", "mac-ui", "react", "react-native", "react-native-path", "repository-context",
+              "repository-context-asset", "swift-ui-path", "swiftui-cross-platform", "tauri",
+              "tauri-path", "uikit", "web-asset", "web-component", "web-route", "webview",
+              "windows-app-sdk", "windows-class", "windows-ui"
+            ]
+          }
+        }
+      }
+    },
+    "systemHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["marker", "matchedFiles"],
+      "properties": {
+        "marker": {"type": "string", "enum": ["design-tokens", "storybook", "tailwind", "theme", "component-library"]},
+        "matchedFiles": {"$ref": "#/$defs/matchedFiles"}
+      }
+    },
+    "creativeHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "matchedFiles"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["canvas", "editor", "timeline", "media-workspace"]},
+        "matchedFiles": {"$ref": "#/$defs/matchedFiles"}
+      }
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "applicable",
+        "inspectedFileCount",
+        "candidateFileCount",
+        "inspectionTruncated",
+        "platforms",
+        "establishedSystemHints",
+        "creativeSurfaceHints",
+        "defaultProfileSuggestion",
+        "contentReturned",
+        "detectionSha256"
+      ],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.detection.v1"},
+        "applicable": {"type": "boolean"},
+        "inspectedFileCount": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "candidateFileCount": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "inspectionTruncated": {"const": false},
+        "platforms": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/detectionPlatform"}
+        },
+        "establishedSystemHints": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/systemHint"}
+        },
+        "creativeSurfaceHints": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/creativeHint"}
+        },
+        "defaultProfileSuggestion": {"$ref": "#/$defs/profile"},
+        "contentReturned": {"const": false},
+        "detectionSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "existingSystemEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pathSha256", "sha256", "size"],
+      "properties": {
+        "pathSha256": {"$ref": "#/$defs/sha256"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 10000000}
+      }
+    },
+    "existingSystemPresent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "id", "evidence", "supportedThemes"],
+      "properties": {
+        "present": {"const": true},
+        "id": {"type": "string", "minLength": 1, "maxLength": 160},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/existingSystemEvidence"}
+        },
+        "supportedThemes": {"$ref": "#/$defs/themeList"}
+      }
+    },
+    "existingSystemAbsent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "id", "evidence", "supportedThemes"],
+      "properties": {
+        "present": {"const": false},
+        "id": {"type": "null"},
+        "evidence": {"type": "array", "maxItems": 0},
+        "supportedThemes": {"type": "array", "maxItems": 0}
+      }
+    },
+    "surfaceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surfaceId", "profile"],
+      "properties": {
+        "surfaceId": {"$ref": "#/$defs/identifier"},
+        "profile": {"$ref": "#/$defs/profile"}
+      }
+    },
+    "profileResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["precedenceSource", "defaultProfile", "surfaceProfiles", "existingSystem", "redesignApproved", "redesignApprovalReferenceSha256"],
+      "properties": {
+        "precedenceSource": {
+          "type": "string",
+          "enum": ["explicit-user-direction", "established-project-system", "domain-default", "editorial-fallback"]
+        },
+        "defaultProfile": {"$ref": "#/$defs/profile"},
+        "surfaceProfiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/surfaceProfile"}
+        },
+        "existingSystem": {
+          "oneOf": [
+            {"$ref": "#/$defs/existingSystemPresent"},
+            {"$ref": "#/$defs/existingSystemAbsent"}
+          ]
+        },
+        "redesignApproved": {"type": "boolean"},
+        "redesignApprovalReferenceSha256": {
+          "oneOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "platformList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/platform"}
+    },
+    "themeList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/theme"}
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "width", "height", "dpr", "primary"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "width": {"type": "integer", "minimum": 240, "maximum": 7680},
+        "height": {"type": "integer", "minimum": 240, "maximum": 7680},
+        "dpr": {"type": "number", "minimum": 1, "maximum": 4},
+        "primary": {"type": "boolean"}
+      }
+    },
+    "stateList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/state"},
+      "contains": {"const": "normal"},
+      "minContains": 1,
+      "maxContains": 1
+    },
+    "stateExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason"],
+      "properties": {
+        "state": {"$ref": "#/$defs/state"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "locator", "critical", "states", "stateExclusions", "platforms"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "kind": {"$ref": "#/$defs/surfaceKind"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 500},
+        "critical": {"type": "boolean"},
+        "states": {"$ref": "#/$defs/stateList"},
+        "stateExclusions": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/stateExclusion"}
+        },
+        "platforms": {"$ref": "#/$defs/platformList"}
+      }
+    },
+    "evidenceCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surfaceId", "platform", "theme", "viewportId", "state"],
+      "properties": {
+        "surfaceId": {"$ref": "#/$defs/identifier"},
+        "platform": {"$ref": "#/$defs/platform"},
+        "theme": {"$ref": "#/$defs/theme"},
+        "viewportId": {"$ref": "#/$defs/identifier"},
+        "state": {"$ref": "#/$defs/state"}
+      }
+    },
+    "motionDurations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [{"const": 120}, {"const": 180}, {"const": 240}],
+      "items": false
+    },
+    "themeRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["greenfieldRequired", "existingProductRule"],
+      "properties": {
+        "greenfieldRequired": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [{"const": "light"}, {"const": "dark"}],
+          "items": false
+        },
+        "existingProductRule": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    },
+    "requirementList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "universalRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preserveAndExtend",
+        "unsolicitedRedesignAllowed",
+        "spacingBasePx",
+        "separatorWidthPx",
+        "radiusRangePx",
+        "motionDurationMs",
+        "negativeLetterSpacingAllowed",
+        "platformNativeSemanticsRequired",
+        "themes",
+        "interaction",
+        "accessibility",
+        "quality",
+        "compositionGuardrails"
+      ],
+      "properties": {
+        "preserveAndExtend": {"const": true},
+        "unsolicitedRedesignAllowed": {"const": false},
+        "spacingBasePx": {"const": 4},
+        "separatorWidthPx": {"const": 1},
+        "radiusRangePx": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [{"const": 4}, {"const": 12}],
+          "items": false
+        },
+        "motionDurationMs": {"$ref": "#/$defs/motionDurations"},
+        "negativeLetterSpacingAllowed": {"const": false},
+        "platformNativeSemanticsRequired": {"const": true},
+        "themes": {"$ref": "#/$defs/themeRequirements"},
+        "interaction": {"$ref": "#/$defs/requirementList"},
+        "accessibility": {"$ref": "#/$defs/requirementList"},
+        "quality": {"$ref": "#/$defs/requirementList"},
+        "compositionGuardrails": {"$ref": "#/$defs/requirementList"}
+      }
+    }
+  }
+}

@@ -49,7 +49,10 @@ approvals, or release authority. Each routed role, including the Lead, returns
 a `jstack.specialist.result.v1` object and metadata-only
 `jstack.specialist.telemetry.v1`. The Lead calls `jstack_specialist_result` for
 each exact role/capability assignment and calls
-`jstack_specialist_handoff_check` before completion. Raw prompts, messages,
+`jstack_specialist_handoff_check` before completion, passing the routed
+capability plan's exact `selectionDigest` as `capability_selection_digest` to
+both tools. The digest is mandatory when ordinary and Product Interface
+routing share a role roster. Raw prompts, messages,
 tool arguments, command/model output, source contents, and secrets are
 forbidden in telemetry. Missing, stale, partial, conflicting, permission-unsafe,
 or capability-drifted receipts block handoff; contradictions need an explicit
