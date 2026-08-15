@@ -218,29 +218,42 @@ jobs:
               "\nAssert-JStackPrivateAcl -Path $env:JSTACK_ACL_PATH\n"
           )
           encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-          result = subprocess.run(
-              [
-                  "powershell.exe",
-                  "-NoLogo",
-                  "-NoProfile",
-                  "-NonInteractive",
-                  "-EncodedCommand",
-                  encoded,
-              ],
-              stdin=subprocess.DEVNULL,
-              stdout=subprocess.PIPE,
-              stderr=subprocess.PIPE,
-              env=dict(os.environ),
-              timeout=30,
-              check=False,
-          )
-          print(f"JStack exact product ACL probe exit: {result.returncode}")
-          for label, payload in (("stdout", result.stdout), ("stderr", result.stderr)):
-              if payload:
-                  rendered = payload[:4096].decode("utf-8", errors="replace")
-                  print(f"JStack exact product ACL probe {label}: {rendered}")
-          if result.returncode != 0:
-              raise SystemExit(result.returncode or 1)
+          command = [
+              "powershell.exe",
+              "-NoLogo",
+              "-NoProfile",
+              "-NonInteractive",
+              "-EncodedCommand",
+              encoded,
+          ]
+          for probe_label, probe_environment in (
+              ("cloned-environment", dict(os.environ)),
+              ("inherited-environment", None),
+          ):
+              options = {} if probe_environment is None else {"env": probe_environment}
+              result = subprocess.run(
+                  command,
+                  stdin=subprocess.DEVNULL,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+                  timeout=30,
+                  check=False,
+                  **options,
+              )
+              print(
+                  f"JStack exact product ACL probe {probe_label} exit: "
+                  f"{result.returncode}"
+              )
+              for stream_label, payload in (
+                  ("stdout", result.stdout),
+                  ("stderr", result.stderr),
+              ):
+                  if payload:
+                      rendered = payload[:4096].decode("utf-8", errors="replace")
+                      print(
+                          f"JStack exact product ACL probe {probe_label} "
+                          f"{stream_label}: {rendered}"
+                      )
           '@
           $productProbe | python -
           if ($LASTEXITCODE -ne 0) {
