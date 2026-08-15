@@ -993,7 +993,12 @@ class ImageBuildLifecycleTests(unittest.TestCase):
                     matrix["entries"][0]["requiredQualifiedToolNames"],
                 ),
             )
-            with mock.patch(
+            with mock.patch.object(
+                image_build_runtime.sys, "platform", "darwin"
+            ), mock.patch(
+                "tools.proof_plane.image_build_runtime.platform.machine",
+                return_value="arm64",
+            ), mock.patch(
                 "tools.proof_plane.image_build_runtime.inspect_apple_container_runtime",
                 return_value=identity,
             ), mock.patch(
@@ -1191,7 +1196,12 @@ class ImageBuildLifecycleTests(unittest.TestCase):
                 version="1.2.2",
                 binary_sha256=hashlib.sha256(fixture.runtime.read_bytes()).hexdigest(),
             )
-            with mock.patch(
+            with mock.patch.object(
+                image_build_runtime.sys, "platform", "darwin"
+            ), mock.patch(
+                "tools.proof_plane.image_build_runtime.platform.machine",
+                return_value="arm64",
+            ), mock.patch(
                 "tools.proof_plane.image_build_runtime.inspect_apple_container_runtime",
                 return_value=identity,
             ), mock.patch(
@@ -1269,7 +1279,12 @@ class ImageBuildLifecycleTests(unittest.TestCase):
                     version="1.2.2",
                     binary_sha256=hashlib.sha256(fixture.runtime.read_bytes()).hexdigest(),
                 )
-                with mock.patch(
+                with mock.patch.object(
+                    image_build_runtime.sys, "platform", "darwin"
+                ), mock.patch(
+                    "tools.proof_plane.image_build_runtime.platform.machine",
+                    return_value="arm64",
+                ), mock.patch(
                     "tools.proof_plane.image_build_runtime.inspect_apple_container_runtime",
                     return_value=identity,
                 ), mock.patch(

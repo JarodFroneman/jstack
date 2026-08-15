@@ -250,12 +250,15 @@ class TaskArtifactLifecycleTests(unittest.TestCase):
             self.assertEqual(normalized["ledgerEventCount"], 1)
             self.assertEqual(normalized["quarantinedBaselineWorkspaceCount"], 1)
 
-    def test_current_private_state_reports_zero_of_18_without_inventing_inputs(self):
-        private_root = ROOT / ".jstack-evals" / "beta1-codex-proof-study"
-        status = lifecycle.task_artifact_readiness(
-            private_root=private_root,
-            repo_root=ROOT,
-        )
+    def test_empty_private_state_reports_zero_of_18_without_inventing_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            private_root = lifecycle._private_root(
+                Path(temporary).resolve(), create_children=True
+            )
+            status = lifecycle.task_artifact_readiness(
+                private_root=private_root,
+                repo_root=ROOT,
+            )
         self.assertEqual(status["expectedTaskCount"], 18)
         self.assertEqual(status["readyTaskCount"], 0)
         self.assertFalse(status["studyReady"])

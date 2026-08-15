@@ -244,7 +244,12 @@ python3 -m unittest discover -s tests -v
 python3 mcp/jstack/smoke_test.py
 ```
 
-On Windows, replace `python3` with `python` where required.
+On Windows, replace `python3` with `python` where required. The complete
+`unittest discover` suite includes the Apple/POSIX Proof Plane authority and
+runs on macOS and Linux. Windows CI instead runs every portable product test,
+the portable Proof Plane contract tests in `tests/test_evals.py`, the corpus
+lock check, and the MCP smoke test; see [the CI workflow](.github/workflows/ci.yml)
+for the exact deterministic module selection.
 
 ### 3. Install In Codex
 
@@ -459,10 +464,13 @@ python3 -m unittest discover -s tests -v
 python3 mcp/jstack/smoke_test.py
 ```
 
-CI runs the same release-critical checks on Ubuntu, macOS, and Windows with
-Python 3.9 and 3.12, including capability-routing, receipt-tamper, privacy,
-artifact-parity, installation, orchestration, alpha.9 contract compatibility,
-Proof Plane integrity, and permanent product-boundary tests.
+CI runs the same compilation, generated-artifact, compatibility,
+product-boundary, corpus-lock, and MCP-smoke checks on Ubuntu, macOS, and
+Windows with Python 3.9 and 3.12. Ubuntu and macOS run the complete unit and
+adversarial suite, including the POSIX/macOS Proof Plane authority. Windows
+runs the portable product suite plus portable Proof Plane contract/integrity
+coverage; Apple-container execution and POSIX ownership, mode, link, socket,
+and SSH authority tests are not claimed as Windows-compatible.
 
 ## Documentation
 
