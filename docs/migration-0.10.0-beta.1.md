@@ -46,8 +46,8 @@ candidate. Use a disposable `CODEX_HOME` and the transactional installer:
 
 ```bash
 candidate_codex_home="$(mktemp -d)"
-CODEX_HOME="$candidate_codex_home" python3 scripts/install.py
-CODEX_HOME="$candidate_codex_home" python3 scripts/installed_mcp_smoke.py
+python3 scripts/install.py --codex-home "$candidate_codex_home"
+python3 "$candidate_codex_home/mcp/jstack/smoke_test.py"
 ```
 
 Delete or archive the disposable directory after inspection. A local
