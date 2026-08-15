@@ -2,4 +2,3 @@
 
 This package is intentionally outside the installed MCP and plugin artifacts.
 """
-

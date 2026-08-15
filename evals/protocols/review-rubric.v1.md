@@ -31,6 +31,6 @@ distinct adjudicator, and any disposition disagreement has been adjudicated.
 If no final vector is established, the run stays unscored and the gap report
 names the blocker.
 
-Post-release incidents and rollbacks are unavailable in this pre-release study,
-not zero. Reviewers must not infer avoided production incidents or universal
-quality from a benchmark result.
+Post-release incidents and rollbacks are unavailable in this pre-validation
+study, not zero. Reviewers must not infer avoided production incidents or
+universal quality from a benchmark result.

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0-beta.1 - Unreleased code-complete candidate
+## 0.10.0-beta.1 - 2026-08-15 - Unvalidated prerelease
 
 ### Added
 
@@ -19,8 +19,9 @@
   non-authorizing preregistration-candidate builder with crash-safe private and
   public publication receipts. Neither surface installs the runtime, creates a
   tag, starts a study attempt, or publishes a release implicitly.
-- Added the Beta.1 migration and rollback guide and ADR 0021's explicit
-  distinction between candidate version identity and release authorization.
+- Added the Beta.1 migration and rollback guide, ADR 0021's validation
+  contract, and ADR 0022's explicit unvalidated-prerelease distribution
+  boundary.
 
 ### Changed
 
@@ -36,12 +37,13 @@
 
 ### Security
 
-- The code-complete candidate is not a validated release. The 18 image
+- This prerelease is not a validated study result. The 18 image
   qualifications, 216 attempts, 432 independent human reviews, final evidence
-  signature, release, publication, deployment, and global installation remain
-  deliberately deferred and cannot be inferred from passing product tests.
+  signature, scoring, and validated/stable promotion remain deliberately
+  deferred and cannot be inferred from publication, installation, or passing
+  product tests.
 - No test fixture, self-digest, model-authored review, or partial study output
-  can satisfy the accepted Beta.1 release gate.
+  can satisfy the accepted Beta.1 validation gate.
 
 ## 0.10.0-alpha.10 - 2026-08-12
 

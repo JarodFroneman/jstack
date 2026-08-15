@@ -1,6 +1,7 @@
 # ADR 0021: Beta.1 Codex Proof Study
 
-- Status: Accepted; release gate not yet satisfied
+- Status: Accepted validation contract; prerelease distribution timing amended
+  by [ADR 0022](0022-beta1-unvalidated-prerelease-distribution.md)
 - Date: 2026-08-12
 - Target release: 0.10.0-beta.1
 
@@ -76,11 +77,13 @@ study as a result.
     suppressed from the Beta.1 report and never interpreted as measured zero.
 12. The studied candidate bytes may identify themselves as
     `0.10.0-beta.1` so registration, MCP initialization, packages, and the
-    eventual release all bind one exact version identity. Do not create the
-    release tag, publish, deploy, describe the candidate as validated, or
-    claim uplift until all 18 images qualify, all 216 attempts terminate, all
-    432 primary human reviews and any adjudications verify, the exact scorer
-    succeeds, and the full release gates pass.
+    eventual evidence all bind one exact version identity. ADR 0022 permits
+    the exact bytes to be tagged, published as an explicitly unvalidated
+    prerelease, and installed before the study. Do not describe the candidate
+    as validated, promote it as a stable production release, publish study
+    results, or claim uplift until all 18 images qualify, all 216 attempts
+    terminate, all 432 primary human reviews and any adjudications verify, the
+    exact scorer succeeds, and the full validation gates pass.
 
 ## Consequences
 
@@ -90,10 +93,13 @@ study as a result.
   universal zero-day detection, production readiness, or results for Claude or
   other untested hosts.
 - Installing a container runtime and recruiting the human review panel are
-  external prerequisites. Missing either is a release blocker, not a waivable
-  gap or a reason to substitute synthetic evidence.
-- Installer lifecycle, portable evidence bridges, signed distribution
-  artifacts, SBOM/provenance, and host-parity work remain Beta.2 scope.
+  external validation prerequisites. Missing either blocks validation and
+  every study/result/uplift claim; ADR 0022 permits only an explicitly
+  unvalidated prerelease distribution and never synthetic evidence.
+- Additional installer lifecycle hardening, portable evidence bridges, signed
+  distribution artifacts, SBOM/provenance, and host-parity work remain Beta.2
+  scope. ADR 0022 authorizes Beta.1's existing exact-tag source installation
+  and dedicated-plugin Layout B with rollback and byte-parity verification.
 
 ## Rejected Alternatives
 
@@ -106,5 +112,6 @@ study as a result.
   into paired conditions and later repetitions.
 - Self-asserted or AI-generated reviews: rejected because they do not satisfy
   the independent human-review protocol.
-- Publishing a partial denominator or a protocol-only Beta.1: rejected because
-  the selected release gate is the full 216-run study.
+- Publishing a partial denominator or presenting a protocol-only Beta.1 as a
+  validated result: rejected because the selected validation gate is the full
+  216-run study. ADR 0022 separately permits distribution with no result.

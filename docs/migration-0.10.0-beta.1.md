@@ -1,12 +1,13 @@
-# Migrating To The JStack v0.10.0-beta.1 Candidate
+# Migrating To The JStack v0.10.0-beta.1 Unvalidated Prerelease
 
 ## Status
 
-This document describes the code-complete Beta.1 candidate. It is not a
-release announcement. The accepted 18-image, 216-attempt, 432-review study and
-the final evidence, release, publication, deployment, and global-installation
-gates remain deferred. Do not create or consume a `v0.10.0-beta.1` release tag
-until ADR 0021 is satisfied.
+This document describes the explicitly unvalidated Beta.1 prerelease. ADR 0022
+permits the exact `v0.10.0-beta.1` tag, GitHub prerelease, and exact-version
+Codex installation before the Proof Study runs. It is not a validation
+announcement: ADR 0021's 18-image, 216-attempt, 432-review, scoring, and final
+evidence gates remain pending, and no uplift or production-readiness claim is
+enabled.
 
 ## Candidate changes
 
@@ -50,7 +51,18 @@ CODEX_HOME="$candidate_codex_home" python3 scripts/installed_mcp_smoke.py
 ```
 
 Delete or archive the disposable directory after inspection. A local
-candidate installation does not satisfy the Beta.1 study or release gate.
+candidate installation does not satisfy the Beta.1 study or validation gate.
+
+## Unvalidated global installation
+
+Install globally only from the exact annotated `v0.10.0-beta.1` GitHub
+prerelease after its release checks pass. Preserve the previous shared MCP,
+five dedicated plugin sources and caches, Codex configuration, marketplace
+state, and `~/.jstack` state as one rollback unit. Follow Layout B in
+`docs/installation.md`, keep the umbrella plugin uninstalled, and verify that
+all five plugins plus MCP initialization report `0.10.0-beta.1` with exactly
+52 canonical tools. Installation changes availability only; it does not
+satisfy or waive the deferred study.
 
 ## Private study readiness (deferred)
 
@@ -105,10 +117,10 @@ Rollback invalidates candidate-bound QA, security, audit, loop, program,
 launch, and release receipts. Preserve private `.jstack-evals` evidence; never
 rewrite or reinterpret it under the older runtime.
 
-## Deferred release work
+## Deferred validation work
 
-Beta.1 remains unreleased until all 18 images qualify, all 216 attempts reach
+Beta.1 remains unvalidated until all 18 images qualify, all 216 attempts reach
 write-once terminals, all 432 primary human signatures and any adjudications
-verify, the locked scorer and independent evidence verifier succeed, and the
-full security/review/release gates pass. Beta.2 work requires a separate
-explicit approval after the Beta.1 code-complete milestone.
+verify, and the locked scorer plus independent evidence verifier succeed.
+Until then, the prerelease must retain its unvalidated label and publish no
+study or uplift result. Beta.2 work requires a separate explicit approval.

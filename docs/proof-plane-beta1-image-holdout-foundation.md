@@ -88,8 +88,10 @@ Before final images can qualify, maintainers still need to produce and review:
    report the canary and tool versions; and
 8. all controller, 216-run terminal, sealed-grading, and human-review gates.
 
-No task descriptor, registration, version, release, or uplift claim may use
-this declaration foundation as a substitute for those produced artifacts.
+No task descriptor, registration, study result, validation, release-readiness,
+or uplift claim may use this declaration foundation as a substitute for those
+produced artifacts. ADR 0022 permits an explicitly unvalidated product
+prerelease, but that distribution does not alter this evidence boundary.
 
 ## Implemented admission integrations
 

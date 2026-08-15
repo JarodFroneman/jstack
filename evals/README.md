@@ -30,9 +30,11 @@ another.
 
 ## Beta.1 Study Boundary
 
-Beta.1 is the first real Codex study milestone. Its release gate is deliberately
-larger than its implementation gate: runner code and task fixtures are not a
-result. A release requires all of the following to exist and verify together:
+Beta.1 is the first real Codex study milestone. Its study-validation and claim
+gate is deliberately larger than its implementation and distribution gate:
+runner code and task fixtures are not a result. A validated study or any
+performance, uplift, or release-readiness claim requires all of the following
+to exist and verify together:
 
 - 18 qualified tasks across the six declared families;
 - one immutable, published, preregistered 216-cell execution plan;
@@ -65,6 +67,10 @@ The current maintainer tooling must fail closed while a qualified container VM,
 final task images, immutable registration, private holdouts, or the human
 review roster is absent. See [ADR 0021](../docs/adr/0021-beta1-codex-proof-study.md)
 and the [reviewed task-artifact lifecycle](../docs/proof-plane-beta1-task-artifact-lifecycle.md).
+ADR 0022 permits the exact Beta.1 product bytes to be distributed separately
+as an explicitly unvalidated GitHub prerelease and Codex installation. That
+distribution does not complete this study, populate its denominator, or turn
+its absent evidence into a result.
 
 ## Local Verification
 
