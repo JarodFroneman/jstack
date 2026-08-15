@@ -5,7 +5,7 @@
   "files": [
     {
       "path": "corpus/public/manifest.v1.json",
-      "sha256": "1ced700b028f40d4ca41b943317ddf5c0dae28ec6c677a4eb99c298aa109f803"
+      "sha256": "c37f55523bc7b2be8ae2c9f922686bd32f6dbefbcdb8d1f8615ab621c00955ca"
     },
     {
       "path": "fixtures/mock/scenario.v1.json",
@@ -13,7 +13,7 @@
     },
     {
       "path": "runner/contracts.py",
-      "sha256": "653f3d71b5e6e1f34fc337af874a1254f8e15e631ed6c7d0f0b1e17eb347d540"
+      "sha256": "37016af91004ac6abd7f09c1df81f7a7f9c988c165e9a5addeb7ff457998caad"
     },
     {
       "path": "runner/mock.py",

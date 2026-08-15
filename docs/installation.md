@@ -26,6 +26,13 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
+> **Beta.1 prerelease boundary:** `v0.10.0-beta.1` is an unvalidated
+> prerelease. Install it only from the exact immutable release tag, retain a
+> complete rollback of the previous installation, and verify the installed
+> bytes and tool surface. The Proof Plane is not installed, and installing
+> Beta.1 does not satisfy or replace its deferred 216-run study and independent
+> human reviews.
+
 ## Host Support
 
 | Host | Support level | Boundary |
@@ -214,7 +221,7 @@ Expected dedicated layout:
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-alpha.10`);
+  prerelease, `0.10.0-beta.1`);
 - `tools/list` includes 52 canonical `jstack_*` tools, including
   `jstack_context_readiness`, `jstack_performance_capture`, and
   `jstack_adversarial_capture`.
@@ -229,6 +236,10 @@ Expected dedicated layout:
 5. Replace the shared MCP and reinstall the selected plugin layout.
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
+
+For `v0.10.0-beta.1`, also confirm that GitHub marks the release as a
+prerelease and that the checked-out tag resolves to the release commit before
+staging any global files.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
 during a routine upgrade. An upgrade from v0.8.1 or earlier may leave the retired

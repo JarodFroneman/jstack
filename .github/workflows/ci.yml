@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: "22"
       - name: Compile
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/jstack-pycache
         run: python -m compileall -q mcp scripts tests evals
       - name: Verify generated artifacts
         run: python scripts/sync_artifacts.py --check
@@ -33,7 +35,32 @@ jobs:
         run: python scripts/check_product_boundaries.py
       - name: Verify Proof Plane corpus lock
         run: python -m evals.runner.cli verify-lock
-      - name: Unit and adversarial tests
-        run: python -m unittest discover -s tests -v
+      # Proof Plane's trust-boundary tests intentionally exercise POSIX/macOS
+      # ownership, modes, sockets, SSH, and absolute-path semantics. Linux and
+      # macOS run that full suite; Windows still verifies the portable product.
+      - name: Full unit and adversarial tests (Linux/macOS)
+        if: runner.os != 'Windows'
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          chmod 700 "$TMPDIR"
+          python -m unittest discover -s tests -v
+      - name: Portable product tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $modules = @(
+            Get-ChildItem -Path tests -Filter 'test_*.py' -File |
+              Where-Object { $_.Name -notlike 'test_proof_plane_*' } |
+              Sort-Object -Property Name |
+              ForEach-Object { "tests.$($_.BaseName)" }
+          )
+          if ($modules.Count -eq 0) {
+            throw 'No portable Windows test modules were discovered.'
+          }
+          python -m unittest -v @modules
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
       - name: Independent MCP smoke test
         run: python mcp/jstack/smoke_test.py

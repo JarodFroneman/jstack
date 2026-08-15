@@ -1,0 +1,373 @@
+#!/usr/bin/python3
+"""Verify a Beta.1 image runtime and emit its exact qualified tool report.
+
+Installed verbatim at ``/usr/local/bin/jstack-proof-canary-launcher``.  The
+launcher accepts only the fixed argv emitted by the trusted host controller;
+it never accepts an executable selector other than the two required canonical
+paths, never invokes a shell, and never inherits the caller's environment.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Dict, List, Mapping, Sequence, Tuple
+
+
+VERSION = "jstack-proof-canary-launcher-v1"
+MAX_ARTIFACT_BYTES = 100_000_000
+MAX_OUTPUT_BYTES = 1_000_000
+TIMEOUT_SECONDS = 60
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+TOOL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+
+LAUNCHER_PATH = Path("/usr/local/bin/jstack-proof-canary-launcher")
+TOOL_REPORT_PATH = Path("/usr/local/bin/jstack-proof-tool-report")
+CANARY_PATH = Path("/usr/local/bin/jstack-proof-canary")
+GRADER_PATH = Path("/usr/local/bin/jstack-proof-grade")
+JSTACK_SERVER_PATH = Path("/opt/jstack/jstack_mcp_server.py")
+JSTACK_TOOLS_PATH = Path("/opt/jstack/jstack_mcp_tools.json")
+
+BINDING_TOOL_NAMES = frozenset(
+    (
+        "jstack-proof-canary-version",
+        "jstack-proof-canary-sha256",
+        "jstack-proof-canary-launcher-sha256",
+        "jstack-proof-tool-report-sha256",
+        "jstack-proof-grader-version",
+        "jstack-proof-grader-sha256",
+        "jstack-proof-runtime-sha256",
+        "jstack-mcp-server-sha256",
+        "jstack-mcp-tools-sha256",
+        "jstack-mcp-tool-count",
+    )
+)
+PROBE_TOOL_NAMES = frozenset(
+    (
+        "bubblewrap",
+        "bun",
+        "cc",
+        "cmake",
+        "coreutils",
+        "ctest",
+        "dotnet",
+        "gcc",
+        "git",
+        "java",
+        "make",
+        "maven",
+        "node",
+        "npm",
+        "python",
+        "sqlite",
+        "uv",
+    )
+)
+ALLOWED_TOOL_NAMES = frozenset(BINDING_TOOL_NAMES | PROBE_TOOL_NAMES)
+INTERNAL_PREREQUISITES = frozenset(
+    BINDING_TOOL_NAMES | {"bubblewrap", "coreutils", "git", "python"}
+)
+VALUE_OPTIONS = (
+    "--tool-report",
+    "--canary",
+    "--expected-canary-sha256",
+    "--expected-launcher-sha256",
+    "--expected-tool-report-sha256",
+    "--runtime-sha256",
+    "--grader-sha256",
+    "--jstack-mcp-server-sha256",
+    "--jstack-mcp-tools-sha256",
+    "--jstack-mcp-tool-count",
+)
+
+
+class LauncherError(Exception):
+    """Closed, user-displayable launcher failure."""
+
+
+def _canonical_bytes(value: object) -> bytes:
+    try:
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise LauncherError("qualification output could not be encoded canonically") from exc
+
+
+def _sha256(value: object, field: str) -> str:
+    if not isinstance(value, str) or SHA256_RE.fullmatch(value) is None:
+        raise LauncherError("%s must be one lowercase SHA-256 digest" % field)
+    return value
+
+
+def _stable_file_digest(path: Path, field: str, *, executable: bool) -> str:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise LauncherError("%s is absent" % field) from exc
+    if (
+        stat.S_ISLNK(before.st_mode)
+        or not stat.S_ISREG(before.st_mode)
+        or before.st_size < 1
+        or before.st_size > MAX_ARTIFACT_BYTES
+        or (before.st_mode & 0o022) != 0
+        or (executable and not os.access(str(path), os.X_OK))
+    ):
+        raise LauncherError("%s is not an immutable bounded regular artifact" % field)
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        descriptor = os.open(str(path), flags)
+    except OSError as exc:
+        raise LauncherError("%s could not be opened safely" % field) from exc
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not os.path.samestat(before, opened):
+            raise LauncherError("%s changed while it was opened" % field)
+        digest = hashlib.sha256()
+        total = 0
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_ARTIFACT_BYTES:
+                raise LauncherError("%s exceeds the artifact byte limit" % field)
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        shape = lambda item: (
+            item.st_dev,
+            item.st_ino,
+            item.st_mode,
+            item.st_size,
+            getattr(item, "st_mtime_ns", int(item.st_mtime * 1_000_000_000)),
+            getattr(item, "st_ctime_ns", int(item.st_ctime * 1_000_000_000)),
+        )
+        if shape(opened) != shape(after):
+            raise LauncherError("%s changed while it was hashed" % field)
+    finally:
+        os.close(descriptor)
+    try:
+        current = path.lstat()
+    except OSError as exc:
+        raise LauncherError("%s changed after it was hashed" % field) from exc
+    if stat.S_ISLNK(current.st_mode) or not os.path.samestat(after, current):
+        raise LauncherError("%s changed after it was hashed" % field)
+    return digest.hexdigest()
+
+
+def _parse_arguments(argv: Sequence[str]) -> Tuple[Dict[str, str], Tuple[str, ...]]:
+    values: Dict[str, str] = {}
+    required: List[str] = []
+    index = 0
+    while index < len(argv):
+        option = argv[index]
+        if option not in VALUE_OPTIONS and option != "--required-tool":
+            raise LauncherError("unknown launcher argument %r" % option)
+        if index + 1 >= len(argv):
+            raise LauncherError("launcher option %s is missing its value" % option)
+        value = argv[index + 1]
+        if not isinstance(value, str) or not value or value.startswith("--") or "\x00" in value:
+            raise LauncherError("launcher option %s has an invalid value" % option)
+        if option == "--required-tool":
+            required.append(value)
+        else:
+            if option in values:
+                raise LauncherError("launcher option %s was supplied more than once" % option)
+            values[option] = value
+        index += 2
+    if set(values) != set(VALUE_OPTIONS):
+        raise LauncherError("launcher arguments omit a required immutable binding")
+    if values["--tool-report"] != str(TOOL_REPORT_PATH) or values["--canary"] != str(CANARY_PATH):
+        raise LauncherError("launcher executable paths differ from the frozen image paths")
+    if not required or len(required) > len(ALLOWED_TOOL_NAMES) or len(set(required)) != len(required):
+        raise LauncherError("launcher required-tool set is empty, duplicated, or oversized")
+    if any(TOOL_RE.fullmatch(name) is None or name not in ALLOWED_TOOL_NAMES for name in required):
+        raise LauncherError("launcher required-tool set contains an unknown name")
+    selected = frozenset(required)
+    if not INTERNAL_PREREQUISITES.issubset(selected):
+        missing = sorted(INTERNAL_PREREQUISITES - selected)
+        raise LauncherError("launcher omits internal prerequisite(s): %s" % ", ".join(missing))
+    return values, tuple(sorted(required))
+
+
+def _bounded_run(argv: Sequence[str], *, expected_stdout: bytes = None) -> Tuple[bytes, bytes]:
+    environment = {
+        "HOME": "/tmp/home",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+    }
+    try:
+        with tempfile.TemporaryFile(dir="/tmp") as stdout_file, tempfile.TemporaryFile(
+            dir="/tmp"
+        ) as stderr_file:
+            try:
+                process = subprocess.run(
+                    list(argv),
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    cwd="/workspace",
+                    env=environment,
+                    timeout=TIMEOUT_SECONDS,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise LauncherError("qualification subprocess failed to execute") from exc
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read(MAX_OUTPUT_BYTES + 1)
+            stderr = stderr_file.read(MAX_OUTPUT_BYTES + 1)
+    except OSError as exc:
+        raise LauncherError("launcher could not create bounded capture files") from exc
+    if process.returncode != 0 or len(stdout) + len(stderr) > MAX_OUTPUT_BYTES:
+        raise LauncherError("qualification subprocess failed or exceeded its output limit")
+    if stderr:
+        raise LauncherError("qualification subprocess emitted stderr")
+    if expected_stdout is not None and stdout != expected_stdout:
+        raise LauncherError("isolation canary output differs from the frozen success record")
+    return stdout, stderr
+
+
+def _parse_report(raw: bytes, required: Sequence[str]) -> Dict[str, str]:
+    def reject_duplicates(pairs: Sequence[Tuple[str, object]]) -> Dict[str, object]:
+        result: Dict[str, object] = {}
+        for name, value in pairs:
+            if name in result:
+                raise LauncherError("tool report contains a duplicate JSON key")
+            result[name] = value
+        return result
+
+    def reject_constant(value: str) -> None:
+        raise LauncherError("tool report contains non-finite JSON")
+
+    try:
+        value = json.loads(
+            raw.decode("utf-8", errors="strict"),
+            object_pairs_hook=reject_duplicates,
+            parse_constant=reject_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, LauncherError, RecursionError) as exc:
+        raise LauncherError("tool reporter did not emit bounded UTF-8 JSON") from exc
+    if not isinstance(value, dict) or raw != _canonical_bytes(value) + b"\n":
+        raise LauncherError("tool reporter output is not canonical JSON plus LF")
+    if set(value) != set(required):
+        raise LauncherError("tool reporter output differs from the exact requested tool set")
+    for name, version in value.items():
+        if (
+            not isinstance(name, str)
+            or TOOL_RE.fullmatch(name) is None
+            or not isinstance(version, str)
+            or not version
+            or version != version.strip()
+            or len(version) > 128
+            or any(ord(character) < 32 or ord(character) == 127 for character in version)
+        ):
+            raise LauncherError("tool reporter emitted an invalid exact version")
+    return dict(sorted(value.items()))
+
+
+def launch(
+    argv: Sequence[str],
+    *,
+    paths: Mapping[str, Path] = None,
+    runner=None,
+) -> Dict[str, str]:
+    values, required = _parse_arguments(argv)
+    selected_paths = {
+        "launcher": LAUNCHER_PATH,
+        "reporter": TOOL_REPORT_PATH,
+        "canary": CANARY_PATH,
+        "grader": GRADER_PATH,
+        "server": JSTACK_SERVER_PATH,
+        "tools": JSTACK_TOOLS_PATH,
+    }
+    if paths is not None:
+        if set(paths) != set(selected_paths) or any(not isinstance(item, Path) for item in paths.values()):
+            raise LauncherError("test path seam must supply the exact runtime artifact set")
+        selected_paths = dict(paths)
+    expected = {
+        "canary": _sha256(values["--expected-canary-sha256"], "canary digest"),
+        "launcher": _sha256(values["--expected-launcher-sha256"], "launcher digest"),
+        "reporter": _sha256(values["--expected-tool-report-sha256"], "tool-report digest"),
+        "grader": _sha256(values["--grader-sha256"], "grader digest"),
+        "server": _sha256(values["--jstack-mcp-server-sha256"], "JStack MCP server digest"),
+        "tools": _sha256(values["--jstack-mcp-tools-sha256"], "JStack MCP tools digest"),
+    }
+    _sha256(values["--runtime-sha256"], "runtime digest")
+    if values["--jstack-mcp-tool-count"] != "52":
+        raise LauncherError("JStack MCP tool count must be exactly 52")
+    for name in ("launcher", "reporter", "canary", "grader"):
+        if _stable_file_digest(selected_paths[name], name, executable=True) != expected[name]:
+            raise LauncherError("%s artifact digest mismatch" % name)
+    for name in ("server", "tools"):
+        if _stable_file_digest(selected_paths[name], name, executable=False) != expected[name]:
+            raise LauncherError("%s artifact digest mismatch" % name)
+
+    selected_runner = runner or _bounded_run
+    selected_runner(
+        (str(selected_paths["canary"]),),
+        expected_stdout=b"jstack-proof-canary-v1: pass\n",
+    )
+    reporter_argv: List[str] = [str(selected_paths["reporter"])]
+    for option in (
+        "--expected-canary-sha256",
+        "--expected-launcher-sha256",
+        "--expected-tool-report-sha256",
+        "--runtime-sha256",
+        "--grader-sha256",
+        "--jstack-mcp-server-sha256",
+        "--jstack-mcp-tools-sha256",
+        "--jstack-mcp-tool-count",
+    ):
+        reporter_argv.extend((option, values[option]))
+    for name in required:
+        reporter_argv.extend(("--required-tool", name))
+    stdout, _stderr = selected_runner(tuple(reporter_argv))
+    report = _parse_report(stdout, required)
+    expected_bindings = {
+        "jstack-proof-canary-version": "jstack-proof-canary-v1",
+        "jstack-proof-canary-sha256": expected["canary"],
+        "jstack-proof-canary-launcher-sha256": expected["launcher"],
+        "jstack-proof-tool-report-sha256": expected["reporter"],
+        "jstack-proof-grader-version": "jstack-proof-grader-v1",
+        "jstack-proof-grader-sha256": expected["grader"],
+        "jstack-proof-runtime-sha256": values["--runtime-sha256"],
+        "jstack-mcp-server-sha256": expected["server"],
+        "jstack-mcp-tools-sha256": expected["tools"],
+        "jstack-mcp-tool-count": "52",
+    }
+    for name, expected_value in expected_bindings.items():
+        if report.get(name) != expected_value:
+            raise LauncherError("tool report immutable binding mismatch for %s" % name)
+    return report
+
+
+def main(argv: Sequence[str]) -> int:
+    try:
+        report = launch(argv)
+        sys.stdout.buffer.write(_canonical_bytes(report) + b"\n")
+        sys.stdout.buffer.flush()
+        return 0
+    except LauncherError as exc:
+        sys.stderr.write("jstack-proof-canary-launcher: %s\n" % exc)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

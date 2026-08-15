@@ -1,3 +1,6 @@
 evals/**/*.json text eol=lf
 evals/**/*.py text eol=lf
+evals/**/*.md text eol=lf
+evals/**/*.toml text eol=lf
+tools/proof_plane/**/*.py text eol=lf
 mcp/jstack/schemas/*.json text eol=lf

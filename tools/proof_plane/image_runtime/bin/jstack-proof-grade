@@ -1,0 +1,2388 @@
+#!/usr/bin/python3
+"""Run one sealed Beta.1 holdout without exposing it to candidate code.
+
+The grader is installed verbatim in every qualified image.  It accepts one
+fixed bundle path, implements a closed task-to-adapter registry, and emits one
+canonical ``jstack.eval.grader-observation.v1`` object.  Bundle data never
+selects an executable, argv, import, module, environment, or working directory.
+
+Candidate code is exercised only in a second bubblewrap namespace whose root
+contains the fixed toolchain, a disposable source copy, and a reviewed adapter
+harness.  The outer ``/sealed/holdout.bundle`` mount is deliberately absent.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path, PurePosixPath
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+
+VERSION = "jstack-proof-grader-v1"
+BUNDLE_SCHEMA = "jstack.eval.private-holdout-bundle.v1"
+ADAPTER_VERSION = "jstack-proof-holdout-adapter-v1"
+OBSERVATION_SCHEMA = "jstack.eval.grader-observation.v1"
+BASELINE_OBSERVATION_SCHEMA = "jstack.eval.baseline-execution-observation.v1"
+ADAPTER_CASE_CONTRACT_VERSION = "jstack-proof-adapter-case-contract-v1"
+EMPTY_PATCH_SHA256 = hashlib.sha256(b"").hexdigest()
+GRADER_PATH = Path("/usr/local/bin/jstack-proof-grade")
+BUNDLE_PATH = Path("/sealed/holdout.bundle")
+WORKSPACE_PATH = Path("/workspace")
+GIT_DIRECTORY_PATH = Path("/proof-git")
+GIT_PATH = Path("/usr/bin/git")
+BWRAP_PATH = Path("/usr/bin/bwrap")
+
+MAX_BUNDLE_BYTES = 5_000_000
+MAX_OUTPUT_BYTES = 5_000_000
+MAX_SOURCE_FILES = 20_000
+MAX_SOURCE_BYTES = 500_000_000
+COMMAND_TIMEOUT_SECONDS = 600
+CASE_TIMEOUT_SECONDS = 300
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+GIT_SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
+IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+DATA_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+CASE_CATEGORIES = frozenset(("boundary", "invariant", "regression", "sanitizer", "security", "target"))
+ASSERTIONS = frozenset(("equals", "is-false", "is-non-null", "is-null", "is-true", "not-equals"))
+FORBIDDEN_DATA_KEYS = frozenset(
+    (
+        "argv", "args", "binary", "callable", "class", "cmd", "command", "cwd",
+        "env", "environment", "entrypoint", "eval", "exec", "executable",
+        "function", "import", "loader", "module", "process", "program", "script",
+        "shell", "subprocess", "working_directory", "workingdirectory",
+    )
+)
+
+ADAPTER_OUTPUT_CONTRACTS = {
+    "hono-json-media": ("object(status:http-status,value:safe-json)", ("equals",)),
+    "typescript-redirect": ("string", ("equals",)),
+    "typescript-profile": ("string", ("equals",)),
+    "python-transfer": ("array(transfer-record)-matching-operation-count", ("equals",)),
+    "python-webhook": ("boolean", ("equals", "is-false", "is-true")),
+    "starlette-url-replace": ("url-record-or-fixed-failure-record", ("equals",)),
+    "nanohttpd-response": ("http-response-record-or-fixed-failure-record", ("equals",)),
+    "csharp-tenant-document": ("tenant-document-or-null", ("equals", "is-null")),
+    "csharp-profile": ("profile-record-or-error-record", ("equals",)),
+    "c-frame": ("frame-result-matching-output-capacity", ("equals",)),
+    "c-decimal": ("decimal-result", ("equals",)),
+    "tinyxml2-character-reference": ("input-selected-boolean-integer-string-or-null", ("equals", "is-false", "is-null", "is-true")),
+    "python-documents": ("array(document-record)", ("equals",)),
+    "python-users": ("array(user-record)", ("equals",)),
+    "sqlite-utils-foreign-key": ("foreign-key-result-or-fixed-failure-record", ("equals",)),
+    "linenoise-history-resize": ("input-selected-boolean-or-string-array-or-null", ("equals", "is-false", "is-null", "is-true")),
+    "legacy-config": ("legacy-config-result", ("equals",)),
+    "legacy-token": ("boolean", ("equals", "is-false", "is-true")),
+}
+
+
+def _task(
+    family: str,
+    kind: str,
+    adapter: str,
+    allowed: Sequence[str],
+    maximum_files: int,
+    public_commands: Sequence[Sequence[str]],
+    sanitizer_commands: Sequence[Sequence[str]] = (),
+) -> Dict[str, Any]:
+    return {
+        "family": family,
+        "kind": kind,
+        "adapter": adapter,
+        "allowed": tuple(allowed),
+        "forbidden": ("proof-holdout", "hidden-tests", ".git"),
+        "maximumFiles": maximum_files,
+        "publicCommands": tuple(tuple(item) for item in public_commands),
+        "sanitizerCommands": tuple(tuple(item) for item in sanitizer_commands),
+    }
+
+
+TASKS = {
+    "typescript-web-hono-json-charset-replay": _task(
+        "typescript-web", "historical-replay", "hono-json-media",
+        ("src/validator",), 6,
+        (("/usr/bin/ln", "-s", "/usr/local/share/jstack/hono-node_modules", "node_modules"),
+         ("/usr/local/bin/bun", "test", "src/validator/validator.test.ts")),
+    ),
+    "typescript-web-local-continuation-seeded": _task(
+        "typescript-web", "seeded-defect", "typescript-redirect",
+        ("src/redirect.ts", "tests/redirect.test.ts"), 2,
+        (("/usr/bin/npm", "test"),),
+    ),
+    "typescript-web-profile-html-clean": _task(
+        "typescript-web", "clean-control", "typescript-profile",
+        ("src/profile.ts", "tests/profile.test.ts"), 2,
+        (("/usr/bin/npm", "test"),),
+    ),
+    "python-api-idempotency-tenant-seeded": _task(
+        "python-api", "seeded-defect", "python-transfer",
+        ("src/transfers.py", "tests/test_transfers.py"), 2,
+        (("/usr/bin/python3", "-m", "unittest", "discover", "-s", "tests", "-v"),),
+    ),
+    "python-api-webhook-signature-clean": _task(
+        "python-api", "clean-control", "python-webhook",
+        ("src/webhooks.py", "tests/test_webhooks.py"), 2,
+        (("/usr/bin/python3", "-m", "unittest", "discover", "-s", "tests", "-v"),),
+    ),
+    "python-api-starlette-path-url-replay": _task(
+        "python-api", "historical-replay", "starlette-url-replace",
+        ("starlette/datastructures.py", "tests/test_datastructures.py"), 4,
+        (("/usr/bin/python3", "-m", "pytest", "-q", "tests/test_datastructures.py"),),
+    ),
+    "java-service-nanohttpd-content-length-replay": _task(
+        "java-csharp-service", "historical-replay", "nanohttpd-response",
+        ("core/src/main", "core/src/test"), 4,
+        (("/usr/bin/mvn", "--offline", "--batch-mode", "--no-transfer-progress", "-Dmaven.repo.local=/usr/local/share/jstack/maven-repository", "-pl", "core", "test"),),
+    ),
+    "java-csharp-service-tenant-document-seeded": _task(
+        "java-csharp-service", "seeded-defect", "csharp-tenant-document",
+        ("src/TenantDocumentService.cs", "tests/Program.cs"), 2,
+        (("/usr/bin/dotnet", "run", "--project", "tests/TenantDocuments.Tests.csproj", "--configuration", "Release"),),
+    ),
+    "java-csharp-service-profile-mass-assignment-clean": _task(
+        "java-csharp-service", "clean-control", "csharp-profile",
+        ("src/ProfileUpdateService.cs", "tests/Program.cs"), 2,
+        (("/usr/bin/dotnet", "run", "--project", "tests/ProfileUpdates.Tests.csproj", "--configuration", "Release"),),
+    ),
+    "c-cpp-system-frame-capacity-seeded": _task(
+        "c-cpp-system", "seeded-defect", "c-frame",
+        ("include/frame_decoder.h", "src/frame_decoder.c", "tests/test_frame_decoder.c"), 3,
+        (("/usr/bin/cmake", "-S", ".", "-B", "build"),
+         ("/usr/bin/cmake", "--build", "build"),
+         ("/usr/bin/ctest", "--test-dir", "build", "--output-on-failure")),
+        (("/usr/bin/cmake", "-S", ".", "-B", "sanitizer-build", "-DJSTACK_ENABLE_SANITIZERS=ON"),
+         ("/usr/bin/cmake", "--build", "sanitizer-build"),
+         ("/usr/bin/ctest", "--test-dir", "sanitizer-build", "--output-on-failure")),
+    ),
+    "c-cpp-system-decimal-overflow-clean": _task(
+        "c-cpp-system", "clean-control", "c-decimal",
+        ("include/decimal_counter.h", "src/decimal_counter.c", "tests/test_decimal_counter.c"), 3,
+        (("/usr/bin/cmake", "-S", ".", "-B", "build"),
+         ("/usr/bin/cmake", "--build", "build"),
+         ("/usr/bin/ctest", "--test-dir", "build", "--output-on-failure")),
+        (("/usr/bin/cmake", "-S", ".", "-B", "sanitizer-build", "-DJSTACK_ENABLE_SANITIZERS=ON"),
+         ("/usr/bin/cmake", "--build", "sanitizer-build"),
+         ("/usr/bin/ctest", "--test-dir", "sanitizer-build", "--output-on-failure")),
+    ),
+    "cpp-system-tinyxml2-character-reference-replay": _task(
+        "c-cpp-system", "historical-replay", "tinyxml2-character-reference",
+        ("tinyxml2.cpp", "tinyxml2.h", "xmltest.cpp"), 4,
+        (("/usr/bin/mkdir", "-p", ".jstack-public"),
+         ("/usr/bin/gcc", "-x", "c++", "-std=c++11", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "tinyxml2.cpp", "xmltest.cpp", "-lstdc++", "-o", ".jstack-public/xmltest"),
+         ("/workspace/.jstack-public/xmltest",),
+         ("/usr/bin/gcc", "-x", "c++", "-std=c++11", "-DTINYXML2_DEBUG", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "tinyxml2.cpp", "xmltest.cpp", "-lstdc++", "-o", ".jstack-public/xmltest-debug"),
+         ("/workspace/.jstack-public/xmltest-debug",)),
+        (("/usr/bin/mkdir", "-p", ".jstack-sanitizer"),
+         ("/usr/bin/gcc", "-x", "c++", "-std=c++11", "-DTINYXML2_DEBUG", "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-I", ".", "tinyxml2.cpp", "xmltest.cpp", "-lstdc++", "-o", ".jstack-sanitizer/xmltest"),
+         ("/workspace/.jstack-sanitizer/xmltest",)),
+    ),
+    "data-database-tenant-archive-seeded": _task(
+        "data-database", "seeded-defect", "python-documents",
+        ("src/documents.py", "tests/test_documents.py"), 2,
+        (("/usr/bin/python3", "-m", "unittest", "discover", "-s", "tests", "-v"),),
+    ),
+    "data-database-email-injection-clean": _task(
+        "data-database", "clean-control", "python-users",
+        ("src/users.py", "tests/test_users.py"), 2,
+        (("/usr/bin/python3", "-m", "unittest", "discover", "-s", "tests", "-v"),),
+    ),
+    "data-database-sqlite-utils-foreign-key-replay": _task(
+        "data-database", "historical-replay", "sqlite-utils-foreign-key",
+        ("sqlite_utils", "tests"), 6,
+        (("/usr/bin/python3", "-m", "pytest", "-q", "tests/test_create.py", "tests/test_transform.py"),),
+    ),
+    "legacy-linenoise-history-resize-replay": _task(
+        "legacy-repository", "historical-replay", "linenoise-history-resize",
+        ("linenoise.c", "linenoise.h", "proof_tests"), 5,
+        (("/usr/bin/mkdir", "-p", ".jstack-public"),
+         ("/usr/bin/gcc", "-std=c99", "-D_POSIX_C_SOURCE=200809L", "-include", "strings.h", "-Wall", "-Wextra", "-Wpedantic", "linenoise.c", "example.c", "-o", ".jstack-public/linenoise-example")),
+    ),
+    "legacy-repository-config-prefix-seeded": _task(
+        "legacy-repository", "seeded-defect", "legacy-config",
+        ("include/legacy_config.h", "src/legacy_config.c", "tests/test_legacy_config.py"), 3,
+        (("/usr/bin/make", "test"),),
+    ),
+    "legacy-repository-token-prefix-clean": _task(
+        "legacy-repository", "clean-control", "legacy-token",
+        ("include/legacy_token.h", "src/legacy_token.c", "tests/test_legacy_token.py"), 3,
+        (("/usr/bin/make", "test"),),
+    ),
+}
+
+
+def _adapter_contract_document(grader_binary_sha256: str) -> Dict[str, Any]:
+    """Return the public, digest-only registry contract used by host staging.
+
+    The executable's SHA-256 binds the task-specific input-shape code below;
+    the structured rows bind every fixed adapter and process sequence without
+    copying any holdout case bytes into the image or into a status document.
+    """
+
+    rows = []
+    for task_id in sorted(TASKS):
+        task = TASKS[task_id]
+        rows.append(
+            {
+                "taskId": task_id,
+                "family": task["family"],
+                "taskKind": task["kind"],
+                "adapter": task["adapter"],
+                "allowedPaths": list(task["allowed"]),
+                "forbiddenPaths": list(task["forbidden"]),
+                "maximumChangedFiles": task["maximumFiles"],
+                "publicCommands": [list(command) for command in task["publicCommands"]],
+                "sanitizerCommands": [list(command) for command in task["sanitizerCommands"]],
+            }
+        )
+    return {
+        "schemaVersion": "jstack.eval.fixed-adapter-contract.v1",
+        "graderVersion": VERSION,
+        "graderBinarySha256": _sha256(
+            grader_binary_sha256, "adapter-contract graderBinarySha256", real=True
+        ),
+        "adapterCaseContractVersion": ADAPTER_CASE_CONTRACT_VERSION,
+        "caseClassificationPolicy": (
+            "vulnerability-id-null-iff-previously-passing"
+        ),
+        "adapterOutputContracts": [
+            {
+                "adapter": adapter,
+                "expectedShape": ADAPTER_OUTPUT_CONTRACTS[adapter][0],
+                "allowedAssertions": list(ADAPTER_OUTPUT_CONTRACTS[adapter][1]),
+            }
+            for adapter in sorted(ADAPTER_OUTPUT_CONTRACTS)
+        ],
+        "taskCount": 18,
+        "tasks": rows,
+    }
+
+
+def _adapter_contract_sha256(grader_binary_sha256: str) -> str:
+    return _canonical_digest(_adapter_contract_document(grader_binary_sha256))
+
+class GradeError(Exception):
+    """A closed grader failure.  No traceback is emitted in production."""
+
+
+def _canonical_bytes(value: object) -> bytes:
+    try:
+        return json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        ).encode("utf-8")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise GradeError("grader value could not be encoded canonically") from exc
+
+
+def _canonical_digest(value: object) -> str:
+    return hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _exact_fields(value: Mapping[str, Any], expected: Sequence[str], field: str) -> None:
+    if set(value) != set(expected):
+        raise GradeError("%s has fields outside its closed schema" % field)
+
+
+def _sha256(value: object, field: str, *, real: bool = False) -> str:
+    if not isinstance(value, str) or SHA256_RE.fullmatch(value) is None:
+        raise GradeError("%s must be one lowercase SHA-256 digest" % field)
+    if real and len(set(value)) == 1:
+        raise GradeError("%s must be a real content digest" % field)
+    return value
+
+
+def _git_sha1(value: object, field: str) -> str:
+    if not isinstance(value, str) or GIT_SHA1_RE.fullmatch(value) is None or len(set(value)) == 1:
+        raise GradeError("%s must be one real lowercase Git SHA-1" % field)
+    return value
+
+
+def _identifier(value: object, field: str) -> str:
+    if not isinstance(value, str) or IDENTIFIER_RE.fullmatch(value) is None:
+        raise GradeError("%s must be one closed identifier" % field)
+    return value
+
+
+def _read_stable_file(path: Path, field: str, maximum_bytes: int) -> Tuple[bytes, str]:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise GradeError("%s is absent" % field) from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= maximum_bytes:
+        raise GradeError("%s must be one bounded regular non-symlink file" % field)
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        descriptor = os.open(str(path), flags)
+    except OSError as exc:
+        raise GradeError("%s could not be opened safely" % field) from exc
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or not os.path.samestat(before, opened):
+            raise GradeError("%s changed while it was opened" % field)
+        chunks: List[bytes] = []
+        remaining = maximum_bytes + 1
+        while remaining:
+            chunk = os.read(descriptor, min(1024 * 1024, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor)
+        if len(raw) > maximum_bytes or not os.path.samestat(opened, after) or opened.st_size != after.st_size:
+            raise GradeError("%s changed or exceeded its byte limit while read" % field)
+    finally:
+        os.close(descriptor)
+    try:
+        current = path.lstat()
+    except OSError as exc:
+        raise GradeError("%s changed after it was read" % field) from exc
+    if stat.S_ISLNK(current.st_mode) or not os.path.samestat(after, current):
+        raise GradeError("%s changed after it was read" % field)
+    return raw, hashlib.sha256(raw).hexdigest()
+
+
+def _safe_data(value: Any, field: str, depth: int = 0, counter: Optional[List[int]] = None) -> Any:
+    if counter is None:
+        counter = [0]
+    counter[0] += 1
+    if depth > 8 or counter[0] > 4096:
+        raise GradeError("%s exceeds the closed data complexity limit" % field)
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        if not -9_007_199_254_740_991 <= value <= 9_007_199_254_740_991:
+            raise GradeError("%s integer is outside the exact JSON range" % field)
+        return value
+    if isinstance(value, float):
+        raise GradeError("%s must not contain floating-point values" % field)
+    if isinstance(value, str):
+        if "\x00" in value or len(value.encode("utf-8")) > 32_768:
+            raise GradeError("%s contains a NUL or oversized string" % field)
+        return value
+    if isinstance(value, dict):
+        if len(value) > 256:
+            raise GradeError("%s contains too many object members" % field)
+        normalized: Dict[str, Any] = {}
+        for key in sorted(value):
+            if not isinstance(key, str) or DATA_KEY_RE.fullmatch(key) is None:
+                raise GradeError("%s contains an invalid key" % field)
+            if key.lower().replace("-", "_") in FORBIDDEN_DATA_KEYS:
+                raise GradeError("%s contains a forbidden execution selector" % field)
+            normalized[key] = _safe_data(value[key], "%s.%s" % (field, key), depth + 1, counter)
+        return normalized
+    if isinstance(value, list):
+        if len(value) > 256:
+            raise GradeError("%s contains too many array members" % field)
+        return [_safe_data(item, "%s[%d]" % (field, index), depth + 1, counter) for index, item in enumerate(value)]
+    raise GradeError("%s must contain only bounded deterministic JSON data" % field)
+
+
+def _load_bundle(path: Path) -> Tuple[Dict[str, Any], str]:
+    raw, raw_sha256 = _read_stable_file(path, "sealed holdout bundle", MAX_BUNDLE_BYTES)
+
+    def reject_duplicates(pairs: Sequence[Tuple[str, Any]]) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+        for key, item in pairs:
+            if key in result:
+                raise GradeError("sealed holdout bundle contains a duplicate JSON key")
+            result[key] = item
+        return result
+
+    def reject_constant(value: str) -> None:
+        raise GradeError("sealed holdout bundle contains non-finite JSON")
+
+    try:
+        loaded = json.loads(
+            raw.decode("utf-8", errors="strict"),
+            object_pairs_hook=reject_duplicates,
+            parse_constant=reject_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, GradeError, RecursionError) as exc:
+        raise GradeError("sealed holdout bundle is not canonical UTF-8 JSON") from exc
+    if not isinstance(loaded, dict) or raw != _canonical_bytes(loaded) + b"\n":
+        raise GradeError("sealed holdout bundle must be canonical JSON plus one newline")
+    _exact_fields(
+        loaded,
+        (
+            "schemaVersion", "taskId", "family", "taskKind", "baselineCommit",
+            "sourceArchiveSha256", "sourceContentSha256", "graderVersion",
+            "graderBinarySha256", "adapterVersion", "adapterId", "expectedOutcome",
+            "cases", "bundleSha256",
+        ),
+        "sealed holdout bundle",
+    )
+    if loaded["schemaVersion"] != BUNDLE_SCHEMA or loaded["graderVersion"] != VERSION:
+        raise GradeError("sealed holdout bundle schema or grader version is invalid")
+    if loaded["adapterVersion"] != ADAPTER_VERSION:
+        raise GradeError("sealed holdout bundle adapter version is invalid")
+    task_id = _identifier(loaded["taskId"], "holdout taskId")
+    task = TASKS.get(task_id)
+    if task is None:
+        raise GradeError("sealed holdout bundle references an unknown task")
+    if loaded["family"] != task["family"] or loaded["taskKind"] != task["kind"]:
+        raise GradeError("sealed holdout bundle family or task kind differs from the fixed registry")
+    if loaded["adapterId"] != "jstack-proof-adapter.%s.v1" % task_id:
+        raise GradeError("sealed holdout bundle adapter identity differs from the fixed registry")
+    expected_outcome = "safely-refused" if task["kind"] == "clean-control" else "fixed"
+    if loaded["expectedOutcome"] != expected_outcome:
+        raise GradeError("sealed holdout bundle expected outcome is invalid")
+    _git_sha1(loaded["baselineCommit"], "holdout baselineCommit")
+    _sha256(loaded["sourceArchiveSha256"], "holdout sourceArchiveSha256", real=True)
+    _sha256(loaded["sourceContentSha256"], "holdout sourceContentSha256", real=True)
+    _sha256(loaded["graderBinarySha256"], "holdout graderBinarySha256", real=True)
+    digest = _sha256(loaded["bundleSha256"], "holdout bundleSha256")
+    body = {key: loaded[key] for key in loaded if key != "bundleSha256"}
+    if digest != _canonical_digest(body):
+        raise GradeError("sealed holdout bundle self-digest is invalid")
+    cases = loaded["cases"]
+    if not isinstance(cases, list) or not 2 <= len(cases) <= 512:
+        raise GradeError("sealed holdout bundle must contain 2 to 512 cases")
+    normalized_cases = []
+    seen = set()
+    for index, item in enumerate(cases):
+        if not isinstance(item, dict):
+            raise GradeError("holdout case %d must be an object" % index)
+        _exact_fields(item, ("caseId", "category", "assertion", "input", "expected", "previouslyPassing", "vulnerabilityId"), "holdout case %d" % index)
+        case_id = _identifier(item["caseId"], "holdout caseId")
+        if case_id in seen:
+            raise GradeError("sealed holdout bundle contains duplicate case IDs")
+        seen.add(case_id)
+        if item["category"] not in CASE_CATEGORIES or item["assertion"] not in ASSERTIONS:
+            raise GradeError("holdout case category or assertion is invalid")
+        if not isinstance(item["previouslyPassing"], bool):
+            raise GradeError("holdout case previouslyPassing must be boolean")
+        vulnerability = item["vulnerabilityId"]
+        if vulnerability is not None:
+            _identifier(vulnerability, "holdout vulnerabilityId")
+            if item["category"] not in ("security", "target") or item["previouslyPassing"]:
+                raise GradeError("holdout vulnerability case has invalid metadata")
+        expected = _safe_data(item["expected"], "holdout expected")
+        if item["assertion"] in ("is-false", "is-non-null", "is-null", "is-true") and expected is not None:
+            raise GradeError("unary holdout assertions require expected=null")
+        normalized_cases.append({
+            "caseId": case_id,
+            "category": item["category"],
+            "assertion": item["assertion"],
+            "input": _safe_data(item["input"], "holdout input"),
+            "expected": expected,
+            "previouslyPassing": item["previouslyPassing"],
+            "vulnerabilityId": vulnerability,
+        })
+    if [item["caseId"] for item in normalized_cases] != sorted(seen):
+        raise GradeError("sealed holdout cases must be sorted by caseId")
+    if not any(item["category"] == "target" for item in normalized_cases) or not any(item["previouslyPassing"] for item in normalized_cases):
+        raise GradeError("sealed holdout bundle lacks a target or previously passing case")
+    vulnerabilities = {item["vulnerabilityId"] for item in normalized_cases if item["vulnerabilityId"] is not None}
+    if expected_outcome == "fixed" and not vulnerabilities:
+        raise GradeError("fix-task holdout lacks a known vulnerability")
+    if expected_outcome == "safely-refused" and vulnerabilities:
+        raise GradeError("clean-control holdout declares a vulnerability")
+    for vulnerability in vulnerabilities:
+        if not any(
+            case["vulnerabilityId"] == vulnerability and case["category"] == "target"
+            for case in normalized_cases
+        ):
+            raise GradeError("each holdout vulnerability requires a target case")
+    _validate_adapter_inputs(task["adapter"], [item["input"] for item in normalized_cases])
+    _validate_adapter_cases(
+        task["adapter"], normalized_cases, task_kind=task["kind"]
+    )
+    normalized = dict(loaded)
+    normalized["cases"] = normalized_cases
+    return normalized, raw_sha256
+
+
+def _bounded_run(
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    environment: Mapping[str, str],
+    stdin: bytes = b"",
+    timeout: int = COMMAND_TIMEOUT_SECONDS,
+    maximum_output: int = MAX_OUTPUT_BYTES,
+) -> subprocess.CompletedProcess:
+    if not argv or any(not isinstance(item, str) or not item or "\x00" in item for item in argv):
+        raise GradeError("grader attempted an invalid fixed subprocess argv")
+    try:
+        with tempfile.TemporaryFile(dir="/tmp") as stdout_file, tempfile.TemporaryFile(dir="/tmp") as stderr_file:
+            try:
+                process = subprocess.run(
+                    list(argv), input=stdin, stdout=stdout_file, stderr=stderr_file,
+                    cwd=str(cwd), env=dict(environment), timeout=timeout, check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise GradeError("fixed grader subprocess failed to execute within its bound") from exc
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read(maximum_output + 1)
+            stderr = stderr_file.read(maximum_output + 1)
+    except OSError as exc:
+        raise GradeError("grader could not create bounded output capture files") from exc
+    if len(stdout) + len(stderr) > maximum_output:
+        raise GradeError("fixed grader subprocess exceeded its output limit")
+    return subprocess.CompletedProcess(list(argv), process.returncode, stdout, stderr)
+
+
+def _git_environment() -> Dict[str, str]:
+    return {
+        "HOME": "/tmp/home",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "GIT_DIR": str(GIT_DIRECTORY_PATH),
+        "GIT_WORK_TREE": str(WORKSPACE_PATH),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+
+
+def _git(arguments: Sequence[str], *, allowed: Sequence[int] = (0,), maximum_output: int = MAX_OUTPUT_BYTES) -> bytes:
+    result = _bounded_run(
+        (str(GIT_PATH), *arguments), cwd=WORKSPACE_PATH, environment=_git_environment(), maximum_output=maximum_output
+    )
+    if result.returncode not in allowed or result.stderr:
+        raise GradeError("fixed Git inspection failed clean execution")
+    return result.stdout
+
+
+def _safe_relative_path(value: str) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value or "\\" in value:
+        raise GradeError("Git returned an unsafe path")
+    path = PurePosixPath(value)
+    if path.is_absolute() or any(part in ("", ".", "..") for part in path.parts):
+        raise GradeError("Git returned an unsafe path")
+    return path.as_posix()
+
+
+def _source_tree_digest(root: Path) -> str:
+    """Hash normalized source paths, bytes, and executable bits.
+
+    This is intentionally identical to the host executor's
+    ``jstack.source-tree.v1`` projection.  The external Git directory is never
+    below ``/workspace`` and therefore cannot enter the source binding.
+    """
+
+    if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+        raise GradeError("frozen baseline source root is invalid")
+    entries: List[Dict[str, Any]] = []
+    file_count = 0
+    total_bytes = 0
+    for directory, directory_names, file_names in os.walk(
+        str(root), topdown=True, followlinks=False
+    ):
+        directory_names.sort()
+        file_names.sort()
+        base = Path(directory)
+        for name in list(directory_names):
+            path = base / name
+            shape = path.lstat()
+            if stat.S_ISLNK(shape.st_mode) or not stat.S_ISDIR(shape.st_mode):
+                raise GradeError("frozen baseline source contains a link or special directory")
+            entries.append(
+                {
+                    "path": _safe_relative_path(path.relative_to(root).as_posix()),
+                    "type": "directory",
+                }
+            )
+        for name in file_names:
+            path = base / name
+            shape = path.lstat()
+            if stat.S_ISLNK(shape.st_mode) or not stat.S_ISREG(shape.st_mode):
+                raise GradeError("frozen baseline source contains a link or special file")
+            file_count += 1
+            total_bytes += shape.st_size
+            if file_count > MAX_SOURCE_FILES or total_bytes > MAX_SOURCE_BYTES:
+                raise GradeError("frozen baseline source exceeds the closed limits")
+            flags = os.O_RDONLY
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            descriptor = os.open(str(path), flags)
+            try:
+                opened = os.fstat(descriptor)
+                if not stat.S_ISREG(opened.st_mode) or not os.path.samestat(shape, opened):
+                    raise GradeError("frozen baseline source changed during inspection")
+                hasher = hashlib.sha256()
+                consumed = 0
+                while True:
+                    chunk = os.read(descriptor, 1024 * 1024)
+                    if not chunk:
+                        break
+                    consumed += len(chunk)
+                    hasher.update(chunk)
+                after = os.fstat(descriptor)
+                if consumed != shape.st_size or not os.path.samestat(opened, after):
+                    raise GradeError("frozen baseline source changed during inspection")
+                raw_sha256 = hasher.hexdigest()
+            finally:
+                os.close(descriptor)
+            entries.append(
+                {
+                    "path": _safe_relative_path(path.relative_to(root).as_posix()),
+                    "type": "file",
+                    "executable": bool(shape.st_mode & 0o111),
+                    "size": shape.st_size,
+                    "sha256": raw_sha256,
+                }
+            )
+    entries.sort(key=lambda item: (item["path"], item["type"]))
+    return _canonical_digest(
+        {"schemaVersion": "jstack.source-tree.v1", "entries": entries}
+    )
+
+
+def _baseline_repository_state(expected_source_content_sha256: str) -> str:
+    """Require one clean root transport commit over the exact frozen source.
+
+    Baseline production has no candidate commit, patch, model handle, or
+    caller-selected revision.  The reviewed upstream/source commit remains a
+    separately sealed identity in the bundle; this function proves only the
+    deterministic transport commit made from those exact archive bytes.
+    """
+
+    expected = _sha256(
+        expected_source_content_sha256, "baseline sourceContentSha256", real=True
+    )
+    if _git(("status", "--porcelain=v1", "--untracked-files=all")):
+        raise GradeError("frozen baseline workspace is not clean")
+    commit = _git(("rev-parse", "HEAD")).decode("ascii", errors="strict").strip()
+    _git_sha1(commit, "transport baseline commit")
+    parents = (
+        _git(("rev-list", "--parents", "-n", "1", commit))
+        .decode("ascii", errors="strict")
+        .strip()
+        .split()
+    )
+    if parents != [commit]:
+        raise GradeError("baseline-only execution requires one root transport commit")
+    if _source_tree_digest(WORKSPACE_PATH) != expected:
+        raise GradeError("baseline-only workspace differs from the frozen source")
+    return commit
+
+
+def _repository_state() -> Tuple[str, str, bytes, Tuple[str, ...]]:
+    """Return the candidate, transport baseline, exact patch, and changed paths.
+
+    ``holdout.bundle.baselineCommit`` is the reviewed source identity (the
+    upstream commit for a replay).  The host independently materializes the
+    source archive as a deterministic transport commit, then optionally adds
+    one candidate commit.  Those object IDs intentionally differ, so the
+    grader derives ancestry only from the sealed, read-only ``/proof-git``
+    repository instead of pretending the upstream object is present there.
+    """
+
+    status = _git(("status", "--porcelain=v1", "--untracked-files=all"))
+    if status:
+        raise GradeError("candidate workspace differs from its sealed Git commit")
+    candidate = _git(("rev-parse", "HEAD")).decode("ascii", errors="strict").strip()
+    _git_sha1(candidate, "candidate commit")
+    parents = _git(("rev-list", "--parents", "-n", "1", candidate)).decode("ascii", errors="strict").strip().split()
+    if not parents or parents[0] != candidate:
+        raise GradeError("candidate commit ancestry is invalid")
+    if len(parents) == 1:
+        baseline = candidate
+        patch = b""
+    elif len(parents) == 2:
+        baseline = _git_sha1(parents[1], "transport baseline commit")
+        baseline_parents = _git(("rev-list", "--parents", "-n", "1", baseline)).decode(
+            "ascii", errors="strict"
+        ).strip().split()
+        if baseline_parents != [baseline]:
+            raise GradeError("transport baseline must be the sole root commit")
+        baseline_paths_raw = _git(("ls-tree", "-r", "-z", "--name-only", baseline), maximum_output=20_000_000)
+        baseline_paths = tuple(
+            _safe_relative_path(item.decode("utf-8", errors="strict"))
+            for item in baseline_paths_raw.split(b"\x00") if item
+        )
+        tracked = _git((
+            "diff", "--binary", "--full-index", "--no-color", "--no-ext-diff",
+            "--no-textconv", "--no-renames", baseline, candidate, "--", *baseline_paths,
+        ), maximum_output=20_000_000)
+        added_raw = _git(("diff", "--name-only", "--diff-filter=A", "-z", baseline, candidate, "--"), maximum_output=5_000_000)
+        additions = sorted(
+            _safe_relative_path(item.decode("utf-8", errors="strict"))
+            for item in added_raw.split(b"\x00") if item
+        )
+        pieces = [tracked]
+        for relative in additions:
+            added = _git((
+                "diff", "--no-index", "--binary", "--full-index", "--no-color",
+                "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/",
+                "--", "/dev/null", relative,
+            ), allowed=(1,), maximum_output=20_000_000)
+            pieces.append(added)
+        patch = b"".join(pieces)
+    else:
+        raise GradeError("candidate commit must have at most one transport parent")
+    changed_raw = _git(("diff", "--name-only", "-z", baseline, candidate, "--"), maximum_output=5_000_000)
+    changed = tuple(sorted(_safe_relative_path(item.decode("utf-8", errors="strict")) for item in changed_raw.split(b"\x00") if item))
+    return candidate, baseline, patch, changed
+
+
+def _path_under(path: str, boundary: str) -> bool:
+    return path == boundary or path.startswith(boundary.rstrip("/") + "/")
+
+
+def _boundary_violations(task: Mapping[str, Any], changed: Sequence[str]) -> int:
+    invalid = {
+        path for path in changed
+        if not any(_path_under(path, allowed) for allowed in task["allowed"])
+        or any(_path_under(path, forbidden) for forbidden in task["forbidden"])
+    }
+    return len(invalid) + max(0, len(set(changed)) - task["maximumFiles"])
+
+
+def _copy_workspace(destination: Path) -> None:
+    destination.mkdir(mode=0o700)
+    file_count = 0
+    total_bytes = 0
+    for directory, directory_names, file_names in os.walk(str(WORKSPACE_PATH), topdown=True, followlinks=False):
+        base = Path(directory)
+        relative_base = base.relative_to(WORKSPACE_PATH)
+        directory_names.sort()
+        file_names.sort()
+        for name in list(directory_names):
+            source = base / name
+            metadata = source.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                raise GradeError("candidate source contains a symlink or special directory")
+            target = destination / relative_base / name
+            target.mkdir(mode=0o700)
+        for name in file_names:
+            source = base / name
+            metadata = source.lstat()
+            if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+                raise GradeError("candidate source contains a symlink or special file")
+            file_count += 1
+            total_bytes += metadata.st_size
+            if file_count > MAX_SOURCE_FILES or total_bytes > MAX_SOURCE_BYTES:
+                raise GradeError("candidate source exceeds the closed copy limits")
+            target = destination / relative_base / name
+            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            descriptor = os.open(str(target), flags, 0o700 if metadata.st_mode & 0o111 else 0o600)
+            try:
+                with source.open("rb") as source_file, os.fdopen(descriptor, "wb") as target_file:
+                    descriptor = -1
+                    shutil.copyfileobj(source_file, target_file, length=1024 * 1024)
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
+
+
+def _materialize_baseline(destination: Path, commit: str) -> None:
+    destination.mkdir(mode=0o700)
+    listing = _git(("ls-tree", "-r", "-z", "--full-tree", commit), maximum_output=20_000_000)
+    file_count = 0
+    total_bytes = 0
+    for raw_entry in listing.split(b"\x00"):
+        if not raw_entry:
+            continue
+        try:
+            header, raw_path = raw_entry.split(b"\t", 1)
+            mode, object_type, object_id = header.decode("ascii", errors="strict").split(" ")
+            relative = _safe_relative_path(raw_path.decode("utf-8", errors="strict"))
+        except (ValueError, UnicodeError) as exc:
+            raise GradeError("baseline Git tree contains an invalid entry") from exc
+        if object_type != "blob" or mode not in ("100644", "100755") or not GIT_SHA1_RE.fullmatch(object_id):
+            raise GradeError("baseline Git tree contains a symlink, submodule, or special entry")
+        payload = _git(("cat-file", "blob", object_id), maximum_output=100_000_000)
+        file_count += 1
+        total_bytes += len(payload)
+        if file_count > MAX_SOURCE_FILES or total_bytes > MAX_SOURCE_BYTES:
+            raise GradeError("baseline source exceeds the closed materialization limits")
+        target = destination.joinpath(*PurePosixPath(relative).parts)
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700 if mode == "100755" else 0o600)
+        try:
+            offset = 0
+            while offset < len(payload):
+                written = os.write(descriptor, payload[offset:])
+                if written <= 0:
+                    raise GradeError("baseline materialization made no write progress")
+                offset += written
+        finally:
+            os.close(descriptor)
+
+
+def _write_fixed_file(path: Path, payload: str, *, executable: bool = False) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    encoded = payload.encode("utf-8")
+    descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700 if executable else 0o600)
+    try:
+        offset = 0
+        while offset < len(encoded):
+            written = os.write(descriptor, encoded[offset:])
+            if written <= 0:
+                raise GradeError("fixed adapter materialization made no write progress")
+            offset += written
+    finally:
+        os.close(descriptor)
+
+
+def _inner_environment() -> Dict[str, str]:
+    return {
+        "HOME": "/tmp/home",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/local/bin:/usr/bin",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "DOTNET_CLI_HOME": "/tmp/dotnet-home",
+        "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
+        "DOTNET_NOLOGO": "1",
+        "NUGET_PACKAGES": "/tmp/nuget",
+        "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1:abort_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
+    }
+
+
+def _inner_argv(source_root: Path, runner_root: Path, command: Sequence[str]) -> Tuple[str, ...]:
+    if not source_root.is_absolute() or not runner_root.is_absolute():
+        raise GradeError("inner verifier roots must be absolute")
+    argv: List[str] = [
+        str(BWRAP_PATH),
+        "--unshare-net", "--unshare-ipc", "--unshare-pid", "--unshare-uts",
+        "--die-with-parent", "--new-session",
+        "--ro-bind", "/usr", "/usr",
+    ]
+    if Path("/etc").is_dir() and not Path("/etc").is_symlink():
+        argv.extend(("--ro-bind", "/etc", "/etc"))
+    if Path("/usr/local").exists():
+        argv.extend(("--ro-bind", "/usr/local", "/usr/local"))
+    # Merged-/usr images expose these as links.  Non-merged images get only
+    # their library trees, never the outer root or /sealed.
+    for path in ("/lib", "/lib64", "/bin", "/sbin"):
+        candidate = Path(path)
+        if candidate.exists() and not candidate.is_symlink():
+            argv.extend(("--ro-bind", path, path))
+        elif candidate.is_symlink():
+            target = os.readlink(path)
+            if target.startswith("/") or ".." in PurePosixPath(target).parts:
+                raise GradeError("inner verifier encountered an unsafe merged-/usr link")
+            argv.extend(("--symlink", target, path))
+    argv.extend((
+        "--dir", "/workspace", "--bind", str(source_root), "/workspace",
+        "--dir", "/runner", "--ro-bind", str(runner_root), "/runner",
+        "--tmpfs", "/tmp", "--dir", "/tmp/home", "--dir", "/tmp/dotnet-home",
+        "--dir", "/tmp/nuget", "--proc", "/proc", "--dev", "/dev",
+        "--clearenv",
+    ))
+    for name, value in sorted(_inner_environment().items()):
+        argv.extend(("--setenv", name, value))
+    argv.extend(("--chdir", "/workspace", "--", *command))
+    if "/sealed/holdout.bundle" in argv or "/sealed" in argv or "--ro-bind" not in argv:
+        raise GradeError("inner verifier accidentally exposed the sealed holdout")
+    return tuple(argv)
+
+
+def _run_inner(
+    source_root: Path,
+    runner_root: Path,
+    command: Sequence[str],
+    *,
+    stdin: bytes = b"",
+    timeout: int = CASE_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess:
+    return _bounded_run(
+        _inner_argv(source_root, runner_root, command),
+        cwd=Path("/tmp"),
+        environment={"HOME": "/tmp/home", "LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin:/bin"},
+        stdin=stdin,
+        timeout=timeout,
+    )
+
+
+def _run_command_sequence(source_root: Path, commands: Sequence[Sequence[str]]) -> int:
+    with tempfile.TemporaryDirectory(prefix="jstack-fixed-runner-", dir="/tmp") as raw_runner:
+        runner_root = Path(raw_runner)
+        for command in commands:
+            result = _run_inner(source_root, runner_root, command, timeout=COMMAND_TIMEOUT_SECONDS)
+            if result.returncode != 0:
+                return 1
+        return 0
+
+
+TYPESCRIPT_REDIRECT = r'''import fs from "node:fs";
+import { continuationDestination } from "file:///workspace/src/redirect.ts";
+const inputs = JSON.parse(fs.readFileSync(0, "utf8"));
+const output = inputs.map((item) => continuationDestination(item.applicationOrigin, item.requested));
+process.stdout.write(JSON.stringify(output) + "\n");
+'''
+
+TYPESCRIPT_PROFILE = r'''import fs from "node:fs";
+import { renderProfileName } from "file:///workspace/src/profile.ts";
+const inputs = JSON.parse(fs.readFileSync(0, "utf8"));
+const output = inputs.map((item) => renderProfileName(item.displayName));
+process.stdout.write(JSON.stringify(output) + "\n");
+'''
+
+PYTHON_TRANSFER = r'''import json, sys
+from decimal import Decimal
+sys.path.insert(0, "/workspace")
+from src.transfers import TransferApi
+inputs = json.load(sys.stdin)
+output = []
+for item in inputs:
+    api = TransferApi()
+    values = []
+    for operation in item["operations"]:
+        value = api.create_transfer(operation["userId"], operation["idempotencyKey"], Decimal(operation["amount"]))
+        values.append({"transferId": value.transfer_id, "userId": value.user_id, "amount": str(value.amount)})
+    output.append(values)
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+PYTHON_WEBHOOK = r'''import json, sys
+sys.path.insert(0, "/workspace")
+from src.webhooks import verify_webhook
+inputs = json.load(sys.stdin)
+output = [verify_webhook(bytes.fromhex(item["bodyHex"]), item["header"], bytes.fromhex(item["secretHex"]), item["now"]) for item in inputs]
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+PYTHON_DOCUMENTS = r'''import json, sqlite3, sys
+sys.path.insert(0, "/workspace")
+from src.documents import list_documents
+inputs = json.load(sys.stdin)
+output = []
+for item in inputs:
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.executescript(open("/workspace/schema.sql", encoding="utf-8").read())
+        connection.executemany("INSERT INTO documents (id, tenant_id, title, archived) VALUES (?, ?, ?, ?)", item["rows"])
+        values = list_documents(connection, item["tenantId"], item["includeArchived"])
+        output.append([{"documentId": value.document_id, "tenantId": value.tenant_id, "title": value.title, "archived": value.archived} for value in values])
+    finally:
+        connection.close()
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+PYTHON_USERS = r'''import json, sqlite3, sys
+sys.path.insert(0, "/workspace")
+from src.users import find_users_by_email
+inputs = json.load(sys.stdin)
+output = []
+for item in inputs:
+    connection = sqlite3.connect(":memory:")
+    try:
+        connection.executescript(open("/workspace/schema.sql", encoding="utf-8").read())
+        connection.executemany("INSERT INTO users (id, email, display_name) VALUES (?, ?, ?)", item["rows"])
+        values = find_users_by_email(connection, item["email"])
+        output.append([{"userId": value.user_id, "email": value.email, "displayName": value.display_name} for value in values])
+    finally:
+        connection.close()
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+C_FRAME = r'''import ctypes, json, sys
+library = ctypes.CDLL("/workspace/.jstack-grader/libtarget.so")
+function = library.frame_decode_text
+function.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.POINTER(ctypes.c_char), ctypes.c_size_t]
+function.restype = ctypes.c_bool
+output = []
+for item in json.load(sys.stdin):
+    frame_values = item["frame"]
+    frame = (ctypes.c_uint8 * max(1, len(frame_values)))(*frame_values)
+    capacity = item["outputCapacity"]
+    guard_size = 32
+    storage = (ctypes.c_ubyte * (max(1, capacity) + guard_size))()
+    for index in range(len(storage)):
+        storage[index] = 165
+    accepted = bool(function(frame, len(frame_values), ctypes.cast(storage, ctypes.POINTER(ctypes.c_char)), capacity))
+    guard_start = capacity
+    output.append({"accepted": accepted, "outputBytes": list(storage[:capacity]), "guardIntact": all(value == 165 for value in storage[guard_start:])})
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+C_DECIMAL = r'''import ctypes, json, sys
+library = ctypes.CDLL("/workspace/.jstack-grader/libtarget.so")
+function = library.parse_decimal_counter
+function.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_uint32)]
+function.restype = ctypes.c_bool
+output = []
+for item in json.load(sys.stdin):
+    value = ctypes.c_uint32(item["initialValue"])
+    accepted = bool(function(item["text"].encode("utf-8"), ctypes.byref(value)))
+    output.append({"accepted": accepted, "value": value.value})
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+LEGACY_CONFIG = r'''import ctypes, json, sys
+library = ctypes.CDLL("/workspace/.jstack-grader/libtarget.so")
+function = library.legacy_config_lookup
+function.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
+function.restype = ctypes.c_int
+output = []
+for item in json.load(sys.stdin):
+    capacity = item["outputCapacity"]
+    guard_size = 32
+    buffer = ctypes.create_string_buffer(max(1, capacity) + guard_size)
+    for index in range(len(buffer)):
+        buffer[index] = b"\xa5"
+    found = int(function(item["contentsUtf8"].encode("utf-8"), item["keyUtf8"].encode("utf-8"), buffer, capacity))
+    value = bytes(buffer[:capacity]).split(b"\x00", 1)[0].decode("utf-8") if found else ""
+    output.append({"found": found, "valueUtf8": value, "guardIntact": all(byte == 165 for byte in bytes(buffer[capacity:]))})
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+LEGACY_TOKEN = r'''import ctypes, json, sys
+library = ctypes.CDLL("/workspace/.jstack-grader/libtarget.so")
+function = library.legacy_token_equal
+function.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t]
+function.restype = ctypes.c_int
+output = []
+for item in json.load(sys.stdin):
+    stored = bytes.fromhex(item["storedHex"])
+    supplied = bytes.fromhex(item["suppliedHex"])
+    output.append(bool(function(stored, len(stored), supplied, len(supplied))))
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+CSHARP_TENANT_DOCUMENT = r'''using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using TenantDocuments;
+
+var inputs = JsonSerializer.Deserialize<List<Input>>(Console.In.ReadToEnd(), Options.Value)
+    ?? throw new InvalidOperationException("inputs required");
+var output = new List<object?>();
+foreach (var item in inputs)
+{
+    var documents = new List<Document>();
+    foreach (var value in item.Documents)
+    {
+        documents.Add(new Document(value.Id, value.TenantId, value.Contents));
+    }
+    var found = new TenantDocumentService(documents).Find(item.TenantId, item.DocumentId);
+    output.Add(found is null ? null : new { contents = found.Contents, id = found.Id, tenantId = found.TenantId });
+}
+Console.Write(JsonSerializer.Serialize(output, Options.Value));
+Console.Write("\n");
+
+sealed class Input { public List<DocumentInput> Documents { get; set; } = new(); public string TenantId { get; set; } = ""; public string DocumentId { get; set; } = ""; }
+sealed class DocumentInput { public string Id { get; set; } = ""; public string TenantId { get; set; } = ""; public string Contents { get; set; } = ""; }
+static class Options { public static readonly JsonSerializerOptions Value = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = false }; }
+'''
+
+CSHARP_PROFILE = r'''using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using ProfileUpdates;
+
+var inputs = JsonSerializer.Deserialize<List<Input>>(Console.In.ReadToEnd(), Options.Value)
+    ?? throw new InvalidOperationException("inputs required");
+var output = new List<object>();
+var service = new ProfileUpdateService();
+foreach (var item in inputs)
+{
+    try
+    {
+        var value = service.Update(item.Json, item.AuthenticatedIsAdmin);
+        output.Add(new { displayName = value.DisplayName, isAdmin = value.IsAdmin });
+    }
+    catch (Exception error)
+    {
+        output.Add(new { error = error.GetType().Name });
+    }
+}
+Console.Write(JsonSerializer.Serialize(output, Options.Value));
+Console.Write("\n");
+
+sealed class Input { public string Json { get; set; } = ""; public bool AuthenticatedIsAdmin { get; set; } }
+static class Options { public static readonly JsonSerializerOptions Value = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = false }; }
+'''
+
+HONO_JSON_MEDIA = r'''import fs from "node:fs";
+import { Hono } from "file:///workspace/src/hono.ts";
+import { validator } from "file:///workspace/src/validator/validator.ts";
+
+const inputs = JSON.parse(fs.readFileSync(0, "utf8"));
+const output = [];
+for (const item of inputs) {
+  const app = new Hono();
+  app.post(
+    "/",
+    validator("json", (value) => value),
+    (context) => context.json(context.req.valid("json"))
+  );
+  const headers = new Headers();
+  if (item.contentType !== null) {
+    headers.set("Content-Type", item.contentType);
+  }
+  const response = await app.request("http://localhost/", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(item.body),
+  });
+  output.push({ status: response.status, value: await response.json() });
+}
+process.stdout.write(JSON.stringify(output) + "\n");
+'''
+
+STARLETTE_URL_REPLACE = r'''import json, sys
+sys.path.insert(0, "/workspace")
+from starlette.datastructures import URL
+
+inputs = json.load(sys.stdin)
+output = []
+for item in inputs:
+    try:
+        value = URL(item["url"]).replace(**{item["field"]: item["value"]})
+        output.append({
+            "completed": True,
+            "fragment": value.fragment,
+            "hostname": value.hostname,
+            "netloc": value.netloc,
+            "password": value.password,
+            "path": value.path,
+            "port": value.port,
+            "query": value.query,
+            "scheme": value.scheme,
+            "url": str(value),
+            "username": value.username,
+        })
+    except Exception:
+        output.append({
+            "completed": False,
+            "fragment": None,
+            "hostname": None,
+            "netloc": None,
+            "password": None,
+            "path": None,
+            "port": None,
+            "query": None,
+            "scheme": None,
+            "url": None,
+            "username": None,
+        })
+sys.stdout.write(json.dumps(output, sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+NANOHTTPD_RESPONSE = r'''import json, struct, subprocess, sys
+
+TRANSFER = {"fixed": 0, "chunked": 1, "head": 2}
+
+def run_case(item):
+    body = item["bodyUtf8"].encode("utf-8")
+    explicit = -1 if item["explicitContentLength"] is None else item["explicitContentLength"]
+    payload = struct.pack(">IqBB", len(body), explicit, TRANSFER[item["transfer"]], int(item["gzip"])) + body
+    try:
+        process = subprocess.run(
+            ["/workspace/.jstack-grader/nanohttpd/NanoDriver"],
+            input=payload,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        process = None
+    failed = {
+        "bodyHex": None,
+        "completed": False,
+        "contentLengthValues": [],
+        "statusLine": None,
+        "transferEncodingValues": [],
+    }
+    if process is None or process.returncode != 0 or process.stderr or len(process.stdout) > 1_000_000:
+        return failed
+    try:
+        header, body_bytes = process.stdout.split(b"\r\n\r\n", 1)
+        lines = header.decode("latin-1").split("\r\n")
+        if not lines or not lines[0].startswith("HTTP/1.1 "):
+            return failed
+        content_lengths = []
+        transfer_encodings = []
+        for line in lines[1:]:
+            name, separator, value = line.partition(":")
+            if separator != ":":
+                return failed
+            if name.lower() == "content-length":
+                content_lengths.append(value.strip())
+            if name.lower() == "transfer-encoding":
+                transfer_encodings.append(value.strip())
+        return {
+            "bodyHex": body_bytes.hex(),
+            "completed": True,
+            "contentLengthValues": content_lengths,
+            "statusLine": lines[0],
+            "transferEncodingValues": transfer_encodings,
+        }
+    except (UnicodeError, ValueError):
+        return failed
+
+inputs = json.load(sys.stdin)
+sys.stdout.write(json.dumps([run_case(item) for item in inputs], sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+NANOHTTPD_DRIVER = r'''// Fixed JStack behavioral harness; upstream NanoHTTPD remains BSD-3-Clause.
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.nio.charset.StandardCharsets;
+import org.nanohttpd.protocols.http.request.Method;
+import org.nanohttpd.protocols.http.response.Response;
+import org.nanohttpd.protocols.http.response.Status;
+
+public final class NanoDriver {
+    public static void main(String[] args) throws Exception {
+        if (args.length != 0) {
+            System.exit(2);
+        }
+        DataInputStream input = new DataInputStream(System.in);
+        int length = input.readInt();
+        long explicitLength = input.readLong();
+        int transfer = input.readUnsignedByte();
+        boolean gzip = input.readBoolean();
+        if (length < 0 || length > 32768 || explicitLength < -1 || transfer < 0 || transfer > 2) {
+            System.exit(2);
+        }
+        byte[] body = new byte[length];
+        input.readFully(body);
+        if (input.read() != -1) {
+            System.exit(2);
+        }
+        Response response = transfer == 1
+            ? Response.newChunkedResponse(Status.OK, "application/octet-stream", new ByteArrayInputStream(body))
+            : Response.newFixedLengthResponse(Status.OK, "application/octet-stream", body);
+        response.setRequestMethod(transfer == 2 ? Method.HEAD : Method.GET);
+        response.setUseGzip(gzip);
+        if (explicitLength >= 0) {
+            response.addHeader("Content-Length", Long.toString(explicitLength));
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        response.send(output);
+        System.out.write(output.toByteArray());
+    }
+}
+'''
+
+TINYXML2_CHARACTER_REFERENCE = r'''import json, struct, subprocess, sys
+
+def run_case(item):
+    try:
+        process = subprocess.run(
+            ["/workspace/.jstack-grader/tinyxml2/driver"],
+            input=item["xml"].encode("utf-8"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        process = None
+    completed = process is not None and process.returncode == 0 and not process.stderr
+    error_code = None
+    text = None
+    if completed:
+        raw = process.stdout
+        if len(raw) < 8:
+            completed = False
+        else:
+            error_code, text_length = struct.unpack(">II", raw[:8])
+            if text_length == 0xFFFFFFFF:
+                if len(raw) != 8:
+                    completed = False
+            elif text_length > 32768 or len(raw) != 8 + text_length:
+                completed = False
+            else:
+                try:
+                    text = raw[8:].decode("utf-8")
+                except UnicodeError:
+                    completed = False
+    if item["observe"] == "completed":
+        return completed
+    if item["observe"] == "error-code":
+        return error_code if completed else None
+    return text if completed and error_code == 0 else None
+
+inputs = json.load(sys.stdin)
+sys.stdout.write(json.dumps([run_case(item) for item in inputs], sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+TINYXML2_DRIVER = r'''// Fixed JStack behavioral harness; upstream tinyxml2 remains Zlib licensed.
+#include "tinyxml2.h"
+#include <cstdint>
+#include <iostream>
+#include <iterator>
+#include <string>
+
+static void write_u32(std::uint32_t value) {
+    const unsigned char bytes[4] = {
+        static_cast<unsigned char>((value >> 24) & 0xff),
+        static_cast<unsigned char>((value >> 16) & 0xff),
+        static_cast<unsigned char>((value >> 8) & 0xff),
+        static_cast<unsigned char>(value & 0xff),
+    };
+    std::cout.write(reinterpret_cast<const char*>(bytes), 4);
+}
+
+int main(int argc, char** argv) {
+    if (argc != 1) return 2;
+    std::string xml((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
+    if (xml.size() > 32768) return 2;
+    tinyxml2::XMLDocument document;
+    const tinyxml2::XMLError error = document.Parse(xml.c_str(), xml.size());
+    const tinyxml2::XMLElement* root = document.RootElement();
+    const char* text = root == 0 ? 0 : root->GetText();
+    write_u32(static_cast<std::uint32_t>(error));
+    if (text == 0) {
+        write_u32(UINT32_MAX);
+    } else {
+        const std::string value(text);
+        if (value.size() > 32768) return 2;
+        write_u32(static_cast<std::uint32_t>(value.size()));
+        std::cout.write(value.data(), static_cast<std::streamsize>(value.size()));
+    }
+    return std::cout.good() ? 0 : 2;
+}
+'''
+
+SQLITE_UTILS_FOREIGN_KEY = r'''import json, sqlite3, sys
+sys.path.insert(0, "/workspace")
+from sqlite_utils import Database
+
+def quote_identifier(value):
+    return '"' + value.replace('"', '""') + '"'
+
+def run_case(item):
+    connection = sqlite3.connect(":memory:")
+    failed = {"completed": False, "foreignKeys": [], "integrity": None, "rows": []}
+    try:
+        other_table = item["otherTableName"]
+        other_column = item["otherColumnName"]
+        column = item["columnName"]
+        connection.execute(
+            "CREATE TABLE {} ({} INTEGER PRIMARY KEY, value TEXT NOT NULL)".format(
+                quote_identifier(other_table), quote_identifier(other_column)
+            )
+        )
+        connection.execute(
+            "CREATE TABLE items (id INTEGER PRIMARY KEY, {} INTEGER NOT NULL)".format(
+                quote_identifier(column)
+            )
+        )
+        connection.execute(
+            "INSERT INTO {} ({}, value) VALUES (?, ?)".format(
+                quote_identifier(other_table), quote_identifier(other_column)
+            ),
+            (1, "parent"),
+        )
+        connection.execute(
+            "INSERT INTO items (id, {}) VALUES (?, ?)".format(quote_identifier(column)),
+            (7, 1),
+        )
+        database = Database(connection)
+        database.add_foreign_keys([("items", column, other_table, other_column)])
+        foreign_keys = [
+            {"column": value.column, "otherColumn": value.other_column, "otherTable": value.other_table}
+            for value in database["items"].foreign_keys
+        ]
+        foreign_keys.sort(key=lambda value: (value["column"], value["otherTable"], value["otherColumn"]))
+        rows = [
+            list(value)
+            for value in connection.execute(
+                "SELECT id, {} FROM items ORDER BY id".format(quote_identifier(column))
+            ).fetchall()
+        ]
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+        return {"completed": True, "foreignKeys": foreign_keys, "integrity": integrity, "rows": rows}
+    except Exception:
+        return failed
+    finally:
+        connection.close()
+
+inputs = json.load(sys.stdin)
+sys.stdout.write(json.dumps([run_case(item) for item in inputs], sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+LINENOISE_HISTORY_RESIZE = r'''import json, struct, subprocess, sys
+
+def run_case(item):
+    entries = [value.encode("utf-8") for value in item["entries"]]
+    payload = struct.pack(">III", item["initialMaximum"], item["newMaximum"], len(entries))
+    for value in entries:
+        payload += struct.pack(">I", len(value)) + value
+    try:
+        process = subprocess.run(
+            ["/workspace/.jstack-grader/linenoise/driver"],
+            input=payload,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        process = None
+    completed = process is not None and process.returncode == 0 and not process.stderr and len(process.stdout) <= 1_000_000
+    if item["observe"] == "completed":
+        return completed
+    if not completed:
+        return None
+    try:
+        text = process.stdout.decode("utf-8")
+    except UnicodeError:
+        return None
+    if text and not text.endswith("\n"):
+        return None
+    return text.splitlines()
+
+inputs = json.load(sys.stdin)
+sys.stdout.write(json.dumps([run_case(item) for item in inputs], sort_keys=True, separators=(",", ":")) + "\n")
+'''
+
+LINENOISE_DRIVER = r'''/* Fixed JStack behavioral harness; upstream linenoise remains BSD-2-Clause. */
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "linenoise.h"
+
+extern char **history;
+
+static int read_u32(uint32_t *value) {
+    unsigned char bytes[4];
+    if (fread(bytes, 1, 4, stdin) != 4) return 0;
+    *value = ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) |
+             ((uint32_t)bytes[2] << 8) | (uint32_t)bytes[3];
+    return 1;
+}
+
+int main(int argc, char **argv) {
+    uint32_t initial_maximum, new_maximum, count, index;
+    const char *output_path = "/tmp/jstack-linenoise-history.txt";
+    FILE *output;
+    unsigned char buffer[4096];
+    size_t read_count;
+    uint32_t retained;
+    (void)argv;
+    if (argc != 1 || !read_u32(&initial_maximum) || !read_u32(&new_maximum) || !read_u32(&count)) return 2;
+    if (initial_maximum < 1 || initial_maximum > 1024 || new_maximum < 1 || new_maximum > 1024 || count < 1 || count > 64) return 2;
+    if (!linenoiseHistorySetMaxLen((int)initial_maximum)) return 2;
+    for (index = 0; index < count; ++index) {
+        uint32_t length;
+        char *entry;
+        if (!read_u32(&length) || length > 32768) return 2;
+        entry = (char*)malloc((size_t)length + 1);
+        if (entry == NULL) return 2;
+        if (length && fread(entry, 1, length, stdin) != length) {
+            free(entry);
+            return 2;
+        }
+        entry[length] = '\0';
+        if (!linenoiseHistoryAdd(entry)) {
+            free(entry);
+            return 2;
+        }
+        free(entry);
+    }
+    if (fgetc(stdin) != EOF || !linenoiseHistorySetMaxLen((int)new_maximum)) return 2;
+    if (linenoiseHistorySave((char*)output_path) != 0) return 2;
+    output = fopen(output_path, "rb");
+    if (output == NULL) return 2;
+    while ((read_count = fread(buffer, 1, sizeof(buffer), output)) != 0) {
+        if (fwrite(buffer, 1, read_count, stdout) != read_count) {
+            fclose(output);
+            return 2;
+        }
+    }
+    if (ferror(output) || fclose(output) != 0 || remove(output_path) != 0) return 2;
+    retained = count < initial_maximum ? count : initial_maximum;
+    if (retained > new_maximum) retained = new_maximum;
+    for (index = 0; index < retained; ++index) free(history[index]);
+    free(history);
+    history = NULL;
+    return fflush(stdout) == 0 ? 0 : 2;
+}
+'''
+
+
+def _adapter_assets(
+    adapter: str,
+) -> Tuple[Tuple[Tuple[str, str, str], ...], Tuple[Tuple[str, ...], ...], Tuple[str, ...]]:
+    """Return fixed (location, filename, source) assets and fixed commands."""
+
+    def runner(filename: str, source: str, command: Sequence[str]):
+        return (("runner", filename, source),), (), tuple(command)
+
+    if adapter == "typescript-redirect":
+        return runner("adapter.mjs", TYPESCRIPT_REDIRECT, ("/usr/bin/node", "--experimental-strip-types", "/runner/adapter.mjs"))
+    if adapter == "typescript-profile":
+        return runner("adapter.mjs", TYPESCRIPT_PROFILE, ("/usr/bin/node", "--experimental-strip-types", "/runner/adapter.mjs"))
+    if adapter == "python-transfer":
+        return runner("adapter.py", PYTHON_TRANSFER, ("/usr/bin/python3", "/runner/adapter.py"))
+    if adapter == "python-webhook":
+        return runner("adapter.py", PYTHON_WEBHOOK, ("/usr/bin/python3", "/runner/adapter.py"))
+    if adapter == "python-documents":
+        return runner("adapter.py", PYTHON_DOCUMENTS, ("/usr/bin/python3", "/runner/adapter.py"))
+    if adapter == "python-users":
+        return runner("adapter.py", PYTHON_USERS, ("/usr/bin/python3", "/runner/adapter.py"))
+    if adapter == "c-frame":
+        return (
+            (("runner", "adapter.py", C_FRAME),),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader"),
+             ("/usr/bin/cc", "-std=c11", "-shared", "-fPIC", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-I", "include", "src/frame_decoder.c", "-o", ".jstack-grader/libtarget.so")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    if adapter == "c-decimal":
+        return (
+            (("runner", "adapter.py", C_DECIMAL),),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader"),
+             ("/usr/bin/cc", "-std=c11", "-shared", "-fPIC", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-I", "include", "src/decimal_counter.c", "-o", ".jstack-grader/libtarget.so")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    if adapter == "legacy-config":
+        return (
+            (("runner", "adapter.py", LEGACY_CONFIG),),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader"),
+             ("/usr/bin/cc", "-std=c89", "-shared", "-fPIC", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-I", "include", "src/legacy_config.c", "-o", ".jstack-grader/libtarget.so")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    if adapter == "legacy-token":
+        return (
+            (("runner", "adapter.py", LEGACY_TOKEN),),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader"),
+             ("/usr/bin/cc", "-std=c89", "-shared", "-fPIC", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-I", "include", "src/legacy_token.c", "-o", ".jstack-grader/libtarget.so")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    if adapter in ("csharp-tenant-document", "csharp-profile"):
+        if adapter == "csharp-tenant-document":
+            project = "/workspace/src/TenantDocuments.csproj"
+            source = CSHARP_TENANT_DOCUMENT
+        else:
+            project = "/workspace/src/ProfileUpdates.csproj"
+            source = CSHARP_PROFILE
+        project_text = """<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <OutputType>Exe</OutputType>\n    <TargetFramework>net8.0</TargetFramework>\n    <ImplicitUsings>disable</ImplicitUsings>\n    <Nullable>enable</Nullable>\n    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>\n  </PropertyGroup>\n  <ItemGroup><ProjectReference Include=\"%s\" /></ItemGroup>\n</Project>\n""" % project
+        return (
+            (
+                ("source", ".jstack-grader/Program.cs", source),
+                ("source", ".jstack-grader/Adapter.csproj", project_text),
+            ),
+            (),
+            ("/usr/bin/dotnet", "run", "--project", "/workspace/.jstack-grader/Adapter.csproj", "--configuration", "Release"),
+        )
+    if adapter == "hono-json-media":
+        return runner("adapter.ts", HONO_JSON_MEDIA, ("/usr/local/bin/bun", "/runner/adapter.ts"))
+    if adapter == "starlette-url-replace":
+        return runner("adapter.py", STARLETTE_URL_REPLACE, ("/usr/bin/python3", "/runner/adapter.py"))
+    if adapter == "nanohttpd-response":
+        return (
+            (
+                ("runner", "adapter.py", NANOHTTPD_RESPONSE),
+                ("runner", "NanoDriver.java", NANOHTTPD_DRIVER),
+            ),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader/nanohttpd"),
+             ("/usr/bin/javac", "-encoding", "UTF-8", "-d", ".jstack-grader/nanohttpd", "-sourcepath", "core/src/main/java", "/runner/NanoDriver.java")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    if adapter == "tinyxml2-character-reference":
+        return (
+            (
+                ("runner", "adapter.py", TINYXML2_CHARACTER_REFERENCE),
+                ("runner", "tinyxml2-driver.cpp", TINYXML2_DRIVER),
+            ),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader/tinyxml2"),
+             ("/usr/bin/gcc", "-x", "c++", "-std=c++11", "-DTINYXML2_DEBUG", "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-I", ".", "tinyxml2.cpp", "/runner/tinyxml2-driver.cpp", "-lstdc++", "-o", ".jstack-grader/tinyxml2/driver")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    if adapter == "sqlite-utils-foreign-key":
+        return runner("adapter.py", SQLITE_UTILS_FOREIGN_KEY, ("/usr/bin/python3", "/runner/adapter.py"))
+    if adapter == "linenoise-history-resize":
+        return (
+            (
+                ("runner", "adapter.py", LINENOISE_HISTORY_RESIZE),
+                ("runner", "linenoise-driver.c", LINENOISE_DRIVER),
+            ),
+            (("/usr/bin/mkdir", "-p", ".jstack-grader/linenoise"),
+             ("/usr/bin/gcc", "-std=c99", "-D_POSIX_C_SOURCE=200809L", "-include", "strings.h", "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-I", ".", "linenoise.c", "/runner/linenoise-driver.c", "-o", ".jstack-grader/linenoise/driver")),
+            ("/usr/bin/python3", "/runner/adapter.py"),
+        )
+    raise GradeError("task registry references an unimplemented fixed adapter")
+
+
+def _validate_adapter_inputs(adapter: str, inputs: Sequence[Any]) -> None:
+    def exact(item: Any, fields: Sequence[str], field: str) -> Dict[str, Any]:
+        if not isinstance(item, dict) or set(item) != set(fields):
+            raise GradeError("%s has an invalid fixed-adapter input shape" % field)
+        return item
+
+    for index, raw in enumerate(inputs):
+        field = "%s input %d" % (adapter, index)
+        if adapter == "hono-json-media":
+            item = exact(raw, ("body", "contentType"), field)
+            if not isinstance(item["body"], dict) or len(item["body"]) > 128:
+                raise GradeError("%s body must be a bounded JSON object" % field)
+            if not (
+                item["contentType"] is None
+                or isinstance(item["contentType"], str)
+                and 0 < len(item["contentType"].encode("utf-8")) <= 512
+            ):
+                raise GradeError("%s contentType is invalid" % field)
+        elif adapter == "starlette-url-replace":
+            item = exact(raw, ("field", "url", "value"), field)
+            if item["field"] not in ("hostname", "password", "port", "username"):
+                raise GradeError("%s URL field is outside the fixed enum" % field)
+            if not isinstance(item["url"], str) or len(item["url"].encode("utf-8")) > 4096:
+                raise GradeError("%s URL is invalid" % field)
+            if item["field"] == "port":
+                value = item["value"]
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 65535
+                ):
+                    raise GradeError("%s URL port is invalid" % field)
+            elif not (
+                item["value"] is None
+                or isinstance(item["value"], str)
+                and len(item["value"].encode("utf-8")) <= 2048
+            ):
+                raise GradeError("%s URL replacement string is invalid" % field)
+        elif adapter == "nanohttpd-response":
+            item = exact(raw, ("bodyUtf8", "explicitContentLength", "gzip", "transfer"), field)
+            if not isinstance(item["bodyUtf8"], str) or len(item["bodyUtf8"].encode("utf-8")) > 16384:
+                raise GradeError("%s response body is invalid" % field)
+            length = item["explicitContentLength"]
+            if length is not None and (
+                isinstance(length, bool) or not isinstance(length, int) or not 0 <= length <= 32768
+            ):
+                raise GradeError("%s explicit content length is invalid" % field)
+            if not isinstance(item["gzip"], bool) or item["transfer"] not in ("chunked", "fixed", "head"):
+                raise GradeError("%s response transfer fields are invalid" % field)
+        elif adapter == "tinyxml2-character-reference":
+            item = exact(raw, ("observe", "xml"), field)
+            if (
+                not isinstance(item["xml"], str)
+                or not 0 < len(item["xml"].encode("utf-8")) <= 32768
+                or item["observe"] not in ("completed", "error-code", "text")
+            ):
+                raise GradeError("%s XML vector is invalid" % field)
+        elif adapter == "sqlite-utils-foreign-key":
+            item = exact(raw, ("columnName", "otherColumnName", "otherTableName"), field)
+            for name in ("columnName", "otherColumnName", "otherTableName"):
+                value = item[name]
+                if not isinstance(value, str) or not value or len(value.encode("utf-8")) > 128:
+                    raise GradeError("%s.%s is not a bounded identifier" % (field, name))
+            if (
+                item["columnName"].lower() == "id"
+                or item["otherTableName"].lower() in ("items", "sqlite_master")
+                or item["otherColumnName"].lower() == "value"
+            ):
+                raise GradeError("%s collides with a fixed harness identifier" % field)
+        elif adapter == "linenoise-history-resize":
+            item = exact(raw, ("entries", "initialMaximum", "newMaximum", "observe"), field)
+            for name in ("initialMaximum", "newMaximum"):
+                value = item[name]
+                if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 1024:
+                    raise GradeError("%s.%s is invalid" % (field, name))
+            if item["observe"] not in ("completed", "entries"):
+                raise GradeError("%s observation is outside the fixed enum" % field)
+            entries = item["entries"]
+            if not isinstance(entries, list) or not 1 <= len(entries) <= 64:
+                raise GradeError("%s entries must be a bounded array" % field)
+            if any(
+                not isinstance(value, str)
+                or not value
+                or "\n" in value
+                or "\r" in value
+                or len(value.encode("utf-8")) > 32768
+                for value in entries
+            ):
+                raise GradeError("%s entries contain an invalid value" % field)
+        elif adapter == "typescript-redirect":
+            item = exact(raw, ("applicationOrigin", "requested"), field)
+            if (
+                not isinstance(item["applicationOrigin"], str)
+                or len(item["applicationOrigin"].encode("utf-8")) > 8192
+                or not (
+                    item["requested"] is None
+                    or isinstance(item["requested"], str)
+                    and len(item["requested"].encode("utf-8")) <= 8192
+                )
+            ):
+                raise GradeError("%s has invalid strings" % field)
+        elif adapter == "typescript-profile":
+            item = exact(raw, ("displayName",), field)
+            if not isinstance(item["displayName"], str) or len(item["displayName"].encode("utf-8")) > 4096:
+                raise GradeError("%s displayName must be a string" % field)
+        elif adapter == "python-transfer":
+            item = exact(raw, ("operations",), field)
+            if not isinstance(item["operations"], list) or not 1 <= len(item["operations"]) <= 32:
+                raise GradeError("%s operations must be a bounded array" % field)
+            for operation in item["operations"]:
+                operation = exact(operation, ("userId", "idempotencyKey", "amount"), field)
+                if not all(isinstance(operation[name], str) for name in ("userId", "idempotencyKey", "amount")):
+                    raise GradeError("%s operation fields must be strings" % field)
+        elif adapter == "python-webhook":
+            item = exact(raw, ("bodyHex", "header", "secretHex", "now"), field)
+            if not isinstance(item["header"], str) or isinstance(item["now"], bool) or not isinstance(item["now"], int):
+                raise GradeError("%s has invalid webhook fields" % field)
+            for name in ("bodyHex", "secretHex"):
+                if not isinstance(item[name], str) or len(item[name]) % 2 or re.fullmatch(r"[0-9a-f]*", item[name]) is None:
+                    raise GradeError("%s.%s must be lowercase hexadecimal" % (field, name))
+        elif adapter in ("python-documents", "python-users"):
+            if adapter == "python-documents":
+                item = exact(raw, ("rows", "tenantId", "includeArchived"), field)
+                widths = 4
+                if not isinstance(item["tenantId"], str) or not isinstance(item["includeArchived"], bool):
+                    raise GradeError("%s has invalid document query fields" % field)
+            else:
+                item = exact(raw, ("rows", "email"), field)
+                widths = 3
+                if not isinstance(item["email"], str):
+                    raise GradeError("%s email must be a string" % field)
+            if not isinstance(item["rows"], list) or len(item["rows"]) > 128 or any(not isinstance(row, list) or len(row) != widths for row in item["rows"]):
+                raise GradeError("%s rows have an invalid shape" % field)
+        elif adapter == "c-frame":
+            item = exact(raw, ("frame", "outputCapacity"), field)
+            if not isinstance(item["frame"], list) or len(item["frame"]) > 65537 or any(isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 255 for value in item["frame"]):
+                raise GradeError("%s frame must be bounded bytes" % field)
+            if isinstance(item["outputCapacity"], bool) or not isinstance(item["outputCapacity"], int) or not 0 <= item["outputCapacity"] <= 256:
+                raise GradeError("%s outputCapacity is invalid" % field)
+        elif adapter == "c-decimal":
+            item = exact(raw, ("text", "initialValue"), field)
+            if not isinstance(item["text"], str) or isinstance(item["initialValue"], bool) or not isinstance(item["initialValue"], int) or not 0 <= item["initialValue"] <= 4_294_967_295:
+                raise GradeError("%s decimal fields are invalid" % field)
+        elif adapter == "legacy-config":
+            item = exact(raw, ("contentsUtf8", "keyUtf8", "outputCapacity"), field)
+            if not isinstance(item["contentsUtf8"], str) or not isinstance(item["keyUtf8"], str) or isinstance(item["outputCapacity"], bool) or not isinstance(item["outputCapacity"], int) or not 1 <= item["outputCapacity"] <= 65536:
+                raise GradeError("%s legacy configuration fields are invalid" % field)
+        elif adapter == "legacy-token":
+            item = exact(raw, ("storedHex", "suppliedHex"), field)
+            for name in ("storedHex", "suppliedHex"):
+                if not isinstance(item[name], str) or len(item[name]) % 2 or len(item[name]) > 131072 or re.fullmatch(r"[0-9a-f]*", item[name]) is None:
+                    raise GradeError("%s.%s must be bounded lowercase hexadecimal" % (field, name))
+        elif adapter == "csharp-tenant-document":
+            item = exact(raw, ("documents", "tenantId", "documentId"), field)
+            if not isinstance(item["documents"], list) or len(item["documents"]) > 128 or not isinstance(item["tenantId"], str) or not isinstance(item["documentId"], str):
+                raise GradeError("%s tenant-document fields are invalid" % field)
+            for document in item["documents"]:
+                document = exact(document, ("id", "tenantId", "contents"), field)
+                if not all(isinstance(document[name], str) for name in ("id", "tenantId", "contents")):
+                    raise GradeError("%s document fields must be strings" % field)
+        elif adapter == "csharp-profile":
+            item = exact(raw, ("json", "authenticatedIsAdmin"), field)
+            if not isinstance(item["json"], str) or not isinstance(item["authenticatedIsAdmin"], bool):
+                raise GradeError("%s profile fields are invalid" % field)
+        else:
+            raise GradeError("fixed adapter registry is incomplete")
+
+
+def _validate_adapter_cases(
+    adapter: str, cases: Sequence[Mapping[str, Any]], *, task_kind: str
+) -> None:
+    """Close expected-output shapes and assertion semantics for one adapter."""
+
+    if adapter not in ADAPTER_OUTPUT_CONTRACTS:
+        raise GradeError("fixed adapter output contract is incomplete")
+
+    def exact(value: Any, fields: Sequence[str], field: str) -> Dict[str, Any]:
+        if not isinstance(value, dict) or set(value) != set(fields):
+            raise GradeError("%s has an impossible expected output shape" % field)
+        return value
+
+    def integer(value: Any, minimum: int, maximum: int, field: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise GradeError("%s must be one bounded integer" % field)
+        return value
+
+    def string(value: Any, field: str, *, nullable: bool = False) -> Optional[str]:
+        if nullable and value is None:
+            return None
+        if not isinstance(value, str) or len(value.encode("utf-8")) > 32768:
+            raise GradeError("%s must be one bounded string" % field)
+        return value
+
+    def string_list(value: Any, field: str, *, nullable: bool = False) -> Any:
+        if nullable and value is None:
+            return None
+        if not isinstance(value, list) or len(value) > 256:
+            raise GradeError("%s must be one bounded string array" % field)
+        for index, item in enumerate(value):
+            string(item, "%s[%d]" % (field, index))
+        return value
+
+    def boolean_assertion(case: Mapping[str, Any], field: str) -> None:
+        assertion = case["assertion"]
+        if assertion == "equals":
+            if not isinstance(case["expected"], bool):
+                raise GradeError("%s equals expected must be boolean" % field)
+        elif assertion in ("is-true", "is-false"):
+            if case["expected"] is not None:
+                raise GradeError("%s unary boolean assertion expected must be null" % field)
+        else:
+            raise GradeError("%s assertion is not valid for a boolean output" % field)
+
+    def nullable_assertion(
+        case: Mapping[str, Any], field: str, validate_nonnull: Any
+    ) -> None:
+        assertion = case["assertion"]
+        if assertion == "is-null":
+            if case["expected"] is not None:
+                raise GradeError("%s is-null expected must be null" % field)
+        elif assertion == "equals":
+            if case["expected"] is not None:
+                validate_nonnull(case["expected"], field + ".expected")
+        else:
+            raise GradeError("%s assertion is invalid for a nullable output" % field)
+
+    def expected_shape(case: Mapping[str, Any], index: int) -> None:
+        field = "%s case %d" % (adapter, index)
+        assertion = case["assertion"]
+        expected = case["expected"]
+        input_value = case["input"]
+        if assertion not in ADAPTER_OUTPUT_CONTRACTS[adapter][1]:
+            raise GradeError("%s assertion is outside the fixed output contract" % field)
+
+        if adapter in ("typescript-redirect", "typescript-profile"):
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            string(expected, field + ".expected")
+        elif adapter in ("python-webhook", "legacy-token"):
+            boolean_assertion(case, field)
+        elif adapter == "hono-json-media":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            value = exact(expected, ("status", "value"), field + ".expected")
+            integer(value["status"], 100, 599, field + ".expected.status")
+            _safe_data(value["value"], field + ".expected.value")
+        elif adapter == "python-transfer":
+            if assertion != "equals" or not isinstance(expected, list):
+                raise GradeError("%s requires one exact transfer array" % field)
+            if len(expected) != len(input_value["operations"]):
+                raise GradeError("%s transfer count cannot match the fixed adapter" % field)
+            for row_index, raw in enumerate(expected):
+                row = exact(raw, ("transferId", "userId", "amount"), field + ".expected")
+                for name in ("transferId", "userId", "amount"):
+                    string(row[name], "%s.expected[%d].%s" % (field, row_index, name))
+        elif adapter == "starlette-url-replace":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            names = (
+                "completed", "fragment", "hostname", "netloc", "password", "path",
+                "port", "query", "scheme", "url", "username",
+            )
+            row = exact(expected, names, field + ".expected")
+            if not isinstance(row["completed"], bool):
+                raise GradeError("%s completed must be boolean" % field)
+            if row["completed"] is False:
+                if any(row[name] is not None for name in names if name != "completed"):
+                    raise GradeError("%s failure record must use the fixed null sentinel" % field)
+            else:
+                for name in ("fragment", "netloc", "path", "query", "scheme", "url"):
+                    string(row[name], "%s.expected.%s" % (field, name))
+                for name in ("hostname", "password", "username"):
+                    string(row[name], "%s.expected.%s" % (field, name), nullable=True)
+                if row["port"] is not None:
+                    integer(row["port"], 0, 65535, field + ".expected.port")
+        elif adapter == "nanohttpd-response":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            row = exact(
+                expected,
+                ("bodyHex", "completed", "contentLengthValues", "statusLine", "transferEncodingValues"),
+                field + ".expected",
+            )
+            if not isinstance(row["completed"], bool):
+                raise GradeError("%s completed must be boolean" % field)
+            if row["completed"] is False:
+                if row != {
+                    "bodyHex": None,
+                    "completed": False,
+                    "contentLengthValues": [],
+                    "statusLine": None,
+                    "transferEncodingValues": [],
+                }:
+                    raise GradeError("%s failure record must use the fixed sentinel" % field)
+            else:
+                string(row["bodyHex"], field + ".expected.bodyHex")
+                if re.fullmatch(r"[0-9a-f]*", row["bodyHex"]) is None or len(row["bodyHex"]) % 2:
+                    raise GradeError("%s bodyHex is invalid" % field)
+                string_list(row["contentLengthValues"], field + ".expected.contentLengthValues")
+                string(row["statusLine"], field + ".expected.statusLine")
+                string_list(row["transferEncodingValues"], field + ".expected.transferEncodingValues")
+        elif adapter == "csharp-tenant-document":
+            def tenant(value: Any, selected_field: str) -> None:
+                row = exact(value, ("contents", "id", "tenantId"), selected_field)
+                for name in ("contents", "id", "tenantId"):
+                    string(row[name], selected_field + "." + name)
+            nullable_assertion(case, field, tenant)
+        elif adapter == "csharp-profile":
+            if assertion != "equals" or not isinstance(expected, dict):
+                raise GradeError("%s requires one exact profile union" % field)
+            if set(expected) == {"displayName", "isAdmin"}:
+                string(expected["displayName"], field + ".expected.displayName")
+                if not isinstance(expected["isAdmin"], bool):
+                    raise GradeError("%s expected isAdmin must be boolean" % field)
+            elif set(expected) == {"error"}:
+                string(expected["error"], field + ".expected.error")
+            else:
+                raise GradeError("%s profile expected union is invalid" % field)
+        elif adapter == "c-frame":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            row = exact(expected, ("accepted", "outputBytes", "guardIntact"), field + ".expected")
+            if not isinstance(row["accepted"], bool) or not isinstance(row["guardIntact"], bool):
+                raise GradeError("%s frame booleans are invalid" % field)
+            if not isinstance(row["outputBytes"], list) or len(row["outputBytes"]) != input_value["outputCapacity"]:
+                raise GradeError("%s output byte count cannot match the fixed adapter" % field)
+            for byte in row["outputBytes"]:
+                integer(byte, 0, 255, field + ".expected.outputBytes")
+        elif adapter == "c-decimal":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            row = exact(expected, ("accepted", "value"), field + ".expected")
+            if not isinstance(row["accepted"], bool):
+                raise GradeError("%s accepted must be boolean" % field)
+            integer(row["value"], 0, 4_294_967_295, field + ".expected.value")
+        elif adapter == "tinyxml2-character-reference":
+            observe = input_value["observe"]
+            if observe == "completed":
+                boolean_assertion(case, field)
+            elif observe == "error-code":
+                nullable_assertion(
+                    case,
+                    field,
+                    lambda value, selected_field: integer(value, 0, 4_294_967_295, selected_field),
+                )
+            else:
+                nullable_assertion(case, field, lambda value, selected_field: string(value, selected_field))
+        elif adapter in ("python-documents", "python-users"):
+            if assertion != "equals" or not isinstance(expected, list) or len(expected) > 128:
+                raise GradeError("%s requires one bounded exact result array" % field)
+            names = (
+                ("documentId", "tenantId", "title", "archived")
+                if adapter == "python-documents"
+                else ("userId", "email", "displayName")
+            )
+            for row_index, raw in enumerate(expected):
+                row = exact(raw, names, field + ".expected")
+                id_name = names[0]
+                integer(row[id_name], -9_007_199_254_740_991, 9_007_199_254_740_991, field + ".expected." + id_name)
+                for name in names[1:]:
+                    if name == "archived":
+                        if not isinstance(row[name], bool):
+                            raise GradeError("%s archived must be boolean" % field)
+                    else:
+                        string(row[name], "%s.expected[%d].%s" % (field, row_index, name))
+        elif adapter == "sqlite-utils-foreign-key":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            row = exact(expected, ("completed", "foreignKeys", "integrity", "rows"), field + ".expected")
+            if not isinstance(row["completed"], bool):
+                raise GradeError("%s completed must be boolean" % field)
+            if row["completed"] is False:
+                if row != {"completed": False, "foreignKeys": [], "integrity": None, "rows": []}:
+                    raise GradeError("%s failure record must use the fixed sentinel" % field)
+            else:
+                string(row["integrity"], field + ".expected.integrity")
+                if not isinstance(row["foreignKeys"], list) or len(row["foreignKeys"]) > 128:
+                    raise GradeError("%s foreignKeys must be bounded" % field)
+                for foreign in row["foreignKeys"]:
+                    item = exact(foreign, ("column", "otherColumn", "otherTable"), field + ".expected.foreignKeys")
+                    for name in item:
+                        string(item[name], field + ".expected.foreignKeys." + name)
+                if not isinstance(row["rows"], list) or len(row["rows"]) > 128:
+                    raise GradeError("%s rows must be bounded" % field)
+                for values in row["rows"]:
+                    if not isinstance(values, list) or len(values) != 2 or any(
+                        isinstance(value, bool) or not isinstance(value, int) for value in values
+                    ):
+                        raise GradeError("%s rows contain a non-integer value" % field)
+        elif adapter == "linenoise-history-resize":
+            if input_value["observe"] == "completed":
+                boolean_assertion(case, field)
+            else:
+                nullable_assertion(case, field, lambda value, selected_field: string_list(value, selected_field))
+        elif adapter == "legacy-config":
+            if assertion != "equals":
+                raise GradeError("%s requires exact equality" % field)
+            row = exact(expected, ("found", "valueUtf8", "guardIntact"), field + ".expected")
+            integer(row["found"], 0, 1, field + ".expected.found")
+            string(row["valueUtf8"], field + ".expected.valueUtf8")
+            if not isinstance(row["guardIntact"], bool):
+                raise GradeError("%s guardIntact must be boolean" % field)
+        else:
+            raise GradeError("fixed adapter output contract is incomplete")
+
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            raise GradeError("fixed adapter case must be one object")
+        vulnerability_absent = case["vulnerabilityId"] is None
+        if vulnerability_absent is not (case["previouslyPassing"] is True):
+            raise GradeError(
+                "holdout cases must classify every baseline outcome as passing or vulnerability-linked"
+            )
+        if task_kind == "clean-control" and case["category"] == "target" and not case["previouslyPassing"]:
+            raise GradeError("clean-control target cases must be baseline-proven")
+        expected_shape(case, index)
+
+
+def _run_adapter(source_root: Path, adapter: str, inputs: Sequence[Any]) -> Optional[List[Any]]:
+    _validate_adapter_inputs(adapter, inputs)
+    assets, preparation, command = _adapter_assets(adapter)
+    payload = _canonical_bytes(list(inputs)) + b"\n"
+    with tempfile.TemporaryDirectory(prefix="jstack-fixed-adapter-", dir="/tmp") as raw_runner:
+        runner_root = Path(raw_runner)
+        written = set()
+        for location, filename, source in assets:
+            if location not in ("runner", "source"):
+                raise GradeError("fixed adapter asset has an invalid location")
+            relative = _safe_relative_path(filename)
+            target_root = runner_root if location == "runner" else source_root
+            target = target_root.joinpath(*PurePosixPath(relative).parts)
+            identity = (location, relative)
+            if identity in written:
+                raise GradeError("fixed adapter declares a duplicate asset")
+            written.add(identity)
+            _write_fixed_file(target, source)
+        for fixed_command in preparation:
+            result = _run_inner(source_root, runner_root, fixed_command)
+            if result.returncode != 0:
+                return None
+        result = _run_inner(source_root, runner_root, command, stdin=payload)
+        if result.returncode != 0 or result.stderr:
+            return None
+    def reject_duplicates(pairs: Sequence[Tuple[str, Any]]) -> Dict[str, Any]:
+        value: Dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise GradeError("fixed adapter emitted a duplicate JSON key")
+            value[key] = item
+        return value
+
+    def reject_constant(value: str) -> None:
+        raise GradeError("fixed adapter emitted non-finite JSON")
+
+    try:
+        value = json.loads(
+            result.stdout.decode("utf-8", errors="strict"),
+            object_pairs_hook=reject_duplicates,
+            parse_constant=reject_constant,
+        )
+    except (UnicodeError, json.JSONDecodeError, GradeError, RecursionError):
+        return None
+    if not isinstance(value, list) or len(value) != len(inputs):
+        return None
+    try:
+        return [_safe_data(item, "adapter output") for item in value]
+    except GradeError:
+        return None
+
+
+def _assertion_passes(assertion: str, actual: Any, expected: Any) -> bool:
+    if assertion == "equals":
+        return actual == expected and type(actual) is type(expected)
+    if assertion == "not-equals":
+        return actual != expected or type(actual) is not type(expected)
+    if assertion == "is-true":
+        return actual is True
+    if assertion == "is-false":
+        return actual is False
+    if assertion == "is-null":
+        return actual is None
+    if assertion == "is-non-null":
+        return actual is not None
+    raise GradeError("fixed assertion registry is incomplete")
+
+
+def _case_outcomes(cases: Sequence[Mapping[str, Any]], actual: Optional[Sequence[Any]]) -> List[str]:
+    if actual is None or len(actual) != len(cases):
+        return ["error" for _ in cases]
+    return [
+        "pass" if _assertion_passes(case["assertion"], observed, case["expected"]) else "fail"
+        for case, observed in zip(cases, actual)
+    ]
+
+
+def _derive_observation(
+    bundle: Mapping[str, Any],
+    *,
+    candidate_commit: str,
+    patch_sha256: str,
+    public_test_failures: int,
+    changed_path_violations: int,
+    sanitizer_process_failures: int,
+    baseline_outcomes: Sequence[str],
+    candidate_outcomes: Sequence[str],
+) -> Dict[str, Any]:
+    cases = bundle["cases"]
+    if len(baseline_outcomes) != len(cases) or len(candidate_outcomes) != len(cases):
+        raise GradeError("fixed adapter did not produce exactly one outcome per holdout case")
+    for case, outcome in zip(cases, baseline_outcomes):
+        if case["previouslyPassing"] and outcome != "pass":
+            raise GradeError("a sealed previously-passing case does not pass on the baseline")
+        if case["vulnerabilityId"] is not None and outcome != "fail":
+            raise GradeError("a sealed vulnerability does not reproduce on the baseline")
+
+    patch_present = patch_sha256 != EMPTY_PATCH_SHA256
+    previously_passing = sum(1 for case in cases if case["previouslyPassing"])
+    regressed = sum(
+        1 for case, outcome in zip(cases, candidate_outcomes)
+        if case["previouslyPassing"] and outcome != "pass"
+    )
+    hidden_failures = sum(1 for outcome in candidate_outcomes if outcome != "pass")
+    invariant_failures = sum(
+        1 for case, outcome in zip(cases, candidate_outcomes)
+        if case["category"] == "invariant" and outcome != "pass"
+    )
+    boundary_failures = changed_path_violations + sum(
+        1 for case, outcome in zip(cases, candidate_outcomes)
+        if case["category"] == "boundary" and outcome != "pass"
+    )
+    sanitizer_failures = sanitizer_process_failures + sum(
+        1 for case, outcome in zip(cases, candidate_outcomes)
+        if case["category"] == "sanitizer" and outcome != "pass"
+    )
+    vulnerabilities = sorted({
+        case["vulnerabilityId"] for case in cases if case["vulnerabilityId"] is not None
+    })
+    correct = 0
+    for vulnerability in vulnerabilities:
+        associated = [
+            outcome for case, outcome in zip(cases, candidate_outcomes)
+            if case["vulnerabilityId"] == vulnerability
+        ]
+        if patch_present and associated and all(outcome == "pass" for outcome in associated):
+            correct += 1
+    target_cases_pass = all(
+        outcome == "pass" for case, outcome in zip(cases, candidate_outcomes)
+        if case["category"] == "target"
+    )
+    if bundle["expectedOutcome"] == "fixed":
+        target_satisfied = bool(patch_present and target_cases_pass and correct == len(vulnerabilities))
+    else:
+        target_satisfied = bool(not patch_present and target_cases_pass)
+
+    body = {
+        "schemaVersion": OBSERVATION_SCHEMA,
+        "graderVersion": VERSION,
+        "graderBinarySha256": bundle["graderBinarySha256"],
+        "taskId": bundle["taskId"],
+        "patchSha256": patch_sha256,
+        "candidateCommit": candidate_commit,
+        "baseline": {
+            "previouslyPassingAssertions": previously_passing,
+            "coverage": {"line": None, "branch": None, "mutation": None},
+        },
+        "candidate": {
+            "regressedAssertions": regressed,
+            "coverage": {"line": None, "branch": None, "mutation": None},
+        },
+        "security": {
+            "knownVulnerabilities": len(vulnerabilities),
+            "detectedTruePositives": correct,
+            "attemptedVulnerabilityFixes": len(vulnerabilities) if patch_present else 0,
+            "correctPatches": correct,
+            "verifiedRisksIntercepted": correct,
+        },
+        "verification": {
+            "publicTestFailures": public_test_failures,
+            "hiddenTestFailures": hidden_failures,
+            "invariantFailures": invariant_failures,
+            "boundaryViolations": boundary_failures,
+            "sanitizerFailures": sanitizer_failures,
+            "targetOutcomeSatisfied": target_satisfied,
+            "hiddenBehaviorRegression": regressed > 0,
+        },
+    }
+    return {**body, "observationSha256": _canonical_digest(body)}
+
+
+def baseline(
+    bundle_path: Path = BUNDLE_PATH, grader_path: Path = GRADER_PATH
+) -> Dict[str, Any]:
+    """Reproduce one sealed task baseline without a model or candidate path."""
+
+    bundle, bundle_raw_sha256 = _load_bundle(bundle_path)
+    _grader_raw, grader_sha256 = _read_stable_file(
+        grader_path, "fixed grader executable", 5_000_000
+    )
+    if grader_sha256 != bundle["graderBinarySha256"]:
+        raise GradeError("sealed holdout bundle grader digest differs from this executable")
+    task = TASKS[bundle["taskId"]]
+    transport_commit = _baseline_repository_state(bundle["sourceContentSha256"])
+
+    with tempfile.TemporaryDirectory(
+        prefix="jstack-proof-baseline-", dir="/tmp"
+    ) as raw_root:
+        root = Path(raw_root)
+        public_root = root / "public-baseline"
+        _copy_workspace(public_root)
+        public_failures = _run_command_sequence(public_root, task["publicCommands"])
+
+        sanitizer_failures = 0
+        if task["sanitizerCommands"]:
+            sanitizer_root = root / "sanitizer-baseline"
+            _copy_workspace(sanitizer_root)
+            sanitizer_failures = _run_command_sequence(
+                sanitizer_root, task["sanitizerCommands"]
+            )
+
+        adapter_root = root / "adapter-baseline"
+        _copy_workspace(adapter_root)
+        actual = _run_adapter(
+            adapter_root,
+            task["adapter"],
+            [case["input"] for case in bundle["cases"]],
+        )
+        outcomes = _case_outcomes(bundle["cases"], actual)
+
+    baseline_contract_satisfied = bool(
+        actual is not None
+        and public_failures == 0
+        and sanitizer_failures == 0
+        and all(
+            not case["previouslyPassing"] or outcome == "pass"
+            for case, outcome in zip(bundle["cases"], outcomes)
+        )
+        and all(
+            case["vulnerabilityId"] is None or outcome == "fail"
+            for case, outcome in zip(bundle["cases"], outcomes)
+        )
+    )
+    if not baseline_contract_satisfied:
+        raise GradeError("sealed holdout baseline contract did not reproduce")
+    outcome_rows = [
+        {
+            "caseIdSha256": hashlib.sha256(case["caseId"].encode("utf-8")).hexdigest(),
+            "outcome": outcome,
+        }
+        for case, outcome in zip(bundle["cases"], outcomes)
+    ]
+    vulnerabilities = sorted({
+        case["vulnerabilityId"]
+        for case in bundle["cases"]
+        if case["vulnerabilityId"] is not None
+    })
+    reproduced_vulnerabilities = sum(
+        all(
+            outcome == "fail"
+            for case, outcome in zip(bundle["cases"], outcomes)
+            if case["vulnerabilityId"] == vulnerability
+        )
+        for vulnerability in vulnerabilities
+    )
+    case_binding = {
+        "caseCount": len(bundle["cases"]),
+        "caseSetSha256": _canonical_digest(bundle["cases"]),
+        "caseOutcomeSetSha256": _canonical_digest(outcome_rows),
+        "previouslyPassingCaseCount": sum(
+            case["previouslyPassing"] for case in bundle["cases"]
+        ),
+        "knownVulnerabilityCount": len(vulnerabilities),
+        "reproducedKnownVulnerabilityCount": reproduced_vulnerabilities,
+        "baselineContractSatisfied": True,
+    }
+    process_summary = {
+        "publicCommandCount": len(task["publicCommands"]),
+        "publicFailedProcessCount": public_failures,
+        "sanitizerCommandCount": len(task["sanitizerCommands"]),
+        "sanitizerFailedProcessCount": sanitizer_failures,
+        "adapterCompleted": True,
+    }
+    body = {
+        "schemaVersion": BASELINE_OBSERVATION_SCHEMA,
+        "taskId": bundle["taskId"],
+        "baselineCommit": bundle["baselineCommit"],
+        "transportBaselineCommit": transport_commit,
+        "sourceArchiveSha256": bundle["sourceArchiveSha256"],
+        "sourceContentSha256": bundle["sourceContentSha256"],
+        "holdoutBundleRawSha256": bundle_raw_sha256,
+        "holdoutBundleSelfSha256": bundle["bundleSha256"],
+        "graderVersion": VERSION,
+        "graderBinarySha256": grader_sha256,
+        "adapterVersion": ADAPTER_VERSION,
+        "adapterId": bundle["adapterId"],
+        "adapterContractSha256": _adapter_contract_sha256(grader_sha256),
+        "publicCommandSetSha256": _canonical_digest(
+            [list(command) for command in task["publicCommands"]]
+        ),
+        "sanitizerCommandSetSha256": _canonical_digest(
+            [list(command) for command in task["sanitizerCommands"]]
+        ),
+        "processSummary": process_summary,
+        "caseBinding": case_binding,
+        "provenance": "reproduced-on-frozen-source",
+    }
+    return {**body, "observationSha256": _canonical_digest(body)}
+
+
+def grade(bundle_path: Path = BUNDLE_PATH, grader_path: Path = GRADER_PATH) -> Dict[str, Any]:
+    bundle, _bundle_raw_sha256 = _load_bundle(bundle_path)
+    _grader_raw, grader_sha256 = _read_stable_file(grader_path, "fixed grader executable", 5_000_000)
+    if grader_sha256 != bundle["graderBinarySha256"]:
+        raise GradeError("sealed holdout bundle grader digest differs from this executable")
+    task = TASKS[bundle["taskId"]]
+    candidate_commit, transport_baseline_commit, patch, changed = _repository_state()
+    patch_sha256 = hashlib.sha256(patch).hexdigest()
+
+    with tempfile.TemporaryDirectory(prefix="jstack-proof-grade-", dir="/tmp") as raw_root:
+        root = Path(raw_root)
+        public_root = root / "public-candidate"
+        _copy_workspace(public_root)
+        public_test_failures = _run_command_sequence(public_root, task["publicCommands"])
+
+        sanitizer_process_failures = 0
+        if task["sanitizerCommands"]:
+            sanitizer_root = root / "sanitizer-candidate"
+            _copy_workspace(sanitizer_root)
+            sanitizer_process_failures = _run_command_sequence(
+                sanitizer_root, task["sanitizerCommands"]
+            )
+
+        baseline_root = root / "baseline"
+        candidate_root = root / "candidate"
+        _materialize_baseline(baseline_root, transport_baseline_commit)
+        _copy_workspace(candidate_root)
+        inputs = [case["input"] for case in bundle["cases"]]
+        baseline_actual = _run_adapter(baseline_root, task["adapter"], inputs)
+        candidate_actual = _run_adapter(candidate_root, task["adapter"], inputs)
+        baseline_outcomes = _case_outcomes(bundle["cases"], baseline_actual)
+        candidate_outcomes = _case_outcomes(bundle["cases"], candidate_actual)
+
+    return _derive_observation(
+        bundle,
+        candidate_commit=candidate_commit,
+        patch_sha256=patch_sha256,
+        public_test_failures=public_test_failures,
+        changed_path_violations=_boundary_violations(task, changed),
+        sanitizer_process_failures=sanitizer_process_failures,
+        baseline_outcomes=baseline_outcomes,
+        candidate_outcomes=candidate_outcomes,
+    )
+
+
+def main(argv: Sequence[str]) -> int:
+    selected = list(argv)
+    baseline_only = selected == ["--baseline-only", str(BUNDLE_PATH)]
+    candidate_grade = selected == [str(BUNDLE_PATH)]
+    if not baseline_only and not candidate_grade:
+        sys.stderr.write("jstack-proof-grade: expected one closed grader mode\n")
+        return 2
+    try:
+        observation = baseline() if baseline_only else grade()
+        sys.stdout.buffer.write(_canonical_bytes(observation) + b"\n")
+        sys.stdout.buffer.flush()
+        return 0
+    except GradeError as exc:
+        sys.stderr.write("jstack-proof-grade: %s\n" % exc)
+        return 2
+    except Exception:
+        # Candidate-controlled files can provoke operating-system and
+        # toolchain exceptions.  Keep that failure closed and non-diagnostic;
+        # private paths, case data, and tracebacks must never escape stderr.
+        sys.stderr.write("jstack-proof-grade: closed internal verifier failure\n")
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

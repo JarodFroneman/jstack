@@ -28,6 +28,50 @@ The alpha.10 mock fixture similarly proves the harness plumbing and arithmetic;
 it is not evidence that JStack beats plain prompting or that one host beats
 another.
 
+## Beta.1 Study Boundary
+
+Beta.1 is the first real Codex study milestone. Its study-validation and claim
+gate is deliberately larger than its implementation and distribution gate:
+runner code and task fixtures are not a result. A validated study or any
+performance, uplift, or release-readiness claim requires all of the following
+to exist and verify together:
+
+- 18 qualified tasks across the six declared families;
+- one immutable, published, preregistered 216-cell execution plan;
+- 216 write-once terminal model attempts, including every failure, blocker,
+  and timeout;
+- hidden grading performed in fresh VMs only after all attempts terminate;
+- 432 cryptographically verified, blinded primary human reviews and every
+  required distinct adjudication;
+- 216 complete private evidence chains projected into minimized public run,
+  review, and attestation documents;
+- one canonical private-evidence verification-set receipt proving all private
+  chains and human signatures were re-verified, including pair-wide
+  adjudicator independence, plus a detached OpenSSH signature from the
+  separately preregistered evidence-verifier key; and
+- exact scorer reconciliation plus an honest limitations/gap report.
+
+Preregistration also binds a deterministic harness lock covering every direct
+`tools/proof_plane` implementation file and every eval runner, schema, and
+protocol file. The lock excludes only its own JSON to avoid a hash cycle; its
+raw digest is bound in the registration. Missing or added harness files,
+symlinks, traversal, duplicate paths, and byte drift all fail closed.
+
+Controlled mode exposes the same four Proof-broker tools to both conditions
+and measures workflow-protocol uplift. Operational mode separately compares
+the plain broker surface with the broker plus the exact frozen 52-tool JStack
+MCP. Neither mode gains network, host, secret, hidden-test, GitHub, deployment,
+or production authority.
+
+The current maintainer tooling must fail closed while a qualified container VM,
+final task images, immutable registration, private holdouts, or the human
+review roster is absent. See [ADR 0021](../docs/adr/0021-beta1-codex-proof-study.md)
+and the [reviewed task-artifact lifecycle](../docs/proof-plane-beta1-task-artifact-lifecycle.md).
+ADR 0022 permits the exact Beta.1 product bytes to be distributed separately
+as an explicitly unvalidated GitHub prerelease and Codex installation. That
+distribution does not complete this study, populate its denominator, or turn
+its absent evidence into a result.
+
 ## Local Verification
 
 Run from the repository root:

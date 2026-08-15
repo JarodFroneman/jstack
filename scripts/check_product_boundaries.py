@@ -86,6 +86,7 @@ CORE_STDLIB_IMPORTS = {
 }
 NETWORK_IMPORTS = {"aiohttp", "ftplib", "http", "httpx", "requests", "smtplib", "socket", "urllib3"}
 VENDOR_IMPORTS = {"anthropic", "azure", "boto3", "github", "gitlab", "google", "openai", "semgrep", "snyk", "trivy"}
+PROOF_MAINTAINER_ROOT = ROOT / "tools" / "proof_plane"
 
 
 def _load_module(name: str, path: Path) -> Any:
@@ -201,6 +202,21 @@ def check_boundaries() -> list[str]:
         errors.append("dedicated plugins must not package the Proof Plane")
     if "evals" in imports:
         errors.append("installed MCP must not import the Proof Plane")
+    if not PROOF_MAINTAINER_ROOT.is_dir():
+        errors.append("maintainer-only Proof Plane tooling is missing")
+    else:
+        proof_imports = _absolute_import_roots(PROOF_MAINTAINER_ROOT)
+        if proof_imports & VENDOR_IMPORTS:
+            errors.append("maintainer Proof Plane must not import vendor SDKs")
+        if any("tools/proof_plane" in path.as_posix() for path in managed_paths):
+            errors.append("maintainer Proof Plane tools must not be synchronized into installed artifacts")
+        for install_root in (ROOT / "plugin", ROOT / "plugins", ROOT / "mcp"):
+            if any("proof_plane" in path.parts for path in install_root.rglob("*")):
+                errors.append("installed artifacts must not package maintainer Proof Plane tools")
+        for path in (ROOT / "mcp" / "jstack").rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            if "tools.proof_plane" in text:
+                errors.append("installed MCP must not import maintainer Proof Plane tools")
     errors.extend(_evals_forbidden_actions())
     return errors
 

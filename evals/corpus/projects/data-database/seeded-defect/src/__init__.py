@@ -1,0 +1,1 @@
+"""SQLite document repository fixture."""

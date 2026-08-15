@@ -1,0 +1,12 @@
+{
+  "name": "jstack-eval-profile-fragment",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}
