@@ -569,6 +569,12 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("$rule.PropagationFlags -band $inheritOnlyFlag", script)
         self.assertIn("$allowed -notcontains $owner", script)
         self.assertIn("$allowed -notcontains $sid", script)
+        self.assertIn("$ownerRightsSid = 'S-1-3-4'", script)
+        self.assertIn("$ownerRights = $sid -eq $ownerRightsSid", script)
+        self.assertLess(
+            script.index("$allowed -notcontains $owner"),
+            script.index("$ownerRights = $sid -eq $ownerRightsSid"),
+        )
         self.assertEqual(str(target), runner.call_args.args[1]["JSTACK_ACL_PATH"])
 
     def test_powershell_wrapper_forwards_supported_args_and_propagates_failure(self) -> None:

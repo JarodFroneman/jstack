@@ -254,6 +254,7 @@ function Assert-JStackPrivateAcl {
     ).Value
     $allowType = [System.Security.AccessControl.AccessControlType]::Allow
     $inheritOnlyFlag = [System.Security.AccessControl.PropagationFlags]::InheritOnly
+    $ownerRightsSid = 'S-1-3-4'
     if ($allowed -notcontains $owner) {
         exit 22
     }
@@ -268,7 +269,15 @@ function Assert-JStackPrivateAcl {
             $sid -eq 'S-1-3-0' -and
             ($rule.PropagationFlags -band $inheritOnlyFlag)
         )
-        if (($allowed -notcontains $sid) -and -not $creatorOwner) {
+        # CPython 3.9+ secure temporary directories can use OWNER RIGHTS.
+        # The object owner was allowlisted above, so this well-known SID does
+        # not widen access beyond that already-approved owner.
+        $ownerRights = $sid -eq $ownerRightsSid
+        if (
+            ($allowed -notcontains $sid) -and
+            -not $creatorOwner -and
+            -not $ownerRights
+        ) {
             exit 23
         }
     }
