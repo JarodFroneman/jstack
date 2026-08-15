@@ -76,6 +76,11 @@ for source in sorted((ROOT / "mcp" / "jstack" / "program").rglob("*")):
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "program")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "program" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "ui").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "ui")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "ui" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "schemas").glob("*.json")):
     FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "schemas" / source.name]
 
@@ -97,6 +102,14 @@ for source in sorted((ROOT / "skills" / "jstack-loop").rglob("*")):
 FILE_MAP[ROOT / "skills" / "jstack-loop" / "references" / "mastery-system.md"].append(
     ROOT / "docs" / "loop-mastery-system.md"
 )
+
+for source in sorted((ROOT / "skills" / "product-ui-design").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "skills" / "product-ui-design")
+        FILE_MAP[source] = [
+            ROOT / "plugin" / "skills" / "product-ui-design" / relative,
+            ROOT / "plugins" / "j-stack-dev" / "skills" / "product-ui-design" / relative,
+        ]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "templates").glob("*")):
     if source.is_file():
@@ -125,6 +138,7 @@ TREE_MIRRORS = (
     (ROOT / "mcp" / "jstack" / "launch", ROOT / "plugin" / "mcp" / "launch"),
     (ROOT / "mcp" / "jstack" / "loop", ROOT / "plugin" / "mcp" / "loop"),
     (ROOT / "mcp" / "jstack" / "program", ROOT / "plugin" / "mcp" / "program"),
+    (ROOT / "mcp" / "jstack" / "ui", ROOT / "plugin" / "mcp" / "ui"),
     (ROOT / "mcp" / "jstack" / "schemas", ROOT / "plugin" / "mcp" / "schemas"),
     (ROOT / "skills" / "jstack-audit", ROOT / "plugin" / "skills" / "jstack-audit"),
     (
@@ -135,6 +149,14 @@ TREE_MIRRORS = (
     (
         ROOT / "skills" / "jstack-loop",
         ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop",
+    ),
+    (
+        ROOT / "skills" / "product-ui-design",
+        ROOT / "plugin" / "skills" / "product-ui-design",
+    ),
+    (
+        ROOT / "skills" / "product-ui-design",
+        ROOT / "plugins" / "j-stack-dev" / "skills" / "product-ui-design",
     ),
 )
 

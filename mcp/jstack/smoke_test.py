@@ -61,6 +61,8 @@ def main() -> int:
         "jstack_audit",
         "jstack_audit_finalize",
         "jstack_release_readiness",
+        "jstack_ui_contract",
+        "jstack_ui_finalize",
         "jstack_launch_assess",
         "jstack_launch_evidence_register",
         "jstack_launch_finalize",
@@ -89,7 +91,7 @@ def main() -> int:
     missing = required - names
     if missing:
         raise RuntimeError(f"missing tools: {sorted(missing)}")
-    if len(names) != 52:
+    if len(names) != 54:
         raise RuntimeError(f"unexpected canonical tool count: {len(names)}")
     print("jstack MCP JSONL smoke test passed")
     return 0

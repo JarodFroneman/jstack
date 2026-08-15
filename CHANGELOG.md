@@ -1,5 +1,90 @@
 # Changelog
 
+## 0.10.0-beta.2 - 2026-08-15 - Product Interface prerelease
+
+### Added
+
+- Added the JStack Product Interface System and automatically routed its
+  `product-ui-design` skill for user-facing interface work inside the existing
+  five commands; backend-only work remains unaffected and no sixth slash
+  command was added.
+- Added the original `editorial-calm` and `creative-canvas` profiles, hybrid
+  shell/workspace composition, greenfield light/dark coverage, a 4px spacing
+  base, restrained 4–12px radii, 1px separators, zero negative letter spacing,
+  and 120/180/240ms purposeful motion defaults.
+- Added deterministic precedence for explicit user direction, an existing
+  project design system, the applicable domain profile, and the editorial
+  fallback. Existing tokens, components, accessibility rules, layouts, and
+  brand constraints are preserved and extended unless redesign is explicit.
+- Added the separate versioned Product Interface catalog and the canonical-only
+  `jstack_ui_contract` and `jstack_ui_finalize` tools. The live Beta.2 surface
+  is 54 canonical `jstack_*` tools plus the frozen 52 legacy `gstack_*`
+  aliases; no legacy UI aliases were introduced.
+- Added Git-bound UI contract/finalization evidence, exact QA/build/runtime
+  binding, a complete viewport/state/theme/platform PNG matrix, objective
+  adapter checks, Product Designer observations, UI receipt propagation through
+  planning, team, loop, program, and release-readiness workflows, and a
+  catalog-bound read-only Product Interface review for JStack Audit.
+- Added adapters for web, webview, iOS, Android, React Native, Flutter,
+  Electron, Tauri, macOS, Windows, and Linux. Web ships with a qualified
+  evidence contract; webview, packaged-shell, native, and cross-platform
+  adapters are explicitly contract-only pending exact-runtime provenance
+  evidence.
+- Added transactional installation of exactly one Product Interface skill.
+  Direct installs may opt in to a bounded managed global `AGENTS.md` block with
+  `--manage-agents`; the default preserves global instructions unchanged, and
+  enabled plugin copies prevent a duplicate direct installation.
+- Added ADR 0023 and the Beta.2 migration guide covering design intent,
+  originality, activation, evidence, compatibility, installation, limitations,
+  and rollback.
+- Added six non-authorizing representative Product Interface evaluation tasks
+  and a provider-blind review rubric covering hierarchy, coherence,
+  responsiveness, accessibility, platform fit, and generic-AI styling risks;
+  these fixtures are separate from the frozen Beta.1 Proof Study.
+
+### Changed
+
+- Advanced public installable metadata and the live MCP candidate identity to
+  `0.10.0-beta.2` while preserving five command plugins, Python 3.9+, the
+  standard-library core, compatible Beta.1 non-UI requests, exact declared
+  UI-aware successor fields, and readable v1 loop/program state for non-UI
+  work.
+- Added the optional exact `capability_selection_digest` successor field to
+  specialist result and handoff inputs. Product Interface plans propagate that
+  digest so generic or full-team goals cannot be rebound to an ordinary
+  capability plan with the same role roster; existing non-UI calls remain
+  accepted without it.
+- Kept the development-only Beta.1 Proof Plane byte-frozen and unvalidated at
+  the exact annotated `v0.10.0-beta.1` tag. CI now fetches full Git history and
+  exports that tag's 52-tool MCP tree for the Proof runtime probe rather than
+  substituting the live Beta.2 server.
+
+### Security
+
+- Product Interface evidence uses a fixed server-selected private root,
+  bounded strict manifests, descriptor-safe file reads, exact artifact hashes,
+  validated PNG structure, critical-surface observations, and clean strict
+  baseline-to-candidate Git ancestry.
+- UI contract envelopes use a dedicated private per-user POSIX signing key so
+  exact in-flight contracts can be finalized after an MCP restart; freshness
+  is still required for new loop/program intake, all other receipts remain
+  session-local, and Windows retains session-local UI contracts rather than
+  persisting a key without verifiable DACL/reparse guarantees. Windows UI
+  evidence finalization also fails closed until those private-file guarantees
+  can be established; routing and contract planning remain portable.
+- UI receipts are evidence only. They never replace QA, security, audit,
+  launch, release-owner approval, provider controls, or explicit deployment
+  scope. Screenshots prove validated bytes and declared coverage, not capture
+  honesty, runtime provenance, subjective visual excellence, or user
+  preference; human aesthetic approval remains optional and is never inferred.
+- The visual direction is an original implementation influenced by calm
+  editorial hierarchy and focused creative-workspace qualities associated with
+  products such as Claude and Fable. It copies no proprietary theme, layout,
+  asset, branding, or source code and implies no affiliation or endorsement.
+- Beta.2 publication does not validate the deferred Beta.1 18-image,
+  216-attempt, 432-review study and enables no measured uplift, superiority,
+  stable-release, production-readiness, or universal UI-quality claim.
+
 ## 0.10.0-beta.1 - 2026-08-15 - Unvalidated prerelease
 
 ### Added

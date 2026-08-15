@@ -1,0 +1,7 @@
+interface:
+  display_name: "Product UI Design"
+  short_description: "Build and review polished product interfaces"
+  default_prompt: "Use $product-ui-design to design and verify this user-facing interface."
+
+policy:
+  allow_implicit_invocation: true

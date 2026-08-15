@@ -63,13 +63,12 @@ GOAL = "Review multi-agent architecture, capability contracts, signed receipts, 
 
 
 def planned_team() -> dict:
-    return server.tool_team_plan(
-        {
-            "goal": GOAL,
-            "quality_level": "enterprise",
-            "team_mode": "smart-subagents",
-        }
-    )["team"]
+    return server.choose_agent_team(
+        GOAL,
+        server.classify_work(GOAL),
+        quality_level="enterprise",
+        team_mode="smart-subagents",
+    )
 
 
 def result_for(agent: dict, *, finding: dict | None = None, changes: list[dict] | None = None) -> dict:
@@ -127,20 +126,22 @@ def issue_for(
     write_scope: list[str] | None = None,
     goal: str = GOAL,
     team_mode: str = "smart-subagents",
+    capability_selection_digest: str | None = None,
 ) -> dict:
-    return server.tool_specialist_result(
-        {
-            "project_path": str(repo),
-            "goal": goal,
-            "team_mode": team_mode,
-            "team_role_ids": [item["id"] for item in team["agents"]],
-            "role_id": agent["id"],
-            "capability_ids": agent["capabilityIds"],
-            "write_scope": write_scope or [],
-            "result": result or result_for(agent),
-            "telemetry": telemetry or telemetry_for(index),
-        }
-    )
+    args = {
+        "project_path": str(repo),
+        "goal": goal,
+        "team_mode": team_mode,
+        "team_role_ids": [item["id"] for item in team["agents"]],
+        "role_id": agent["id"],
+        "capability_ids": agent["capabilityIds"],
+        "write_scope": write_scope or [],
+        "result": result or result_for(agent),
+        "telemetry": telemetry or telemetry_for(index),
+    }
+    if capability_selection_digest is not None:
+        args["capability_selection_digest"] = capability_selection_digest
+    return server.tool_specialist_result(args)
 
 
 class CapabilityRegistryTests(unittest.TestCase):
@@ -326,6 +327,49 @@ class CapabilityRegistryTests(unittest.TestCase):
 
 
 class SpecialistReceiptTests(unittest.TestCase):
+    def test_full_team_product_ui_receipts_bind_the_exact_selection_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            goal = "Finish the change."
+            _, team = server._deterministic_specialist_team(
+                goal, "full-team", [], ui_product=True
+            )
+            selection_digest = team["capabilityPlan"]["selectionDigest"]
+            issued = [
+                issue_for(
+                    repo,
+                    team,
+                    agent,
+                    index,
+                    goal=goal,
+                    team_mode="full-team",
+                    capability_selection_digest=selection_digest,
+                )
+                for index, agent in enumerate(team["agents"], start=1)
+            ]
+            checked = server.tool_specialist_handoff_check(
+                {
+                    "project_path": str(repo),
+                    "goal": goal,
+                    "team_mode": "full-team",
+                    "capability_selection_digest": selection_digest,
+                    "expected_agents": [
+                        {
+                            "roleId": agent["id"],
+                            "capabilityIds": agent["capabilityIds"],
+                        }
+                        for agent in team["agents"]
+                    ],
+                    "receipts": [
+                        item["specialistResultReceipt"] for item in issued
+                    ],
+                }
+            )
+            self.assertTrue(checked["valid"], checked["diagnostics"])
+            self.assertEqual(
+                selection_digest, checked["capabilitySelectionDigest"]
+            )
+
     def test_results_and_handoff_are_signed_current_and_privacy_safe(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
@@ -580,6 +624,7 @@ class SpecialistReceiptTests(unittest.TestCase):
             write_goal = "Implement a bounded agent capability feature and its tests."
             write_team = server.tool_team_plan(
                 {
+                    "project_path": str(repo),
                     "goal": write_goal,
                     "quality_level": "enterprise",
                     "team_mode": "smart-subagents",

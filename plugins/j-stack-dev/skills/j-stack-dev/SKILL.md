@@ -44,7 +44,10 @@ Default behavior:
 For Git-backed handoff, submit the Lead's exact `jstack.specialist.result.v1`
 and metadata-only `jstack.specialist.telemetry.v1` to
 `jstack_specialist_result`, then validate the one-role receipt set with
-`jstack_specialist_handoff_check`. Store no raw prompts, messages, tool
+`jstack_specialist_handoff_check`. Pass the routed capability plan's exact
+`selectionDigest` as `capability_selection_digest` to both tools; it is
+mandatory when ordinary and Product Interface routing share a role roster.
+Store no raw prompts, messages, tool
 arguments, command/model output, source contents, or secrets in telemetry.
 Missing capability evidence, a partial/blocked result, stale receipt, or failed
 handoff check prevents a completion claim.

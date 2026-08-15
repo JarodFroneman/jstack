@@ -94,6 +94,10 @@ worktree. Default implementation work to `L2`.
    results with `jstack_specialist_handoff_check` and pass its
    `specialist_handoff_receipt`; missing, stale, incomplete, capability-drifted,
    or unreconciled specialist evidence blocks the checkpoint.
+   Pass `capabilityContract.selectionDigest` as
+   `capability_selection_digest` to every specialist result and handoff call;
+   this is mandatory when Product Interface and ordinary routing share a role
+   roster.
    Follow `continue`, `ready_to_finalize`, `needs_approval`, or `policy_stop`.
 7. A `needs_approval` state releases the write lease and pauses active time.
    Resume through an explicit approved revision; do not mark the native Goal

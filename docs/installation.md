@@ -26,12 +26,12 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **Beta.1 prerelease boundary:** `v0.10.0-beta.1` is an unvalidated
-> prerelease. Install it only from the exact immutable release tag, retain a
-> complete rollback of the previous installation, and verify the installed
-> bytes and tool surface. The Proof Plane is not installed, and installing
-> Beta.1 does not satisfy or replace its deferred 216-run study and independent
-> human reviews.
+> **Beta.2 prerelease boundary:** install `v0.10.0-beta.2` only from its exact
+> immutable GitHub prerelease tag, retain the prior Beta.1 installation as one
+> complete rollback unit, and verify the installed bytes and tool surface. The
+> Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
+> unvalidated. Installing Beta.2 does not satisfy its deferred 216-run study
+> and independent human reviews.
 
 ## Host Support
 
@@ -57,11 +57,45 @@ macOS and Linux:
 python3 scripts/install.py
 ```
 
+The direct installer adds one `product-ui-design` skill. Its skill description
+automatically routes user-facing interface work; it remains inactive for
+backend-only or non-interface work. By default the installer does not edit
+global instructions. To also install or refresh the bounded JStack Product UI
+block in `CODEX_HOME/AGENTS.md`, explicitly opt in:
+
+```bash
+python3 scripts/install.py --manage-agents
+```
+
+The managed update preserves content outside its markers, newline style, and
+existing POSIX mode and ownership (plus the Windows security descriptor where
+applicable), rejects unsafe/malformed targets, and rolls back with the rest of
+the install if a later phase fails. It grants no new tool, filesystem, network,
+release, deployment, or production authority.
+
 Windows PowerShell:
 
 ```powershell
 .\scripts\install.ps1
+.\scripts\install.ps1 -CodexHome C:\Users\you\.codex -ManageAgents
 ```
+
+On Windows, the installer runs no-profile PowerShell ACL checks before any
+installation mutation, accepts only a `CODEX_HOME` ancestry whose owner and
+allow rules are limited to the current user, LocalSystem, and built-in
+administrators, and copies each existing config, backup, prompt, or managed
+`AGENTS.md` security descriptor to its staged replacement. This applies whether
+or not that Python version exposes descriptor-mode operations. An unverifiable,
+broad, or reparse-point home fails closed, and custom `CODEX_HOME` paths must
+remain beneath the verified current-user profile. The PowerShell wrapper
+forwards only `-CodexHome` and `-ManageAgents` and returns the Python installer's
+nonzero exit status unchanged. The same owner/DACL boundary is rechecked on
+every existing managed descendant, archive and recovery parent, and staged tree
+root; recovery data therefore remains beneath the verified private profile.
+
+The umbrella `plugin/` layout launches through Node.js and is tested with
+Node.js 22. The dedicated Layout B plugins invoke the Python MCP server directly
+and do not add a Node.js runtime requirement.
 
 Use a custom Codex home when validating or packaging:
 
@@ -70,8 +104,44 @@ python3 scripts/install.py --codex-home /absolute/path/to/codex-home
 ```
 
 The installer stages the complete payload before activation. A late failure
-restores every affected target. The previous Codex configuration is retained
-as a backup after a successful installation.
+restores every unaffected target by moving its exact retained preimage back
+without replacing a concurrent winner. Replaced installer postimages remain in
+a private `CODEX_HOME/jstack-backups/install-preimages-<id>/` recovery set on a
+failed activation so an open-descriptor edit cannot be silently discarded.
+After a successful upgrade, the exact displaced preimages are retained as the
+single bounded `CODEX_HOME/jstack-backups/install-preimages-latest/` recovery
+set. JStack never deletes or rotates that set automatically because another
+process may still hold a writable descriptor to a displaced file. Verify and
+archive or remove it explicitly before the next upgrade; until then, a new
+install fails before mutation. Conflict sets are never pruned automatically.
+The previous Codex configuration is also retained as
+`config.toml.jstack-backup`.
+
+Recovery activation requires same-filesystem atomic no-replace renames beneath
+`CODEX_HOME`: Linux uses `renameat2` (the libc wrapper or the supported kernel
+syscall), macOS uses `renamex_np(RENAME_EXCL)`, and Windows uses its
+destination-must-be-absent rename semantics. An unsupported POSIX platform or
+filesystem fails closed. Recovery roots are mode `0700` on POSIX and are
+owner/DACL-validated beneath the current-user profile on Windows.
+
+To restore manually, first stop Codex and every process that may still hold a
+JStack file open, then archive the current target. Move the numbered recovery
+entry back to the matching target only while that target is absent:
+`prompt-<name>` maps to `prompts/<name>`; `jstack-dev-skill`,
+`jstack-audit-skill`, `jstack-loop-skill`, `product-ui-design`, and
+`jstack-mcp` map to their same-named installed skill or MCP directories;
+`config.toml`, `config-backup`, and `AGENTS.md` map to the corresponding
+`CODEX_HOME` files. Preserve the recovery set if any mapping or live state is
+uncertain.
+
+Layout A deliberately refuses to rewrite a valid `config.toml` when its
+conservative lexical remover cannot prove a lossless MCP-only edit. That
+includes TOML multiline basic or literal strings (and any single-line value
+containing a triple-quote delimiter token), plus a root inline
+`mcp_servers = { ... }` table. The file is left byte-for-byte unchanged. Use
+Layout B and add the documented MCP block manually, or first make a separate
+backup and convert those values to ordinary single-line tables/values before
+rerunning Layout A.
 
 ## Codex Layout B: Dedicated Command Plugins
 
@@ -84,7 +154,9 @@ This layout provides five clean command surfaces:
 - `jstack-loop`
 
 The dedicated plugins under `plugins/` are skill-only. They require one shared
-`jstack` MCP server configured separately.
+`jstack` MCP server configured separately. The `j-stack-dev` plugin also owns
+the single active `product-ui-design` skill used across UI-scoped JStack work;
+this is automatic capability routing, not a sixth command.
 
 ### 1. Register A Local Marketplace
 
@@ -171,6 +243,67 @@ Use either:
 - the five dedicated plugins plus one shared MCP server; or
 - the umbrella plugin by itself.
 
+Do not add a direct `CODEX_HOME/skills/product-ui-design` copy while either the
+dedicated `j-stack-dev` plugin or the umbrella plugin is enabled. Exactly one
+active copy prevents ambiguous routing. The Python direct installer detects an
+enabled plugin copy and fails before mutation rather than creating a duplicate.
+
+## Product Interface Activation And Evidence
+
+For user-facing interface scope, JStack resolves design guidance in this
+order: explicit user instruction, the repository's existing design system,
+the applicable domain profile, then the `editorial-calm` fallback. Creative,
+spatial, media, timeline, or node-based work uses `creative-canvas`; hybrid
+products keep `editorial-calm` for the shell and `creative-canvas` for the
+workspace. Greenfield UI covers light and dark themes. Existing projects keep
+their established supported themes unless the user explicitly requests a
+redesign.
+
+The system is an original design framework influenced by calm, hierarchy-led
+editorial interfaces and focused creative tools, including qualities users
+associate with Claude and Fable. It does not copy proprietary themes, layouts,
+assets, branding, or source code, and implies no affiliation or endorsement.
+
+The Git-only lifecycle uses `jstack_ui_contract` before implementation and
+`jstack_ui_finalize` after the clean committed candidate and exact-build QA
+receipt exist. The finalizer reads a server-selected private root under
+`~/.jstack/evidence/ui/`, validates a complete PNG capture matrix and objective
+platform checks, binds build/runtime digests and Product Designer observations,
+and issues evidence only. A UI receipt never replaces QA, security, audit,
+launch, release approval, or explicit deployment scope. Artifact-only projects
+may use the design skill and planning guidance but cannot receive these
+commit-bound receipts.
+
+On POSIX hosts, first contract creation also creates one current-user private
+`~/.jstack/keys/ui-contract-hmac-v1` key (0700 parent, 0600 single-link file).
+It keeps the self-contained contract verifiable across MCP restarts; it does
+not make QA, finalization, audit, launch, or release receipts durable. Include
+the key in the normal `~/.jstack` backup and never print or copy its bytes into
+a repository. Windows keeps UI contracts session-local in Beta.2 rather than
+persisting a key whose DACL/reparse ancestry the stdlib-only server cannot
+verify. For the same reason, Windows can use automatic routing and contract
+planning but `jstack_ui_finalize` fails closed there in Beta.2: the server
+cannot prove screenshot and manifest privacy against inherited ACLs and
+reparse points. The complete root-bound UI lifecycle must begin and finish on
+a supported POSIX host. POSIX privacy checks bind the current UID, regular-file
+shape, link count, and mode bits; Beta.2 does not inspect macOS/NFSv4 extended
+ACL grants. A POSIX account or evidence/key root shared through an extended ACL
+is outside the supported privacy boundary and must not be used for UI
+finalization.
+
+Adapter status in Beta.2 is intentionally explicit:
+
+| Adapter | Maturity |
+| --- | --- |
+| Web | Qualified evidence contract |
+| Webview, Electron, Tauri | Contract-only until host or packaged-shell provenance evidence exists |
+| iOS, Android, React Native, Flutter, macOS, Windows, Linux | Contract-only until exact target-runtime evidence exists |
+
+Screenshots bind validated bytes, dimensions, coverage, and declared checks;
+they do not independently prove capture honesty, runtime provenance, visual
+quality, or user preference. Human aesthetic approval is optional and external
+to the v1 producer manifest, which cannot authenticate, fabricate, or infer it.
+
 ## Claude Code MCP Preview
 
 [Claude Code supports local stdio MCP servers](https://docs.anthropic.com/en/docs/claude-code/mcp),
@@ -220,11 +353,15 @@ Expected dedicated layout:
 - all five dedicated plugins are installed and enabled;
 - all five report the same release and cachebuster version;
 - `jstack@personal` is not installed;
+- exactly one active `product-ui-design` skill is present through
+  `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-beta.1`);
-- `tools/list` includes 52 canonical `jstack_*` tools, including
+  prerelease, `0.10.0-beta.2`);
+- `tools/list` includes 54 canonical `jstack_*` tools, including
   `jstack_context_readiness`, `jstack_performance_capture`, and
-  `jstack_adversarial_capture`.
+  `jstack_adversarial_capture`, plus `jstack_ui_contract` and
+  `jstack_ui_finalize`; the frozen compatibility surface remains 52 legacy
+  `gstack_*` aliases and has no UI aliases.
 
 ## Upgrade
 
@@ -237,9 +374,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.10.0-beta.1`, also confirm that GitHub marks the release as a
-prerelease and that the checked-out tag resolves to the release commit before
-staging any global files.
+For `v0.10.0-beta.2`, also confirm that GitHub marks the release as a
+prerelease and that the checked-out annotated tag resolves to the release
+commit before staging any global files. The rollback snapshot must contain the
+actual published Beta.1 installation, not an older Alpha cache.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
 during a routine upgrade. An upgrade from v0.8.1 or earlier may leave the retired

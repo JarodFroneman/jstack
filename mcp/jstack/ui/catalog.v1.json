@@ -1,0 +1,328 @@
+{
+  "schemaVersion": "jstack.ui.catalog.v1",
+  "catalogVersion": "1.0.0",
+  "identity": {
+    "name": "JStack Product Interface System",
+    "originalityNotice": "An original JStack system influenced by the general craft qualities of calm editorial interfaces and expressive canvas products. It does not copy Anthropic, Claude, Fable, or any other vendor's proprietary themes, source code, layouts, branding, or assets.",
+    "designIntent": "Combine Claude-like clarity, restraint, hierarchy, and content focus with Fable-like spatial composition, responsive motion, and creative-tool confidence while preserving the product's own identity."
+  },
+  "precedence": [
+    {
+      "rank": 1,
+      "source": "explicit-user-direction",
+      "rule": "Follow explicit user visual and interaction requirements unless they violate safety or accessibility requirements."
+    },
+    {
+      "rank": 2,
+      "source": "established-project-system",
+      "rule": "Preserve and extend existing tokens, components, patterns, and brand rules; do not perform an unsolicited redesign."
+    },
+    {
+      "rank": 3,
+      "source": "domain-default",
+      "rule": "Use creative-canvas for creation, spatial, timeline, media, and editor surfaces; otherwise use editorial-calm."
+    },
+    {
+      "rank": 4,
+      "source": "editorial-fallback",
+      "rule": "Use editorial-calm when no higher-precedence signal resolves the surface."
+    }
+  ],
+  "profiles": [
+    {
+      "id": "editorial-calm",
+      "title": "Editorial Calm",
+      "bestFor": [
+        "content-heavy products",
+        "settings and account surfaces",
+        "documentation and research",
+        "administrative and workflow software"
+      ],
+      "character": [
+        "quiet hierarchy",
+        "generous negative space",
+        "restrained chroma",
+        "high information legibility",
+        "subtle depth",
+        "purposeful motion"
+      ],
+      "defaults": {
+        "spacingBasePx": 4,
+        "density": "comfortable",
+        "contentMeasureCh": 72,
+        "radiusPx": {
+          "small": 4,
+          "medium": 8,
+          "large": 12,
+          "pill": 999
+        },
+        "type": {
+          "bodyLineHeight": 1.55,
+          "displayTrackingEm": 0,
+          "labelTrackingEm": 0,
+          "numericStyle": "tabular-when-comparative"
+        },
+        "color": {
+          "strategy": "neutral-led-with-one-purposeful-accent",
+          "minimumTextContrast": "WCAG-2.2-AA",
+          "semanticColorsRequired": true,
+          "darkThemeAvoidsPureBlack": true
+        },
+        "motion": {
+          "durationMs": [120, 180, 240],
+          "style": "subtle-state-and-spatial-continuity",
+          "reducedMotionRequired": true
+        }
+      }
+    },
+    {
+      "id": "creative-canvas",
+      "title": "Creative Canvas",
+      "bestFor": [
+        "visual creation tools",
+        "timeline and node editors",
+        "media and animation products",
+        "spatial workspaces and dashboards"
+      ],
+      "character": [
+        "canvas-first composition",
+        "confident tool hierarchy",
+        "dense controls with calm chrome",
+        "clear object selection",
+        "responsive transitions",
+        "focused creative energy"
+      ],
+      "defaults": {
+        "spacingBasePx": 4,
+        "density": "adaptive-compact",
+        "canvasPriority": "primary",
+        "radiusPx": {
+          "small": 4,
+          "medium": 8,
+          "large": 12,
+          "pill": 999
+        },
+        "type": {
+          "bodyLineHeight": 1.45,
+          "displayTrackingEm": 0,
+          "labelTrackingEm": 0,
+          "numericStyle": "tabular-for-properties-and-timelines"
+        },
+        "color": {
+          "strategy": "neutral-workspace-with-contextual-accent",
+          "minimumTextContrast": "WCAG-2.2-AA",
+          "semanticColorsRequired": true,
+          "selectionMustNotRelyOnColorAlone": true
+        },
+        "motion": {
+          "durationMs": [120, 180, 240],
+          "style": "responsive-spatial-and-object-continuity",
+          "reducedMotionRequired": true
+        }
+      }
+    }
+  ],
+  "universalRequirements": {
+    "preserveAndExtend": true,
+    "unsolicitedRedesignAllowed": false,
+    "spacingBasePx": 4,
+    "separatorWidthPx": 1,
+    "radiusRangePx": [4, 12],
+    "motionDurationMs": [120, 180, 240],
+    "negativeLetterSpacingAllowed": false,
+    "platformNativeSemanticsRequired": true,
+    "themes": {
+      "greenfieldRequired": [
+        "light",
+        "dark"
+      ],
+      "existingProductRule": "Preserve every theme the scoped product supports; adding another theme requires explicit scope."
+    },
+    "interaction": [
+      "Every primary control has a visible hover or pressed state where the platform supports it.",
+      "Keyboard focus is visible and never indicated by color alone.",
+      "Loading, empty, error, disabled, selected, success, and destructive states are designed when applicable.",
+      "Critical actions have clear feedback and reversible or confirmable behavior where practical.",
+      "Motion communicates state or spatial continuity and respects reduced-motion preferences."
+    ],
+    "accessibility": [
+      "Web and webview surfaces target WCAG 2.2 AA.",
+      "Native surfaces use platform accessibility semantics and behavior.",
+      "Touch targets, text scaling, keyboard traversal, focus order, labels, and contrast are verified.",
+      "Canvas interfaces provide an accessible semantic or keyboard alternative when the content or action is task-critical."
+    ],
+    "quality": [
+      "No clipped or overlapping content at required viewports.",
+      "No placeholder glyphs, emoji, ASCII art, or improvised vector assets where a real asset or icon is required.",
+      "Typography, spacing, alignment, border, radius, and responsive behavior are checked against the selected system.",
+      "Realistic bounded data exercises long text, empty content, error content, and dense content where applicable."
+    ],
+    "compositionGuardrails": [
+      "Avoid card-heavy composition and nested cards when hierarchy can be expressed through spacing, separators, or grouping.",
+      "Use pills only for genuinely pill-shaped controls, tags, or compact statuses.",
+      "Avoid decorative gradients, floating orbs, giant dashboard headings, indiscriminate glassmorphism, and one-note purple-blue palettes.",
+      "Use platform-native semantics, accessibility, and behavior; custom visual controls remain acceptable when they preserve those contracts."
+    ]
+  },
+  "domainDefaults": [
+    {
+      "profile": "creative-canvas",
+      "surfaceKinds": [
+        "canvas",
+        "editor",
+        "timeline",
+        "media-workspace"
+      ]
+    },
+    {
+      "profile": "editorial-calm",
+      "surfaceKinds": [
+        "route",
+        "screen",
+        "window",
+        "webview"
+      ]
+    }
+  ],
+  "platformAdapters": [
+    {
+      "id": "web",
+      "status": "qualified",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "webview",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "ios",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "accessibility",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "android",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "accessibility",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "react-native",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "accessibility",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "flutter",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "accessibility",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "electron",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "tauri",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "macos",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "windows",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    },
+    {
+      "id": "linux",
+      "status": "contract-only",
+      "evidence": [
+        "png-screenshot",
+        "critical-flow",
+        "keyboard-focus",
+        "accessibility",
+        "reduced-motion",
+        "text-fit-overflow"
+      ]
+    }
+  ],
+  "evidencePolicy": {
+    "manifestSchemaVersion": "jstack.ui.evidence.v1",
+    "finalizationSchemaVersion": "jstack.ui.finalization.v1",
+    "maximumManifestBytes": 2000000,
+    "maximumArtifactBytes": 25000000,
+    "maximumArtifacts": 640,
+    "maximumMatrixCells": 256,
+    "maximumAgeMinutes": 1440,
+    "allowedImageFormat": "png",
+    "rawArtifactContentReturned": false,
+    "humanAestheticApprovalRequired": false,
+    "structuredProductObservationRequired": true,
+    "producerHonestyCertified": false,
+    "semanticTruthCertified": false
+  }
+}

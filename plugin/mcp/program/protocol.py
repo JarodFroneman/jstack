@@ -16,18 +16,24 @@ from typing import Any, Optional
 
 try:
     from ..launch import registry as launch_core
+    from ..loop import protocol as loop_core
 except (ImportError, ValueError):  # Support the packaged top-level server layout.
     from launch import registry as launch_core
+    from loop import protocol as loop_core
 
 
 PROGRAM_CONTRACT_SCHEMA = "jstack.program.contract.v1"
+PROGRAM_CONTRACT_SCHEMA_V2 = "jstack.program.contract.v2"
+PROGRAM_CONTRACT_SCHEMAS = (PROGRAM_CONTRACT_SCHEMA, PROGRAM_CONTRACT_SCHEMA_V2)
 PROGRAM_SNAPSHOT_SCHEMA = "jstack.program.snapshot.v1"
 PROGRAM_EVENT_SCHEMA = "jstack.program.event.v1"
 PROGRAM_STATUS_SCHEMA = "jstack.program.status.v1"
 PROGRAM_READINESS_SCHEMA = "jstack.program.goal-readiness.v1"
 PROGRAM_READINESS_RECEIPT_SCHEMA = "jstack.program.goal-readiness-receipt.v1"
 PROGRAM_COMPLETION_PROOF_SCHEMA = "jstack.program.completion-proof.v1"
+PROGRAM_COMPLETION_PROOF_SCHEMA_V2 = "jstack.program.completion-proof.v2"
 PHASE_COMPLETION_PROOF_SCHEMA = "jstack.program.phase-completion-proof.v1"
+PHASE_COMPLETION_PROOF_SCHEMA_V2 = "jstack.program.phase-completion-proof.v2"
 HUMAN_DECISION_SCHEMA = "jstack.program.human-decision.v1"
 EXTERNAL_EVIDENCE_SCHEMA = "jstack.program.external-evidence.v1"
 
@@ -74,6 +80,113 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 class ProgramError(Exception):
     """Expected program protocol failure."""
+
+
+def _normalize_ui_contract_binding(value: Any) -> Optional[dict[str, str]]:
+    """Validate the closed receipt-derived UI binding routed by the MCP server."""
+    try:
+        return loop_core._normalize_ui_contract_binding(value)
+    except loop_core.LoopError as exc:
+        raise ProgramError(str(exc)) from exc
+
+
+def _has_ui_criterion(criteria: Any) -> bool:
+    return isinstance(criteria, list) and any(
+        isinstance(item, dict)
+        and isinstance(item.get("verifier"), dict)
+        and item["verifier"].get("type") == "ui"
+        for item in criteria
+    )
+
+
+def _contract_schema_supported(contract: Any) -> bool:
+    """Accept unchanged v1 programs and fail closed on the opt-in UI v2 form."""
+    if not isinstance(contract, dict):
+        return False
+    schema = contract.get("schemaVersion")
+    ui_in_phases = any(
+        _has_ui_criterion(phase.get("acceptanceCriteria"))
+        for phase in contract.get("phases", [])
+        if isinstance(phase, dict)
+    )
+    ui_in_final = _has_ui_criterion(contract.get("finalAcceptanceCriteria"))
+    if schema == PROGRAM_CONTRACT_SCHEMA:
+        return (
+            "uiContract" not in contract
+            and not ui_in_phases
+            and not ui_in_final
+        )
+    if schema != PROGRAM_CONTRACT_SCHEMA_V2:
+        return False
+    try:
+        binding = _normalize_ui_contract_binding(contract.get("uiContract"))
+    except ProgramError:
+        return False
+    project = contract.get("project")
+    policy = contract.get("policy")
+    return bool(
+        binding is not None
+        and binding == contract.get("uiContract")
+        and isinstance(project, dict)
+        and isinstance(policy, dict)
+        and binding["baselineGitHead"] == project.get("baselineCommit")
+        and binding["baselineProjectFingerprint"]
+        == project.get("baselineFingerprint")
+        and binding["baselinePolicyDigest"] == policy.get("digest")
+        and ui_in_final
+    )
+
+
+def match_program_ui_evidence(
+    contract: dict[str, Any], value: Any
+) -> Optional[dict[str, Any]]:
+    """Match the exact loop UI-evidence summary against a program UI binding."""
+    if contract.get("schemaVersion") != PROGRAM_CONTRACT_SCHEMA_V2:
+        return None
+    pseudo_loop_contract = {
+        "schemaVersion": loop_core.LOOP_CONTRACT_SCHEMA_V2,
+        "uiContract": contract.get("uiContract"),
+    }
+    return loop_core._matched_ui_evidence(pseudo_loop_contract, value)
+
+
+def _validated_final_ui_evidence(
+    contract: dict[str, Any],
+    final_criteria: list[dict[str, Any]],
+    project_fingerprint: str,
+) -> Optional[dict[str, Any]]:
+    if contract.get("schemaVersion") != PROGRAM_CONTRACT_SCHEMA_V2:
+        return None
+    matched: list[dict[str, Any]] = []
+    for criterion, result in zip(
+        contract["finalAcceptanceCriteria"], final_criteria
+    ):
+        if criterion["verifier"]["type"] != "ui":
+            continue
+        if (
+            not isinstance(result, dict)
+            or set(result) != {"id", "satisfied", "evidence"}
+            or result.get("satisfied") is not True
+            or not isinstance(result.get("evidence"), list)
+            or len(result["evidence"]) != 1
+        ):
+            raise ProgramError(
+                "Final ui acceptance requires one exact current UI evidence summary."
+            )
+        evidence = match_program_ui_evidence(contract, result["evidence"][0])
+        if (
+            evidence is None
+            or evidence.get("projectFingerprint") != project_fingerprint
+        ):
+            raise ProgramError(
+                "Final UI evidence does not match the program contract, catalog, baseline, or candidate project state."
+            )
+        matched.append(evidence)
+    if not matched or any(item != matched[0] for item in matched[1:]):
+        raise ProgramError(
+            "UI-bound program completion requires one consistent final UI evidence summary."
+        )
+    return matched[0]
 
 
 def _now() -> dt.datetime:
@@ -193,9 +306,17 @@ def _normalize_criterion(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(verifier, dict):
         raise ProgramError("%s.verifier must be an object." % field)
     verifier_type = _text(verifier.get("type"), field + ".verifier.type", maximum=20)
-    if verifier_type not in {"qa", "security", "audit", "launch", "review", "artifact"}:
+    if verifier_type not in {
+        "qa",
+        "security",
+        "audit",
+        "launch",
+        "review",
+        "artifact",
+        "ui",
+    }:
         raise ProgramError(
-            "%s verifier must be qa, security, audit, launch, review, or artifact; use a program gate for human decisions."
+            "%s verifier must be qa, security, audit, launch, review, artifact, or ui; use a program gate for human decisions."
             % field
         )
     allowed = {
@@ -205,6 +326,7 @@ def _normalize_criterion(value: Any, field: str) -> dict[str, Any]:
         "launch": {"type", "targetEnvironment", "surfaces"},
         "review": {"type"},
         "artifact": {"type", "path", "sha256"},
+        "ui": {"type"},
     }[verifier_type]
     extra = sorted(set(verifier) - allowed)
     if extra:
@@ -562,6 +684,7 @@ def normalize_program_input(
         "revision_approval_reference",
         "operation_id",
         "project_path",
+        "ui_contract_binding",
     }
     unknown = sorted(set(args) - supported_fields)
     if unknown:
@@ -576,6 +699,35 @@ def normalize_program_input(
     if len(phases_raw) > MAX_PHASES:
         raise ProgramError("phases exceeds the protocol maximum of %d." % MAX_PHASES)
     phases = [_normalize_phase(item, index) for index, item in enumerate(phases_raw)]
+    final_acceptance_criteria = _normalize_criteria(
+        args.get("final_acceptance_criteria"), "final_acceptance_criteria"
+    )
+    ui_contract = _normalize_ui_contract_binding(args.get("ui_contract_binding"))
+    ui_in_phases = any(
+        _has_ui_criterion(phase["acceptanceCriteria"]) for phase in phases
+    )
+    ui_in_final = _has_ui_criterion(final_acceptance_criteria)
+    ui_worktree_phases = [
+        phase["id"]
+        for phase in phases
+        if phase["worktreeRequired"]
+        and _has_ui_criterion(phase["acceptanceCriteria"])
+    ]
+    if ui_worktree_phases:
+        raise ProgramError(
+            "UI-bound phases cannot require linked worktrees because Product Interface "
+            "contracts bind one exact repository root and baseline fingerprint. Run the "
+            "UI phase in the program root, or split it into a separately contracted "
+            "program: " + ", ".join(ui_worktree_phases)
+        )
+    if ui_contract is None and (ui_in_phases or ui_in_final):
+        raise ProgramError(
+            "A ui acceptance criterion requires a server-routed ui_contract_binding."
+        )
+    if ui_contract is not None and not ui_in_final:
+        raise ProgramError(
+            "UI-bound programs require a dedicated final ui acceptance criterion."
+        )
     limits = _normalize_limits(args.get("limits"), program_policy)
     if len(phases) > limits["maxPhases"]:
         raise ProgramError("Program phase count exceeds limits.max_phases.")
@@ -600,7 +752,11 @@ def normalize_program_input(
         if item not in blocked_actions:
             blocked_actions.append(item)
     contract = {
-        "schemaVersion": PROGRAM_CONTRACT_SCHEMA,
+        "schemaVersion": (
+            PROGRAM_CONTRACT_SCHEMA_V2
+            if ui_contract is not None
+            else PROGRAM_CONTRACT_SCHEMA
+        ),
         "revision": 1,
         "goal": _text(args.get("goal"), "goal"),
         "owner": _text(args.get("owner"), "owner", maximum=200),
@@ -614,9 +770,7 @@ def normalize_program_input(
         "nonGoals": _string_list(args.get("non_goals"), "non_goals", maximum=50),
         "phases": phases,
         "topologicalOrder": topological_order,
-        "finalAcceptanceCriteria": _normalize_criteria(
-            args.get("final_acceptance_criteria"), "final_acceptance_criteria"
-        ),
+        "finalAcceptanceCriteria": final_acceptance_criteria,
         "finalGates": final_gates,
         "limits": limits,
         "blockedActions": blocked_actions,
@@ -633,6 +787,12 @@ def normalize_program_input(
             "program": program_policy,
         },
     }
+    if ui_contract is not None:
+        contract["uiContract"] = ui_contract
+        if not _contract_schema_supported(contract):
+            raise ProgramError(
+                "ui_contract_binding does not match the program baseline Git, project, or policy identity."
+            )
     if limits["maxParallelPhases"] > 1 and not any(
         phase["parallelSafe"] for phase in phases
     ):
@@ -643,7 +803,7 @@ def normalize_program_input(
 
 
 def program_contract_input_payload(contract: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = {
         key: contract[key]
         for key in (
             "goal",
@@ -660,6 +820,9 @@ def program_contract_input_payload(contract: dict[str, Any]) -> dict[str, Any]:
             "policy",
         )
     }
+    if contract.get("schemaVersion") == PROGRAM_CONTRACT_SCHEMA_V2:
+        payload["uiContract"] = contract.get("uiContract")
+    return payload
 
 
 def program_contract_input_digest(contract: dict[str, Any]) -> str:
@@ -762,6 +925,8 @@ def assess_program_readiness(
         "finalCriteria": [item["id"] for item in contract["finalAcceptanceCriteria"]],
         "finalGates": [item["id"] for item in contract["finalGates"]],
     }
+    if contract.get("schemaVersion") == PROGRAM_CONTRACT_SCHEMA_V2:
+        preview["uiContract"] = contract.get("uiContract")
     readiness_digest = _digest(
         {
             "contractInputDigest": contract_input_digest,
@@ -774,6 +939,7 @@ def assess_program_readiness(
         len(contract["phases"]) > 1
         or contract["limits"]["maxParallelPhases"] > 1
         or any(phase["riskTier"] in {"medium", "high", "critical"} for phase in contract["phases"])
+        or contract.get("schemaVersion") == PROGRAM_CONTRACT_SCHEMA_V2
     )
     supplied_digest = _text(
         args.get("confirmed_readiness_digest") or "",
@@ -970,6 +1136,42 @@ def _gate_digest(gate: dict[str, Any]) -> str:
     return _digest(gate)
 
 
+def _completion_proof(
+    contract: dict[str, Any],
+    snapshot: dict[str, Any],
+    *,
+    project_fingerprint: str,
+    evidence_digest: str,
+    ui_evidence: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    proof = {
+        "schemaVersion": (
+            PROGRAM_COMPLETION_PROOF_SCHEMA_V2
+            if ui_evidence is not None
+            else PROGRAM_COMPLETION_PROOF_SCHEMA
+        ),
+        "programId": snapshot["programId"],
+        "contractDigest": snapshot["contractDigest"],
+        "projectFingerprint": project_fingerprint,
+        "evidenceDigest": evidence_digest,
+        "phaseProofDigests": {
+            phase_id: _digest(state["completionProof"])
+            for phase_id, state in snapshot["phaseStates"].items()
+        },
+        "completedAt": _now_iso(),
+        "passed": True,
+    }
+    if ui_evidence is not None:
+        proof.update(
+            {
+                "uiContract": contract["uiContract"],
+                "uiEvidenceDigest": _digest(ui_evidence),
+                "uiFinalizationReceiptDigest": ui_evidence["receiptDigest"],
+            }
+        )
+    return proof
+
+
 def _top_scope(pattern: str) -> str:
     first = pattern.split("/", 1)[0]
     if any(character in first for character in "*?["):
@@ -1099,7 +1301,7 @@ class ProgramService:
         for number in range(1, revision + 1):
             item = _read_json(contracts_dir / ("%04d.json" % number), "contract history")
             if (
-                item.get("schemaVersion") != PROGRAM_CONTRACT_SCHEMA
+                not _contract_schema_supported(item)
                 or item.get("programId") != contract.get("programId")
                 or item.get("revision") != number
                 or item.get("project", {}).get("gitRoot") != str(self.project_root)
@@ -1136,7 +1338,7 @@ class ProgramService:
             raise ProgramError("Program pending transaction is malformed.")
         self._validate_events(events)
         if (
-            contract.get("schemaVersion") != PROGRAM_CONTRACT_SCHEMA
+            not _contract_schema_supported(contract)
             or snapshot.get("schemaVersion") != PROGRAM_SNAPSHOT_SCHEMA
             or snapshot.get("programId") != contract.get("programId")
             or snapshot.get("contractDigest") != _digest(contract)
@@ -1183,7 +1385,7 @@ class ProgramService:
         contract = _read_json(program_dir / "contract.json", "contract")
         snapshot = _read_json(program_dir / "snapshot.json", "snapshot")
         events = self._events(program_dir)
-        if contract.get("schemaVersion") != PROGRAM_CONTRACT_SCHEMA or snapshot.get("schemaVersion") != PROGRAM_SNAPSHOT_SCHEMA:
+        if not _contract_schema_supported(contract) or snapshot.get("schemaVersion") != PROGRAM_SNAPSHOT_SCHEMA:
             raise ProgramError("Program state schema is unsupported.")
         self._validate_contract_history(program_dir, contract, events)
         if (
@@ -1578,7 +1780,7 @@ class ProgramService:
             status = "blocked"
         ready = [view for view in derived["phaseViews"].values() if view["status"] == "ready"]
         running = [view for view in derived["phaseViews"].values() if view["status"] == "running"]
-        return {
+        result = {
             "schemaVersion": PROGRAM_STATUS_SCHEMA,
             "programId": snapshot["programId"],
             "status": status,
@@ -1626,6 +1828,9 @@ class ProgramService:
             "latestEventHash": snapshot["latestEventHash"],
             "updatedAt": snapshot["updatedAt"],
         }
+        if contract.get("schemaVersion") == PROGRAM_CONTRACT_SCHEMA_V2:
+            result["uiContract"] = contract.get("uiContract")
+        return result
 
     def start(
         self,
@@ -1866,6 +2071,7 @@ class ProgramService:
                     % phase_id
                 )
             phase = next(item for item in contract["phases"] if item["id"] == phase_id)
+            ui_phase = _has_ui_criterion(phase["acceptanceCriteria"])
             expected = {
                 "goal": phase["goal"],
                 "executionMode": phase["executionMode"],
@@ -1876,6 +2082,20 @@ class ProgramService:
             }
             if any(child.get(key) != value for key, value in expected.items()):
                 raise ProgramError("Child loop contract does not exactly match the phase contract.")
+            if ui_phase:
+                if (
+                    contract.get("schemaVersion") != PROGRAM_CONTRACT_SCHEMA_V2
+                    or child.get("uiContract") != contract.get("uiContract")
+                    or child.get("baselineCommit")
+                    != contract["uiContract"]["baselineGitHead"]
+                ):
+                    raise ProgramError(
+                        "A UI phase requires a child loop bound to the exact program UI contract and baseline."
+                    )
+            elif child.get("uiContract") is not None:
+                raise ProgramError(
+                    "A non-UI phase may not bind a UI child loop with a different acceptance boundary."
+                )
             child_blocked = child.get("blockedActions")
             required_blocked = set(contract["blockedActions"]) | set(
                 phase["blockedActions"]
@@ -1907,6 +2127,8 @@ class ProgramService:
                 "phaseDigest": _phase_digest(phase),
                 "boundAt": _now_iso(),
             }
+            if ui_phase:
+                binding["uiContract"] = contract["uiContract"]
             snapshot["phaseStates"][phase_id].update(
                 {"child": binding, "invalidatedReason": None}
             )
@@ -1942,7 +2164,14 @@ class ProgramService:
     ) -> dict[str, Any]:
         operation_id = self._operation_id(operation_id)
         phase_id = _identifier(phase_id, "phase_id")
-        if not isinstance(proof, dict) or proof.get("schemaVersion") != PHASE_COMPLETION_PROOF_SCHEMA:
+        if (
+            not isinstance(proof, dict)
+            or proof.get("schemaVersion")
+            not in {
+                PHASE_COMPLETION_PROOF_SCHEMA,
+                PHASE_COMPLETION_PROOF_SCHEMA_V2,
+            }
+        ):
             raise ProgramError("A durable verified phase completion proof is required.")
         if not isinstance(output_digests, dict):
             raise ProgramError("output_digests must be an object.")
@@ -1975,6 +2204,16 @@ class ProgramService:
             phase = next((item for item in contract["phases"] if item["id"] == phase_id), None)
             if phase is None:
                 raise ProgramError("Unknown phase_id: %s" % phase_id)
+            ui_phase = _has_ui_criterion(phase["acceptanceCriteria"])
+            expected_proof_schema = (
+                PHASE_COMPLETION_PROOF_SCHEMA_V2
+                if ui_phase
+                else PHASE_COMPLETION_PROOF_SCHEMA
+            )
+            if proof.get("schemaVersion") != expected_proof_schema:
+                raise ProgramError(
+                    "Phase completion proof schema does not match the phase UI contract."
+                )
             state = snapshot["phaseStates"][phase_id]
             child = state.get("child")
             if not isinstance(child, dict):
@@ -1987,6 +2226,44 @@ class ProgramService:
                 or proof.get("passed") is not True
             ):
                 raise ProgramError("Phase completion proof does not match the bound child contract.")
+            if ui_phase:
+                required_fields = {
+                    "schemaVersion",
+                    "programId",
+                    "phaseId",
+                    "phaseDigest",
+                    "loopId",
+                    "projectPath",
+                    "contractDigest",
+                    "loopCompletionEvidenceDigest",
+                    "loopLatestEventHash",
+                    "loopReceiptDigest",
+                    "completedAt",
+                    "passed",
+                    "uiContract",
+                    "loopUiFinalizationReceiptDigest",
+                }
+                if set(proof) != required_fields:
+                    raise ProgramError(
+                        "UI phase completion proof fields do not match the closed v2 proof contract."
+                    )
+                ui_receipt_digest = proof.get(
+                    "loopUiFinalizationReceiptDigest"
+                )
+                if (
+                    proof.get("programId") != program_id
+                    or proof.get("phaseId") != phase_id
+                    or child.get("uiContract") != contract.get("uiContract")
+                    or proof.get("uiContract") != child.get("uiContract")
+                    or not isinstance(ui_receipt_digest, str)
+                    or not _SHA256.fullmatch(ui_receipt_digest)
+                    or not isinstance(proof.get("loopReceiptDigest"), str)
+                    or not _SHA256.fullmatch(proof["loopReceiptDigest"])
+                ):
+                    raise ProgramError(
+                        "UI phase proof does not bind the child UI contract and completion receipt."
+                    )
+                _parse_time(proof.get("completedAt"), "proof.completedAt")
             expected_outputs = {item["id"] for item in phase["outputs"]}
             if set(output_digests) != expected_outputs:
                 raise ProgramError("Phase output digest set does not match the phase contract.")
@@ -2471,6 +2748,12 @@ class ProgramService:
                 or phase_id not in new_phases
                 or _phase_digest(old_phases[phase_id]) != _phase_digest(new_phases[phase_id])
             }
+            if candidate.get("uiContract") != old.get("uiContract"):
+                directly_changed.update(
+                    phase_id
+                    for phase_id, phase in new_phases.items()
+                    if _has_ui_criterion(phase["acceptanceCriteria"])
+                )
             invalidated = self._transitive_dependents(
                 candidate["phases"], directly_changed & set(new_phases)
             )
@@ -2636,21 +2919,18 @@ class ProgramService:
             supplied_ids = [item.get("id") for item in final_criteria]
             if supplied_ids != expected_ids or not all(item.get("satisfied") is True for item in final_criteria):
                 raise ProgramError("Final acceptance criteria are incomplete or out of contract order.")
+            ui_evidence = _validated_final_ui_evidence(
+                contract, final_criteria, project_fingerprint
+            )
             if snapshot.get("status") == "completed":
                 current = snapshot.get("completionProof") or {}
-                replacement = {
-                    "schemaVersion": PROGRAM_COMPLETION_PROOF_SCHEMA,
-                    "programId": program_id,
-                    "contractDigest": snapshot["contractDigest"],
-                    "projectFingerprint": project_fingerprint,
-                    "evidenceDigest": evidence_digest,
-                    "phaseProofDigests": {
-                        phase_id: _digest(state["completionProof"])
-                        for phase_id, state in snapshot["phaseStates"].items()
-                    },
-                    "completedAt": _now_iso(),
-                    "passed": True,
-                }
+                replacement = _completion_proof(
+                    contract,
+                    snapshot,
+                    project_fingerprint=project_fingerprint,
+                    evidence_digest=evidence_digest,
+                    ui_evidence=ui_evidence,
+                )
                 event = self._append_event(
                     events,
                     program_id,
@@ -2676,19 +2956,13 @@ class ProgramService:
                 self._prepare_snapshot(snapshot, event)
                 self._commit(program_dir, contract, snapshot, events)
                 return self._operation_result(contract, snapshot, operation_id)
-            proof = {
-                "schemaVersion": PROGRAM_COMPLETION_PROOF_SCHEMA,
-                "programId": program_id,
-                "contractDigest": snapshot["contractDigest"],
-                "projectFingerprint": project_fingerprint,
-                "evidenceDigest": evidence_digest,
-                "phaseProofDigests": {
-                    phase_id: _digest(state["completionProof"])
-                    for phase_id, state in snapshot["phaseStates"].items()
-                },
-                "completedAt": _now_iso(),
-                "passed": True,
-            }
+            proof = _completion_proof(
+                contract,
+                snapshot,
+                project_fingerprint=project_fingerprint,
+                evidence_digest=evidence_digest,
+                ui_evidence=ui_evidence,
+            )
             snapshot.update(
                 {
                     "status": "completed",

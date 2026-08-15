@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "jstack.ui.blind-review-rubric.v1",
+  "purpose": "Provider-blind comparative review of Product Interface outputs outside the Beta.1 Proof Plane; never a release authorization.",
+  "blindProtocol": {
+    "hide": ["model", "provider", "prompt-author", "implementation-author"],
+    "randomizeCandidateOrder": true,
+    "sameEvidenceMatrixRequired": true,
+    "sameBuildAndStateRequired": true,
+    "reviewerSeesOnly": ["task", "screenshots", "interaction-results", "accessibility-results", "platform-metadata"]
+  },
+  "scale": {
+    "minimum": 0,
+    "maximum": 4,
+    "anchors": {
+      "0": "Missing, unusable, or contradicted by evidence.",
+      "1": "Major defects materially impede the task.",
+      "2": "Functional but inconsistent, incomplete, or visibly generic.",
+      "3": "Coherent and polished with only minor shortcomings.",
+      "4": "Excellent execution for the exact task, system, viewport, state, and platform."
+    }
+  },
+  "dimensions": [
+    {
+      "id": "hierarchy",
+      "weight": 0.18,
+      "question": "Does visual priority make the primary task, content relationships, and next action immediately understandable?"
+    },
+    {
+      "id": "coherence",
+      "weight": 0.18,
+      "question": "Do typography, spacing, color, components, and interaction states form one deliberate system and preserve established project intent?"
+    },
+    {
+      "id": "responsiveness",
+      "weight": 0.16,
+      "question": "Does the interface reflow without clipping, overlap, hidden actions, unstable dimensions, or unreadable text at every required viewport?"
+    },
+    {
+      "id": "accessibility",
+      "weight": 0.20,
+      "question": "Are semantics, keyboard and focus behavior, contrast, text scaling, reduced motion, errors, and alternatives complete for the critical flow?"
+    },
+    {
+      "id": "platform-fit",
+      "weight": 0.16,
+      "question": "Does the result respect the claimed platform's navigation, input, window, lifecycle, accessibility, and system conventions?"
+    },
+    {
+      "id": "non-generic-authorship",
+      "weight": 0.12,
+      "question": "Does the design avoid card stacking, excessive pills, decorative gradients or orbs, giant headings, indiscriminate glass effects, and one-note purple-blue styling unless the product context requires them?"
+    }
+  ],
+  "automaticBlockers": [
+    "missing-required-evidence-cell",
+    "failed-critical-flow",
+    "accessibility-blocker",
+    "keyboard-or-focus-failure",
+    "unresolved-clipping-or-overflow",
+    "unsupported-platform-claim",
+    "established-system-regression"
+  ],
+  "reporting": {
+    "showDimensionScores": true,
+    "showWeightedTotal": true,
+    "showBlockersSeparately": true,
+    "humanAestheticApprovalOptional": true,
+    "mayAuthorizeRelease": false
+  }
+}

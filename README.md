@@ -56,6 +56,7 @@ JStack makes those controls explicit.
 | "Tests passed" exists only as prose | QA and security receipts tied to the exact Git revision, workspace, policy, and command |
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
 | A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
+| Interface output defaults to generic cards and gradients or overwrites a product's visual language | Automatic Product Interface routing preserves the existing design system, selects an editorial or creative profile, and requires exact-state objective visual evidence |
 | A launch checklist is incomplete, under-scoped, or “passed” with prose | Risk floors and detected surface hints select 47 controls; JStack derives results from structured, target-bound assertions |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
@@ -97,6 +98,26 @@ when every expected role is present, current, capability-matched, and free of
 unresolved contradictions. See the
 [specialist capability system](docs/specialist-capabilities.md).
 
+### Product Interface design inside the five commands
+
+Beta.2 adds `product-ui-design` as an automatic skill for user-facing
+interface work inside the existing five commands. It is not a sixth slash
+command, and backend-only or non-interface work does not activate it. The
+resolution order is fixed: an explicit user instruction wins, then the
+project's existing design system, then the domain profile, with
+`editorial-calm` as the fallback. `creative-canvas` is selected for spatial,
+visual, timeline, node, media, and other creation work; hybrid products keep a
+calm shell around the creative workspace.
+
+The system is an original implementation influenced by the qualities users
+often value in products such as Claude and Fable: clear hierarchy, disciplined
+spacing, restrained color, typography-led grouping, and focused creative
+workspaces. It does not copy their proprietary themes, layouts, assets,
+branding, or source code, and it implies no affiliation or endorsement.
+Existing product tokens, components, accessibility rules, layouts, and brand
+constraints are preserved and extended rather than redesigned without an
+explicit request.
+
 ### Adaptive context inside the five commands
 
 JStack v0.9.1 introduced repository and durable-context inspection before it
@@ -122,7 +143,9 @@ flowchart LR
     Q --> B[Readiness and policy]
     B --> C[Selected delivery mode]
     C --> K[Role-bound capability plan]
-    K --> D[Structured specialist, QA, security, launch, review, and audit evidence]
+    K --> UI[Product Interface contract when UI applies]
+    UI --> D[Structured UI, QA, security, launch, review, and audit evidence]
+    K --> D
     D --> E{Acceptance contract met?}
     E -- No --> F[Bounded revision or human gate]
     F --> C
@@ -143,16 +166,18 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.1 Prerelease
+## What Is In The v0.10.0-beta.2 Prerelease
 
-> **Unvalidated prerelease:** `0.10.0-beta.1` may be distributed only as a
-> GitHub prerelease and exact-version Codex installation under ADR 0022. ADR
-> 0021's image, execution, independent-review, scoring, and evidence gates have
-> not passed. Do not treat Beta.1 as validated, production-ready, or evidence
-> of measured JStack uplift.
+> **Unvalidated prerelease:** `0.10.0-beta.2` adds the Product Interface
+> System to the published Beta.1 product. Beta.1's 18-image, 216-attempt,
+> 432-review Proof Study remains deferred and byte-bound to the exact annotated
+> `v0.10.0-beta.1` tag. Neither Beta.2 publication nor Product Interface
+> receipts validate that study, prove measured uplift, or establish production
+> readiness.
 
 | Capability | What it provides |
 | --- | --- |
+| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, objective screenshot-matrix evidence, and release propagation without a sixth slash command |
 | Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance, uplift, validation, or production-readiness claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
@@ -175,14 +200,16 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Program orchestration | Phase-count-agnostic dependency graphs, child-goal proofs, human and external gates, pause-aware budgets, invalidation, recovery, and final integrated evidence |
 | Team coordination | Single-lead, specialist-team, and full-team modes with validated roles, permissions, scopes, and controlled waves |
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
-| Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, transactional installers, and cross-platform CI |
+| Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
-The MCP exposes 52 canonical `jstack_*` tools, including the shared
+The MCP exposes 54 canonical `jstack_*` tools, including the new
+`jstack_ui_contract` and `jstack_ui_finalize` lifecycle, the shared
 `jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
 protocol, plus `jstack_performance_capture`, `jstack_adversarial_capture`, and the delivery, audit, loop, continuity,
-specialist-review, and mastery families. Legacy `gstack_*` aliases remain
-available for compatibility.
+specialist-review, and mastery families. The frozen 52 legacy `gstack_*`
+aliases remain available for compatibility; the two new UI tools deliberately
+have no legacy aliases.
 
 The four shared-gate workflows pass the gate's `readinessReceipt` and exact
 `normalizedBrief` forward as `context_readiness_receipt` and `context_brief`.
@@ -191,17 +218,15 @@ Audit selectors cannot be silently changed after intake.
 
 ### Development-only Proof Plane
 
-The [Proof Plane](evals/README.md) surrounds the installed product without
-expanding it. Alpha.10 validates five versioned benchmark contracts, a
-six-family public development manifest, content digests, deterministic mock
-execution and scoring, exact execution-plan completeness, and the frozen
-alpha.9 product surface. Expected runs are manifest-bound so omitted failures
-cannot vanish from the denominator, while controlled comparisons bind host,
-model, JStack, environment, allowed tools, tool-call limits, and budgets. Its
-mock results are protocol fixtures—not evidence that JStack beats plain
-prompting, that Codex beats Claude, or that JStack finds every security defect.
-Real-project tasks, host runners, external pilots, evidence bridges, and public
-aggregate reports remain later measured milestones.
+The [Beta.1 Proof Plane](evals/README.md) surrounds the installed product
+without expanding it. Its descriptors and installable-product assets remain
+byte-frozen against the exact annotated `v0.10.0-beta.1` tag and its 52-tool
+server; CI exports and probes that immutable tag instead of substituting the
+live Beta.2 server. Expected runs are manifest-bound so omitted failures cannot
+vanish from the denominator. The image qualifications, 216 executions, 432
+independent human reviews, scoring, and independent verification have not run,
+so the study remains unvalidated and cannot be used as a Beta.2 quality,
+superiority, uplift, or production claim.
 
 ## Host Compatibility
 
@@ -227,7 +252,16 @@ are covered by JStack's release tests.
 - Claude Code for the optional MCP preview
 - Git for commit-bound evidence and release controls
 - Python 3.9 or newer
+- Node.js 22 for the umbrella `plugin/` layout only; the dedicated Layout B
+  plugins remain Python-only
 - macOS, Linux, or Windows
+
+Windows supports installation, automatic Product Interface routing, and
+session-local contract planning. Beta.2 UI evidence finalization intentionally
+fails closed on Windows because the stdlib-only server cannot verify inherited
+DACL and reparse privacy for evidence files; begin and finish a release-bound
+UI lifecycle on a supported POSIX host with no granting extended ACLs on the
+key or evidence roots. See [installation](docs/installation.md#product-interface-activation-and-evidence).
 
 ### 1. Clone
 
@@ -259,14 +293,37 @@ For the simplest transactional installation:
 python3 scripts/install.py
 ```
 
+The installed skill already routes applicable UI work automatically. To also
+reinforce that policy in global instructions, use
+`python3 scripts/install.py --manage-agents`. The managed block is bounded and
+transactional; the default install leaves `AGENTS.md` byte-for-byte unchanged.
+Dedicated plugin Layout B already exposes one copy of the skill through
+`j-stack-dev`, so do not install a second direct copy.
+
 PowerShell:
 
 ```powershell
 .\scripts\install.ps1
 ```
 
+On Windows, the direct installer uses no-profile PowerShell ACL checks before
+mutation, rejects a `CODEX_HOME` ancestry whose owner or allow rules are not
+verifiably limited to the current user plus Windows system administrators, and
+copies an existing control file's security descriptor onto its staged
+replacement. `CODEX_HOME` must remain below the current user's private profile;
+ambiguous custom roots fail closed. The wrapper accepts `-CodexHome <path>` and
+`-ManageAgents` and propagates Python failures.
+
 The installer stages the complete payload, updates the Codex MCP
-configuration, and restores prior targets if a later installation phase fails.
+configuration, and restores prior targets without overwriting concurrent edits
+if a later installation phase fails. Successful upgrades retain one bounded,
+private recovery set at
+`CODEX_HOME/jstack-backups/install-preimages-latest/`; failure and conflict
+recovery sets are preserved separately. Recovery data is never auto-deleted;
+verify and explicitly archive or remove `install-preimages-latest` before the
+next upgrade. Layout A fails closed without changing `config.toml` when it
+contains TOML multiline strings; use the manual Layout B MCP configuration
+documented in the installation guide for that case.
 
 ### 4. Restart And Verify
 
@@ -287,6 +344,7 @@ flowchart TB
 
     M --> P[Policy and project binding]
     M --> D[Delivery, capability routing, and team coordination]
+    M --> UIC[Product Interface contracts and objective visual evidence]
     M --> E[QA, security, audit, and release evidence]
     M --> L[Bounded goal loops]
     M --> R[Program and phase orchestration]
@@ -295,6 +353,8 @@ flowchart TB
     P --> G[(Git project state)]
     D --> G
     E --> G
+    UIC --> G
+    UIC --> X
     L --> X[(Private ~/.jstack state)]
     R --> X
 ```
@@ -314,6 +374,8 @@ artifacts before release.
 - **Delivery** owns plans, staffing, permissions, scopes, and implementation.
 - **Capabilities** add role-bound methods, required evidence, stop conditions,
   and audit/loop controls without expanding those permissions or scopes.
+- **Product Interface** detects UI scope, resolves design-system precedence,
+  and binds implementation/finalization evidence without authorizing changes.
 - **Evidence** owns current QA, security, audit, output, and approval proofs.
 - **Loop** owns one bounded Phase -> Iteration convergence contract.
 - **Program** owns a project-defined Program -> Phase dependency graph above
@@ -331,6 +393,8 @@ release gate can require:
 - a distinct pre-release base and clean committed candidate;
 - complete committed, staged, unstaged, and untracked change evidence;
 - current QA, security, deterministic review, and audit receipts;
+- a current Product Interface finalization receipt when the actual release
+  range changes an applicable user-facing interface;
 - current specialist result and handoff receipts when multi-agent capability
   routing is used;
 - complete current-tree and release-range secret scanning;
@@ -367,6 +431,10 @@ Release readiness is evidence only: its result always includes
   separation of duties belongs in host and provider controls.
 - Audit receipts prove the collected scope, validated structure, and result
   calculation. They do not make every model-authored semantic finding true.
+- Product Interface screenshots prove the validated PNG bytes, dimensions,
+  matrix coverage, and declared checks. They do not independently prove capture
+  honesty, runtime provenance, visual excellence, or user preference; human
+  aesthetic approval is optional and is never inferred.
 - Audit mastery Stage 0 uses only inert local scenarios and writes only declared
   training artifacts under `.jstack-training/`; passing it grants no execution,
   remediation, publication, release, deployment, or production authority.
@@ -440,8 +508,8 @@ environment.
 
 | Path | Purpose |
 | --- | --- |
-| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
-| [`skills/`](skills/) | Canonical single-lead, audit, and loop skills |
+| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, Product Interface catalog and evidence controls, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
+| [`skills/`](skills/) | Canonical single-lead, Product Interface, audit, and loop skills |
 | [`prompts/`](prompts/) | Canonical slash-command prompts |
 | [`plugins/`](plugins/) | Five dedicated command plugins |
 | [`plugin/`](plugin/) | Optional all-in-one plugin with portable launcher |
@@ -477,6 +545,7 @@ and SSH authority tests are not claimed as Windows-compatible.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.2 migration guide](docs/migration-0.10.0-beta.2.md) | [Product Interface System decision](docs/adr/0023-product-interface-system.md) |
 | [v0.10.0-beta.1 prerelease migration guide](docs/migration-0.10.0-beta.1.md) | [Beta.1 Proof Study](docs/adr/0021-beta1-codex-proof-study.md) · [Unvalidated prerelease amendment](docs/adr/0022-beta1-unvalidated-prerelease-distribution.md) |
 | [v0.10.0-alpha.10 migration guide](docs/migration-0.10.0-alpha.10.md) | [Proof Foundation decision](docs/adr/0020-proof-foundation.md) |
 | [v0.10.0-alpha.9 migration guide](docs/migration-0.10.0-alpha.9.md) | [Enterprise Audit Lead decision](docs/adr/0019-enterprise-audit-lead-stage8.md) |

@@ -53,7 +53,10 @@ always false. Raw prompts, messages, tool arguments, command or model output,
 source contents, credentials, and secrets are forbidden.
 
 The Lead calls `jstack_specialist_result` for every exact role/capability
-assignment, then `jstack_specialist_handoff_check`. The latter rejects missing,
+assignment, passing the capability plan's exact `selectionDigest` as
+`capability_selection_digest` to it and `jstack_specialist_handoff_check`.
+That digest is mandatory when ordinary and Product Interface routing share the
+same role roster. The latter rejects missing,
 duplicate, stale, tampered, capability-drifted, permission-unsafe, overlapping,
 blocked, or contradictory receipt sets. Contradictions need a named
 `resolutionKey` and an evidence-backed Lead resolution. The issued handoff

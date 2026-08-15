@@ -162,13 +162,14 @@ execution.
 
 ## Tools
 
-The server exposes 52 canonical `jstack_*` tools for runtime status, project
+The server exposes 54 canonical `jstack_*` tools for runtime status, project
 detection, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
-mastery. Legacy `gstack_*` aliases remain for compatibility; upstream gstack
-itself is optional.
+mastery, and Product Interface contracting/finalization. The frozen 52 legacy
+`gstack_*` aliases remain for compatibility; the two UI tools are canonical-only
+and upstream gstack itself is optional.
 
 Current JStack releases have no custom action-approval tools. JStack never asks for an approval
 token, signing key, challenge file, mailbox response, or terminal command.
@@ -190,18 +191,30 @@ The capability-specific entry points are `jstack_capability_catalog`,
 `jstack_specialist_result`, and `jstack_specialist_handoff_check`; planning,
 audit, and loop tools also expose capability fields.
 
+Product Interface evidence producers use the packaged
+`ui-evidence.v1.schema.json`, `ui-objective-result.v1.schema.json`, and
+`ui-product-observation.v1.schema.json` contracts. Objective results bind the
+exact build, runtime, producer, surface/platform, contracted matrix cells, and
+digest-bound structured assertion measurements. Product observations carry
+the same candidate and producer binding. All referenced bytes remain beneath
+the server-selected private evidence root; receipts return normalized digests
+and counts, never raw artifact content.
+
 ## Install
 
-From this directory:
+From a complete release checkout, use the top-level installer:
 
 ~~~text
-python install.py
+python scripts/install.py
 ~~~
 
-The installer stages all prompts, skills, MCP files, curricula, and config
-before activation. Any late failure restores every affected target; successful
-installs retain the previous Codex config backup and write the
-`mcp_servers.jstack` entry using the current Python interpreter.
+The transactional installer stages all prompts, skills, MCP files, curricula,
+and config before activation. Any late failure restores every affected target;
+successful installs retain the previous Codex config backup and write the
+`mcp_servers.jstack` entry using the current Python interpreter. The local
+`mcp/jstack/install.py` file is only a compatibility router to that top-level
+installer when it is run from a complete checkout. An already-installed MCP
+copy deliberately refuses to update itself.
 
 Restart Codex or open a new task after installation.
 

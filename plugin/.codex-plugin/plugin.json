@@ -1,7 +1,7 @@
 {
   "name": "jstack",
-  "version": "0.10.0-beta.1",
-  "description": "Universal JStack delivery, launch assurance, specialist capabilities, bounded loops, multi-phase programs, read-only audits, mastery, and MCP evidence workflows for Codex.",
+  "version": "0.10.0-beta.2",
+  "description": "Universal JStack delivery, Product Interface design, launch assurance, specialist capabilities, bounded loops, multi-phase programs, read-only audits, mastery, and MCP evidence workflows for Codex.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "JStack",
     "shortDescription": "Enterprise delivery, goal programs, and audits for Codex",
-    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. An Adaptive Context Gate inspects first, asks at most three material questions with recommended defaults, and binds sourced facts and disclosed assumptions into planning without terminal ceremony. Versioned capability routing upgrades the same roles without granting extra permissions. Its MCP also provides risk-tiered 47-control Launch Assurance v2, durable loop and program state, review, QA, security, audit finalization, release readiness, deterministic Safe Security Operator Stage 0, evidence-bound Repository Reconnaissance Stage 1, and exact-revision Correctness and Reliability Stage 2.",
+    "longDescription": "JStack adds five Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, and read-only repository audits. User-facing interface work automatically receives the original Product Interface design skill and Git-bound objective visual evidence without adding a sixth command. An Adaptive Context Gate inspects first, asks at most three material questions with recommended defaults, and binds sourced facts and disclosed assumptions into planning without terminal ceremony. Versioned capability routing upgrades the same roles without granting extra permissions. Its MCP also provides risk-tiered Launch Assurance, durable loop and program state, review, QA, security, audit finalization, and release readiness.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [

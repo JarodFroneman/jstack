@@ -53,7 +53,13 @@ deployment, or production action.
    `--fail-on`, `--format`, `--verify`, `--learning-mode`, and `--team-mode`.
 2. Return usage only for `help`, `--help`, or `?`; do not inspect a repository.
 3. Read project instructions and relevant durable context.
-4. Call `jstack_runtime_status`, then `jstack_detect_project`.
+4. Call `jstack_runtime_status`, then `jstack_detect_project`. When the returned
+   Product Interface state is `required` or `review-required`, or the declared
+   scope otherwise contains user-facing interface work, read and apply
+   [product-interface-review.md](references/product-interface-review.md). This
+   is a catalog-bound, read-only review projection: Audit neither issues nor
+   finalizes a UI contract and never treats a UI receipt as a substitute for
+   audit evidence.
 5. Apply the Adaptive Context Gate after inspection. Call
    `jstack_context_readiness` with `workflow_mode="jstack-audit"`, the exact
    audit goal, source-attributed facts, assumptions, and only material open
@@ -402,7 +408,9 @@ specialist team is deployed, first obtain the matching `jstack_team_plan` with
 receipt. Give each read-only role only its routed capability subset and require
 structured
 specialist results plus privacy-safe telemetry. Validate them through
-`jstack_specialist_result` and `jstack_specialist_handoff_check` before Audit
+`jstack_specialist_result` and `jstack_specialist_handoff_check`, passing the
+routed capability plan's exact `selectionDigest` as
+`capability_selection_digest` to both, before Audit
 Lead synthesis. Never store raw prompts, messages, tool arguments, command or
 model output, source contents, credentials, or secrets in telemetry.
 
