@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import os
 import shutil
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +33,76 @@ class _StatView:
 
 
 class InstallerTests(unittest.TestCase):
+    def test_windows_acl_runner_uses_utf16le_encoded_command(self) -> None:
+        script = "$ErrorActionPreference = 'Stop'\nWrite-Output 'Jos\u00e9'\n"
+        with mock.patch.object(
+            install_module.subprocess,
+            "run",
+            return_value=mock.Mock(returncode=0),
+        ) as runner:
+            install_module._run_windows_acl_script(
+                script,
+                {"JSTACK_ACL_PATH": "C:/Users/Jos\u00e9/.codex"},
+                label="test root",
+                input_text='["C:/Users/Jos\\u00e9/.codex"]',
+            )
+
+        command = runner.call_args.args[0]
+        self.assertEqual(
+            [
+                "powershell.exe",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-EncodedCommand",
+            ],
+            command[:-1],
+        )
+        encoded_script = command[-1]
+        self.assertTrue(encoded_script.isascii())
+        self.assertEqual(
+            script,
+            base64.b64decode(encoded_script, validate=True).decode("utf-16-le"),
+        )
+        self.assertNotIn("-Command", command)
+        self.assertFalse(any(script in argument for argument in command))
+        self.assertEqual(
+            b'["C:/Users/Jos\\u00e9/.codex"]',
+            runner.call_args.kwargs["input"],
+        )
+        self.assertIsNone(runner.call_args.kwargs["stdin"])
+        self.assertEqual(subprocess.PIPE, runner.call_args.kwargs["stdout"])
+        self.assertEqual(subprocess.PIPE, runner.call_args.kwargs["stderr"])
+        self.assertEqual(30, runner.call_args.kwargs["timeout"])
+        self.assertFalse(runner.call_args.kwargs["check"])
+        self.assertEqual(
+            "C:/Users/Jos\u00e9/.codex",
+            runner.call_args.kwargs["env"]["JSTACK_ACL_PATH"],
+        )
+
+    def test_windows_acl_runner_failures_remain_fail_closed(self) -> None:
+        failures = (
+            (mock.Mock(returncode=22), None, "not verifiably user-private"),
+            (None, OSError("powershell missing"), "Could not verify"),
+            (
+                None,
+                subprocess.TimeoutExpired("powershell.exe", 30),
+                "Could not verify",
+            ),
+        )
+        for result, side_effect, message in failures:
+            with self.subTest(message=message), mock.patch.object(
+                install_module.subprocess,
+                "run",
+                return_value=result,
+                side_effect=side_effect,
+            ), self.assertRaisesRegex(RuntimeError, message):
+                install_module._run_windows_acl_script(
+                    "Write-Output 'check'",
+                    {},
+                    label="test root",
+                )
+
     def test_direct_install_succeeds_without_os_fchmod(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             codex_home = Path(temp) / "codex"

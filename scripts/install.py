@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import ctypes
 import datetime as dt
 import errno
@@ -207,6 +208,9 @@ def _run_windows_acl_script(
     process_environment = dict(os.environ)
     process_environment.update(environment)
     run_input = None if input_text is None else input_text.encode("utf-8")
+    # Windows PowerShell expects -EncodedCommand payloads as UTF-16LE Base64.
+    # This avoids raw multiline-command reparsing at the process boundary.
+    encoded_script = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     try:
         result = subprocess.run(
             [
@@ -214,8 +218,8 @@ def _run_windows_acl_script(
                 "-NoLogo",
                 "-NoProfile",
                 "-NonInteractive",
-                "-Command",
-                script,
+                "-EncodedCommand",
+                encoded_script,
             ],
             stdin=subprocess.DEVNULL if run_input is None else None,
             input=run_input,
