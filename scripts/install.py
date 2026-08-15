@@ -250,11 +250,13 @@ function Assert-JStackPrivateAcl {
     $owner = $acl.GetOwner(
         [System.Security.Principal.SecurityIdentifier]
     ).Value
+    $allowType = [System.Security.AccessControl.AccessControlType]::Allow
+    $inheritOnlyFlag = [System.Security.AccessControl.PropagationFlags]::InheritOnly
     if ($allowed -notcontains $owner) {
         exit 22
     }
     foreach ($rule in $acl.Access) {
-        if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {
+        if ($rule.AccessControlType -ne $allowType) {
             continue
         }
         $sid = $rule.IdentityReference.Translate(
@@ -262,7 +264,7 @@ function Assert-JStackPrivateAcl {
         ).Value
         $creatorOwner = (
             $sid -eq 'S-1-3-0' -and
-            ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly)
+            ($rule.PropagationFlags -band $inheritOnlyFlag)
         )
         if (($allowed -notcontains $sid) -and -not $creatorOwner) {
             exit 23

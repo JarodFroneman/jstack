@@ -539,6 +539,14 @@ class InstallerTests(unittest.TestCase):
 
         script = runner.call_args.args[0]
         self.assertIn("$acl.GetOwner", script)
+        self.assertIn("$allowType = [System.Security.AccessControl.AccessControlType]::Allow", script)
+        self.assertIn(
+            "$inheritOnlyFlag = "
+            "[System.Security.AccessControl.PropagationFlags]::InheritOnly",
+            script,
+        )
+        self.assertIn("$rule.AccessControlType -ne $allowType", script)
+        self.assertIn("$rule.PropagationFlags -band $inheritOnlyFlag", script)
         self.assertIn("$allowed -notcontains $owner", script)
         self.assertIn("$allowed -notcontains $sid", script)
         self.assertEqual(str(target), runner.call_args.args[1]["JSTACK_ACL_PATH"])
