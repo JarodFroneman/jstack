@@ -136,7 +136,9 @@ jobs:
           $env:TMPDIR = $env:TEMP
           Set-JStackTestProfileAcl -Path $env:TEMP
           $privateTempProbe = @'
+          import base64
           import os
+          import subprocess
           import tempfile
           from pathlib import Path
 
@@ -145,6 +147,56 @@ jobs:
           root = os.path.normcase(os.environ["USERPROFILE"])
           with tempfile.TemporaryDirectory() as temporary_directory:
               value = os.path.normcase(temporary_directory)
+              environment = dict(os.environ)
+              environment["JSTACK_ACL_PATH"] = value
+              diagnostic_script = r'''
+          $ErrorActionPreference = 'Stop'
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          $securityModule = "$PSHOME\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1"
+          Import-Module -Name $securityModule -Force -ErrorAction Stop
+          $acl = Get-Acl -LiteralPath $env:JSTACK_ACL_PATH
+          $sections = (
+            [System.Security.AccessControl.AccessControlSections]::Owner -bor
+            [System.Security.AccessControl.AccessControlSections]::Access
+          )
+          Write-Output ('CHILD_SDDL:' + $acl.GetSecurityDescriptorSddlForm($sections))
+          Write-Output ('CHILD_OWNER:' + $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value)
+          foreach ($rule in @($acl.Access)) {
+            $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+            Write-Output ('CHILD_ACE:{0}|{1}|{2}|{3}|{4}' -f $sid, $rule.AccessControlType, $rule.FileSystemRights, $rule.InheritanceFlags, $rule.PropagationFlags)
+          }
+          '''
+              product_script = install._windows_private_acl_script(
+                  "\nAssert-JStackPrivateAcl -Path $env:JSTACK_ACL_PATH\n"
+              )
+              for label, script in (
+                  ("diagnostic", diagnostic_script),
+                  ("product", product_script),
+              ):
+                  encoded = base64.b64encode(
+                      script.encode("utf-16-le")
+                  ).decode("ascii")
+                  result = subprocess.run(
+                      [
+                          "powershell.exe",
+                          "-NoLogo",
+                          "-NoProfile",
+                          "-NonInteractive",
+                          "-EncodedCommand",
+                          encoded,
+                      ],
+                      stdin=subprocess.DEVNULL,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.PIPE,
+                      env=environment,
+                      timeout=30,
+                      check=False,
+                  )
+                  print(f"JStack child ACL {label} exit: {result.returncode}")
+                  if result.stdout:
+                      print(result.stdout[:4096].decode("utf-8", errors="replace"))
+                  if result.stderr:
+                      print(result.stderr[:4096].decode("utf-8", errors="replace"))
               install._validate_windows_install_root(Path(value))
               assert os.path.commonpath((root, value)) == root, (root, value)
           '@
