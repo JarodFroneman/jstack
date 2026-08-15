@@ -867,7 +867,7 @@ class ReadinessRedactionTests(unittest.TestCase):
     def test_readiness_and_recovery_summaries_never_leak_holdout_bytes_or_paths(self):
         temporary, root = _new_private_root()
         self.addCleanup(temporary.cleanup)
-        redaction_canary = "HOLDOUT-SECRET-DO-NOT-LEAK-7e886d1f"
+        redaction_canary = "HOLDOUT-" + "SECRET-DO-NOT-LEAK-7e886d1f"
         reviewed = _private_directory(
             root / lifecycle.REVIEWED_INPUT_ROOT_RELATIVE / TASK_ID
         )
