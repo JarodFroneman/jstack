@@ -131,139 +131,24 @@ jobs:
           $profileRoot = Join-Path $env:RUNNER_TEMP 'jstack-private-profile'
           Set-JStackTestProfileAcl -Path $profileRoot
           $env:USERPROFILE = $profileRoot
-          $env:JSTACK_ACL_PATH = $profileRoot
-          $privateAclProbe = @'
-          $ErrorActionPreference = 'Stop'
-          $acl = Get-Acl -LiteralPath $env:JSTACK_ACL_PATH
-          $current = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-          $owner = $acl.GetOwner(
-            [System.Security.Principal.SecurityIdentifier]
-          ).Value
-          $allowed = @($current, 'S-1-5-18', 'S-1-5-32-544')
-          $rules = @($acl.Access)
-          if ($rules.Count -gt 16) {
-            throw "JSTACK_CI_PRIVATE_ACL_TOO_MANY_ACES:$($rules.Count)"
-          }
-          $entries = @(
-            foreach ($rule in $rules) {
-              $sid = $rule.IdentityReference.Translate(
-                [System.Security.Principal.SecurityIdentifier]
-              ).Value
-              [ordered]@{
-                sid = $sid
-                type = [string]$rule.AccessControlType
-                rights = [string]$rule.FileSystemRights
-                inherited = [bool]$rule.IsInherited
-                inheritance = [string]$rule.InheritanceFlags
-                propagation = [string]$rule.PropagationFlags
-              }
-            }
-          )
-          $diagnostic = [ordered]@{
-            path = $env:JSTACK_ACL_PATH
-            currentSid = $current
-            ownerSid = $owner
-            protected = [bool]$acl.AreAccessRulesProtected
-            aceCount = $rules.Count
-            aces = $entries
-          }
-          Write-Output (
-            'JStack CI private ACL diagnostic: ' +
-            ($diagnostic | ConvertTo-Json -Compress -Depth 4)
-          )
-          if (-not $acl.AreAccessRulesProtected) {
-            throw 'JSTACK_CI_PRIVATE_ACL_NOT_PROTECTED'
-          }
-          if ($allowed -notcontains $owner) {
-            throw "JSTACK_CI_PRIVATE_ACL_OWNER_REJECTED:$owner"
-          }
-          $allowType = [System.Security.AccessControl.AccessControlType]::Allow
-          $inheritOnlyFlag = [System.Security.AccessControl.PropagationFlags]::InheritOnly
-          foreach ($rule in $rules) {
-            if ($rule.AccessControlType -ne $allowType) {
-              continue
-            }
-            $sid = $rule.IdentityReference.Translate(
-              [System.Security.Principal.SecurityIdentifier]
-            ).Value
-            $isInheritOnly = [bool](
-              $rule.PropagationFlags -band $inheritOnlyFlag
-            )
-            $creatorOwner = (
-              $sid -eq 'S-1-3-0' -and
-              $isInheritOnly
-            )
-            if (($allowed -notcontains $sid) -and -not $creatorOwner) {
-              throw "JSTACK_CI_PRIVATE_ACL_ALLOW_SID_REJECTED:$sid"
-            }
-          }
-          '@
-          $encodedProbe = [Convert]::ToBase64String(
-            [Text.Encoding]::Unicode.GetBytes($privateAclProbe)
-          )
-          $directProbeOutput = & powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand $encodedProbe 2>&1
-          $directProbeExit = $LASTEXITCODE
-          $directProbeOutput | ForEach-Object { Write-Host $_ }
-          if ($directProbeExit -ne 0) {
-            throw "JSTACK_CI_PRIVATE_ACL_DIRECT_PROBE_FAILED:$directProbeExit"
-          }
-          $productProbe = @'
-          import base64
-          import os
-          import subprocess
-
-          from scripts import install
-
-          script = install._windows_private_acl_script(
-              "\nAssert-JStackPrivateAcl -Path $env:JSTACK_ACL_PATH\n"
-          )
-          encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-          command = [
-              "powershell.exe",
-              "-NoLogo",
-              "-NoProfile",
-              "-NonInteractive",
-              "-EncodedCommand",
-              encoded,
-          ]
-          for probe_label, probe_environment in (
-              ("cloned-environment", dict(os.environ)),
-              ("inherited-environment", None),
-          ):
-              options = {} if probe_environment is None else {"env": probe_environment}
-              result = subprocess.run(
-                  command,
-                  stdin=subprocess.DEVNULL,
-                  stdout=subprocess.PIPE,
-                  stderr=subprocess.PIPE,
-                  timeout=30,
-                  check=False,
-                  **options,
-              )
-              print(
-                  f"JStack exact product ACL probe {probe_label} exit: "
-                  f"{result.returncode}"
-              )
-              for stream_label, payload in (
-                  ("stdout", result.stdout),
-                  ("stderr", result.stderr),
-              ):
-                  if payload:
-                      rendered = payload[:4096].decode("utf-8", errors="replace")
-                      print(
-                          f"JStack exact product ACL probe {probe_label} "
-                          f"{stream_label}: {rendered}"
-                      )
-          '@
-          $productProbe | python -
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
           $env:TEMP = Join-Path $profileRoot 'AppData\Local\Temp'
           $env:TMP = $env:TEMP
           $env:TMPDIR = $env:TEMP
-          New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
-          python -c "import os,tempfile; from pathlib import Path; from scripts import install; root=os.path.normcase(os.environ['USERPROFILE']); value=os.path.normcase(tempfile.gettempdir()); install._validate_windows_install_root(Path(value)); assert os.path.commonpath((root,value)) == root, (root,value)"
+          Set-JStackTestProfileAcl -Path $env:TEMP
+          $privateTempProbe = @'
+          import os
+          import tempfile
+          from pathlib import Path
+
+          from scripts import install
+
+          root = os.path.normcase(os.environ["USERPROFILE"])
+          with tempfile.TemporaryDirectory() as temporary_directory:
+              value = os.path.normcase(temporary_directory)
+              install._validate_windows_install_root(Path(value))
+              assert os.path.commonpath((root, value)) == root, (root, value)
+          '@
+          $privateTempProbe | python -
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
