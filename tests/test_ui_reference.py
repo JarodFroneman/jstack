@@ -416,13 +416,14 @@ class ReferenceBundleTests(unittest.TestCase):
                 )
 
     def test_windows_reference_finalizer_fails_before_filesystem_reads(self) -> None:
+        unread_root = Path("/unread/reference")
         with mock.patch.object(server.os, "name", "nt"), mock.patch.object(
             server.Path,
             "home",
             side_effect=AssertionError("filesystem authority was inspected"),
         ):
             with self.assertRaisesRegex(server.ToolError, "requires a POSIX host"):
-                server._validate_ui_evidence_root_authority(Path("C:/unread/reference"))
+                server._validate_ui_evidence_root_authority(unread_root)
 
 
 if __name__ == "__main__":
