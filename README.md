@@ -280,7 +280,9 @@ session-local contract planning. Beta.2 UI evidence finalization intentionally
 fails closed on Windows because the stdlib-only server cannot verify inherited
 DACL and reparse privacy for evidence files; begin and finish a release-bound
 UI lifecycle on a supported POSIX host with no granting extended ACLs on the
-key or evidence roots. See [installation](docs/installation.md#product-interface-activation-and-evidence).
+key or evidence roots. Beta.3 Evidence Builder contracts can be planned on
+Windows, but reference finalization shares the same POSIX-only privacy boundary.
+See [installation](docs/installation.md#product-interface-activation-and-evidence).
 
 ### 1. Clone
 

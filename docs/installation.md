@@ -280,6 +280,11 @@ security, launch, release, or deployment evidence. The public file formats are
 `ui-contract.v1`; binding a finalized reference emits the additive
 `ui-contract.v2` contract.
 
+Evidence Builder contract planning is portable, but Beta.3 reference
+finalization requires a supported POSIX host. It fails closed on Windows before
+reading the bundle because the stdlib-only server cannot verify inherited DACL
+and reparse privacy for the reference root and files.
+
 The Git-only lifecycle uses `jstack_ui_contract` before implementation and
 `jstack_ui_finalize` after the clean committed candidate and exact-build QA
 receipt exist. The finalizer reads a server-selected private root under

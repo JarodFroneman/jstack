@@ -184,6 +184,7 @@ class ReferenceBundleTests(unittest.TestCase):
         write_private(root / "manifest.json", ui.canonical_bytes(manifest) + b"\n")
         return root
 
+    @unittest.skipUnless(os.name == "posix", "UI reference finalization requires POSIX")
     def test_reference_bundle_finalizes_and_binds_into_ui_contract_only(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
@@ -296,6 +297,7 @@ class ReferenceBundleTests(unittest.TestCase):
                     }
                 )
 
+    @unittest.skipUnless(os.name == "posix", "UI reference finalization requires POSIX")
     def test_prototype_rejects_external_network_references(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
@@ -361,6 +363,7 @@ class ReferenceBundleTests(unittest.TestCase):
                     }
                 )
 
+    @unittest.skipUnless(os.name == "posix", "UI reference finalization requires POSIX")
     def test_url_capture_requires_exact_authority_and_provider_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
@@ -411,6 +414,15 @@ class ReferenceBundleTests(unittest.TestCase):
                         "reference_manifest": "manifest.json",
                     }
                 )
+
+    def test_windows_reference_finalizer_fails_before_filesystem_reads(self) -> None:
+        with mock.patch.object(server.os, "name", "nt"), mock.patch.object(
+            server.Path,
+            "home",
+            side_effect=AssertionError("filesystem authority was inspected"),
+        ):
+            with self.assertRaisesRegex(server.ToolError, "requires a POSIX host"):
+                server._validate_ui_evidence_root_authority(Path("C:/unread/reference"))
 
 
 if __name__ == "__main__":

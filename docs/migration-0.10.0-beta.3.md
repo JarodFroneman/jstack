@@ -54,6 +54,9 @@ remain deferred.
 - Existing callers using the 52 legacy aliases continue to receive their
   frozen names and request schemas.
 - Existing reference-free UI contract consumers continue to receive v1.
+- Evidence Builder contract planning is portable. Reference finalization is
+  POSIX-only in Beta.3 and fails closed on Windows before bundle reads because
+  the stdlib-only server cannot verify inherited DACL and reparse privacy.
 
 ## Upgrade
 

@@ -2982,6 +2982,11 @@ def _ui_reference_root(project_path: Path, bundle_id: str) -> Path:
 
 def _validate_ui_evidence_root_authority(root: Path) -> None:
     """Reject aliasing or permissive components below the fixed user home."""
+    if os.name != "posix":
+        raise ToolError(
+            "UI reference finalization requires a POSIX host because this "
+            "stdlib-only server cannot verify Windows DACL and reparse privacy."
+        )
     home = Path.home()
     try:
         relative = root.relative_to(home)
