@@ -1,0 +1,40 @@
+{
+  "name": "jstack-evidence-builder",
+  "version": "0.10.0-beta.3",
+  "description": "Top-level JStack command for private screenshot and URL reference bundles before UI implementation.",
+  "author": {
+    "name": "Jarod Froneman",
+    "url": "https://github.com/JarodFroneman"
+  },
+  "homepage": "https://github.com/JarodFroneman/jstack",
+  "repository": "https://github.com/JarodFroneman/jstack",
+  "license": "MIT",
+  "keywords": [
+    "jstack",
+    "codex",
+    "screenshots",
+    "ui-reference",
+    "evidence"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "JStack Evidence Builder",
+    "shortDescription": "Private screenshot and URL reference bundles",
+    "longDescription": "Builds a private, digest-bound Product Interface reference bundle from user-provided screenshots, Figma exports, and explicitly approved URL captures. It can create up to two isolated standalone visual prototypes, records rights, redaction, and provider disclosures, and returns a receipt that may inform a later UI contract without counting as candidate QA evidence.",
+    "developerName": "Jarod Froneman",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Build a private UI reference bundle from my approved screenshots or URLs before implementation."
+    ],
+    "websiteURL": "https://github.com/JarodFroneman/jstack",
+    "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",
+    "termsOfServiceURL": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
+    "brandColor": "#1F6FEB",
+    "screenshots": []
+  }
+}

@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.10.0-beta.3 - 2026-08-19 - Evidence Builder prerelease
+
+### Added
+
+- Added `/jstack-evidence-builder` as a sixth, explicitly invoked workflow for
+  user-provided screenshots, Figma exports, and approved URL captures.
+- Added canonical-only `jstack_ui_reference_contract` and
+  `jstack_ui_reference_finalize` tools, taking the live surface to 56 canonical
+  `jstack_*` tools while preserving all 52 frozen `gstack_*` aliases.
+- Added private, hash-bound reference contracts and bundles with rights,
+  redaction, provider-disclosure, image, isolated-prototype, and path-safety
+  validation. Reference receipts may be bound into `jstack_ui_contract` but can
+  never satisfy candidate UI finalization or another release gate. Ordinary
+  UI contracts remain byte-compatible v1; a reference-bound contract uses the
+  additive `jstack.ui.contract.v2` / `ui-contract.v2.schema.json` successor.
+- Added a dependency-free host-orchestration workflow inspired by
+  `abi/screenshot-to-code` at pinned commit
+  `d026163f586dfa8c5c10d28c36edd59a9d3b0e88`; no upstream application runtime
+  or provider SDK is vendored.
+
+### Changed
+
+- Advanced all public version-bearing plugin and MCP identities to
+  `0.10.0-beta.3`. The dedicated layout now contains six command plugins and
+  the live MCP exposes 56 canonical `jstack_*` tools while the 52 legacy
+  `gstack_*` aliases remain byte-compatible and frozen.
+- Kept ordinary reference-free Product Interface contracts byte-compatible as
+  `jstack.ui.contract.v1`; only contracts carrying a finalized reference
+  binding use the additive `jstack.ui.contract.v2` successor.
+
+### Security
+
+- Reference artifacts remain beneath a server-selected private root and are
+  descriptor-, size-, media-, dimension-, and digest-validated. URL authority,
+  rights basis, redaction state, and external-provider use are explicit.
+- Reference receipts are provenance evidence only. They grant no project-write,
+  candidate-QA, security, release, deployment, legal, or production authority.
+- This prerelease does not validate the deferred Beta.1 Proof Study and makes
+  no measured uplift, superiority, stable-release, or production-readiness
+  claim.
+
 ## 0.10.0-beta.2 - 2026-08-15 - Product Interface prerelease
 
 ### Added

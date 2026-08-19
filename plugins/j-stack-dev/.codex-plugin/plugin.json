@@ -1,6 +1,6 @@
 {
   "name": "j-stack-dev",
-  "version": "0.10.0-beta.2",
+  "version": "0.10.0-beta.3",
   "description": "Top-level JStack single Lead Engineer command with automatic Product Interface design routing for Codex.",
   "author": {
     "name": "Jarod Froneman",

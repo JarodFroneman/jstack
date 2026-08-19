@@ -15,11 +15,15 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = {
     "j-stack-dev.md",
     "jstack-audit.md",
+    "jstack-evidence-builder.md",
     "jstack-full-team.md",
     "jstack-loop.md",
     "jstack-subagents.md",
 }
-PLUGIN_NAMES = {"j-stack-dev", "jstack-audit", "jstack-full-team", "jstack-loop", "jstack-subagents"}
+PLUGIN_NAMES = {
+    "j-stack-dev", "jstack-audit", "jstack-evidence-builder",
+    "jstack-full-team", "jstack-loop", "jstack-subagents",
+}
 ROLES = {
     "lead",
     "architect",
@@ -53,11 +57,16 @@ CAPABILITIES = {
     "product-observability",
     "privacy-legal-evidence",
 }
-ADDITIVE_CANONICAL_TOOLS = {"jstack_ui_contract", "jstack_ui_finalize"}
+ADDITIVE_CANONICAL_TOOLS = {
+    "jstack_ui_contract",
+    "jstack_ui_finalize",
+    "jstack_ui_reference_contract",
+    "jstack_ui_reference_finalize",
+}
 CONTRACT_FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "v0.10.0-alpha.9.json"
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 54
+LIVE_CANONICAL_TOOL_COUNT = 56
 CORE_LOCAL_IMPORTS = {
     "audit",
     "capabilities",
@@ -77,6 +86,7 @@ CORE_STDLIB_IMPORTS = {
     "functools",
     "hashlib",
     "hmac",
+    "html",
     "json",
     "math",
     "os",
@@ -160,10 +170,10 @@ def check_boundaries() -> list[str]:
     errors: list[str] = []
     prompt_names = {path.name for path in (ROOT / "prompts").glob("*.md")}
     if prompt_names != COMMANDS:
-        errors.append("JStack must expose exactly the five named command prompts")
+        errors.append("JStack must expose exactly the six named command prompts")
     plugin_names = {path.name for path in (ROOT / "plugins").iterdir() if path.is_dir()}
     if plugin_names != PLUGIN_NAMES:
-        errors.append("JStack must retain exactly the five dedicated command plugins")
+        errors.append("JStack must retain exactly the six dedicated command plugins")
 
     server = _load_module("jstack_boundary_server", ROOT / "mcp" / "jstack" / "jstack_mcp_server.py")
     canonical = {name for name in server.TOOLS if name.startswith("jstack_")}
@@ -178,7 +188,7 @@ def check_boundaries() -> list[str]:
         errors.append("frozen legacy MCP alias snapshot must remain at 52 tools")
     if len(canonical) != LIVE_CANONICAL_TOOL_COUNT or canonical != expected_canonical:
         errors.append(
-            "canonical MCP tool inventory must be the frozen 52 plus exactly the two Product Interface System tools"
+            "canonical MCP tool inventory must be the frozen 52 plus exactly the four Product Interface System tools"
         )
     if len(aliases) != FROZEN_ALIAS_COUNT or aliases != frozen_aliases:
         errors.append("legacy MCP alias inventory must remain the exact frozen 52")
@@ -256,7 +266,7 @@ def main() -> int:
         sys.stderr.write("\n".join(errors) + "\n")
         return 1
     print(
-        "JStack product boundaries are intact: five commands, 54 canonical tools, "
+        "JStack product boundaries are intact: six commands, 56 canonical tools, "
         "52 frozen aliases, stdlib core, no packaged Proof Plane authority."
     )
     return 0

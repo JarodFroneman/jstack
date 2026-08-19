@@ -46,7 +46,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.2"
+SERVER_VERSION = "0.10.0-beta.3"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -78,8 +78,10 @@ LAUNCH_HINT_MAX_FILE_BYTES = 256_000
 LAUNCH_HINT_MAX_TOTAL_BYTES = 8_000_000
 UI_RECEIPT_MAX_CHARS = 250_000
 UI_CONTRACT_MAX_AGE_SECONDS = 24 * 60 * 60
+UI_REFERENCE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 UI_CONTRACT_HMAC_KEY_BYTES = 32
 UI_CONTRACT_HMAC_DOMAIN = b"jstack.ui-contract.hmac.v1\0"
+UI_REFERENCE_HMAC_DOMAIN = b"jstack.ui-reference.hmac.v1\0"
 UI_HINT_MAX_FILES = 5_000
 UI_HINT_MAX_FILE_BYTES = 256_000
 UI_HINT_MAX_TOTAL_BYTES = 8_000_000
@@ -604,6 +606,8 @@ GIT_REQUIRED_TOOLS = [
     "jstack_program_finalize",
     "jstack_ui_contract",
     "jstack_ui_finalize",
+    "jstack_ui_reference_contract",
+    "jstack_ui_reference_finalize",
 ]
 ARTIFACT_ONLY_RELEASE_BLOCKER = (
     "Git-backed JStack release readiness is unavailable until the authoritative source has a committed git repository."
@@ -2958,6 +2962,24 @@ def _ui_evidence_root(project_path: Path) -> Path:
     return Path.home() / ".jstack" / "evidence" / "ui" / project_key
 
 
+def _ui_reference_root(project_path: Path, bundle_id: str) -> Path:
+    state = project_state(project_path)
+    identity = _ui_git_identity(project_path, state)
+    project_key = hashlib.sha256(
+        (identity["commonDir"] + "\0" + identity["gitRoot"]).encode("utf-8")
+    ).hexdigest()[:24]
+    if not re.fullmatch(r"[a-z][a-z0-9._-]{1,79}", bundle_id):
+        raise ToolError("Reference bundle id is invalid.")
+    return (
+        Path.home()
+        / ".jstack"
+        / "evidence"
+        / "ui-reference"
+        / project_key
+        / bundle_id
+    )
+
+
 def _validate_ui_evidence_root_authority(root: Path) -> None:
     """Reject aliasing or permissive components below the fixed user home."""
     home = Path.home()
@@ -3325,6 +3347,87 @@ def verify_ui_contract_receipt(token: str, *, require_fresh: bool) -> dict[str, 
     if not all(checks.values()):
         state = "stale" if require_fresh else "invalid"
         raise ToolError(f"Product Interface contract receipt is {state} or fails its durable binding.")
+    return payload
+
+
+def _ui_reference_signing_key(*, create: bool = False) -> bytes:
+    return hmac.new(
+        _ui_contract_hmac_key(create=create),
+        UI_REFERENCE_HMAC_DOMAIN,
+        hashlib.sha256,
+    ).digest()
+
+
+def issue_ui_reference_receipt(payload: dict[str, Any]) -> str:
+    key = _ui_reference_signing_key(create=True)
+    body = dict(payload)
+    body["serverSession"] = SERVER_SESSION_ID
+    body["issuedAt"] = now_iso()
+    body["keyIdSha256"] = hashlib.sha256(key).hexdigest()
+    body["keyDurability"] = (
+        "posix-user-key-v1"
+        if _ui_contract_key_is_durable()
+        else "server-session-v1"
+    )
+    encoded = _b64encode(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+    signature = _b64encode(
+        hmac.new(key, encoded.encode("ascii"), hashlib.sha256).digest()
+    )
+    return f"{encoded}.{signature}"
+
+
+def verify_ui_reference_receipt(
+    token: str,
+    *,
+    expected_kind: str,
+    require_fresh: bool,
+) -> dict[str, Any]:
+    if expected_kind not in {"ui-reference-contract", "ui-reference-finalization"}:
+        raise ToolError("Product Interface reference receipt kind is unsupported.")
+    try:
+        encoded, supplied_signature = token.split(".", 1)
+        key = _ui_reference_signing_key()
+        expected_signature = _b64encode(
+            hmac.new(key, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("timezone-aware timestamps required")
+    except Exception as exc:
+        raise ToolError(
+            "Product Interface reference receipt is malformed or has an invalid durable signature."
+        ) from exc
+    now = _dt.datetime.now(_dt.timezone.utc)
+    checks = {
+        "kind": payload.get("kind") == expected_kind,
+        "issuerSession": bool(
+            re.fullmatch(r"[0-9a-f]{32}", str(payload.get("serverSession") or ""))
+        ),
+        "keyId": payload.get("keyIdSha256") == hashlib.sha256(key).hexdigest(),
+        "keyDurability": payload.get("keyDurability")
+        == (
+            "posix-user-key-v1"
+            if _ui_contract_key_is_durable()
+            else "server-session-v1"
+        ),
+        "issued": issued <= now,
+        "boundedExpiry": 0
+        < (expires - issued).total_seconds()
+        <= UI_REFERENCE_MAX_AGE_SECONDS,
+    }
+    if require_fresh:
+        checks["fresh"] = issued <= now < expires
+    if not all(checks.values()):
+        state = "stale" if require_fresh else "invalid"
+        raise ToolError(
+            f"Product Interface reference receipt is {state} or fails its durable binding."
+        )
     return payload
 
 
@@ -19050,6 +19153,260 @@ def _ui_global_established_system_paths(
     return sorted(representatives)
 
 
+def tool_ui_reference_contract(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    subject_before = evidence_subject(project_path)
+    if not subject_before["clean"]:
+        raise ToolError(
+            "A Product Interface reference contract requires a clean committed baseline. Commit or remove local changes first."
+        )
+    expected_fingerprint = str(args.get("project_fingerprint") or "").strip()
+    if expected_fingerprint != subject_before["projectFingerprint"]:
+        raise ToolError(
+            "project_fingerprint is stale or does not match the server-derived reference baseline."
+        )
+    baseline = _ui_git_identity(project_path, subject_before)
+    viewports = args.get("viewports")
+    if viewports is None:
+        viewports = [
+            {"id": "desktop", "width": 1280, "height": 800, "dpr": 1},
+            {"id": "mobile", "width": 390, "height": 844, "dpr": 1},
+        ]
+    prototype_mode = str(args.get("prototype_mode") or "none").strip()
+    max_variants = args.get("max_variants")
+    if max_variants is None:
+        max_variants = 0 if prototype_mode == "none" else 2
+    bundle_id = "reference-" + secrets.token_hex(12)
+    try:
+        contract = ui_core.build_reference_contract(
+            goal=args.get("goal"),
+            baseline=baseline,
+            bundle_id=bundle_id,
+            source_kinds=args.get("source_kinds"),
+            viewports=viewports,
+            prototype_mode=prototype_mode,
+            max_variants=max_variants,
+            external_provider_allowed=args.get("external_provider_allowed", False),
+        )
+    except ui_core.ReferenceError as exc:
+        raise ToolError(str(exc)) from exc
+    subject_after = evidence_subject(project_path)
+    identity_after = _ui_git_identity(project_path, subject_after)
+    if subject_after != subject_before or identity_after != baseline:
+        raise ToolError(
+            "The repository or policy changed while the reference contract was being derived."
+        )
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=UI_REFERENCE_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    token = issue_ui_reference_receipt(
+        {
+            "kind": "ui-reference-contract",
+            "schemaVersion": "jstack.ui.reference-contract-receipt.v1",
+            "projectPath": subject_before["gitRoot"],
+            "gitHead": subject_before["gitHead"],
+            "projectFingerprint": subject_before["projectFingerprint"],
+            "policyDigest": subject_before["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "contract": contract,
+            "contractSha256": contract["contractSha256"],
+            "bundleId": contract["bundleId"],
+            "expiresAt": expires,
+            "passed": False,
+        }
+    )
+    if len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError(
+            "The reference contract exceeds the bounded receipt limit. Narrow the source or viewport scope."
+        )
+    reference_root = _ui_reference_root(project_path, contract["bundleId"])
+    return {
+        "schemaVersion": "jstack.ui.reference-contract-response.v1",
+        "projectPath": str(project_path),
+        "baseline": baseline,
+        "contract": contract,
+        "contractSha256": contract["contractSha256"],
+        "referenceContractReceipt": token,
+        "expiresAt": expires,
+        "referenceRoot": str(reference_root),
+        "referenceRootPolicy": {
+            "serverSelected": True,
+            "outsideRepository": True,
+            "callerCreatesDirectoryMode": "0700",
+            "fileMode": "0600",
+            "relativeManifestOnly": True,
+            "rawArtifactContentReturned": False,
+        },
+        "executionAuthorized": False,
+        "limitations": [
+            "This contract authorizes collection only from user-provided or explicitly approved references; it does not authorize crawling, authenticated browsing, or external-provider disclosure.",
+            "Reference artifacts are design inputs, not candidate UI evidence, QA, accessibility proof, security evidence, release approval, or deployment authority.",
+            "Prototype rendering must remain isolated with network access disabled; generated files stay outside the project until the user separately approves implementation.",
+        ],
+    }
+
+
+def _ui_reference_contract_payload(
+    project_path: Path,
+    token: str,
+    *,
+    require_fresh: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not token or len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("reference_contract_receipt must be one bounded signed receipt.")
+    payload = verify_ui_reference_receipt(
+        token,
+        expected_kind="ui-reference-contract",
+        require_fresh=require_fresh,
+    )
+    try:
+        contract = ui_core.validate_reference_contract(payload.get("contract"))
+    except ui_core.ReferenceError as exc:
+        raise ToolError(str(exc)) from exc
+    baseline = contract["baseline"]
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == "jstack.ui.reference-contract-receipt.v1",
+        "projectPath": payload.get("projectPath") == str(project_path),
+        "gitRoot": baseline.get("gitRoot") == str(project_path),
+        "gitHead": payload.get("gitHead") == baseline.get("gitHead"),
+        "projectFingerprint": payload.get("projectFingerprint")
+        == baseline.get("projectFingerprint"),
+        "policyDigest": payload.get("policyDigest") == baseline.get("policyDigest"),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "contractSha256": payload.get("contractSha256")
+        == contract["contractSha256"],
+        "bundleId": payload.get("bundleId") == contract["bundleId"],
+        "notFinalization": payload.get("passed") is False,
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "Reference contract receipt no longer matches this project, server, or contract."
+        )
+    return payload, contract
+
+
+def tool_ui_reference_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    token = str(args.get("reference_contract_receipt") or "").strip()
+    _, contract = _ui_reference_contract_payload(
+        project_path,
+        token,
+        require_fresh=True,
+    )
+    subject_before = evidence_subject(project_path)
+    baseline = contract["baseline"]
+    identity_before = _ui_git_identity(project_path, subject_before)
+    if not subject_before["clean"] or identity_before != baseline:
+        raise ToolError(
+            "Reference finalization requires the same clean committed project baseline used by its contract."
+        )
+    reference_root = _ui_reference_root(project_path, contract["bundleId"])
+    _validate_ui_evidence_root_authority(reference_root)
+    manifest_relative = str(args.get("reference_manifest") or "").strip()
+    try:
+        first = ui_core.load_and_validate_reference_bundle(
+            reference_root,
+            manifest_relative,
+            contract=contract,
+        )
+        second = ui_core.load_and_validate_reference_bundle(
+            reference_root,
+            manifest_relative,
+            contract=contract,
+        )
+    except ui_core.ReferenceError as exc:
+        raise ToolError(str(exc)) from exc
+    if first != second:
+        raise ToolError("Reference bundle changed during final verification.")
+    subject_after = evidence_subject(project_path)
+    identity_after = _ui_git_identity(project_path, subject_after)
+    if subject_after != subject_before or identity_after != baseline:
+        raise ToolError("The project changed during reference finalization.")
+    binding = ui_core.reference_binding(first)
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=UI_REFERENCE_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    finalization_token = issue_ui_reference_receipt(
+        {
+            "kind": "ui-reference-finalization",
+            "schemaVersion": "jstack.ui.reference-finalization-receipt.v1",
+            "projectPath": str(project_path),
+            "gitHead": baseline["gitHead"],
+            "projectFingerprint": baseline["projectFingerprint"],
+            "policyDigest": baseline["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "contract": contract,
+            "contractSha256": contract["contractSha256"],
+            "binding": binding,
+            "expiresAt": expires,
+            "passed": True,
+        }
+    )
+    if len(finalization_token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("The reference finalization exceeds the bounded receipt limit.")
+    return {
+        "schemaVersion": "jstack.ui.reference-finalization.v1",
+        "status": "passed",
+        "projectPath": str(project_path),
+        "baseline": baseline,
+        "referenceBundle": binding,
+        "validation": first,
+        "referenceFinalizationReceipt": finalization_token,
+        "expiresAt": expires,
+        "candidateEvidenceQualified": False,
+        "executionAuthorized": False,
+        "limitations": [
+            "This receipt proves only the integrity and declared provenance of a private reference bundle.",
+            "It cannot satisfy jstack_ui_finalize, QA, accessibility, security, launch, release, or human approval requirements.",
+        ],
+    }
+
+
+def _ui_reference_finalization_payload(
+    project_path: Path,
+    token: str,
+    *,
+    require_fresh: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not token or len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("reference_bundle_receipt must be one bounded signed receipt.")
+    payload = verify_ui_reference_receipt(
+        token,
+        expected_kind="ui-reference-finalization",
+        require_fresh=require_fresh,
+    )
+    try:
+        contract = ui_core.validate_reference_contract(payload.get("contract"))
+        binding = ui_core.normalize_reference_bundle(payload.get("binding"))
+    except (ui_core.ReferenceError, ui_core.UIError) as exc:
+        raise ToolError(str(exc)) from exc
+    baseline = contract["baseline"]
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == "jstack.ui.reference-finalization-receipt.v1",
+        "projectPath": payload.get("projectPath") == str(project_path),
+        "gitRoot": baseline.get("gitRoot") == str(project_path),
+        "gitHead": payload.get("gitHead") == baseline.get("gitHead"),
+        "projectFingerprint": payload.get("projectFingerprint")
+        == baseline.get("projectFingerprint"),
+        "policyDigest": payload.get("policyDigest") == baseline.get("policyDigest"),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "contractSha256": payload.get("contractSha256")
+        == contract["contractSha256"],
+        "bindingContract": binding is not None
+        and binding.get("contractSha256") == contract["contractSha256"],
+        "passed": payload.get("passed") is True,
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "Reference finalization receipt no longer matches this project, server, or bundle."
+        )
+    return payload, binding
+
+
 def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
     project_path = require_project_path(args.get("project_path"))
     subject_before = evidence_subject(project_path)
@@ -19063,6 +19420,23 @@ def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
             "project_fingerprint is stale or does not match the server-derived baseline fingerprint."
         )
     baseline = _ui_git_identity(project_path, subject_before)
+    reference_binding = None
+    reference_token = str(args.get("reference_bundle_receipt") or "").strip()
+    if reference_token:
+        reference_payload, reference_binding = _ui_reference_finalization_payload(
+            project_path,
+            reference_token,
+            require_fresh=True,
+        )
+        if (
+            reference_payload.get("gitHead") != subject_before["gitHead"]
+            or reference_payload.get("projectFingerprint")
+            != subject_before["projectFingerprint"]
+            or reference_payload.get("policyDigest") != subject_before["policyDigest"]
+        ):
+            raise ToolError(
+                "The reference bundle was finalized against a different project baseline."
+            )
     raw_allowed_paths = args.get("allowed_paths")
     if (
         not isinstance(raw_allowed_paths, list)
@@ -19152,6 +19526,7 @@ def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
             existing_system=existing_system,
             redesign_approved=args.get("redesign_approved", False),
             redesign_approval_reference=args.get("redesign_approval_reference"),
+            reference_bundle=reference_binding,
         )
     except ui_core.UIError as exc:
         raise ToolError(str(exc)) from exc
@@ -19193,6 +19568,7 @@ def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
         "catalog": contract["catalog"],
         "detection": detection,
         "profileResolution": contract["profileResolution"],
+        "referenceBundle": contract.get("referenceBundle"),
         "allowedPaths": contract["allowedPaths"],
         "platformExclusions": contract["platformExclusions"],
         "requirements": contract["requirements"],
@@ -25684,6 +26060,89 @@ for _name, _meta in list(TOOLS.items()):
 # gstack_* aliases remain byte-compatible while the live JStack surface grows.
 TOOLS.update(
     {
+        "jstack_ui_reference_contract": {
+            "description": "Create a clean-baseline, Git-bound contract for a private Product Interface reference bundle assembled from user-provided screenshots, Figma exports, or explicitly approved URL captures. The tool performs no capture, crawling, model call, project edit, release, or deployment action; on POSIX it creates or reads one private per-user signing key beneath ~/.jstack.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["goal", "project_fingerprint", "source_kinds"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "goal": {"type": "string", "minLength": 1, "maxLength": 4000},
+                    "project_fingerprint": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "description": "Expected server-derived clean baseline fingerprint; always recomputed.",
+                    },
+                    "source_kinds": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": len(ui_core.SOURCE_KINDS),
+                        "uniqueItems": True,
+                        "items": {"type": "string", "enum": list(ui_core.SOURCE_KINDS)},
+                    },
+                    "viewports": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": ui_core.REFERENCE_MAX_VIEWPORTS,
+                        "description": "Defaults to 1280x800 desktop and 390x844 mobile when omitted.",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["id", "width", "height", "dpr"],
+                            "properties": {
+                                "id": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+                                "width": {"type": "integer", "minimum": 240, "maximum": 7680},
+                                "height": {"type": "integer", "minimum": 240, "maximum": 7680},
+                                "dpr": {"type": "number", "minimum": 1, "maximum": 4},
+                            },
+                        },
+                    },
+                    "prototype_mode": {
+                        "type": "string",
+                        "enum": list(ui_core.PROTOTYPE_MODES),
+                        "default": "none",
+                    },
+                    "max_variants": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": ui_core.REFERENCE_MAX_VARIANTS,
+                        "description": "Must be zero for none and one or two for a prototype mode; defaults to two when a prototype mode is selected.",
+                    },
+                    "external_provider_allowed": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Explicitly permits disclosed reference bytes to leave the host for the selected provider; credentials and unrelated project data remain forbidden.",
+                    },
+                },
+            },
+            "handler": tool_ui_reference_contract,
+            "readOnlyHint": False,
+        },
+        "jstack_ui_reference_finalize": {
+            "description": "Validate one complete private Product Interface reference bundle against its signed clean-baseline contract. Returns only digests, counts, provenance classifications, and a receipt that may be bound into jstack_ui_contract; reference material never qualifies as candidate UI evidence.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["reference_contract_receipt", "reference_manifest"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "reference_contract_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                    },
+                    "reference_manifest": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "description": "Safe relative path beneath the server-selected private reference root.",
+                    },
+                },
+            },
+            "handler": tool_ui_reference_finalize,
+            "readOnlyHint": True,
+        },
         "jstack_ui_contract": {
             "description": "Create a clean-baseline, Git-bound Product Interface System contract with original editorial-calm or creative-canvas profiles, preserve-and-extend precedence, per-surface platform mapping, and a complete objective evidence matrix. This tool performs no UI implementation or external action; on POSIX it creates or reads one private per-user contract-signing key beneath ~/.jstack.",
             "inputSchema": {
@@ -25694,6 +26153,12 @@ TOOLS.update(
                     "project_path": {"type": "string"},
                     "goal": {"type": "string", "minLength": 1, "maxLength": 4000},
                     "project_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Expected server-derived clean baseline fingerprint; never trusted without recomputation."},
+                    "reference_bundle_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                        "description": "Optional current receipt from jstack_ui_reference_finalize. Its digest-only binding informs this contract but never satisfies candidate finalization evidence.",
+                    },
                     "profile_override": {"type": "string", "enum": list(ui_core.PROFILE_IDS)},
                     "surfaces": {
                         "type": "array", "minItems": 1, "maxItems": 64,

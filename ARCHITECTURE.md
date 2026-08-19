@@ -106,8 +106,8 @@ runner/scorer. The existing 12-fixture synthetic audit corpus remains Tier 0;
 it validates scoring protocol behavior and is not represented as a
 repository-level host benchmark.
 
-`scripts/check_product_boundaries.py` proves that the product still has the
-five named commands, 54 canonical MCP tools, the frozen 52 compatibility aliases, 11
+`scripts/check_product_boundaries.py` proves that the product has the
+six named commands, 56 canonical MCP tools, the frozen 52 compatibility aliases, 11
 roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
 standard-library core. It also rejects vendor SDKs, network-capable core
 imports, packaged `evals/` content, model or scanner execution in the Proof
@@ -117,8 +117,10 @@ Plane, and Proof Plane filesystem mutation.
 alpha.9 snapshot: command and plugin layouts, legacy request-schema digests,
 legacy aliases, published core-schema bytes, protocol versions, and persisted
 state markers. Beta.2 admits only the declared Product Interface successor
-fields/enums on affected legacy requests plus the two canonical-only UI tools;
-all other prior request schemas remain frozen.
+fields/enums on affected legacy requests plus its two canonical-only UI tools.
+The Evidence Builder successor adds one command/plugin, two reference tools,
+three reference schemas, and the reference-bound UI contract v2; all other
+prior request schemas remain frozen.
 
 The scorer consumes already-produced run and blinded-review envelopes. It
 retains failed, blocked, and timed-out runs, requires equal limits for

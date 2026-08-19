@@ -162,13 +162,14 @@ execution.
 
 ## Tools
 
-The server exposes 54 canonical `jstack_*` tools for runtime status, project
+The server exposes 56 canonical `jstack_*` tools for runtime status, project
 detection, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
-mastery, and Product Interface contracting/finalization. The frozen 52 legacy
-`gstack_*` aliases remain for compatibility; the two UI tools are canonical-only
+mastery, and Product Interface reference and candidate
+contracting/finalization. The frozen 52 legacy `gstack_*` aliases remain for
+compatibility; the four UI tools are canonical-only
 and upstream gstack itself is optional.
 
 Current JStack releases have no custom action-approval tools. JStack never asks for an approval
@@ -199,6 +200,15 @@ digest-bound structured assertion measurements. Product observations carry
 the same candidate and producer binding. All referenced bytes remain beneath
 the server-selected private evidence root; receipts return normalized digests
 and counts, never raw artifact content.
+
+Evidence Builder producers use the packaged
+`ui-reference-contract.v1.schema.json`,
+`ui-reference-bundle.v1.schema.json`, and
+`ui-reference-analysis.v1.schema.json` contracts. Their private source bundles
+can contribute only a digest-bound reference to a later UI contract; they never
+satisfy candidate screenshots, objective checks, security evidence, or release
+approval. Reference-free UI contracts retain the v1 shape; reference-bound
+contracts use the packaged additive `ui-contract.v2.schema.json` successor.
 
 ## Install
 

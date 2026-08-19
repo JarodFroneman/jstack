@@ -24,6 +24,7 @@ FILE_MAP = {
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
     ROOT / "prompts" / "jstack-audit.md": [ROOT / "plugin" / "commands" / "jstack-audit.md"],
+    ROOT / "prompts" / "jstack-evidence-builder.md": [ROOT / "plugin" / "commands" / "jstack-evidence-builder.md"],
     ROOT / "prompts" / "jstack-loop.md": [ROOT / "plugin" / "commands" / "jstack-loop.md"],
     ROOT / "skills" / "jstack-dev" / "SKILL.md": [ROOT / "plugin" / "skills" / "jstack-dev" / "SKILL.md"],
     ROOT / "mastery" / "curriculum.v1.json": [
@@ -103,6 +104,14 @@ FILE_MAP[ROOT / "skills" / "jstack-loop" / "references" / "mastery-system.md"].a
     ROOT / "docs" / "loop-mastery-system.md"
 )
 
+for source in sorted((ROOT / "skills" / "jstack-evidence-builder").rglob("*")):
+    if source.is_file():
+        relative = source.relative_to(ROOT / "skills" / "jstack-evidence-builder")
+        FILE_MAP[source] = [
+            ROOT / "plugin" / "skills" / "jstack-evidence-builder" / relative,
+            ROOT / "plugins" / "jstack-evidence-builder" / "skills" / "jstack-evidence-builder" / relative,
+        ]
+
 for source in sorted((ROOT / "skills" / "product-ui-design").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "skills" / "product-ui-design")
@@ -149,6 +158,14 @@ TREE_MIRRORS = (
     (
         ROOT / "skills" / "jstack-loop",
         ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop",
+    ),
+    (
+        ROOT / "skills" / "jstack-evidence-builder",
+        ROOT / "plugin" / "skills" / "jstack-evidence-builder",
+    ),
+    (
+        ROOT / "skills" / "jstack-evidence-builder",
+        ROOT / "plugins" / "jstack-evidence-builder" / "skills" / "jstack-evidence-builder",
     ),
     (
         ROOT / "skills" / "product-ui-design",

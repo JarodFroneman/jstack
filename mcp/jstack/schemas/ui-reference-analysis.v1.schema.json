@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-reference-analysis.v1.schema.json",
+  "title": "JStack Product Interface reference analysis v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "summary",
+    "layout",
+    "colors",
+    "typography",
+    "components",
+    "interactions",
+    "responsiveBehavior",
+    "assetNotes",
+    "accessibilityNotes"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.reference-analysis.v1"},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "layout": {"$ref": "#/$defs/observations"},
+    "colors": {"$ref": "#/$defs/observations"},
+    "typography": {"$ref": "#/$defs/observations"},
+    "components": {"$ref": "#/$defs/observations"},
+    "interactions": {"$ref": "#/$defs/observations"},
+    "responsiveBehavior": {"$ref": "#/$defs/observations"},
+    "assetNotes": {"$ref": "#/$defs/observations"},
+    "accessibilityNotes": {"$ref": "#/$defs/observations"}
+  },
+  "$defs": {
+    "observations": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  }
+}

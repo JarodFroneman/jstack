@@ -9,8 +9,10 @@ from unittest import mock
 
 from scripts.check_contract_compatibility import (
     ADDITIVE_CANONICAL_TOOLS,
+    ADDITIVE_COMMAND_NAMES,
     ADDITIVE_EXISTING_TOOL_ENUMS,
     ADDITIVE_EXISTING_TOOL_FIELDS,
+    ADDITIVE_PLUGIN_LAYOUTS,
     ADDITIVE_SCHEMA_FILES,
     DEFAULT_FIXTURE,
     _canonical_digest,
@@ -33,6 +35,8 @@ class CrossVersionContractTests(unittest.TestCase):
         self.assertEqual(52, fixture["productInvariants"]["legacyAliasCount"])
         self.assertTrue(ADDITIVE_CANONICAL_TOOLS.isdisjoint(frozen_tools))
         self.assertTrue(ADDITIVE_SCHEMA_FILES.isdisjoint(frozen_schemas))
+        self.assertTrue(ADDITIVE_COMMAND_NAMES.isdisjoint(fixture["commandNames"]))
+        self.assertTrue(ADDITIVE_PLUGIN_LAYOUTS.isdisjoint(fixture["pluginLayouts"]))
 
     def test_live_contract_is_only_the_approved_additive_delta(self) -> None:
         fixture = json.loads(DEFAULT_FIXTURE.read_text(encoding="utf-8"))
@@ -45,12 +49,23 @@ class CrossVersionContractTests(unittest.TestCase):
                 "*.json"
             )
         }
+        root = DEFAULT_FIXTURE.parents[3]
+        commands = {path.name for path in (root / "prompts").glob("*.md")}
+        plugin_layouts = {
+            "plugin/.codex-plugin/plugin.json",
+            *{
+                path.relative_to(root).as_posix()
+                for path in root.glob("plugins/*/.codex-plugin/plugin.json")
+            },
+        }
         self.assertEqual(
             set(fixture["canonicalToolInputSchemaSha256"]) | ADDITIVE_CANONICAL_TOOLS,
             canonical,
         )
         self.assertEqual(set(fixture["legacyAliases"]), aliases)
         self.assertEqual(set(fixture["coreSchemaFilesSha256"]) | ADDITIVE_SCHEMA_FILES, schemas)
+        self.assertEqual(set(fixture["commandNames"]) | ADDITIVE_COMMAND_NAMES, commands)
+        self.assertEqual(set(fixture["pluginLayouts"]) | ADDITIVE_PLUGIN_LAYOUTS, plugin_layouts)
         self.assertFalse(any(name.startswith("gstack_ui_") for name in aliases))
 
     def test_release_readiness_successor_adds_only_optional_ui_receipt(self) -> None:

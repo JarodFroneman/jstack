@@ -28,10 +28,14 @@ class ProductInterfaceSyncTests(unittest.TestCase):
         for name in (
             "ui-catalog.v1.schema.json",
             "ui-contract.v1.schema.json",
+            "ui-contract.v2.schema.json",
             "ui-evidence.v1.schema.json",
             "ui-finalization.v1.schema.json",
             "ui-objective-result.v1.schema.json",
             "ui-product-observation.v1.schema.json",
+            "ui-reference-analysis.v1.schema.json",
+            "ui-reference-bundle.v1.schema.json",
+            "ui-reference-contract.v1.schema.json",
         ):
             source = ROOT / "mcp" / "jstack" / "schemas" / name
             self.assertEqual(
