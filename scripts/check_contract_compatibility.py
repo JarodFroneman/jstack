@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preserve alpha.9 contracts while allowing the closed Product UI additions."""
+"""Preserve alpha.9 contracts while allowing closed Product UI successors."""
 
 from __future__ import annotations
 
@@ -15,7 +15,16 @@ from typing import Any, Dict
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "v0.10.0-alpha.9.json"
 ADDITIVE_CANONICAL_TOOLS = frozenset(
-    {"jstack_ui_contract", "jstack_ui_finalize"}
+    {
+        "jstack_ui_contract",
+        "jstack_ui_finalize",
+        "jstack_ui_reference_contract",
+        "jstack_ui_reference_finalize",
+    }
+)
+ADDITIVE_COMMAND_NAMES = frozenset({"jstack-evidence-builder.md"})
+ADDITIVE_PLUGIN_LAYOUTS = frozenset(
+    {"plugins/jstack-evidence-builder/.codex-plugin/plugin.json"}
 )
 ADDITIVE_EXISTING_TOOL_FIELDS = {
     **{
@@ -193,15 +202,19 @@ ADDITIVE_SCHEMA_FILES = frozenset(
     {
         "ui-catalog.v1.schema.json",
         "ui-contract.v1.schema.json",
+        "ui-contract.v2.schema.json",
         "ui-evidence.v1.schema.json",
         "ui-finalization.v1.schema.json",
         "ui-objective-result.v1.schema.json",
         "ui-product-observation.v1.schema.json",
+        "ui-reference-analysis.v1.schema.json",
+        "ui-reference-bundle.v1.schema.json",
+        "ui-reference-contract.v1.schema.json",
     }
 )
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 54
+LIVE_CANONICAL_TOOL_COUNT = 56
 
 
 def _canonical_digest(value: Any) -> str:
@@ -283,14 +296,16 @@ def check_contracts(fixture_path: Path = DEFAULT_FIXTURE) -> list[str]:
     errors: list[str] = []
     server = _load_server()
     command_names = sorted(path.name for path in (ROOT / "prompts").glob("*.md"))
-    if command_names != fixture["commandNames"]:
-        errors.append("five-command contract drift: %s" % command_names)
+    expected_commands = set(fixture["commandNames"]) | ADDITIVE_COMMAND_NAMES
+    if set(command_names) != expected_commands:
+        errors.append("command contract changed outside the approved additive surface: %s" % command_names)
     plugin_layouts = sorted(
         ["plugin/.codex-plugin/plugin.json"]
         + [path.relative_to(ROOT).as_posix() for path in ROOT.glob("plugins/*/.codex-plugin/plugin.json")]
     )
-    if plugin_layouts != fixture["pluginLayouts"]:
-        errors.append("plugin-layout contract drift")
+    expected_plugin_layouts = set(fixture["pluginLayouts"]) | ADDITIVE_PLUGIN_LAYOUTS
+    if set(plugin_layouts) != expected_plugin_layouts:
+        errors.append("plugin layout changed outside the approved additive surface")
 
     canonical = {
         name: _canonical_digest(meta["inputSchema"])
@@ -354,8 +369,8 @@ def check_contracts(fixture_path: Path = DEFAULT_FIXTURE) -> list[str]:
         or invariants["legacyAliasCount"] != FROZEN_ALIAS_COUNT
     ):
         errors.append("legacy alias count changed")
-    if len(command_names) != invariants["commandCount"]:
-        errors.append("command count changed")
+    if len(command_names) != invariants["commandCount"] + len(ADDITIVE_COMMAND_NAMES):
+        errors.append("command count changed outside the approved additive surface")
     if server.SERVER_NAME != invariants["serverName"]:
         errors.append("MCP server name changed")
     if len(server.capability_core.ROSTER_ROLE_IDS) != invariants["roleCount"]:

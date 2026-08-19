@@ -1413,22 +1413,32 @@ class ProductInterfaceServerTests(unittest.TestCase):
         home_patch.start()
         self.addCleanup(home_patch.stop)
 
-    def test_tools_are_54_canonical_52_legacy_and_ui_tools_are_canonical_only(self) -> None:
+    def test_tools_are_56_canonical_52_legacy_and_ui_tools_are_canonical_only(self) -> None:
         definitions = {item["name"]: item for item in server.tool_definitions()}
         names = set(definitions)
         canonical = {name for name in names if name.startswith("jstack_")}
         legacy = {name for name in server.TOOLS if name.startswith("gstack_")}
-        self.assertEqual(54, len(canonical))
+        self.assertEqual(56, len(canonical))
         self.assertEqual(52, len(legacy))
         self.assertIn("jstack_ui_contract", canonical)
         self.assertIn("jstack_ui_finalize", canonical)
+        self.assertIn("jstack_ui_reference_contract", canonical)
+        self.assertIn("jstack_ui_reference_finalize", canonical)
         self.assertNotIn("gstack_ui_contract", names)
         self.assertNotIn("gstack_ui_finalize", names)
+        self.assertNotIn("gstack_ui_reference_contract", names)
+        self.assertNotIn("gstack_ui_reference_finalize", names)
         self.assertFalse(
             definitions["jstack_ui_contract"]["annotations"]["readOnlyHint"]
         )
         self.assertTrue(
             definitions["jstack_ui_finalize"]["annotations"]["readOnlyHint"]
+        )
+        self.assertFalse(
+            definitions["jstack_ui_reference_contract"]["annotations"]["readOnlyHint"]
+        )
+        self.assertTrue(
+            definitions["jstack_ui_reference_finalize"]["annotations"]["readOnlyHint"]
         )
 
     def test_ui_contract_key_is_durable_but_only_fresh_contracts_start_work(self) -> None:

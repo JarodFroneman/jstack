@@ -2,7 +2,7 @@
 
 `evals/` is development infrastructure for measuring JStack without enlarging
 the installed product. It is deliberately outside `mcp/`, `plugin/`, and the
-five dedicated command plugins. The installer and artifact synchroniser do not
+six dedicated command plugins. The installer and artifact synchroniser do not
 copy it into Codex.
 
 ## Alpha.10 Scope

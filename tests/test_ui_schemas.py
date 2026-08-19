@@ -11,7 +11,12 @@ try:
 except ImportError:  # The production runtime intentionally has no schema dependency.
     jsonschema = None  # type: ignore[assignment]
 
-from mcp.jstack.ui import build_contract, detect_product_ui, load_catalog
+from mcp.jstack.ui import (
+    build_contract,
+    build_reference_contract,
+    detect_product_ui,
+    load_catalog,
+)
 from mcp.jstack.ui.detector import PLATFORM_MARKER_IDS
 
 
@@ -20,10 +25,14 @@ SCHEMA_ROOT = ROOT / "mcp" / "jstack" / "schemas"
 SCHEMA_NAMES = (
     "ui-catalog.v1.schema.json",
     "ui-contract.v1.schema.json",
+    "ui-contract.v2.schema.json",
     "ui-evidence.v1.schema.json",
     "ui-finalization.v1.schema.json",
     "ui-objective-result.v1.schema.json",
     "ui-product-observation.v1.schema.json",
+    "ui-reference-analysis.v1.schema.json",
+    "ui-reference-bundle.v1.schema.json",
+    "ui-reference-contract.v1.schema.json",
 )
 SHA = "a" * 64
 GIT_OID = "b" * 40
@@ -44,7 +53,7 @@ def walk_schema(value: Any, path: Tuple[str, ...] = ()) -> Iterator[Tuple[Tuple[
             yield from walk_schema(child, path + (str(index),))
 
 
-def sample_contract() -> dict[str, Any]:
+def sample_contract(reference_bundle: Any = None) -> dict[str, Any]:
     return build_contract(
         goal="Build the account interface",
         baseline={
@@ -82,7 +91,23 @@ def sample_contract() -> dict[str, Any]:
             {"id": "desktop", "width": 1280, "height": 800, "dpr": 1, "primary": True}
         ],
         allowed_paths=["app/**"],
+        reference_bundle=reference_bundle,
     )
+
+
+def sample_reference_bound_contract() -> dict[str, Any]:
+    return sample_contract({
+        "schemaVersion": "jstack.ui.reference-binding.v1",
+        "bundleId": "reference-schema",
+        "contractSha256": SHA,
+        "bundleSha256": SHA,
+        "sourceCount": 1,
+        "sourceSetSha256": SHA,
+        "analysisSha256": SHA,
+        "prototypeCount": 0,
+        "prototypeSetSha256": SHA,
+        "selectedPrototypeId": None,
+    })
 
 
 def sample_evidence() -> dict[str, Any]:
@@ -174,6 +199,82 @@ def sample_evidence() -> dict[str, Any]:
             "approvalSha256": None,
         },
         "manifestSha256": SHA,
+    }
+
+
+def sample_reference_contract() -> dict[str, Any]:
+    return build_reference_contract(
+        goal="Extract the account interface reference.",
+        baseline={
+            "gitRoot": "/tmp/project",
+            "commonDir": "/tmp/project/.git",
+            "gitHead": GIT_OID,
+            "projectFingerprint": SHA,
+            "treeSha256": SHA,
+            "policyDigest": SHA,
+        },
+        bundle_id="reference-schema",
+        source_kinds=["screenshot", "url-capture"],
+        viewports=[{"id": "desktop", "width": 1280, "height": 800, "dpr": 1}],
+        prototype_mode="none",
+        max_variants=0,
+        external_provider_allowed=False,
+    )
+
+
+def sample_reference_bundle() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.ui.reference-bundle.v1",
+        "contractSha256": SHA,
+        "createdAt": TIMESTAMP,
+        "complete": True,
+        "truncated": False,
+        "sources": [
+            {
+                "id": "source-1",
+                "kind": "screenshot",
+                "artifact": {
+                    "path": "sources/source.png",
+                    "sha256": SHA,
+                    "size": 100,
+                    "mediaType": "image/png",
+                },
+                "width": 1280,
+                "height": 800,
+                "viewportId": "desktop",
+                "sourceUrlSha256": None,
+                "captureAuthority": None,
+                "rightsBasis": "owned",
+                "sensitiveData": "none",
+                "metadataStripped": True,
+                "externalProcessing": False,
+                "providerDisclosure": None,
+            }
+        ],
+        "analysisArtifact": {
+            "path": "analysis.json",
+            "sha256": SHA,
+            "size": 100,
+            "mediaType": "application/json",
+        },
+        "prototypes": [],
+        "selectedPrototypeId": None,
+        "manifestSha256": SHA,
+    }
+
+
+def sample_reference_analysis() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.ui.reference-analysis.v1",
+        "summary": "A calm, typography-led product surface.",
+        "layout": ["Centered content column with a persistent navigation rail."],
+        "colors": ["Neutral canvas with one restrained accent."],
+        "typography": ["Large editorial heading and compact body text."],
+        "components": ["Navigation rail", "Primary content region"],
+        "interactions": ["Navigation selection"],
+        "responsiveBehavior": ["Rail collapses below tablet width."],
+        "assetNotes": ["No third-party brand assets are retained."],
+        "accessibilityNotes": ["Preserve text contrast and visible focus."],
     }
 
 
@@ -307,11 +408,12 @@ def sample_finalization() -> dict[str, Any]:
 
 class UISchemaStructureTests(unittest.TestCase):
     def test_contract_schema_platform_markers_match_runtime_detector(self) -> None:
-        contract = load_schema("ui-contract.v1.schema.json")
-        schema_markers = set(
-            contract["$defs"]["detectionPlatform"]["properties"]["markers"]["items"]["enum"]
-        )
-        self.assertEqual(schema_markers, set(PLATFORM_MARKER_IDS))
+        for name in ("ui-contract.v1.schema.json", "ui-contract.v2.schema.json"):
+            contract = load_schema(name)
+            schema_markers = set(
+                contract["$defs"]["detectionPlatform"]["properties"]["markers"]["items"]["enum"]
+            )
+            self.assertEqual(schema_markers, set(PLATFORM_MARKER_IDS))
 
     def test_every_nested_object_schema_is_closed_and_exact(self) -> None:
         for name in SCHEMA_NAMES:
@@ -342,6 +444,12 @@ class UISchemaStructureTests(unittest.TestCase):
         self.assertEqual(evidence["properties"]["captures"]["maxItems"], 256)
         self.assertEqual(finalization["$defs"]["contractSummary"]["properties"]["surfaceCount"]["maximum"], 64)
         self.assertEqual(finalization["$defs"]["contractSummary"]["properties"]["matrixCellCount"]["maximum"], 256)
+        self.assertEqual("jstack.ui.contract.v1", sample_contract()["schemaVersion"])
+        self.assertNotIn("referenceBundle", sample_contract())
+        self.assertEqual(
+            "jstack.ui.contract.v2",
+            sample_reference_bound_contract()["schemaVersion"],
+        )
 
 
 @unittest.skipIf(jsonschema is None, "jsonschema is not installed in the production runtime")
@@ -355,10 +463,14 @@ class UISchemaValidationTests(unittest.TestCase):
         instances = {
             "ui-catalog.v1.schema.json": load_catalog(),
             "ui-contract.v1.schema.json": sample_contract(),
+            "ui-contract.v2.schema.json": sample_reference_bound_contract(),
             "ui-evidence.v1.schema.json": sample_evidence(),
             "ui-finalization.v1.schema.json": sample_finalization(),
             "ui-objective-result.v1.schema.json": sample_objective_result(),
             "ui-product-observation.v1.schema.json": sample_product_observation(),
+            "ui-reference-analysis.v1.schema.json": sample_reference_analysis(),
+            "ui-reference-contract.v1.schema.json": sample_reference_contract(),
+            "ui-reference-bundle.v1.schema.json": sample_reference_bundle(),
         }
         for name, instance in instances.items():
             self.validator(name).validate(instance)
@@ -367,6 +479,9 @@ class UISchemaValidationTests(unittest.TestCase):
         mutations = {
             "ui-catalog.v1.schema.json": (load_catalog(), ("identity",)),
             "ui-contract.v1.schema.json": (sample_contract(), ("surfaces", 0)),
+            "ui-contract.v2.schema.json": (
+                sample_reference_bound_contract(), ("referenceBundle",)
+            ),
             "ui-evidence.v1.schema.json": (sample_evidence(), ("captures", 0, "artifact")),
             "ui-finalization.v1.schema.json": (sample_finalization(), ("evidence", "candidate")),
             "ui-objective-result.v1.schema.json": (
@@ -374,6 +489,15 @@ class UISchemaValidationTests(unittest.TestCase):
             ),
             "ui-product-observation.v1.schema.json": (
                 sample_product_observation(), ()
+            ),
+            "ui-reference-analysis.v1.schema.json": (
+                sample_reference_analysis(), ()
+            ),
+            "ui-reference-contract.v1.schema.json": (
+                sample_reference_contract(), ("prototype",)
+            ),
+            "ui-reference-bundle.v1.schema.json": (
+                sample_reference_bundle(), ("sources", 0)
             ),
         }
         for name, (instance, path) in mutations.items():

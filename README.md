@@ -57,6 +57,7 @@ JStack makes those controls explicit.
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
 | A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
 | Interface output defaults to generic cards and gradients or overwrites a product's visual language | Automatic Product Interface routing preserves the existing design system, selects an editorial or creative profile, and requires exact-state objective visual evidence |
+| Screenshots or websites are used as vague inspiration or mistaken for implementation proof | Evidence Builder records private, digest-bound reference analysis and optional isolated prototypes while keeping source references separate from candidate UI evidence |
 | A launch checklist is incomplete, under-scoped, or “passed” with prose | Risk floors and detected surface hints select 47 controls; JStack derives results from structured, target-bound assertions |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
 | A large project is hardcoded into one giant prompt | Project-defined Program -> Phase dependency graphs with independently verified child goals |
@@ -74,15 +75,18 @@ authoritative; JStack never silently escalates staffing.
 | `/jstack-full-team` | Eleven professional roles dispatched in controlled waves | High-risk, broad, or release-critical changes requiring full functional coverage |
 | `/jstack-loop` | A bounded durable goal loop composed with one selected delivery mode | Work that needs verified iteration across turns, human approvals, external waits, or multiple phases |
 | `/jstack-audit` | Independent read-only inspection | Evidence-bound correctness, security, architecture, maintainability, performance, and release review |
+| `/jstack-evidence-builder` | One Lead builds a private source-reference bundle without editing the project | Approved screenshots, Figma exports, or exact URLs that should inform later UI implementation |
 
 `/jstack-loop <goal>` uses single-lead delivery by default. State `use JStack
 Subagents` or `use JStack Full Team` in the same request when that staffing is
 explicitly intended. Audit remains an independent inspection boundary and does
 not edit project code.
 
-### Specialist capabilities inside the five commands
+### Specialist capabilities inside the five delivery commands
 
-JStack upgrades the existing commands rather than adding a sixth command.
+JStack upgrades the five delivery/audit commands without changing their
+staffing model. Evidence Builder is a separate, explicitly invoked
+pre-implementation workflow, not another delivery mode.
 The selected delivery mode still decides who works and who may edit; a
 deterministic capability plan then decides which task-specific methods each
 selected role must apply. For example, an API change can route contract and
@@ -98,11 +102,13 @@ when every expected role is present, current, capability-matched, and free of
 unresolved contradictions. See the
 [specialist capability system](docs/specialist-capabilities.md).
 
-### Product Interface design inside the five commands
+### Product Interface design and reference evidence
 
 Beta.2 adds `product-ui-design` as an automatic skill for user-facing
-interface work inside the existing five commands. It is not a sixth slash
-command, and backend-only or non-interface work does not activate it. The
+interface work inside the five delivery/audit commands. Backend-only or
+non-interface work does not activate it. The separate
+`/jstack-evidence-builder` command collects approved visual references without
+editing the project and without qualifying them as candidate evidence. The
 resolution order is fixed: an explicit user instruction wins, then the
 project's existing design system, then the domain profile, with
 `editorial-calm` as the fallback. `creative-canvas` is selected for spatial,
@@ -118,7 +124,7 @@ Existing product tokens, components, accessibility rules, layouts, and brand
 constraints are preserved and extended rather than redesigned without an
 explicit request.
 
-### Adaptive context inside the five commands
+### Adaptive context across JStack commands
 
 JStack v0.9.1 introduced repository and durable-context inspection before it
 asks the user anything. Clear, specific prompts continue immediately. When an
@@ -166,18 +172,29 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.2 Prerelease
+## What Is In The v0.10.0-beta.3 Prerelease
 
-> **Unvalidated prerelease:** `0.10.0-beta.2` adds the Product Interface
-> System to the published Beta.1 product. Beta.1's 18-image, 216-attempt,
+`v0.10.0-beta.3` adds `/jstack-evidence-builder` and two
+canonical-only reference tools. It accepts approved screenshots, Figma exports,
+and exact host-browser URL captures, then validates a private digest-bound
+analysis bundle and at most two isolated static prototypes. A finalized bundle
+may inform a later Product Interface contract; it never replaces current
+candidate screenshots, objective results, Product observations, QA, security,
+launch, or human approval evidence. Reference-free UI contracts remain v1;
+reference-bound contracts use the additive v2 schema. See
+[ADR 0024](docs/adr/0024-ui-reference-evidence-builder.md) and the
+[Beta.3 migration guide](docs/migration-0.10.0-beta.3.md).
+
+> **Unvalidated prerelease:** `0.10.0-beta.3` adds the Evidence Builder to the
+> published Beta.2 Product Interface product. Beta.1's 18-image, 216-attempt,
 > 432-review Proof Study remains deferred and byte-bound to the exact annotated
-> `v0.10.0-beta.1` tag. Neither Beta.2 publication nor Product Interface
+> `v0.10.0-beta.1` tag. Neither Beta.3 publication nor Product Interface
 > receipts validate that study, prove measured uplift, or establish production
 > readiness.
 
 | Capability | What it provides |
 | --- | --- |
-| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, objective screenshot-matrix evidence, and release propagation without a sixth slash command |
+| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command |
 | Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance, uplift, validation, or production-readiness claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
@@ -188,27 +205,29 @@ JStack separates four concerns that ordinary prompts tend to collapse:
 | Supply-Chain, Build And Release Integrity Stage 6 | Closed exact-Git inventory and report contracts across major dependency ecosystems; JStack independently enumerates tracked inputs, parses GitHub Actions pins and permissions, verifies source-to-artifact graphs, provenance, generated-copy drift, complete signed dependency-scanner evidence (including optional offline OSV coverage), all discovered QA commands, and one separately committed hardening diff |
 | Dynamic And Adversarial Verification Stage 7 | Closed exact-revision campaign/capture contracts with deterministic two-run outcomes, eight explicit adversarial categories, signed command/environment/case bindings, reciprocal hypothesis and false-positive analysis, current QA/security evidence, and strict baseline/candidate harness comparison while Audit remains read-only |
 | Enterprise Audit Lead Stage 8 | Exact reconciliation of a current signed Git-bound release audit, finalized finding/result contract, deterministic SARIF 2.1.0, priority-first risk ownership, explicit accepted-risk governance, derived go/no-go, canonical engineering/executive reporting, and a strict prior-validated-baseline-to-current committed remediation comparison while Audit remains read-only |
-| Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the existing five commands |
+| Adaptive context | Inspect-first source attribution, disclosed and plan-visible assumptions, a three-question maximum with recommended defaults, non-lowerable high-risk behavior, digest-verified briefs, exact audit-selector binding, and stale-state-bound planning receipts across the command workflows |
 | Delivery control | Planning, preflight, health, policy, team dispatch, deterministic review, and release-readiness tools |
 | Host-native action safety | No JStack approval challenge, token, signer, mailbox, or terminal command; explicit user scope plus ordinary Codex/provider permissions govern external operations |
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
+| Reference Evidence Builder | Private screenshot/Figma/approved-URL bundles, rights and provider disclosures, optional isolated HTML prototypes, and digest-only binding into a later UI contract without candidate-evidence authority |
 | Launch assurance | 22 explicit surfaces, four non-lowerable risk tiers, a versioned 47-control catalog, static hint reconciliation, composite structured evidence, independent high-risk scanning, and fail-closed production receipts |
-| Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the existing five commands |
+| Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the five delivery commands; Evidence Builder remains a separate single-Lead preprocessing workflow |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
 | Audit system | Read-only quick, standard, deep, and release profiles with deterministic finalization and SARIF output |
 | Goal loops | Versioned contracts, private atomic state, one write lease per checkout, circuit breakers, checkpoints, revision, and terminal receipts |
 | Program orchestration | Phase-count-agnostic dependency graphs, child-goal proofs, human and external gates, pause-aware budgets, invalidation, recovery, and final integrated evidence |
 | Team coordination | Single-lead, specialist-team, and full-team modes with validated roles, permissions, scopes, and controlled waves |
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
-| Distribution | Five dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
+| Distribution | Six dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
-The MCP exposes 54 canonical `jstack_*` tools, including the new
-`jstack_ui_contract` and `jstack_ui_finalize` lifecycle, the shared
+The MCP exposes 56 canonical `jstack_*` tools, including the
+`jstack_ui_reference_contract` / `jstack_ui_reference_finalize` reference
+lifecycle, the `jstack_ui_contract` / `jstack_ui_finalize` candidate lifecycle, the shared
 `jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
 protocol, plus `jstack_performance_capture`, `jstack_adversarial_capture`, and the delivery, audit, loop, continuity,
 specialist-review, and mastery families. The frozen 52 legacy `gstack_*`
-aliases remain available for compatibility; the two new UI tools deliberately
+aliases remain available for compatibility; all four UI tools deliberately
 have no legacy aliases.
 
 The four shared-gate workflows pass the gate's `readinessReceipt` and exact
@@ -331,7 +350,7 @@ Restart Codex or open a new task, then confirm that the JStack commands and
 `jstack_*` MCP tools are available. Run the installed MCP smoke test when
 validating a managed environment.
 
-For the clean five-plugin command layout, custom `CODEX_HOME` locations,
+For the clean six-plugin command layout, custom `CODEX_HOME` locations,
 Claude Code MCP preview, upgrades, rollback, and duplicate-command prevention, read the
 [installation guide](docs/installation.md).
 
@@ -509,9 +528,9 @@ environment.
 | Path | Purpose |
 | --- | --- |
 | [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, Product Interface catalog and evidence controls, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
-| [`skills/`](skills/) | Canonical single-lead, Product Interface, audit, and loop skills |
+| [`skills/`](skills/) | Canonical single-lead, Product Interface, Evidence Builder, audit, and loop skills |
 | [`prompts/`](prompts/) | Canonical slash-command prompts |
-| [`plugins/`](plugins/) | Five dedicated command plugins |
+| [`plugins/`](plugins/) | Six dedicated command plugins |
 | [`plugin/`](plugin/) | Optional all-in-one plugin with portable launcher |
 | [`mastery/`](mastery/) | Engineering, audit, and loop curricula |
 | [`evals/`](evals/) | Development-only Proof Plane contracts, manifest, lock, mock runner, and deterministic scorer; never installed into JStack core |
@@ -545,6 +564,7 @@ and SSH authority tests are not claimed as Windows-compatible.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.3 migration guide](docs/migration-0.10.0-beta.3.md) | [Evidence Builder decision](docs/adr/0024-ui-reference-evidence-builder.md) |
 | [v0.10.0-beta.2 migration guide](docs/migration-0.10.0-beta.2.md) | [Product Interface System decision](docs/adr/0023-product-interface-system.md) |
 | [v0.10.0-beta.1 prerelease migration guide](docs/migration-0.10.0-beta.1.md) | [Beta.1 Proof Study](docs/adr/0021-beta1-codex-proof-study.md) · [Unvalidated prerelease amendment](docs/adr/0022-beta1-unvalidated-prerelease-distribution.md) |
 | [v0.10.0-alpha.10 migration guide](docs/migration-0.10.0-alpha.10.md) | [Proof Foundation decision](docs/adr/0020-proof-foundation.md) |

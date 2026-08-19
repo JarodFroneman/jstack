@@ -26,11 +26,11 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **Beta.2 prerelease boundary:** install `v0.10.0-beta.2` only from its exact
-> immutable GitHub prerelease tag, retain the prior Beta.1 installation as one
+> **Beta.3 prerelease boundary:** install `v0.10.0-beta.3` only from its exact
+> immutable GitHub prerelease tag, retain the prior Beta.2 installation as one
 > complete rollback unit, and verify the installed bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
-> unvalidated. Installing Beta.2 does not satisfy its deferred 216-run study
+> unvalidated. Installing Beta.3 does not satisfy its deferred 216-run study
 > and independent human reviews.
 
 ## Host Support
@@ -145,22 +145,24 @@ rerunning Layout A.
 
 ## Codex Layout B: Dedicated Command Plugins
 
-This layout provides five clean command surfaces:
+This layout provides six clean command surfaces:
 
 - `j-stack-dev`
 - `jstack-subagents`
 - `jstack-full-team`
 - `jstack-audit`
 - `jstack-loop`
+- `jstack-evidence-builder`
 
 The dedicated plugins under `plugins/` are skill-only. They require one shared
 `jstack` MCP server configured separately. The `j-stack-dev` plugin also owns
-the single active `product-ui-design` skill used across UI-scoped JStack work;
-this is automatic capability routing, not a sixth command.
+the single active `product-ui-design` skill used across UI-scoped JStack work.
+That automatic implementation skill is separate from the explicitly invoked
+Evidence Builder preprocessing command.
 
 ### 1. Register A Local Marketplace
 
-Register the five directories under `plugins/` in a local Codex marketplace.
+Register the six directories under `plugins/` in a local Codex marketplace.
 Each marketplace source must resolve to the corresponding plugin directory in
 this clone. Then install:
 
@@ -170,6 +172,7 @@ codex plugin add jstack-subagents@personal
 codex plugin add jstack-full-team@personal
 codex plugin add jstack-audit@personal
 codex plugin add jstack-loop@personal
+codex plugin add jstack-evidence-builder@personal
 ```
 
 Replace `personal` with the configured marketplace name when using a different
@@ -237,10 +240,10 @@ accept risk, commit, publish, release, deploy, or access production.
 ### 3. Keep The Umbrella Plugin Uninstalled
 
 The `plugin/` directory is an alternative all-in-one distribution. Installing
-it alongside the five dedicated plugins creates duplicate command surfaces.
+it alongside the six dedicated plugins creates duplicate command surfaces.
 Use either:
 
-- the five dedicated plugins plus one shared MCP server; or
+- the six dedicated plugins plus one shared MCP server; or
 - the umbrella plugin by itself.
 
 Do not add a direct `CODEX_HOME/skills/product-ui-design` copy while either the
@@ -263,6 +266,19 @@ The system is an original design framework influenced by calm, hierarchy-led
 editorial interfaces and focused creative tools, including qualities users
 associate with Claude and Fable. It does not copy proprietary themes, layouts,
 assets, branding, or source code, and implies no affiliation or endorsement.
+
+Before implementation, `/jstack-evidence-builder` can collect approved
+screenshots, Figma exports, or exact host-browser URL captures beneath a
+separate private `~/.jstack/evidence/ui-reference/` root. Its
+`jstack_ui_reference_contract` and `jstack_ui_reference_finalize` lifecycle
+returns a digest-only reference receipt that can inform `jstack_ui_contract`.
+It never satisfies the candidate screenshot matrix, QA, accessibility,
+security, launch, release, or deployment evidence. The public file formats are
+`ui-reference-contract.v1.schema.json`,
+`ui-reference-bundle.v1.schema.json`, and
+`ui-reference-analysis.v1.schema.json`. An ordinary candidate contract remains
+`ui-contract.v1`; binding a finalized reference emits the additive
+`ui-contract.v2` contract.
 
 The Git-only lifecycle uses `jstack_ui_contract` before implementation and
 `jstack_ui_finalize` after the clean committed candidate and exact-build QA
@@ -326,7 +342,7 @@ Then open Claude Code, run `/mcp`, and confirm that the `jstack_*` tools are
 available. Start with `jstack_runtime_status` and `jstack_detect_project`.
 
 This preview exposes the control-plane tools, but it does not install JStack's
-five Codex command plugins. The current loop skill also composes continuation
+six Codex command plugins. The current loop skill also composes continuation
 with Codex Goal mode; Claude operators must supervise continuation manually
 until a Claude-native adapter and its release tests ship. Do not interpret MCP
 connectivity as unattended execution or full host parity.
@@ -350,18 +366,20 @@ codex plugin list --marketplace personal
 
 Expected dedicated layout:
 
-- all five dedicated plugins are installed and enabled;
-- all five report the same release and cachebuster version;
+- all six dedicated plugins are installed and enabled;
+- all six report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-beta.2`);
-- `tools/list` includes 54 canonical `jstack_*` tools, including
+  prerelease, `0.10.0-beta.3`);
+- `tools/list` includes 56 canonical `jstack_*` tools, including
   `jstack_context_readiness`, `jstack_performance_capture`, and
-  `jstack_adversarial_capture`, plus `jstack_ui_contract` and
-  `jstack_ui_finalize`; the frozen compatibility surface remains 52 legacy
-  `gstack_*` aliases and has no UI aliases.
+  `jstack_adversarial_capture`, plus the reference lifecycle
+  `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` and candidate
+  lifecycle `jstack_ui_contract` / `jstack_ui_finalize`; the frozen
+  compatibility surface remains 52 legacy `gstack_*` aliases and has no UI
+  aliases.
 
 ## Upgrade
 
@@ -374,10 +392,11 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.10.0-beta.2`, also confirm that GitHub marks the release as a
+For `v0.10.0-beta.3`, also confirm that GitHub marks the release as a
 prerelease and that the checked-out annotated tag resolves to the release
 commit before staging any global files. The rollback snapshot must contain the
-actual published Beta.1 installation, not an older Alpha cache.
+actual published Beta.2 installation as one coherent MCP, plugin-source,
+plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
 during a routine upgrade. An upgrade from v0.8.1 or earlier may leave the retired
@@ -403,7 +422,7 @@ environment settings from the MCP launcher after confirming the upgrade.
 ### Commands Appear Twice
 
 Confirm that the umbrella plugin and legacy direct prompt or skill artifacts
-are not active alongside the five dedicated plugins. Keep one distribution
+are not active alongside the six dedicated plugins. Keep one distribution
 layout only, then restart Codex.
 
 ### MCP Tools Are Missing

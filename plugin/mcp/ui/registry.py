@@ -7,11 +7,13 @@ import json
 import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 
 CATALOG_SCHEMA_VERSION = "jstack.ui.catalog.v1"
 CATALOG_VERSION = "1.0.0"
+CONTRACT_SCHEMA_VERSION = "jstack.ui.contract.v1"
+REFERENCE_CONTRACT_SCHEMA_VERSION = "jstack.ui.contract.v2"
 DEFAULT_CATALOG_PATH = Path(__file__).with_name("catalog.v1.json")
 PROFILE_IDS = ("editorial-calm", "creative-canvas")
 PLATFORM_IDS = ("web", "webview", "ios", "android", "react-native", "flutter", "electron", "tauri", "macos", "windows", "linux")
@@ -548,6 +550,52 @@ def normalize_allowed_paths(value: Any) -> list[str]:
     return _allowed_paths(value)
 
 
+def _reference_bundle(value: Any) -> Optional[dict[str, Any]]:
+    if value is None:
+        return None
+    fields = {
+        "schemaVersion", "bundleId", "contractSha256", "bundleSha256",
+        "sourceCount", "sourceSetSha256", "analysisSha256", "prototypeCount",
+        "prototypeSetSha256", "selectedPrototypeId",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        raise UIError("referenceBundle has an unsupported field set.")
+    if value["schemaVersion"] != "jstack.ui.reference-binding.v1":
+        raise UIError("referenceBundle.schemaVersion is unsupported.")
+    bundle_id = _text(value["bundleId"], "referenceBundle.bundleId", maximum=80)
+    if not ID_RE.fullmatch(bundle_id):
+        raise UIError("referenceBundle.bundleId is invalid.")
+    result = {"schemaVersion": value["schemaVersion"], "bundleId": bundle_id}
+    for field in (
+        "contractSha256", "bundleSha256", "sourceSetSha256", "analysisSha256",
+        "prototypeSetSha256",
+    ):
+        digest = str(value[field])
+        if not SHA256_RE.fullmatch(digest):
+            raise UIError(f"referenceBundle.{field} must be a lowercase SHA-256 digest.")
+        result[field] = digest
+    for field, maximum in (("sourceCount", 16), ("prototypeCount", 2)):
+        count = value[field]
+        minimum = 1 if field == "sourceCount" else 0
+        if not isinstance(count, int) or isinstance(count, bool) or not minimum <= count <= maximum:
+            raise UIError(f"referenceBundle.{field} is outside the supported range.")
+        result[field] = count
+    selected = value["selectedPrototypeId"]
+    if result["prototypeCount"]:
+        selected = _text(selected, "referenceBundle.selectedPrototypeId", maximum=80)
+        if not ID_RE.fullmatch(selected):
+            raise UIError("referenceBundle.selectedPrototypeId is invalid.")
+    elif selected is not None:
+        raise UIError("referenceBundle.selectedPrototypeId must be null without prototypes.")
+    result["selectedPrototypeId"] = selected
+    return result
+
+
+def normalize_reference_bundle(value: Any) -> Optional[dict[str, Any]]:
+    """Normalize the digest-only reference bundle binding used by UI contracts."""
+    return _reference_bundle(value)
+
+
 def _platform_exclusions(
     value: Any,
     *,
@@ -632,6 +680,7 @@ def build_contract(
     redesign_approved: Any = False,
     redesign_approval_reference: Any = None,
     redesign_approval_sha256: Any = None,
+    reference_bundle: Any = None,
 ) -> dict[str, Any]:
     catalog = load_catalog()
     normalized_detection = _detection(detection)
@@ -642,6 +691,7 @@ def build_contract(
     normalized_themes = _strings(themes, "themes", allowed=THEME_IDS, maximum=len(THEME_IDS))
     normalized_viewports = _viewports(viewports)
     normalized_allowed_paths = _allowed_paths(allowed_paths)
+    normalized_reference_bundle = _reference_bundle(reference_bundle)
     if not isinstance(redesign_approved, bool):
         raise UIError("redesignApproved must be boolean.")
     if redesign_approved:
@@ -795,7 +845,11 @@ def build_contract(
         if not SHA256_RE.fullmatch(str(baseline[field])):
             raise UIError(f"baseline.{field} must be a lowercase SHA-256 digest.")
     contract = {
-        "schemaVersion": "jstack.ui.contract.v1",
+        "schemaVersion": (
+            REFERENCE_CONTRACT_SCHEMA_VERSION
+            if normalized_reference_bundle is not None
+            else CONTRACT_SCHEMA_VERSION
+        ),
         "goal": _text(goal, "goal", maximum=4_000),
         "catalog": {
             "schemaVersion": CATALOG_SCHEMA_VERSION,
@@ -821,6 +875,8 @@ def build_contract(
         "evidenceMatrix": matrix,
         "requirements": _copy(catalog["universalRequirements"]),
     }
+    if normalized_reference_bundle is not None:
+        contract["referenceBundle"] = normalized_reference_bundle
     contract["contractSha256"] = canonical_digest(contract)
     return contract
 
@@ -828,13 +884,24 @@ def build_contract(
 def validate_contract(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise UIError("UI contract must be an object.")
-    expected = {
+    v1_expected = {
         "schemaVersion", "goal", "catalog", "baseline", "detection", "profileResolution",
         "allowedPaths", "platformExclusions", "platforms", "themes", "viewports", "surfaces",
         "evidenceMatrix", "requirements", "contractSha256",
     }
-    if set(value) != expected or value.get("schemaVersion") != "jstack.ui.contract.v1":
-        raise UIError("UI contract has an unsupported v1 field set.")
+    schema_version = value.get("schemaVersion")
+    if schema_version == CONTRACT_SCHEMA_VERSION:
+        expected = v1_expected
+        reference_bundle = None
+    elif schema_version == REFERENCE_CONTRACT_SCHEMA_VERSION:
+        expected = v1_expected | {"referenceBundle"}
+        reference_bundle = value.get("referenceBundle")
+        if reference_bundle is None:
+            raise UIError("UI contract v2 requires a referenceBundle binding.")
+    else:
+        raise UIError("UI contract schemaVersion is unsupported.")
+    if set(value) != expected:
+        raise UIError("UI contract has an unsupported versioned field set.")
     supplied = value.get("contractSha256")
     body = {key: child for key, child in value.items() if key != "contractSha256"}
     if supplied != canonical_digest(body):
@@ -850,14 +917,18 @@ def validate_contract(value: Any) -> dict[str, Any]:
         existing_system=value["profileResolution"]["existingSystem"],
         redesign_approved=value["profileResolution"]["redesignApproved"],
         redesign_approval_sha256=value["profileResolution"]["redesignApprovalReferenceSha256"],
+        reference_bundle=reference_bundle,
     )
     # Rebuilding can intentionally choose a different named precedence source for an
     # inherited system, so compare every immutable semantic field directly.
-    for field in (
+    semantic_fields = [
         "goal", "catalog", "baseline", "detection", "allowedPaths",
         "platformExclusions", "platforms", "themes", "viewports", "surfaces",
         "evidenceMatrix", "requirements",
-    ):
+    ]
+    if schema_version == REFERENCE_CONTRACT_SCHEMA_VERSION:
+        semantic_fields.append("referenceBundle")
+    for field in semantic_fields:
         if value[field] != rebuilt[field]:
             raise UIError(f"UI contract field is not normalized: {field}")
     resolution = value.get("profileResolution")

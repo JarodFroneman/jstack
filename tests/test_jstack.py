@@ -5410,6 +5410,8 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertTrue((ROOT / "plugin" / "skills" / "jstack-audit" / "SKILL.md").exists())
         self.assertTrue((ROOT / "plugin" / "commands" / "jstack-loop.md").exists())
         self.assertTrue((ROOT / "plugin" / "skills" / "jstack-loop" / "SKILL.md").exists())
+        self.assertTrue((ROOT / "plugin" / "commands" / "jstack-evidence-builder.md").exists())
+        self.assertTrue((ROOT / "plugin" / "skills" / "jstack-evidence-builder" / "SKILL.md").exists())
         audit_manifest = json.loads(
             (ROOT / "plugins" / "jstack-audit" / ".codex-plugin" / "plugin.json").read_text(
                 encoding="utf-8"
@@ -5429,6 +5431,23 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertEqual(EXPECTED_VERSION, loop_manifest["version"])
         self.assertTrue(
             (ROOT / "plugins" / "jstack-loop" / "skills" / "jstack-loop" / "SKILL.md").exists()
+        )
+        evidence_builder_manifest = json.loads(
+            (ROOT / "plugins" / "jstack-evidence-builder" / ".codex-plugin" / "plugin.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("jstack-evidence-builder", evidence_builder_manifest["name"])
+        self.assertEqual(EXPECTED_VERSION, evidence_builder_manifest["version"])
+        self.assertTrue(
+            (
+                ROOT
+                / "plugins"
+                / "jstack-evidence-builder"
+                / "skills"
+                / "jstack-evidence-builder"
+                / "SKILL.md"
+            ).exists()
         )
         with tempfile.TemporaryDirectory() as temp:
             codex_home = Path(temp) / "codex"
@@ -5468,6 +5487,8 @@ class MasteryAndInstallTests(unittest.TestCase):
             self.assertTrue((codex_home / "skills" / "jstack-audit" / "SKILL.md").exists())
             self.assertTrue((codex_home / "prompts" / "jstack-loop.md").exists())
             self.assertTrue((codex_home / "skills" / "jstack-loop" / "SKILL.md").exists())
+            self.assertTrue((codex_home / "prompts" / "jstack-evidence-builder.md").exists())
+            self.assertTrue((codex_home / "skills" / "jstack-evidence-builder" / "SKILL.md").exists())
             installed_config = (codex_home / "config.toml").read_text()
             self.assertIn("[mcp_servers.jstack]", installed_config)
             self.assertIn("tool_timeout_sec = 1900.0", installed_config)

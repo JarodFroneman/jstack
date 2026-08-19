@@ -1,5 +1,22 @@
 # Third-Party Notices
 
+## Screenshot To Code Design Reference
+
+JStack Evidence Builder independently implements a private reference-bundle
+contract inspired by the visual prototyping workflow of:
+
+- Project: `abi/screenshot-to-code`
+- Repository: https://github.com/abi/screenshot-to-code
+- Reviewed source commit: `d026163f586dfa8c5c10d28c36edd59a9d3b0e88`
+- License: MIT
+
+No upstream application code, prompts, FastAPI/Vite runtime, provider clients,
+or hosted service are embedded in JStack. The reference informed only the
+general workflow ideas of multi-reference analysis, optional visual variants,
+viewport rendering, and iterative comparison. JStack supplies its own schemas,
+private-file verifier, receipt binding, provider disclosures, and strict
+separation between source references and candidate evidence.
+
 ## Pre-Launch Checklist Sources
 
 JStack Launch Assurance adapts and paraphrases engineering concerns from:

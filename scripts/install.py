@@ -31,6 +31,7 @@ PROMPTS = (
     "jstack-full-team.md",
     "jstack-audit.md",
     "jstack-loop.md",
+    "jstack-evidence-builder.md",
 )
 
 AGENTS_BEGIN = b"<!-- BEGIN JSTACK PRODUCT UI (managed) -->"
@@ -2985,6 +2986,7 @@ def install(
     skill_dir = skills_root / "jstack-dev"
     audit_skill_dir = skills_root / "jstack-audit"
     loop_skill_dir = skills_root / "jstack-loop"
+    evidence_builder_skill_dir = skills_root / "jstack-evidence-builder"
     product_ui_skill_dir = skills_root / PRODUCT_UI_SKILL
     mcp_root = codex_home / "mcp"
     mcp_dir = mcp_root / "jstack"
@@ -3001,6 +3003,7 @@ def install(
         skill_dir,
         audit_skill_dir,
         loop_skill_dir,
+        evidence_builder_skill_dir,
         product_ui_skill_dir,
         skills_root / "gstack-dev",
         codex_home / "skills-disabled",
@@ -3096,6 +3099,11 @@ def install(
         label="jstack-loop skill",
         validate_windows_acl=True,
     )
+    evidence_builder_skill_preimage = _inspect_install_tree(
+        evidence_builder_skill_dir,
+        label="jstack-evidence-builder skill",
+        validate_windows_acl=True,
+    )
     mcp_preimage = _inspect_install_tree(
         mcp_dir,
         label="JStack MCP tree",
@@ -3133,6 +3141,10 @@ def install(
             "jstack-loop-skill",
             repo_root / "skills" / "jstack-loop",
         )
+        staged_evidence_builder_skill = transaction.stage_tree(
+            "jstack-evidence-builder-skill",
+            repo_root / "skills" / "jstack-evidence-builder",
+        )
         staged_product_ui_skill = transaction.stage_tree(
             "product-ui-design-skill",
             product_ui_source,
@@ -3160,6 +3172,7 @@ def install(
         skill_dir,
         audit_skill_dir,
         loop_skill_dir,
+        evidence_builder_skill_dir,
         product_ui_skill_dir,
         mcp_dir,
         backup,
@@ -3183,6 +3196,7 @@ def install(
         skill_dir: skill_preimage,
         audit_skill_dir: audit_skill_preimage,
         loop_skill_dir: loop_skill_preimage,
+        evidence_builder_skill_dir: evidence_builder_skill_preimage,
         product_ui_skill_dir: product_ui_preimage,
         mcp_dir: mcp_preimage,
     }
@@ -3257,6 +3271,13 @@ def install(
                 loop_skill_preimage,
                 "jstack-loop skill",
                 "jstack-loop-skill",
+            ),
+            (
+                staged_evidence_builder_skill,
+                evidence_builder_skill_dir,
+                evidence_builder_skill_preimage,
+                "jstack-evidence-builder skill",
+                "jstack-evidence-builder-skill",
             ),
             (
                 staged_product_ui_skill,
@@ -3374,6 +3395,7 @@ def install(
         "skillDir": skill_dir,
         "auditSkillDir": audit_skill_dir,
         "loopSkillDir": loop_skill_dir,
+        "evidenceBuilderSkillDir": evidence_builder_skill_dir,
         "productUiSkillDir": product_ui_skill_dir,
         "mcpDir": mcp_dir,
         "configPath": config_path,
@@ -3402,6 +3424,7 @@ def main() -> int:
     skill_dir = outcome["skillDir"]
     audit_skill_dir = outcome["auditSkillDir"]
     loop_skill_dir = outcome["loopSkillDir"]
+    evidence_builder_skill_dir = outcome["evidenceBuilderSkillDir"]
     product_ui_skill_dir = outcome["productUiSkillDir"]
     mcp_dir = outcome["mcpDir"]
     config_path = outcome["configPath"]
@@ -3416,6 +3439,7 @@ def main() -> int:
     print(f"Installed jstack-dev skill to {skill_dir}")
     print(f"Installed jstack-audit skill to {audit_skill_dir}")
     print(f"Installed jstack-loop skill to {loop_skill_dir}")
+    print(f"Installed jstack-evidence-builder skill to {evidence_builder_skill_dir}")
     print(f"Installed product-ui-design skill to {product_ui_skill_dir}")
     print(f"Installed JStack MCP to {mcp_dir}")
     print(f"Updated Codex config: {config_path}")

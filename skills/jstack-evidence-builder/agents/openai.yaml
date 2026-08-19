@@ -1,0 +1,4 @@
+interface:
+  display_name: "JStack Evidence Builder"
+  short_description: "Private screenshot and URL reference bundles"
+  default_prompt: "Use $jstack-evidence-builder to build a private UI reference bundle before implementation."
