@@ -172,28 +172,34 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.3 Prerelease
+## What Is In The v0.10.0-beta.4 Prerelease
 
-`v0.10.0-beta.3` adds `/jstack-evidence-builder` and two
-canonical-only reference tools. It accepts approved screenshots, Figma exports,
-and exact host-browser URL captures, then validates a private digest-bound
-analysis bundle and at most two isolated static prototypes. A finalized bundle
-may inform a later Product Interface contract; it never replaces current
-candidate screenshots, objective results, Product observations, QA, security,
-launch, or human approval evidence. Reference-free UI contracts remain v1;
-reference-bound contracts use the additive v2 schema. See
-[ADR 0024](docs/adr/0024-ui-reference-evidence-builder.md) and the
-[Beta.3 migration guide](docs/migration-0.10.0-beta.3.md).
+`v0.10.0-beta.4` adds a mandatory, schema-first two-stage Prompt Compiler to
+all six workflows. Stage A preserves and digests the request, classifies task
+mode and authority, and performs no repository inspection. Stage B merges only
+source-labelled repository, policy, external-evidence, inference, and accepted
+assumption records into a traceable Codex execution contract. It extends the
+Adaptive Context Gate rather than duplicating it, asks at most three material
+questions, and binds planning plus loop/program readiness to the current
+compiler, template, policy, workflow, and project state. Legacy direct MCP
+callers use a compatibility bridge that cannot claim pre-inspection ordering.
+See [ADR 0025](docs/adr/0025-prompt-compiler.md), the
+[Prompt Compiler guide](docs/prompt-compiler.md), and the
+[Beta.4 migration guide](docs/migration-0.10.0-beta.4.md).
 
-> **Unvalidated prerelease:** `0.10.0-beta.3` adds the Evidence Builder to the
-> published Beta.2 Product Interface product. Beta.1's 18-image, 216-attempt,
+Beta.4 retains Beta.3's private Evidence Builder and reference-bound Product
+Interface lifecycle unchanged.
+
+> **Unvalidated prerelease:** `0.10.0-beta.4` adds deterministic prompt
+> compilation to the published Beta.3 product. Beta.1's 18-image, 216-attempt,
 > 432-review Proof Study remains deferred and byte-bound to the exact annotated
-> `v0.10.0-beta.1` tag. Neither Beta.3 publication nor Product Interface
+> `v0.10.0-beta.1` tag. Neither Beta.4 publication nor Product Interface
 > receipts validate that study, prove measured uplift, or establish production
 > readiness.
 
 | Capability | What it provides |
 | --- | --- |
+| Prompt Compiler | Stage A pre-inspection intent and authority normalization; Stage B repository-grounded, source-traceable task contracts; deterministic rendering, size budgets, secret rejection, signed project-bound receipts, four rollout modes, and no stored raw prompt or hidden reasoning |
 | Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command |
 | Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance, uplift, validation, or production-readiness claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
@@ -220,20 +226,22 @@ reference-bound contracts use the additive v2 schema. See
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Six dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
-The MCP exposes 56 canonical `jstack_*` tools, including the
+The MCP exposes 57 canonical `jstack_*` tools, including the canonical-only
+`jstack_prompt_compile` two-stage lifecycle, the
 `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` reference
 lifecycle, the `jstack_ui_contract` / `jstack_ui_finalize` candidate lifecycle, the shared
 `jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
 protocol, plus `jstack_performance_capture`, `jstack_adversarial_capture`, and the delivery, audit, loop, continuity,
 specialist-review, and mastery families. The frozen 52 legacy `gstack_*`
-aliases remain available for compatibility; all four UI tools deliberately
-have no legacy aliases.
+aliases remain available for compatibility; the Prompt Compiler and all four
+UI tools deliberately have no legacy aliases.
 
-The four shared-gate workflows pass the gate's `readinessReceipt` and exact
-`normalizedBrief` forward as `context_readiness_receipt` and `context_brief`.
-Planning verifies the pair so sourced facts, disclosed assumptions, and exact
-Audit selectors cannot be silently changed after intake.
+All six workflows compile intent before inspection and use Stage B's nested
+`readinessReceipt` and exact `normalizedBrief` as
+`context_readiness_receipt` and `context_brief`. Planning verifies the pair so
+sourced facts, disclosed assumptions, task mode, authority, and exact Audit
+selectors cannot be silently changed after intake.
 
 ### Development-only Proof Plane
 
@@ -566,6 +574,7 @@ and SSH authority tests are not claimed as Windows-compatible.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.4 migration guide](docs/migration-0.10.0-beta.4.md) | [Prompt Compiler decision](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |
 | [v0.10.0-beta.3 migration guide](docs/migration-0.10.0-beta.3.md) | [Evidence Builder decision](docs/adr/0024-ui-reference-evidence-builder.md) |
 | [v0.10.0-beta.2 migration guide](docs/migration-0.10.0-beta.2.md) | [Product Interface System decision](docs/adr/0023-product-interface-system.md) |
 | [v0.10.0-beta.1 prerelease migration guide](docs/migration-0.10.0-beta.1.md) | [Beta.1 Proof Study](docs/adr/0021-beta1-codex-proof-study.md) · [Unvalidated prerelease amendment](docs/adr/0022-beta1-unvalidated-prerelease-distribution.md) |

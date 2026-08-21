@@ -13,6 +13,12 @@ Mode: `smart-subagents`.
 The user invoked `/jstack-subagents`, which is explicit approval to deploy
 subagents for this task when multi-agent tools are available.
 
+Before repository inspection, durable-memory reads, planning, or
+side-effecting tools, call
+`jstack_prompt_compile(stage="intent", workflow_mode="jstack-subagents",
+raw_request=$ARGUMENTS)`. Preserve the exact intent contract and receipt; they
+do not authorize execution or widen the user's staffing approval.
+
 Resolve learning mode first: use an explicit `off`, `coach`, or
 `assessment` request; otherwise use `embedded`. Pass that resolved value to
 every planning call.
@@ -27,9 +33,12 @@ receipts or release certification. Only use the MCP fallback when
 Git requirement or failed gate as an MCP attachment failure.
 
 Before team planning or dispatch, inspect repository-answerable context and
-call `jstack_context_readiness(workflow_mode="jstack-subagents")` with
-source-attributed facts, separate assumptions, and only material open
-questions. Ask at most the returned three questions in normal chat, with the
+call `jstack_prompt_compile(stage="grounded",
+workflow_mode="jstack-subagents")` with the exact Stage A contract and receipt,
+source-labelled grounding, separate assumptions, and only material open
+questions. This extends the Adaptive Context Gate; do not run a duplicate
+`jstack_context_readiness` round. Ask at most the returned
+`contextReadiness.questions` in normal chat, with the
 reason and recommended default for each. Clear prompts ask nothing. Reuse
 answers and never repeat unchanged questions. Low-risk defaults may proceed as
 disclosed assumptions; high-risk material defaults require explicit
@@ -68,14 +77,14 @@ coordination packet:
 - `verificationGate`
 - `handoffGate`
 
-Use `jstack_team_plan` with `team_mode="smart-subagents"`, the current
-`context_readiness_receipt`, and its matching `normalizedBrief` as
+Use `jstack_team_plan` with `team_mode="smart-subagents"`, the Stage B
+`contextReadiness.readinessReceipt`, and its matching `normalizedBrief` as
 `context_brief`, and
 `jstack_dispatch_check` with `team_mode="smart-subagents"` and
 the actual `coordination_packet` object when available. Also use
 `jstack_plan(team_mode="smart-subagents", learning_mode=resolved_learning_mode,
-context_readiness_receipt=current_receipt,
-context_brief=current_normalized_brief)`.
+context_readiness_receipt=stage_b.contextReadiness.readinessReceipt,
+context_brief=stage_b.contextReadiness.normalizedBrief)`.
 Specialists are read-only by default. The Lead may implement. If an editing
 specialist is used, only a Builder may edit implementation, and only inside an
 explicitly assigned disjoint write scope.

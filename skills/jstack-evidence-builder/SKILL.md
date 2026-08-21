@@ -11,17 +11,27 @@ implemented candidate.
 
 ## Start
 
-1. Call `jstack_runtime_status` first and require a Git-backed project.
-2. Inspect project instructions and established design-system evidence. Use the
-   ordinary single-lead JStack context/planning path to obtain the current clean
-   project fingerprint. Do not deploy subagents unless the user explicitly asks.
-3. Parse only these inputs:
+1. Before repository inspection, durable-memory reads, browser capture, or any
+   artifact write, call
+   `jstack_prompt_compile(stage="intent",
+   workflow_mode="jstack-evidence-builder",
+   raw_request=exact_user_request)`. Preserve the exact intent contract and
+   receipt. It does not authorize target-project edits, URL capture, external
+   processing, implementation, or deployment.
+2. Call `jstack_runtime_status` and require a Git-backed project.
+3. Inspect project instructions and established design-system evidence, then
+   call Prompt Compiler Stage B with the exact Stage A contract and receipt and
+   source-labelled grounding. Use its nested context-readiness result rather
+   than a duplicate general intake round. Resolve at most three returned
+   material questions before collection. Do not deploy subagents unless the
+   user explicitly asks.
+4. Parse only these inputs:
    - attached PNG, JPEG, or WebP screenshots;
    - PNG, JPEG, or WebP Figma exports;
    - exact URLs supplied or explicitly approved by the user.
-4. Default to `prototype_mode="none"`. Use `html-css` or `html-tailwind` only
+5. Default to `prototype_mode="none"`. Use `html-css` or `html-tailwind` only
    when the user requests a prototype, with at most two variants.
-5. Call `jstack_ui_reference_contract` before collecting or transforming bytes.
+6. Call `jstack_ui_reference_contract` before collecting or transforming bytes.
    Use its exact server-selected reference root and receipt.
 
 ## Capture And Analyze

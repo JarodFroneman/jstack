@@ -17,16 +17,24 @@ they are within the user's explicit request, the active task scope, and normal
 Codex/provider permissions. A goal, phase, gate, revision, or completion
 receipt does not widen that scope or bypass the host's ordinary safety UI.
 
-The loop and program goal-readiness tools are this command's stronger Adaptive
-Context Gate. Inspect the repository and durable context first; do not also run
-a duplicate general intake round. Keep facts source-attributed, assumptions and
-material inference explicit, and ask only the returned questions—at most three
-per round—with their reasons and recommended defaults. Reuse prior answers and
-never repeat an unchanged question. Clear, complete contracts ask nothing.
+Before repository inspection, durable-memory reads, planning, or side-effecting
+tools, call `jstack_prompt_compile(stage="intent",
+workflow_mode="jstack-loop", raw_request=exact_user_request)` and preserve the
+exact intent contract and receipt. After authorized read-only inspection, call
+Stage B with source-labelled grounding. Its nested Adaptive Context Gate is the
+general intake; do not call `jstack_context_readiness` separately. Pass the
+resulting exact `compilationReceipt` and prompt contract to loop or program
+goal readiness. Those tools add the stronger orchestration-specific contract
+without re-asking resolved general context. Keep facts source-attributed,
+assumptions and material inference explicit, and ask only returned questions—at
+most three per round—with reasons and recommended defaults. Reuse prior answers
+and never repeat an unchanged question. Clear, complete contracts ask nothing.
 
 ## Select The Orchestration Level
 
-Call `jstack_runtime_status`, `jstack_detect_project`, and `jstack_plan` before
+After Prompt Compiler Stage A, call `jstack_runtime_status`,
+`jstack_detect_project`, inspect the project, complete Stage B, and call
+`jstack_plan` with Stage B's nested context-readiness receipt and brief before
 creating state. Execution requires `evidenceMode="git"`; report the exact Git
 binding limitation for `artifact-only` projects.
 
@@ -74,7 +82,8 @@ worktree. Default implementation work to `L2`.
    environment and exact `core`-inclusive surface set. Bound paths, blocked
    actions, iterations, active time,
    failures, and changed files. Never supply arbitrary shell commands.
-3. Call `jstack_loop_goal_readiness`. Resolve `needs_context` from inspected
+3. Call `jstack_loop_goal_readiness` with Stage B's exact
+   `prompt_compilation_receipt` and `prompt_contract`. Resolve `needs_context` from inspected
    evidence first, asking only returned blocking questions and showing each
    question's reason and recommended default. For
    `needs_confirmation`, show the preview and exact digest and wait for real
@@ -132,7 +141,8 @@ worktree. Default implementation work to `L2`.
    are safety limits, not a target plan size. Preserve explicit scope,
    destructive-operation, production-release, secret-access, and
    policy-weakening constraints in the program contract.
-7. Call `jstack_program_goal_readiness`. Resolve at most three returned
+7. Call `jstack_program_goal_readiness` with Stage B's exact
+   `prompt_compilation_receipt` and `prompt_contract`. Resolve at most three returned
    questions per round, with reasons and recommended defaults. Show the exact
    DAG preview and readiness digest, then wait for the user's factual
    in-conversation confirmation. Reuse answers from earlier rounds.
@@ -153,6 +163,9 @@ worktree. Default implementation work to `L2`.
    top-level scopes are disjoint, and policy capacity remains.
 3. For each scheduled phase, create a bounded child loop whose goal, mode,
    autonomy, risk, paths, and acceptance criteria exactly match the phase.
+   Compile that exact phase goal through fresh Stage A and repository-grounded
+   Stage B before child goal readiness; never reuse the parent compilation for
+   a materially different phase goal.
    Carry every program- and phase-level blocked action into that child; loop
    defaults may strengthen the list but never remove a prohibition. Route and
    bind phase-specific capabilities during child goal readiness; do not reuse a

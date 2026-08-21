@@ -41,12 +41,13 @@ import capabilities as capability_core
 import context_readiness as context_readiness_core
 import launch as launch_core
 import loop as loop_core
+import prompt_compiler as prompt_compiler_core
 import program as program_core
 import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.3"
+SERVER_VERSION = "0.10.0-beta.4"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -14312,6 +14313,617 @@ def context_project_inspection(binding: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+PROMPT_COMPILER_WORKFLOW_MODES = prompt_compiler_core.WORKFLOW_MODES
+
+
+def _prompt_context_workflow(workflow_mode: str) -> str:
+    return "j-stack-dev" if workflow_mode == "jstack-evidence-builder" else workflow_mode
+
+
+def _prompt_mode() -> str:
+    try:
+        return prompt_compiler_core.compiler_mode()
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _prompt_binding(binding: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "evidenceMode": binding["evidenceMode"],
+        "projectPath": binding["projectPath"],
+        "toolVersion": SERVER_VERSION,
+    }
+    if binding["evidenceMode"] == "git":
+        subject = evidence_subject(Path(binding["gitRoot"]))
+        result.update(
+            {
+                "gitHead": subject["gitHead"],
+                "projectFingerprint": subject["projectFingerprint"],
+                "policyDigest": subject["policyDigest"],
+            }
+        )
+    else:
+        result["policyDigest"] = None
+    return result
+
+
+def _prompt_source_kind(value: str) -> str:
+    return {
+        "user": "explicit-user",
+        "repository": "repository",
+        "policy": "policy",
+        "external-evidence": "external-evidence",
+        "inferred": "inference",
+    }.get(value, "inference")
+
+
+def _prompt_grounding_from_readiness(
+    intent: dict[str, Any], readiness: dict[str, Any]
+) -> dict[str, Any]:
+    sources = [
+        {
+            "field": item["field"],
+            "value": item["value"],
+            "source_kind": _prompt_source_kind(item["sourceKind"]),
+            "source_reference": item["sourceReference"],
+        }
+        for item in readiness.get("sourceMap") or []
+    ]
+    sources.extend(
+        {
+            "field": item["field"],
+            "value": item["value"],
+            "source_kind": "recommended-assumption",
+            "source_reference": item.get("rationale")
+            or "Adaptive Context Gate disclosed assumption",
+        }
+        for item in readiness.get("assumptions") or []
+    )
+    requirements = [
+        {
+            "id": "user-goal",
+            "category": "scope",
+            "statement": intent["normalizedGoal"],
+            "material": True,
+            "status": "required",
+            "source_kind": "explicit-user",
+            "source_reference": "raw-prompt-sha256:" + intent["rawPromptDigest"],
+        }
+    ]
+    for index, constraint in enumerate(intent.get("explicitConstraints") or []):
+        requirements.append(
+            {
+                "id": "user-constraint-%02d" % (index + 1),
+                "category": "scope",
+                "statement": constraint,
+                "material": True,
+                "status": "required",
+                "source_kind": "explicit-user",
+                "source_reference": "raw-prompt-sha256:" + intent["rawPromptDigest"],
+            }
+        )
+    facts = {str(item["field"]): str(item["value"]) for item in readiness.get("sourceMap") or []}
+    acceptance = [facts["acceptance_criteria"]] if facts.get("acceptance_criteria") else []
+    verification = [facts["verification_requirements"]] if facts.get("verification_requirements") else []
+    rollback = [facts["rollback_requirements"]] if facts.get("rollback_requirements") else []
+    return {
+        "sources": sources,
+        "requirements": requirements,
+        "unknowns": [str(item.get("question") or "") for item in readiness.get("questions") or [] if item.get("question")],
+        "contradictions": [],
+        "acceptance_criteria": acceptance,
+        "verification_requirements": verification,
+        "rollback_requirements": rollback,
+        "likely_in_scope": list((intent.get("namedReferences") or {}).get("paths") or []),
+        "explicitly_out_of_scope": list(intent.get("explicitNonGoals") or []),
+        "recommended_defaults": [str(item.get("value") or "") for item in readiness.get("defaultsApplied") or [] if item.get("value")],
+    }
+
+
+def _prompt_intent_questions(intent: dict[str, Any]) -> list[dict[str, Any]]:
+    questions: list[dict[str, Any]] = []
+    for ambiguity in intent.get("materialAmbiguities") or []:
+        ambiguity_id = str(ambiguity.get("id") or "")
+        if ambiguity_id == "task-mode":
+            questions.append(
+                {
+                    "id": "task_mode",
+                    "question": "What action should JStack perform: explain, plan, diagnose, implement, review, or another explicitly named mode?",
+                    "why": "Different task modes grant materially different repository and external-action authority.",
+                    "recommended_default": "Explain or research only without repository changes.",
+                    "material": True,
+                }
+            )
+        elif ambiguity_id == "deployment-contradiction":
+            questions.append(
+                {
+                    "id": "deployment_authority",
+                    "question": "Should deployment remain prohibited or is deployment explicitly authorized after implementation succeeds?",
+                    "why": "The request contains contradictory deployment authority.",
+                    "recommended_default": "Keep deployment prohibited.",
+                    "material": True,
+                }
+            )
+    return questions
+
+
+def _assess_prompt_context(
+    *,
+    goal: str,
+    workflow_mode: str,
+    risk_tier: str,
+    context: dict[str, Any],
+    workflow_parameters: Any,
+    use_recommended_defaults: bool,
+    confirm_material_inferences: bool,
+    intent: dict[str, Any],
+) -> dict[str, Any]:
+    supplied_questions = list(context.get("open_questions") or [])
+    supplied_questions.extend(_prompt_intent_questions(intent))
+    try:
+        return context_readiness_core.assess_context(
+            goal=goal,
+            workflow_mode=workflow_mode,
+            risk_tier=risk_tier,
+            facts=context.get("facts") or [],
+            assumptions=context.get("assumptions") or [],
+            open_questions=supplied_questions,
+            workflow_parameters=workflow_parameters or {},
+            use_recommended_defaults=use_recommended_defaults,
+            confirm_material_inferences=confirm_material_inferences,
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _issue_context_readiness(
+    *,
+    result: dict[str, Any],
+    goal: str,
+    workflow_mode: str,
+    binding: dict[str, Any],
+    compilation: Optional[dict[str, Any]],
+) -> None:
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0)
+    binding_metadata = _prompt_binding(binding)
+    receipt_payload: dict[str, Any] = {
+        "kind": "context-readiness",
+        "schemaVersion": context_readiness_core.CONTEXT_READINESS_SCHEMA,
+        "expiresAt": expires.isoformat(),
+        "goalDigest": context_goal_digest(goal),
+        "briefDigest": result["briefDigest"],
+        "workflowMode": workflow_mode,
+        "riskTier": result["riskTier"],
+        "state": result["state"],
+        **binding_metadata,
+        "promptCompilerMode": _prompt_mode(),
+    }
+    if compilation is not None:
+        receipt_payload.update(
+            {
+                "promptCompilationDigest": compilation["compilationDigest"],
+                "rawPromptDigest": compilation["rawPromptDigest"],
+                "requestedTaskMode": compilation["requestedTaskMode"],
+                "compilerVersion": compilation["compilerVersion"],
+                "promptTemplateVersion": compilation["templateVersion"],
+                "materialExternalEvidenceDigest": compilation.get(
+                    "materialExternalEvidenceDigest"
+                ),
+            }
+        )
+    result["readinessReceipt"] = issue_receipt(receipt_payload)
+
+
+def _issue_prompt_intent_receipt(intent: dict[str, Any]) -> str:
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0)
+    return issue_receipt(
+        {
+            "kind": "prompt-intent",
+            "schemaVersion": prompt_compiler_core.INTENT_SCHEMA,
+            "expiresAt": expires.isoformat(),
+            "intentDigest": intent["intentDigest"],
+            "rawPromptDigest": intent["rawPromptDigest"],
+            "workflowMode": intent["workflowMode"],
+            "requestedTaskMode": intent["requestedTaskMode"],
+            "compilerMode": intent["compilerMode"],
+            "compilerVersion": intent["compilerVersion"],
+            "templateVersion": intent["templateVersion"],
+        }
+    )
+
+
+def _verify_prompt_intent_receipt(receipt: Any, intent: Any) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > 100_000:
+        raise ToolError("A bounded intent_receipt from Prompt Compiler Stage A is required.")
+    if not isinstance(intent, dict):
+        raise ToolError("intent_contract from Prompt Compiler Stage A is required.")
+    payload = verify_signed_session_token(receipt, "prompt-intent")
+    without_digest = {key: value for key, value in intent.items() if key != "intentDigest"}
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == prompt_compiler_core.INTENT_SCHEMA
+        == intent.get("schemaVersion"),
+        "intentDigest": payload.get("intentDigest")
+        == intent.get("intentDigest")
+        == prompt_compiler_core.canonical_digest(without_digest),
+        "rawPromptDigest": payload.get("rawPromptDigest")
+        == intent.get("rawPromptDigest"),
+        "workflowMode": payload.get("workflowMode") == intent.get("workflowMode"),
+        "requestedTaskMode": payload.get("requestedTaskMode")
+        == intent.get("requestedTaskMode"),
+        "compilerMode": payload.get("compilerMode") == intent.get("compilerMode") == _prompt_mode(),
+        "compilerVersion": payload.get("compilerVersion")
+        == prompt_compiler_core.COMPILER_VERSION,
+        "templateVersion": payload.get("templateVersion")
+        == prompt_compiler_core.TEMPLATE_VERSION,
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "Prompt Compiler intent receipt is stale or does not match the supplied intent contract and current compiler configuration."
+        )
+    return {"verified": True, "checks": checks, "payload": payload}
+
+
+def _prompt_compilation_core(contract: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in contract.items()
+        if key not in {"compilationDigest", "compilationReceipt", "contextReadiness"}
+    }
+
+
+def _verify_prompt_compilation_receipt(
+    receipt: Any,
+    contract: Any,
+    *,
+    workflow_mode: str,
+    binding: dict[str, Any],
+    expected_goal: str,
+) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > 250_000:
+        raise ToolError(
+            "A bounded prompt_compilation_receipt from Prompt Compiler Stage B is required."
+        )
+    if not isinstance(contract, dict):
+        raise ToolError(
+            "prompt_contract must be the exact jstack.prompt-compilation.v1 object returned by Stage B."
+        )
+    payload = verify_signed_session_token(receipt, "prompt-compilation")
+    binding_metadata = _prompt_binding(binding)
+    compilation_digest = prompt_compiler_core.canonical_digest(
+        _prompt_compilation_core(contract)
+    )
+    rendered_prompt = contract.get("renderedCodexPrompt")
+    rendered_digest = (
+        hashlib.sha256(rendered_prompt.encode("utf-8")).hexdigest()
+        if isinstance(rendered_prompt, str)
+        else None
+    )
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == contract.get("schemaVersion")
+        == prompt_compiler_core.PROMPT_COMPILATION_SCHEMA,
+        "compilationDigest": payload.get("compilationDigest")
+        == contract.get("compilationDigest")
+        == compilation_digest,
+        "rawPromptDigest": payload.get("rawPromptDigest")
+        == contract.get("rawPromptDigest"),
+        "intentDigest": payload.get("intentDigest") == contract.get("intentDigest"),
+        "renderedPromptSha256": payload.get("renderedPromptSha256")
+        == contract.get("renderedPromptSha256")
+        == rendered_digest,
+        "workflowMode": payload.get("workflowMode")
+        == contract.get("workflowMode")
+        == workflow_mode,
+        "goal": contract.get("normalizedGoal") == " ".join(expected_goal.split()),
+        "requestedTaskMode": payload.get("requestedTaskMode")
+        == contract.get("requestedTaskMode")
+        and payload.get("requestedTaskMode") in prompt_compiler_core.TASK_MODES,
+        "compilerMode": payload.get("compilerMode")
+        == contract.get("compilerMode")
+        == _prompt_mode(),
+        "compilerVersion": payload.get("compilerVersion")
+        == contract.get("compilerVersion")
+        == prompt_compiler_core.COMPILER_VERSION,
+        "templateVersion": payload.get("templateVersion")
+        == contract.get("templateVersion")
+        == prompt_compiler_core.TEMPLATE_VERSION,
+        "ready": contract.get("readiness", {}).get("readyForPlanning") is True,
+    }
+    for field, value in binding_metadata.items():
+        checks[field] = payload.get(field) == value
+    if not all(checks.values()):
+        raise ToolError(
+            "Prompt compilation receipt is stale or does not match the compiled contract, goal, workflow, project, policy, or compiler version."
+        )
+    return {
+        "bound": True,
+        "source": "explicit-stage-b",
+        "compilationDigest": compilation_digest,
+        "rawPromptDigest": contract["rawPromptDigest"],
+        "requestedTaskMode": contract["requestedTaskMode"],
+        "compilerVersion": contract["compilerVersion"],
+        "templateVersion": contract["templateVersion"],
+    }
+
+
+def _prompt_orchestration_binding(
+    args: dict[str, Any],
+    *,
+    goal: str,
+    workflow_mode: str,
+    binding: dict[str, Any],
+) -> Optional[dict[str, Any]]:
+    mode = _prompt_mode()
+    if mode == "disabled":
+        return None
+    receipt = args.get("prompt_compilation_receipt")
+    contract = args.get("prompt_contract")
+    if receipt is not None or contract is not None:
+        if receipt is None or contract is None:
+            raise ToolError(
+                "prompt_compilation_receipt and prompt_contract must be supplied together."
+            )
+        return _verify_prompt_compilation_receipt(
+            receipt,
+            contract,
+            workflow_mode=workflow_mode,
+            binding=binding,
+            expected_goal=goal,
+        )
+
+    # Backward-compatible direct callers still pass through the same
+    # deterministic compiler. The explicit two-stage path is what can prove
+    # pre-inspection ordering; this bridge can bind intent but cannot claim it.
+    try:
+        intent = prompt_compiler_core.compile_intent(
+            raw_request=goal,
+            workflow_mode=workflow_mode,
+            compiler_mode_value=mode,
+        )
+        readiness = {
+            "state": "ready",
+            "readyForPlanning": True,
+            "briefDigest": hashlib.sha256(goal.encode("utf-8")).hexdigest(),
+            "questionCount": 0,
+            "materialGapCount": 0,
+        }
+        compilation = prompt_compiler_core.compile_grounded(
+            intent=intent,
+            workflow_mode=workflow_mode,
+            risk_tier=context_risk_tier(goal, args.get("risk_tier")),
+            grounding=_with_required_prompt_requirements(intent, {}),
+            readiness=readiness,
+            compiler_mode_value=mode,
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return {
+        "bound": True,
+        "source": "legacy-compatibility-bridge",
+        "preInspectionOrderingProven": False,
+        "compilationDigest": compilation["compilationDigest"],
+        "rawPromptDigest": compilation["rawPromptDigest"],
+        "requestedTaskMode": compilation["requestedTaskMode"],
+        "compilerVersion": compilation["compilerVersion"],
+        "templateVersion": compilation["templateVersion"],
+    }
+
+
+def _prompt_receipt_binding_fields(
+    binding: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {"promptCompilerMode": _prompt_mode()}
+    if binding is not None:
+        result.update(
+            {
+                "promptCompilationDigest": binding["compilationDigest"],
+                "rawPromptDigest": binding["rawPromptDigest"],
+                "requestedTaskMode": binding["requestedTaskMode"],
+                "compilerVersion": binding["compilerVersion"],
+                "promptTemplateVersion": binding["templateVersion"],
+                "promptCompilationSource": binding["source"],
+            }
+        )
+    return result
+
+
+def _prompt_receipt_binding_valid(payload: dict[str, Any]) -> bool:
+    mode = _prompt_mode()
+    if payload.get("promptCompilerMode") != mode:
+        return False
+    if mode == "disabled":
+        return payload.get("promptCompilationDigest") is None
+    return bool(
+        re.fullmatch(
+            r"[0-9a-f]{64}", str(payload.get("promptCompilationDigest") or "")
+        )
+        and re.fullmatch(
+            r"[0-9a-f]{64}", str(payload.get("rawPromptDigest") or "")
+        )
+        and payload.get("requestedTaskMode") in prompt_compiler_core.TASK_MODES
+        and payload.get("compilerVersion") == prompt_compiler_core.COMPILER_VERSION
+        and payload.get("promptTemplateVersion")
+        == prompt_compiler_core.TEMPLATE_VERSION
+        and payload.get("promptCompilationSource")
+        in {"explicit-stage-b", "legacy-compatibility-bridge"}
+    )
+
+
+def _grounding_context(grounding: Any, supplied: dict[str, Any]) -> dict[str, Any]:
+    result = {
+        "facts": list(supplied.get("facts") or []),
+        "assumptions": list(supplied.get("assumptions") or []),
+        "open_questions": list(supplied.get("open_questions") or []),
+    }
+    if not isinstance(grounding, dict):
+        return result
+    for source in grounding.get("sources") or []:
+        if not isinstance(source, dict):
+            continue
+        kind = str(source.get("source_kind") or source.get("sourceKind") or "")
+        mapped = {
+            "explicit-user": "user",
+            "repository": "repository",
+            "policy": "policy",
+            "external-evidence": "external-evidence",
+            "inference": "inferred",
+        }.get(kind)
+        if mapped:
+            result["facts"].append(
+                {
+                    "field": source.get("field"),
+                    "value": source.get("value"),
+                    "source_kind": mapped,
+                    "source_reference": source.get("source_reference")
+                    or source.get("sourceReference"),
+                }
+            )
+        elif kind == "recommended-assumption":
+            result["assumptions"].append(
+                {
+                    "field": source.get("field"),
+                    "value": source.get("value"),
+                    "rationale": source.get("source_reference")
+                    or source.get("sourceReference")
+                    or "Prompt Compiler recommended assumption",
+                    "material": True,
+                }
+            )
+    return result
+
+
+def _with_required_prompt_requirements(
+    intent: dict[str, Any], grounding: Any
+) -> dict[str, Any]:
+    value = dict(grounding) if isinstance(grounding, dict) else {}
+    requirements = list(value.get("requirements") or [])
+    existing_ids = {
+        str(item.get("id") or "") for item in requirements if isinstance(item, dict)
+    }
+    if "user-goal" not in existing_ids:
+        requirements.insert(
+            0,
+            {
+                "id": "user-goal",
+                "category": "scope",
+                "statement": intent["normalizedGoal"],
+                "material": True,
+                "status": "required",
+                "source_kind": "explicit-user",
+                "source_reference": "raw-prompt-sha256:" + intent["rawPromptDigest"],
+            },
+        )
+    value["requirements"] = requirements
+    return value
+
+
+def tool_prompt_compile(args: dict[str, Any]) -> dict[str, Any]:
+    stage = str(args.get("stage") or "").strip().lower()
+    workflow_mode = str(args.get("workflow_mode") or "").strip()
+    if workflow_mode not in PROMPT_COMPILER_WORKFLOW_MODES:
+        raise ToolError(
+            "workflow_mode must identify one of the six public JStack workflows."
+        )
+    if stage == "intent":
+        try:
+            intent = prompt_compiler_core.compile_intent(
+                raw_request=args.get("raw_request"),
+                workflow_mode=workflow_mode,
+                compiler_mode_value=_prompt_mode(),
+            )
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        return {
+            "stage": "intent",
+            "intentContract": intent,
+            "intentReceipt": _issue_prompt_intent_receipt(intent),
+            "receiptMeaning": (
+                "Digest-only session proof of pre-inspection intent normalization; it grants no repository read, write, Git, external, release, deployment, or production authority."
+            ),
+        }
+    if stage != "grounded":
+        raise ToolError("stage must be intent or grounded.")
+    intent = args.get("intent_contract")
+    _verify_prompt_intent_receipt(args.get("intent_receipt"), intent)
+    if intent.get("workflowMode") != workflow_mode:
+        raise ToolError("workflow_mode must match the Stage A intent contract.")
+    binding = resolve_project_binding(args.get("project_path"))
+    grounding = _with_required_prompt_requirements(intent, args.get("grounding"))
+    context = _grounding_context(grounding, context_payload(args))
+    context_workflow = _prompt_context_workflow(workflow_mode)
+    risk_tier = context_risk_tier(intent["normalizedGoal"], args.get("risk_tier"))
+    readiness = _assess_prompt_context(
+        goal=intent["normalizedGoal"],
+        workflow_mode=context_workflow,
+        risk_tier=risk_tier,
+        context=context,
+        workflow_parameters=args.get("workflow_parameters") or {},
+        use_recommended_defaults=bool(args.get("use_recommended_defaults", False)),
+        confirm_material_inferences=bool(args.get("confirm_material_inferences", False)),
+        intent=intent,
+    )
+    readiness["projectBinding"] = binding
+    readiness["projectInspection"] = context_project_inspection(binding)
+    try:
+        compilation = prompt_compiler_core.compile_grounded(
+            intent=intent,
+            workflow_mode=workflow_mode,
+            risk_tier=readiness["riskTier"],
+            grounding=grounding,
+            readiness=readiness,
+            compiler_mode_value=_prompt_mode(),
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    if readiness["readyForPlanning"]:
+        binding_before = _prompt_binding(binding)
+        _issue_context_readiness(
+            result=readiness,
+            goal=intent["normalizedGoal"],
+            workflow_mode=context_workflow,
+            binding=binding,
+            compilation=compilation,
+        )
+        binding_after = _prompt_binding(binding)
+        if binding_after != binding_before:
+            raise ToolError(
+                "The project or policy changed during prompt compilation. Re-run both compilation stages."
+            )
+        expires = (
+            _dt.datetime.now(_dt.timezone.utc)
+            + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+        ).replace(microsecond=0)
+        compilation["compilationReceipt"] = issue_receipt(
+            {
+                "kind": "prompt-compilation",
+                "schemaVersion": prompt_compiler_core.PROMPT_COMPILATION_SCHEMA,
+                "expiresAt": expires.isoformat(),
+                "compilationDigest": compilation["compilationDigest"],
+                "rawPromptDigest": compilation["rawPromptDigest"],
+                "intentDigest": compilation["intentDigest"],
+                "renderedPromptSha256": compilation["renderedPromptSha256"],
+                "requestedTaskMode": compilation["requestedTaskMode"],
+                "workflowMode": workflow_mode,
+                "contextWorkflowMode": context_workflow,
+                "riskTier": compilation["riskTier"],
+                "briefDigest": readiness["briefDigest"],
+                "compilerMode": compilation["compilerMode"],
+                "compilerVersion": compilation["compilerVersion"],
+                "templateVersion": compilation["templateVersion"],
+                **binding_after,
+            }
+        )
+    compilation["contextReadiness"] = readiness
+    return compilation
+
+
 def tool_context_readiness(args: dict[str, Any]) -> dict[str, Any]:
     goal = str(args.get("goal") or "").strip()
     if not goal:
@@ -14321,52 +14933,49 @@ def tool_context_readiness(args: dict[str, Any]) -> dict[str, Any]:
         raise ToolError(
             "workflow_mode must be j-stack-dev, jstack-subagents, jstack-full-team, jstack-audit, or jstack-loop."
         )
-    binding = resolve_project_binding(args.get("project_path"))
-    context = context_payload(args)
     try:
-        result = context_readiness_core.assess_context(
-            goal=goal,
+        intent = prompt_compiler_core.compile_intent(
+            raw_request=goal,
             workflow_mode=workflow_mode,
-            risk_tier=context_risk_tier(goal, args.get("risk_tier")),
-            facts=context.get("facts") or [],
-            assumptions=context.get("assumptions") or [],
-            open_questions=context.get("open_questions") or [],
-            workflow_parameters=args.get("workflow_parameters") or {},
-            use_recommended_defaults=bool(args.get("use_recommended_defaults", False)),
-            confirm_material_inferences=bool(args.get("confirm_material_inferences", False)),
+            compiler_mode_value=_prompt_mode(),
         )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
-
+    binding = resolve_project_binding(args.get("project_path"))
+    context = context_payload(args)
+    result = _assess_prompt_context(
+        goal=goal,
+        workflow_mode=workflow_mode,
+        risk_tier=context_risk_tier(goal, args.get("risk_tier")),
+        context=context,
+        workflow_parameters=args.get("workflow_parameters") or {},
+        use_recommended_defaults=bool(args.get("use_recommended_defaults", False)),
+        confirm_material_inferences=bool(args.get("confirm_material_inferences", False)),
+        intent=intent,
+    )
     result["projectBinding"] = binding
     result["projectInspection"] = context_project_inspection(binding)
     if result["readyForPlanning"]:
-        expires = (
-            _dt.datetime.now(_dt.timezone.utc)
-            + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
-        ).replace(microsecond=0)
-        receipt_payload: dict[str, Any] = {
-            "kind": "context-readiness",
-            "schemaVersion": context_readiness_core.CONTEXT_READINESS_SCHEMA,
-            "expiresAt": expires.isoformat(),
-            "goalDigest": context_goal_digest(goal),
-            "briefDigest": result["briefDigest"],
-            "workflowMode": workflow_mode,
-            "riskTier": result["riskTier"],
-            "state": result["state"],
-            "evidenceMode": binding["evidenceMode"],
-            "projectPath": binding["projectPath"],
-            "toolVersion": SERVER_VERSION,
-        }
-        if binding["evidenceMode"] == "git":
-            state = project_state(Path(binding["gitRoot"]))
-            receipt_payload.update(
-                {
-                    "gitHead": state["gitHead"],
-                    "projectFingerprint": state["projectFingerprint"],
-                }
-            )
-        result["readinessReceipt"] = issue_receipt(receipt_payload)
+        compilation = None
+        if _prompt_mode() != "disabled":
+            try:
+                compilation = prompt_compiler_core.compile_grounded(
+                    intent=intent,
+                    workflow_mode=workflow_mode,
+                    risk_tier=result["riskTier"],
+                    grounding=_prompt_grounding_from_readiness(intent, result),
+                    readiness=result,
+                    compiler_mode_value=_prompt_mode(),
+                )
+            except ValueError as exc:
+                raise ToolError(str(exc)) from exc
+        _issue_context_readiness(
+            result=result,
+            goal=goal,
+            workflow_mode=workflow_mode,
+            binding=binding,
+            compilation=compilation,
+        )
     return result
 
 
@@ -14387,6 +14996,7 @@ def verify_context_readiness_receipt(
     except InputError as exc:
         raise ToolError(f"context_brief is invalid: {exc}") from exc
     payload = verify_signed_session_token(receipt, "context-readiness")
+    current_prompt_mode = _prompt_mode()
     checks = {
         "schemaVersion": payload.get("schemaVersion")
         == context_readiness_core.CONTEXT_READINESS_SCHEMA,
@@ -14401,13 +15011,39 @@ def verify_context_readiness_receipt(
         "briefGoal": context_brief.get("goal") == " ".join(goal.split()),
         "briefWorkflowMode": context_brief.get("workflowMode") == workflow_mode,
         "briefRiskTier": context_brief.get("riskTier") == payload.get("riskTier"),
+        "promptCompilerMode": payload.get("promptCompilerMode")
+        == current_prompt_mode,
     }
-    if binding["evidenceMode"] == "git":
-        state = project_state(Path(binding["gitRoot"]))
-        checks["gitHead"] = payload.get("gitHead") == state["gitHead"]
-        checks["projectFingerprint"] = (
-            payload.get("projectFingerprint") == state["projectFingerprint"]
+    if current_prompt_mode != "disabled":
+        checks.update(
+            {
+                "promptCompilationDigest": bool(
+                    re.fullmatch(
+                        r"[0-9a-f]{64}",
+                        str(payload.get("promptCompilationDigest") or ""),
+                    )
+                ),
+                "rawPromptDigest": bool(
+                    re.fullmatch(
+                        r"[0-9a-f]{64}",
+                        str(payload.get("rawPromptDigest") or ""),
+                    )
+                ),
+                "requestedTaskMode": payload.get("requestedTaskMode")
+                in prompt_compiler_core.TASK_MODES,
+                "compilerVersion": payload.get("compilerVersion")
+                == prompt_compiler_core.COMPILER_VERSION,
+                "promptTemplateVersion": payload.get("promptTemplateVersion")
+                == prompt_compiler_core.TEMPLATE_VERSION,
+            }
         )
+    if binding["evidenceMode"] == "git":
+        subject = evidence_subject(Path(binding["gitRoot"]))
+        checks["gitHead"] = payload.get("gitHead") == subject["gitHead"]
+        checks["projectFingerprint"] = (
+            payload.get("projectFingerprint") == subject["projectFingerprint"]
+        )
+        checks["policyDigest"] = payload.get("policyDigest") == subject["policyDigest"]
     if not all(checks.values()):
         raise ToolError(
             "Context readiness receipt is stale or does not match the current goal, workflow, project, or repository state. Re-run jstack_context_readiness."
@@ -14420,6 +15056,15 @@ def verify_context_readiness_receipt(
         "riskTier": payload["riskTier"],
         "workflowMode": payload["workflowMode"],
         "normalizedBrief": context_brief,
+        "promptCompilation": {
+            "bound": current_prompt_mode != "disabled",
+            "mode": current_prompt_mode,
+            "compilationDigest": payload.get("promptCompilationDigest"),
+            "rawPromptDigest": payload.get("rawPromptDigest"),
+            "requestedTaskMode": payload.get("requestedTaskMode"),
+            "compilerVersion": payload.get("compilerVersion"),
+            "templateVersion": payload.get("promptTemplateVersion"),
+        },
         "checks": checks,
     }
 
@@ -21838,6 +22483,7 @@ def _verified_goal_readiness_attestation(
     if (
         not verification["valid"]
         or payload.get("schemaVersion") != loop_core.GOAL_READINESS_RECEIPT_SCHEMA
+        or not _prompt_receipt_binding_valid(payload)
     ):
         raise ToolError(
             "The goal-readiness receipt is stale, malformed, from another session, or bound to a different project state."
@@ -21985,6 +22631,8 @@ def _loop_args_with_ui_contract(
     elif isinstance((prior_status or {}).get("uiContract"), dict):
         enriched["ui_contract_binding"] = dict(prior_status["uiContract"])
     enriched.pop("ui_contract_receipt", None)
+    enriched.pop("prompt_compilation_receipt", None)
+    enriched.pop("prompt_contract", None)
     return enriched
 
 
@@ -22387,6 +23035,21 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             raise ToolError("Terminal loops cannot receive a revised goal-readiness receipt.")
         prior_contract_digest = status["contractDigest"]
         prior_status = status
+    prompt_goal = str(
+        args.get("goal")
+        or (prior_status or {}).get("goal")
+        or ""
+    ).strip()
+    prompt_binding = (
+        _prompt_orchestration_binding(
+            args,
+            goal=prompt_goal,
+            workflow_mode="jstack-loop",
+            binding=resolve_project_binding(str(project_path)),
+        )
+        if prompt_goal
+        else None
+    )
     enriched_args = _loop_args_with_ui_contract(
         args, project_path, subject, prior_status
     )
@@ -22413,14 +23076,18 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
         and not isinstance(prior_status.get("uiContract"), dict)
         and ui_applicability["state"] != "inactive"
     ):
-        return _ui_readiness_block(
+        blocked = _ui_readiness_block(
             ["product-interface-new-loop"], program=False
         )
+        blocked["promptCompilation"] = prompt_binding
+        return blocked
     if ui_bound != has_ui_verifier:
-        return _ui_readiness_block(
+        blocked = _ui_readiness_block(
             ui_gaps,
             program=False,
         )
+        blocked["promptCompilation"] = prompt_binding
+        return blocked
     try:
         assessment = _loop_call(
             lambda: loop_core.assess_goal_readiness(
@@ -22436,16 +23103,25 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
         )
     except ToolError:
         if ui_gaps:
-            return _ui_readiness_block(ui_gaps, program=False)
+            blocked = _ui_readiness_block(ui_gaps, program=False)
+            blocked["promptCompilation"] = prompt_binding
+            return blocked
         raise
     assessment.pop("_contract", None)
     if ui_gaps:
-        return _merge_ui_readiness_block(
+        blocked = _merge_ui_readiness_block(
             assessment, ui_gaps, program=False
         )
+        blocked["promptCompilation"] = prompt_binding
+        return blocked
     if assessment.get("ready") is not True:
         assessment["receiptIssued"] = False
+        assessment["promptCompilation"] = prompt_binding
         return assessment
+    if _prompt_mode() != "disabled" and prompt_binding is None:
+        raise ToolError(
+            "A non-empty goal is required before Prompt Compiler-bound loop readiness can issue a receipt."
+        )
     subject_after = evidence_subject(project_path)
     if any(
         subject_after[field] != subject[field]
@@ -22483,11 +23159,13 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
                 else None
             ),
             "passed": True,
+            **_prompt_receipt_binding_fields(prompt_binding),
         }
     )
     assessment["goalReadinessReceipt"] = receipt
     assessment["receiptExpiresAt"] = expires_at
     assessment["receiptIssued"] = True
+    assessment["promptCompilation"] = prompt_binding
     assessment["receiptMeaning"] = (
         "Session-local proof that the exact goal context and contract were readiness-checked "
         "against the current project state; it executes no implementation or external action "
@@ -22756,6 +23434,8 @@ def _program_args_with_ui_contract(
     elif isinstance((prior_status or {}).get("uiContract"), dict):
         enriched["ui_contract_binding"] = dict(prior_status["uiContract"])
     enriched.pop("ui_contract_receipt", None)
+    enriched.pop("prompt_compilation_receipt", None)
+    enriched.pop("prompt_contract", None)
     return enriched
 
 
@@ -22845,6 +23525,7 @@ def _verified_program_readiness_attestation(
         not verification["valid"]
         or payload.get("schemaVersion")
         != program_core.PROGRAM_READINESS_RECEIPT_SCHEMA
+        or not _prompt_receipt_binding_valid(payload)
     ):
         raise ToolError(
             "The program-readiness receipt is stale, malformed, from another session, or bound to a different project state."
@@ -23157,6 +23838,21 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             raise ToolError("Terminal programs cannot receive a revised readiness receipt.")
         prior_contract_digest = status["contractDigest"]
         prior_status = status
+    prompt_goal = str(
+        args.get("goal")
+        or (prior_status or {}).get("goal")
+        or ""
+    ).strip()
+    prompt_binding = (
+        _prompt_orchestration_binding(
+            args,
+            goal=prompt_goal,
+            workflow_mode="jstack-loop",
+            binding=resolve_project_binding(str(project_path)),
+        )
+        if prompt_goal
+        else None
+    )
     enriched_args = _program_args_with_ui_contract(
         args, project_path, subject, prior_status
     )
@@ -23199,13 +23895,17 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
                     prior_contract_digest=prior_contract_digest,
                 )
             )
-            return _merge_ui_readiness_block(
+            blocked = _merge_ui_readiness_block(
                 incomplete_assessment, ui_gaps, program=True
             )
-        return _ui_readiness_block(ui_gaps, program=True)
+            blocked["promptCompilation"] = prompt_binding
+            return blocked
+        blocked = _ui_readiness_block(ui_gaps, program=True)
+        blocked["promptCompilation"] = prompt_binding
+        return blocked
     policy_gaps = _program_policy_gaps(enriched_args, policy)
     if policy_gaps:
-        return {
+        blocked = {
             "schemaVersion": program_core.PROGRAM_READINESS_SCHEMA,
             "status": "needs_context",
             "ready": False,
@@ -23222,6 +23922,8 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             ],
             "receiptIssued": False,
         }
+        blocked["promptCompilation"] = prompt_binding
+        return blocked
     assessment = _program_call(
         lambda: program_core.assess_program_readiness(
             enriched_args,
@@ -23238,7 +23940,12 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     assessment.pop("_contract", None)
     if assessment.get("ready") is not True:
         assessment["receiptIssued"] = False
+        assessment["promptCompilation"] = prompt_binding
         return assessment
+    if _prompt_mode() != "disabled" and prompt_binding is None:
+        raise ToolError(
+            "A non-empty goal is required before Prompt Compiler-bound program readiness can issue a receipt."
+        )
     subject_after = evidence_subject(project_path)
     if any(
         subject_after[field] != subject[field]
@@ -23275,6 +23982,7 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
                 else None
             ),
             "passed": True,
+            **_prompt_receipt_binding_fields(prompt_binding),
         }
     )
     assessment.update(
@@ -23282,6 +23990,7 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "programReadinessReceipt": receipt,
             "receiptExpiresAt": expires_at,
             "receiptIssued": True,
+            "promptCompilation": prompt_binding,
             "receiptMeaning": (
                 "Session-local proof that the exact program DAG and acceptance boundary were readiness-checked; "
                 "it does not approve implementation, release, deployment, or a human gate."
@@ -24431,6 +25140,22 @@ PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
     "revision_approval_reference": {"type": "string", "maxLength": 500},
 }
 
+PROMPT_ORCHESTRATION_INPUT_PROPERTIES: dict[str, Any] = {
+    "prompt_compilation_receipt": {
+        "type": "string",
+        "maxLength": 250_000,
+        "description": (
+            "Optional exact Stage B receipt from jstack_prompt_compile. Supply it with prompt_contract to prove explicit pre-inspection compilation; legacy callers use the deterministic compatibility bridge."
+        ),
+    },
+    "prompt_contract": {
+        "type": "object",
+        "description": (
+            "Exact jstack.prompt-compilation.v1 object returned with prompt_compilation_receipt."
+        ),
+    },
+}
+
 
 CONTEXT_FACT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -24769,7 +25494,10 @@ TOOLS: dict[str, dict[str, Any]] = {
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
-            "properties": PROGRAM_CONTRACT_PROPERTIES,
+            "properties": {
+                **PROGRAM_CONTRACT_PROPERTIES,
+                **PROMPT_ORCHESTRATION_INPUT_PROPERTIES,
+            },
         },
         "handler": tool_program_goal_readiness,
         "readOnlyHint": True,
@@ -25062,6 +25790,7 @@ TOOLS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "project_path": {"type": "string"},
+                **PROMPT_ORCHESTRATION_INPUT_PROPERTIES,
                 "loop_id": {"type": "string"},
                 "goal": {"type": "string"},
                 "execution_mode": {
@@ -26065,6 +26794,135 @@ for _name, _meta in list(TOOLS.items()):
 # gstack_* aliases remain byte-compatible while the live JStack surface grows.
 TOOLS.update(
     {
+        "jstack_prompt_compile": {
+            "description": "Compile a raw request through JStack's deterministic two-stage Prompt Compiler. Stage intent runs before repository inspection and returns only normalized intent plus a digest-bound receipt. Stage grounded binds source-labelled repository context, task mode, authority, requirements, acceptance evidence, and a rendered Codex prompt to current project and policy state. The tool performs no model call, project edit, side-effecting command, Git mutation, external action, release, deployment, or production mutation.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["stage", "workflow_mode"],
+                "allOf": [
+                    {
+                        "if": {"properties": {"stage": {"const": "intent"}}},
+                        "then": {"required": ["raw_request"]},
+                    },
+                    {
+                        "if": {"properties": {"stage": {"const": "grounded"}}},
+                        "then": {
+                            "required": [
+                                "project_path",
+                                "intent_receipt",
+                                "intent_contract",
+                            ]
+                        },
+                    },
+                ],
+                "properties": {
+                    "stage": {"type": "string", "enum": ["intent", "grounded"]},
+                    "workflow_mode": {
+                        "type": "string",
+                        "enum": list(PROMPT_COMPILER_WORKFLOW_MODES),
+                    },
+                    "raw_request": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": prompt_compiler_core.MAX_RAW_REQUEST_CHARS,
+                        "description": "Required only for Stage intent. Digested in memory and never included in receipts or telemetry.",
+                    },
+                    "project_path": {
+                        "type": "string",
+                        "description": "Required for Stage grounded; Stage intent deliberately performs no project resolution or inspection.",
+                    },
+                    "intent_receipt": {
+                        "type": "string",
+                        "maxLength": 100000,
+                        "description": "Exact Stage A receipt required for Stage grounded.",
+                    },
+                    "intent_contract": {
+                        "type": "object",
+                        "description": "Exact jstack.prompt-intent.v1 object returned by Stage A.",
+                    },
+                    "risk_tier": {
+                        "type": "string",
+                        "enum": list(context_readiness_core.RISK_TIERS),
+                    },
+                    "context": CONTEXT_PAYLOAD_SCHEMA,
+                    "workflow_parameters": {
+                        **CONTEXT_WORKFLOW_PARAMETERS_SCHEMA,
+                        "description": "Exact audit selectors for jstack-audit; omit for other workflows.",
+                    },
+                    "grounding": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "sources": {
+                                "type": "array",
+                                "maxItems": 100,
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["field", "value", "source_kind", "source_reference"],
+                                    "properties": {
+                                        "field": {"type": "string", "minLength": 1, "maxLength": 100},
+                                        "value": {"type": "string", "minLength": 1, "maxLength": 2000},
+                                        "source_kind": {"type": "string", "enum": list(prompt_compiler_core.SOURCE_KINDS)},
+                                        "source_reference": {"type": "string", "minLength": 1, "maxLength": 500},
+                                    },
+                                },
+                            },
+                            "requirements": {
+                                "type": "array",
+                                "maxItems": 100,
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["id", "category", "statement", "source_kind", "source_reference"],
+                                    "properties": {
+                                        "id": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+                                        "category": {"type": "string", "enum": list(prompt_compiler_core.REQUIREMENT_CATEGORIES)},
+                                        "statement": {"type": "string", "minLength": 1, "maxLength": 1000},
+                                        "material": {"type": "boolean"},
+                                        "status": {"type": "string", "enum": ["required", "recommended", "assumption", "unknown"]},
+                                        "source_kind": {"type": "string", "enum": list(prompt_compiler_core.SOURCE_KINDS)},
+                                        "source_reference": {"type": "string", "minLength": 1, "maxLength": 500},
+                                    },
+                                },
+                            },
+                            **{
+                                name: {
+                                    "type": "array",
+                                    "maxItems": 64,
+                                    "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+                                }
+                                for name in (
+                                    "unknowns",
+                                    "contradictions",
+                                    "acceptance_criteria",
+                                    "verification_requirements",
+                                    "rollback_requirements",
+                                    "likely_in_scope",
+                                    "explicitly_out_of_scope",
+                                    "recommended_defaults",
+                                )
+                            },
+                            "material_external_evidence_digest": {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{64}$",
+                            },
+                        },
+                    },
+                    "use_recommended_defaults": {
+                        "type": "boolean",
+                        "default": False,
+                    },
+                    "confirm_material_inferences": {
+                        "type": "boolean",
+                        "default": False,
+                    },
+                },
+            },
+            "handler": tool_prompt_compile,
+            "readOnlyHint": True,
+        },
         "jstack_ui_reference_contract": {
             "description": "Create a clean-baseline, Git-bound contract for a private Product Interface reference bundle assembled from user-provided screenshots, Figma exports, or explicitly approved URL captures. The tool performs no capture, crawling, model call, project edit, release, or deployment action; on POSIX it creates or reads one private per-user signing key beneath ~/.jstack.",
             "inputSchema": {

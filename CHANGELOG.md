@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.10.0-beta.4 - 2026-08-21 - Prompt Compiler prerelease
+
+### Added
+
+- Added the canonical-only `jstack_prompt_compile` tool, taking the live MCP
+  surface to 57 canonical `jstack_*` tools while preserving all 52 frozen
+  `gstack_*` aliases byte-for-byte.
+- Added `jstack.prompt-intent.v1` for pre-inspection task-mode, goal,
+  constraint, reference, ambiguity, and authority normalization without
+  repository access or raw-prompt persistence.
+- Added `jstack.prompt-compilation.v1` for repository-grounded,
+  source-traceable requirements, acceptance criteria, verification, rollback,
+  bounded rendering, and signed current-project compilation receipts.
+- Added a synthetic, de-identified Prompt Compiler evaluation corpus covering
+  clear and vague requests, plan/diagnosis/audit boundaries, implementation,
+  release actions, high-risk domains, conflicting assumptions, injection,
+  long and multilingual prompts, and zero-to-three-question cases.
+- Added ADR 0025, the Prompt Compiler operator guide, a Beta.4 migration guide,
+  and a provenance/licensing record for the independently implemented research.
+
+### Changed
+
+- Extended the existing Adaptive Context Gate instead of adding a parallel
+  intake system. All six public workflows now call Stage A before inspection
+  and Stage B after authorized read-only grounding, then pass the nested
+  readiness receipt and normalized brief into planning.
+- Bound loop and program goal-readiness receipts to the exact compilation
+  digest, task mode, compiler/template versions, workflow, project, policy, and
+  repository state. Legacy direct MCP callers retain an additive compatibility
+  bridge that cannot claim pre-inspection ordering.
+- Advanced all public version-bearing plugin and MCP identities to
+  `0.10.0-beta.4`. The six dedicated command plugins and optional umbrella
+  remain the supported distribution layouts.
+- Added `disabled`, `shadow`, `preview`, and `enforced` feature modes. Enforced
+  remains the default; changing mode invalidates previously issued receipts.
+
+### Security and privacy
+
+- Prompt compilation rejects secret-like input, enforces 50,000-character raw
+  and 40,000-character rendered budgets, treats repository/external content as
+  data, and refuses unsupported required inferences or assumptions.
+- Receipts and telemetry contain digests plus binding metadata only. Raw user
+  prompts, source contents, credentials, and hidden reasoning are not stored.
+- Compilation and readiness remain evidence, never execution authority. Plan,
+  diagnosis, audit, build, Git, release, deployment, production, and external
+  action boundaries are preserved from explicit user intent and workflow
+  policy floors.
+- The Nir Diamant repository was used only to review general techniques because
+  its licence restricts commercial reuse; no source, wording, prompt, notebook,
+  example, code, or repository structure was copied or adapted.
+
 ## 0.10.0-beta.3 - 2026-08-19 - Evidence Builder prerelease
 
 ### Added

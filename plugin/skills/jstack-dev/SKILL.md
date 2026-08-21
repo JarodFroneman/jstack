@@ -41,44 +41,59 @@ the contract's fixed delivery mode. Let `jstack_loop_checkpoint` and
 
 ## Start
 
-1. Read repository instructions and relevant durable memory.
-2. Call `jstack_runtime_status`. A successful response proves the MCP is
+1. Before repository inspection, durable-memory reads, planning, or any
+   side-effecting tool, call
+   `jstack_prompt_compile(stage="intent", workflow_mode=exact_command_mode,
+   raw_request=exact_user_request)`. Preserve its exact `intentContract` and
+   `intentReceipt`. It classifies intent and authority only; it authorizes no
+   read, write, Git, external, release, deployment, or production action.
+   Read [prompt-compiler.md](references/prompt-compiler.md) for the contract and
+   disabled/shadow/preview/enforced modes.
+2. Read repository instructions and relevant durable memory.
+3. Call `jstack_runtime_status`. A successful response proves the MCP is
    mounted. Never describe a later project, input, policy, or gate rejection as
    an MCP attachment failure.
-3. Use `jstack_detect_project` and inspect `evidenceMode`.
-4. For `git`, inspect status, branch, project boundaries, stack, and checks,
+4. Use `jstack_detect_project` and inspect `evidenceMode`.
+5. For `git`, inspect status, branch, project boundaries, stack, and checks,
    then use `jstack_policy_check` with the task goal and comparison `base_ref`
    when known.
-5. Run the Adaptive Context Gate before planning. After inspecting all
-   repository-answerable context, call `jstack_context_readiness` with the exact
-   command workflow mode, source-attributed facts, disclosed assumptions, and
-   only material open questions. Ask the returned questions in normal chat,
+6. Complete Prompt Compiler Stage B before planning. After inspecting all
+   repository-answerable context, call
+   `jstack_prompt_compile(stage="grounded", workflow_mode=exact_command_mode,
+   intent_receipt=stage_a_receipt, intent_contract=stage_a_contract)` with
+   source-labelled grounding, disclosed assumptions, requirements, acceptance
+   and verification evidence, and only material open questions. Stage B
+   extends the Adaptive Context Gate; do not call a duplicate
+   `jstack_context_readiness` round. Ask questions returned under
+   `contextReadiness` in normal chat,
    never more than three per round, each with its reason and recommended
    default. Clear prompts continue with zero questions. Pass the resulting
-   `readinessReceipt` and matching `normalizedBrief` to planning as
+   nested `readinessReceipt` and matching `normalizedBrief` to planning as
    `context_readiness_receipt` and `context_brief`. High-risk material defaults require explicit
    in-conversation confirmation; no token, digest, signer, or terminal paste is
    allowed. A confirmation call confirms only assumptions already shown: carry
    those assumptions forward, set `use_recommended_defaults=false`, and never
    apply a new default batch in the same call. Reuse answered facts and never
-   repeat an unchanged question.
-6. For `artifact-only`, state
+   repeat an unchanged question. Keep the concise intent-to-contract diff
+   visible; show the full rendered prompt only when requested or materially
+   useful. A readiness or compilation receipt remains evidence, not authority.
+7. For `artifact-only`, state
    `MCP mounted; project binding is artifact-only.`, identify the authoritative
    source and deployment boundary, and do not call tools listed in
    `blockedTools`. Capture direct hashes, test output, backup, immutable runtime
    identity, rollback, monitoring, and public smoke evidence without claiming
    commit-bound JStack receipts or release certification.
-7. Use `jstack_plan` with the exact command `team_mode`,
+8. Use `jstack_plan` with the exact command `team_mode`,
    `quality_level="enterprise"`, requested `learning_mode`, and the current
    `context_readiness_receipt` plus matching `context_brief`. Treat its versioned `capabilityPlan` as part of
    the execution contract; do not invent, rename, or silently drop routed
    capability IDs.
-8. For specialist modes, use `jstack_team_plan` with the same readiness receipt
+9. For specialist modes, use `jstack_team_plan` with the same readiness receipt
    and normalized brief,
    build the actual coordination packet including `capabilityPlan`, and pass
    that object plus the exact per-role `capabilityIds` to
    `jstack_dispatch_check`.
-9. In `git` mode, use `jstack_preflight` before substantial implementation and
+10. In `git` mode, use `jstack_preflight` before substantial implementation and
    before handoff.
 
 Use the normal-Codex fallback only when `jstack_runtime_status` itself is

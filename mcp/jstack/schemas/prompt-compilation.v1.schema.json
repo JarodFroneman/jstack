@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/prompt-compilation.v1.schema.json",
+  "title": "JStack Prompt Compilation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "compilerVersion", "templateVersion", "compilerMode",
+    "rawPromptDigest", "intentDigest", "workflowMode", "requestedTaskMode",
+    "riskTier", "normalizedGoal", "authority", "explicitConstraints",
+    "explicitNonGoals", "namedReferences", "sources", "requirements", "unknowns",
+    "contradictions", "acceptanceCriteria", "verificationRequirements",
+    "rollbackRequirements", "scope", "recommendedDefaults",
+    "materialExternalEvidenceDigest", "modelMetadata", "readiness", "traceability",
+    "privacy", "enforcement", "renderedCodexPrompt", "renderedPromptSha256",
+    "compilationDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "jstack.prompt-compilation.v1" },
+    "compilerVersion": { "const": "1.0.0" },
+    "templateVersion": { "const": "jstack.codex-execution-prompt.v1" },
+    "compilerMode": { "enum": ["disabled", "shadow", "preview", "enforced"] },
+    "rawPromptDigest": { "$ref": "#/$defs/sha256" },
+    "intentDigest": { "$ref": "#/$defs/sha256" },
+    "workflowMode": { "$ref": "#/$defs/workflowMode" },
+    "requestedTaskMode": { "$ref": "#/$defs/taskMode" },
+    "riskTier": { "enum": ["low", "medium", "high", "critical"] },
+    "normalizedGoal": { "type": "string", "minLength": 1, "maxLength": 12000 },
+    "authority": { "$ref": "#/$defs/authority" },
+    "explicitConstraints": { "$ref": "#/$defs/stringList" },
+    "explicitNonGoals": { "$ref": "#/$defs/stringList" },
+    "namedReferences": {
+      "type": "object", "additionalProperties": false,
+      "required": ["urls", "paths", "platforms"],
+      "properties": {
+        "urls": { "$ref": "#/$defs/stringList" },
+        "paths": { "$ref": "#/$defs/stringList" },
+        "platforms": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "sources": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["field", "value", "sourceKind", "sourceReference", "trust"],
+        "properties": {
+          "field": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "value": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "sourceKind": { "$ref": "#/$defs/sourceKind" },
+          "sourceReference": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "trust": { "enum": ["instruction", "data"] }
+        }
+      }
+    },
+    "requirements": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "category", "statement", "material", "status", "sourceKind", "sourceReference"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$" },
+          "category": { "enum": ["functional", "non-functional", "ux", "data", "integration", "security-privacy", "migration", "compatibility", "performance", "acceptance", "verification", "rollback", "scope", "authority"] },
+          "statement": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "material": { "type": "boolean" },
+          "status": { "enum": ["required", "recommended", "assumption", "unknown"] },
+          "sourceKind": { "$ref": "#/$defs/sourceKind" },
+          "sourceReference": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    },
+    "unknowns": { "$ref": "#/$defs/stringList" },
+    "contradictions": { "$ref": "#/$defs/stringList" },
+    "acceptanceCriteria": { "$ref": "#/$defs/stringList" },
+    "verificationRequirements": { "$ref": "#/$defs/stringList" },
+    "rollbackRequirements": { "$ref": "#/$defs/stringList" },
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["likelyInScope", "explicitlyOutOfScope"],
+      "properties": {
+        "likelyInScope": { "$ref": "#/$defs/stringList" },
+        "explicitlyOutOfScope": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "recommendedDefaults": { "$ref": "#/$defs/stringList" },
+    "materialExternalEvidenceDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "modelMetadata": {
+      "type": "object", "additionalProperties": false,
+      "required": ["used", "provider", "model", "configurationDigest"],
+      "properties": {
+        "used": { "const": false },
+        "provider": { "type": "null" },
+        "model": { "type": "null" },
+        "configurationDigest": { "type": "null" }
+      }
+    },
+    "readiness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "readyForPlanning", "briefDigest", "questionCount", "materialGapCount"],
+      "properties": {
+        "state": { "enum": ["ready", "proceed_with_assumptions", "needs_context", "needs_confirmation"] },
+        "readyForPlanning": { "type": "boolean" },
+        "briefDigest": { "$ref": "#/$defs/sha256" },
+        "questionCount": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "materialGapCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "traceability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["materialRequirementCount", "tracedMaterialRequirementCount", "unsupportedRequirementCount", "scopeExpansionDetected"],
+      "properties": {
+        "materialRequirementCount": { "type": "integer", "minimum": 0 },
+        "tracedMaterialRequirementCount": { "type": "integer", "minimum": 0 },
+        "unsupportedRequirementCount": { "const": 0 },
+        "scopeExpansionDetected": { "const": false }
+      }
+    },
+    "privacy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rawPromptPersisted", "sourceContentsPersisted", "hiddenReasoningStored", "secretsAllowed", "receiptContent"],
+      "properties": {
+        "rawPromptPersisted": { "const": false },
+        "sourceContentsPersisted": { "const": false },
+        "hiddenReasoningStored": { "const": false },
+        "secretsAllowed": { "const": false },
+        "receiptContent": { "const": "digests-and-binding-metadata-only" }
+      }
+    },
+    "enforcement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mcpEnforced", "hostDependent"],
+      "properties": {
+        "mcpEnforced": { "$ref": "#/$defs/stringList" },
+        "hostDependent": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "renderedCodexPrompt": { "type": "string", "minLength": 1, "maxLength": 40001 },
+    "renderedPromptSha256": { "$ref": "#/$defs/sha256" },
+    "compilationDigest": { "$ref": "#/$defs/sha256" },
+    "compilationReceipt": { "type": "string" },
+    "contextReadiness": { "$ref": "context-readiness.v1.schema.json" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "workflowMode": {
+      "enum": ["j-stack-dev", "jstack-subagents", "jstack-full-team", "jstack-audit", "jstack-loop", "jstack-evidence-builder"]
+    },
+    "taskMode": {
+      "enum": ["explain", "research", "plan-only", "read-only-audit", "diagnose-only", "implement", "test", "review", "fix", "commit", "push", "open-pull-request", "deploy", "modify-production", "external-action"]
+    },
+    "action": {
+      "enum": ["inspect-repository", "edit-files", "run-tests", "commit", "push", "open-pull-request", "merge", "deploy", "modify-production", "external-action"]
+    },
+    "authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repositoryRead", "repositoryWrite", "testExecution", "authorizedActions", "externalActionsRequested", "externalActionsNotAuthorized", "authorityRule"],
+      "properties": {
+        "repositoryRead": { "type": "boolean" },
+        "repositoryWrite": { "type": "boolean" },
+        "testExecution": { "type": "boolean" },
+        "authorizedActions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/action" } },
+        "externalActionsRequested": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/action" } },
+        "externalActionsNotAuthorized": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/action" } },
+        "authorityRule": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "sourceKind": { "enum": ["explicit-user", "repository", "policy", "external-evidence", "inference", "recommended-assumption"] },
+    "stringList": {
+      "type": "array", "maxItems": 100, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+    }
+  }
+}

@@ -7,9 +7,14 @@ Apply the JStack Evidence Builder workflow to the supplied visual references:
 
 $ARGUMENTS
 
-Use one Lead agent by default. Call `jstack_runtime_status` first, inspect the
-Git-backed project, and obtain the current project fingerprint through the
-normal JStack planning context before calling `jstack_ui_reference_contract`.
+Use one Lead agent by default. Before repository inspection, durable-memory
+reads, browser capture, or artifact writes, call
+`jstack_prompt_compile(stage="intent",
+workflow_mode="jstack-evidence-builder", raw_request=$ARGUMENTS)` and preserve
+the exact contract and receipt. Then call `jstack_runtime_status`, inspect the
+Git-backed project, and complete Prompt Compiler Stage B with source-labelled
+grounding. Use its nested context readiness instead of a duplicate general
+intake round before calling `jstack_ui_reference_contract`.
 
 Accept only user-attached screenshots/Figma exports and exact URLs the user
 explicitly supplied or approved. For URLs, use the host browser capture

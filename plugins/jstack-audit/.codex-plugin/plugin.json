@@ -1,7 +1,7 @@
 {
   "name": "jstack-audit",
-  "version": "0.10.0-beta.3",
-  "description": "Top-level JStack command for evidence-bound read-only repository audits.",
+  "version": "0.10.0-beta.4",
+  "description": "Top-level JStack command for prompt-compiled, evidence-bound read-only repository audits.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"
