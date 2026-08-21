@@ -1,7 +1,7 @@
 {
   "name": "jstack-subagents",
-  "version": "0.10.0-beta.3",
-  "description": "Top-level JStack command that deploys the right specialist subagent team.",
+  "version": "0.10.0-beta.4",
+  "description": "Top-level JStack command that prompt-compiles intent before deploying the right specialist team.",
   "author": {
     "name": "Jarod Froneman",
     "url": "https://github.com/JarodFroneman"

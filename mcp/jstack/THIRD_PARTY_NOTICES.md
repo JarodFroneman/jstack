@@ -1,5 +1,23 @@
 # Third-Party Notices
 
+## Prompt Compiler Research References
+
+JStack's Prompt Compiler is an original standard-library implementation. The
+following repositories were reviewed only for general prompt-engineering
+techniques; no source code, notebooks, prompts, examples, wording, or
+repository structure is copied or adapted:
+
+- DAIR.AI Prompt Engineering Guide, revision
+  `57673726396dd94acb23bdb1e67f27c78ee85a8e`, MIT:
+  https://github.com/dair-ai/Prompt-Engineering-Guide
+- Nir Diamant Prompt Engineering, revision
+  `1d28822e826afc1f267da038e9cd677449ecfe86`, custom non-commercial licence:
+  https://github.com/NirDiamant/Prompt_Engineering
+
+The Nir Diamant repository remains research-only. Copying or adapting its
+material for commercially usable JStack releases requires verified permission
+and legal review.
+
 ## Screenshot To Code Design Reference
 
 JStack Evidence Builder independently implements a private reference-bundle

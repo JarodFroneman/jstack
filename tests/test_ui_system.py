@@ -1413,12 +1413,12 @@ class ProductInterfaceServerTests(unittest.TestCase):
         home_patch.start()
         self.addCleanup(home_patch.stop)
 
-    def test_tools_are_56_canonical_52_legacy_and_ui_tools_are_canonical_only(self) -> None:
+    def test_tools_are_57_canonical_52_legacy_and_additive_tools_are_canonical_only(self) -> None:
         definitions = {item["name"]: item for item in server.tool_definitions()}
         names = set(definitions)
         canonical = {name for name in names if name.startswith("jstack_")}
         legacy = {name for name in server.TOOLS if name.startswith("gstack_")}
-        self.assertEqual(56, len(canonical))
+        self.assertEqual(57, len(canonical))
         self.assertEqual(52, len(legacy))
         self.assertIn("jstack_ui_contract", canonical)
         self.assertIn("jstack_ui_finalize", canonical)

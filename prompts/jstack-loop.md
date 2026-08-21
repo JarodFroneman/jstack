@@ -7,14 +7,23 @@ Apply the JStack Loop Engineer workflow to this goal:
 
 $ARGUMENTS
 
-Call `jstack_runtime_status` first, require a Git-backed project, and inspect
+Before repository inspection, durable-memory reads, planning, or
+side-effecting tools, call
+`jstack_prompt_compile(stage="intent", workflow_mode="jstack-loop",
+raw_request=$ARGUMENTS)`. Preserve the exact intent contract and receipt; they
+grant no execution authority. Then call `jstack_runtime_status`, require a
+Git-backed project, and inspect
 the actual goal before selecting one bounded loop or a multi-phase program.
 Derive phase count and dependencies from independently verifiable project
 outcomes. Never assume a fixed phase count or any domain-specific roadmap.
 
-Treat `jstack_loop_goal_readiness` or `jstack_program_goal_readiness` as this
-command's stronger Adaptive Context Gate; do not run a duplicate general intake
-round. Inspect repository-answerable context first, keep facts source-attributed
+After repository inspection, call
+`jstack_prompt_compile(stage="grounded", workflow_mode="jstack-loop")` with
+the exact Stage A receipt/contract and source-labelled grounding. Use its nested
+context readiness instead of a separate `jstack_context_readiness` round. Pass
+the exact Stage B `compilationReceipt` and prompt contract to
+`jstack_loop_goal_readiness` or `jstack_program_goal_readiness`; these add the
+stronger orchestration-specific contract. Keep facts source-attributed
 and assumptions explicit, then ask only the returned questions—at most three
 per round—with their reasons and recommended defaults. Reuse answers and never
 repeat unchanged questions. Clear, complete contracts ask nothing. Any required

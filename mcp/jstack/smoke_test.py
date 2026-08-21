@@ -93,7 +93,7 @@ def main() -> int:
     missing = required - names
     if missing:
         raise RuntimeError(f"missing tools: {sorted(missing)}")
-    if len(names) != 56:
+    if len(names) != 57:
         raise RuntimeError(f"unexpected canonical tool count: {len(names)}")
     print("jstack MCP JSONL smoke test passed")
     return 0

@@ -26,11 +26,11 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **Beta.3 prerelease boundary:** install `v0.10.0-beta.3` only from its exact
-> immutable GitHub prerelease tag, retain the prior Beta.2 installation as one
+> **Beta.4 prerelease boundary:** install `v0.10.0-beta.4` only from its exact
+> immutable GitHub prerelease tag, retain the prior Beta.3 installation as one
 > complete rollback unit, and verify the installed bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
-> unvalidated. Installing Beta.3 does not satisfy its deferred 216-run study
+> unvalidated. Installing Beta.4 does not satisfy its deferred 216-run study
 > and independent human reviews.
 
 ## Host Support
@@ -44,6 +44,17 @@ Use `python` instead of `python3` where required on Windows.
 The MCP server is portable. Command discovery, permissions, subagent behavior,
 and continuation are host responsibilities, so MCP connectivity alone is not
 presented as complete workflow parity.
+
+## Prompt Compiler mode
+
+Beta.4 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
+values are `shadow`, `preview`, and `disabled`; use `disabled` only as a bounded
+compatibility rollback while investigating an integration issue. Mode changes
+invalidate existing readiness and compilation receipts. The six packaged
+commands perform Stage A before repository inspection and Stage B after
+read-only grounding, but JStack cannot intercept arbitrary native host actions
+that bypass its commands and MCP tools. See
+[Prompt Compiler](prompt-compiler.md) for the exact boundary.
 
 ## Codex Layout A: Transactional Direct Install
 
@@ -377,9 +388,10 @@ Expected dedicated layout:
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-beta.3`);
-- `tools/list` includes 56 canonical `jstack_*` tools, including
-  `jstack_context_readiness`, `jstack_performance_capture`, and
+  prerelease, `0.10.0-beta.4`);
+- `tools/list` includes 57 canonical `jstack_*` tools, including the
+  canonical-only `jstack_prompt_compile`, `jstack_context_readiness`,
+  `jstack_performance_capture`, and
   `jstack_adversarial_capture`, plus the reference lifecycle
   `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` and candidate
   lifecycle `jstack_ui_contract` / `jstack_ui_finalize`; the frozen
@@ -397,10 +409,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.10.0-beta.3`, also confirm that GitHub marks the release as a
+For `v0.10.0-beta.4`, also confirm that GitHub marks the release as a
 prerelease and that the checked-out annotated tag resolves to the release
 commit before staging any global files. The rollback snapshot must contain the
-actual published Beta.2 installation as one coherent MCP, plugin-source,
+actual published Beta.3 installation as one coherent MCP, plugin-source,
 plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state

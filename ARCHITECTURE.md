@@ -7,6 +7,7 @@ Canonical sources live in:
 - `mcp/jstack/jstack_mcp_server.py`
 - `mcp/jstack/capabilities/`
 - `mcp/jstack/context_readiness/`
+- `mcp/jstack/prompt_compiler/`
 - `mcp/jstack/audit/`
 - `mcp/jstack/launch/`
 - `mcp/jstack/loop/`
@@ -17,9 +18,10 @@ Canonical sources live in:
 - the engineering, audit, and loop curricula under `mastery/`
 - `mcp/jstack/templates/`
 
-Development-only evaluation infrastructure lives under `evals/`. It is an
-authoritative source for Proof Plane contracts and tests, but it is not part of
-the installed MCP or command-plugin runtime.
+Development-only evaluation infrastructure lives under `evals/` and
+`prompt-compiler-evals/`. They are authoritative sources for Proof Plane and
+Prompt Compiler contracts/tests, but are not part of the installed MCP or
+command-plugin runtime.
 
 `scripts/sync_artifacts.py` generates and verifies plugin copies. It operates
 only on Git-tracked and explicitly declared files, compares exact generated
@@ -33,6 +35,9 @@ The MCP server uses newline-delimited JSON-RPC over stdio. It contains:
 - command/risk routing and enterprise gates
 - inspect-first adaptive context readiness with source attribution,
   assumption disclosure, bounded questions, and stale-state planning receipts
+- two-stage schema-first prompt compilation with pre-inspection intent and
+  authority normalization, source-traceable grounding, deterministic rendering,
+  size/secret limits, and project-bound compilation receipts
 - project and policy inspection
 - team planning and coordination validation
 - deterministic role-bound capability routing and specialist handoff validation
@@ -107,7 +112,7 @@ it validates scoring protocol behavior and is not represented as a
 repository-level host benchmark.
 
 `scripts/check_product_boundaries.py` proves that the product has the
-six named commands, 56 canonical MCP tools, the frozen 52 compatibility aliases, 11
+six named commands, 57 canonical MCP tools, the frozen 52 compatibility aliases, 11
 roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
 standard-library core. It also rejects vendor SDKs, network-capable core
 imports, packaged `evals/` content, model or scanner execution in the Proof
@@ -120,7 +125,10 @@ state markers. Beta.2 admits only the declared Product Interface successor
 fields/enums on affected legacy requests plus its two canonical-only UI tools.
 The Evidence Builder successor adds one command/plugin, two reference tools,
 three reference schemas, and the reference-bound UI contract v2; all other
-prior request schemas remain frozen.
+prior request schemas remain frozen. Beta.4 adds one canonical-only Prompt
+Compiler tool and two closed schemas, plus optional compiler-binding fields on
+loop/program goal readiness; legacy request shapes and all 52 aliases remain
+compatible.
 
 The scorer consumes already-produced run and blinded-review envelopes. It
 retains failed, blocked, and timed-out runs, requires equal limits for
@@ -131,7 +139,24 @@ clients, external scanners, host comparisons, pilots, holdout governance, and
 evidence bridges remain outside the alpha.10 scope and cannot inherit JStack
 authority merely by integrating later.
 
-## Adaptive Context Protocol
+## Prompt Compiler and Adaptive Context Protocol
+
+`jstack_prompt_compile` is the six-workflow, two-stage front door. Stage A runs
+before repository inspection and preserves a SHA-256 of the exact raw request,
+task mode, explicit goal/constraints/non-goals, named references, ambiguity,
+and the authority envelope in `jstack.prompt-intent.v1`. It does not resolve a
+project and its receipt stores no raw text. Stage B accepts only source-labelled
+grounding after authorized read-only inspection, rejects untraceable required
+inferences, and renders `jstack.prompt-compilation.v1` with observable
+acceptance, verification, rollback, scope, privacy, and enforcement fields.
+
+Stage B calls the existing Adaptive Context Gate internally. Its current nested
+receipt and normalized brief feed ordinary planning; its compilation receipt
+also binds loop and program goal readiness. Compiler mode, compiler/template
+version, workflow, goal, accepted assumptions, material external evidence,
+policy, project fingerprint, or Git-state drift invalidates proof. Legacy
+direct MCP calls compile through a compatibility bridge, but that bridge cannot
+claim Stage A happened before host inspection.
 
 `jstack_context_readiness` is a shared read-only intake contract for Dev,
 Subagents, Full Team, and Audit. It accepts structured facts tagged as user,

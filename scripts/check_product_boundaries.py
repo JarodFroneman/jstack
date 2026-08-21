@@ -62,11 +62,12 @@ ADDITIVE_CANONICAL_TOOLS = {
     "jstack_ui_finalize",
     "jstack_ui_reference_contract",
     "jstack_ui_reference_finalize",
+    "jstack_prompt_compile",
 }
 CONTRACT_FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "v0.10.0-alpha.9.json"
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 56
+LIVE_CANONICAL_TOOL_COUNT = 57
 CORE_LOCAL_IMPORTS = {
     "audit",
     "capabilities",
@@ -74,6 +75,7 @@ CORE_LOCAL_IMPORTS = {
     "launch",
     "loop",
     "program",
+    "prompt_compiler",
     "ui",
 }
 CORE_STDLIB_IMPORTS = {
@@ -188,7 +190,7 @@ def check_boundaries() -> list[str]:
         errors.append("frozen legacy MCP alias snapshot must remain at 52 tools")
     if len(canonical) != LIVE_CANONICAL_TOOL_COUNT or canonical != expected_canonical:
         errors.append(
-            "canonical MCP tool inventory must be the frozen 52 plus exactly the four Product Interface System tools"
+            "canonical MCP tool inventory must be the frozen 52 plus exactly four Product Interface tools and the Prompt Compiler"
         )
     if len(aliases) != FROZEN_ALIAS_COUNT or aliases != frozen_aliases:
         errors.append("legacy MCP alias inventory must remain the exact frozen 52")
@@ -266,7 +268,7 @@ def main() -> int:
         sys.stderr.write("\n".join(errors) + "\n")
         return 1
     print(
-        "JStack product boundaries are intact: six commands, 56 canonical tools, "
+        "JStack product boundaries are intact: six commands, 57 canonical tools, "
         "52 frozen aliases, stdlib core, no packaged Proof Plane authority."
     )
     return 0
