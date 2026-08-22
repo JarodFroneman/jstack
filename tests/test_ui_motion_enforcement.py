@@ -308,6 +308,7 @@ class MotionEnforcementTests(unittest.TestCase):
         make_private_root(evidence_root)
         return repo, response, candidate, evidence_root
 
+    @unittest.skipUnless(os.name == "posix", "UI motion finalization requires POSIX")
     def test_finalizer_issues_candidate_bound_receipt_and_private_html_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo, response, candidate, evidence_root = self.fixture(temp)
@@ -384,6 +385,7 @@ class MotionEnforcementTests(unittest.TestCase):
                     runtime_sha256=candidate["runtimeSha256"],
                 )
 
+    @unittest.skipUnless(os.name == "posix", "UI motion finalization requires POSIX")
     def test_semantic_performance_failure_is_rejected_even_when_digests_match(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo, response, candidate, evidence_root = self.fixture(temp)
@@ -404,6 +406,7 @@ class MotionEnforcementTests(unittest.TestCase):
                     }
                 )
 
+    @unittest.skipUnless(os.name == "posix", "UI motion finalization requires POSIX")
     def test_missing_reduced_motion_coverage_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo, response, candidate, evidence_root = self.fixture(temp)
@@ -424,6 +427,7 @@ class MotionEnforcementTests(unittest.TestCase):
                     }
                 )
 
+    @unittest.skipUnless(os.name == "posix", "UI motion finalization requires POSIX")
     def test_tampered_result_bytes_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo, response, candidate, evidence_root = self.fixture(temp)
@@ -443,6 +447,7 @@ class MotionEnforcementTests(unittest.TestCase):
                     }
                 )
 
+    @unittest.skipUnless(os.name == "posix", "UI motion finalization requires POSIX")
     def test_manifest_and_result_timestamps_must_match(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo, response, candidate, evidence_root = self.fixture(temp)
@@ -488,6 +493,25 @@ class MotionEnforcementTests(unittest.TestCase):
         ui_finalize = definitions["jstack_ui_finalize"]["inputSchema"]["properties"]
         self.assertIn("motion_spec_receipt", ui_finalize)
         self.assertIn("motion_finalization_receipt", ui_finalize)
+
+    @unittest.skipUnless(os.name == "nt", "Windows-specific privacy boundary")
+    def test_windows_finalization_fails_before_evidence_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo, response, candidate, _ = self.fixture(temp)
+            with mock.patch.object(
+                server.ui_core, "load_and_validate_motion_evidence"
+            ) as evidence_loader:
+                with self.assertRaisesRegex(server.ToolError, "requires a POSIX host"):
+                    server.tool_ui_motion_finalize(
+                        {
+                            "project_path": str(repo),
+                            "motion_spec_receipt": response["motionSpecReceipt"],
+                            "evidence_manifest": "missing.json",
+                            "build_sha256": candidate["buildSha256"],
+                            "runtime_sha256": candidate["runtimeSha256"],
+                        }
+                    )
+            evidence_loader.assert_not_called()
 
 
 if __name__ == "__main__":
