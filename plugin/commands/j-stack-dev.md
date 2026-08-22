@@ -43,7 +43,16 @@ planning call.
    require explicit conversational confirmation. A confirmation call may
    confirm only assumptions already shown; it must not apply a new default
    batch in the same call. Never request a token, signer,
-   digest, or terminal paste.
+   digest, or terminal paste. When context is ready, display the complete
+   `renderedCodexPrompt` and wait for the user to approve it or request changes.
+   Do not plan or execute yet. Changes to goal, task mode, authority,
+   constraints, or non-goals restart Stage A; other changes require a new Stage
+   B preview. Every revision invalidates the old preview. After explicit
+   approval, repeat Stage B with the
+   exact internal `promptPreviewReceipt` and approval bound to the displayed
+   `renderedPromptSha256`. Never infer approval or ask the user to handle those
+   values. Only the approved response's `compilationReceipt` and nested
+   `readinessReceipt` may be used downstream.
 6. For `git`, use `jstack_policy_check`,
    `jstack_plan(team_mode="single-lead", learning_mode=resolved_learning_mode,
    context_readiness_receipt=stage_b.contextReadiness.readinessReceipt,

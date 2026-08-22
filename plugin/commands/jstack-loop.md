@@ -21,7 +21,13 @@ After repository inspection, call
 `jstack_prompt_compile(stage="grounded", workflow_mode="jstack-loop")` with
 the exact Stage A receipt/contract and source-labelled grounding. Use its nested
 context readiness instead of a separate `jstack_context_readiness` round. Pass
-the exact Stage B `compilationReceipt` and prompt contract to
+When context is ready, display the complete `renderedCodexPrompt` and wait for
+explicit approval or requested changes before planning or creating loop/program
+state. Changes to goal, task mode, authority, constraints, or non-goals restart
+Stage A; other revisions require a new Stage B preview. After approval, repeat Stage B
+with the exact internal `promptPreviewReceipt` and approval bound to the
+displayed prompt digest; never infer approval or ask the user to handle receipt
+values. Pass only the approved Stage B `compilationReceipt` and prompt contract to
 `jstack_loop_goal_readiness` or `jstack_program_goal_readiness`; these add the
 stronger orchestration-specific contract. Keep facts source-attributed
 and assumptions explicit, then ask only the returned questions—at most three

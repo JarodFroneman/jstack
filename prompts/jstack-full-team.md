@@ -44,7 +44,14 @@ answers and never repeat unchanged questions. Low-risk defaults may proceed as
 disclosed assumptions; high-risk material defaults require explicit
 conversational confirmation. A confirmation call may confirm only assumptions
 already shown and must not apply a new default batch. Never request a token, signer, digest, or terminal
-paste.
+paste. When context is ready, display the complete `renderedCodexPrompt` and
+wait for explicit approval or requested changes before team planning or
+dispatch. Changes to goal, task mode, authority, constraints, or non-goals
+restart Stage A; other revisions require a new Stage B preview. Every revision
+invalidates the old preview. After approval, repeat Stage B with the exact internal
+`promptPreviewReceipt` and approval bound to the displayed
+`renderedPromptSha256`; never infer approval or ask the user to handle those
+values. Use only the approved response's receipts downstream.
 
 Use the full 11-role roster:
 

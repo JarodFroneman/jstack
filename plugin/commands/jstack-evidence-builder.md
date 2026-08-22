@@ -14,7 +14,14 @@ workflow_mode="jstack-evidence-builder", raw_request=$ARGUMENTS)` and preserve
 the exact contract and receipt. Then call `jstack_runtime_status`, inspect the
 Git-backed project, and complete Prompt Compiler Stage B with source-labelled
 grounding. Use its nested context readiness instead of a duplicate general
-intake round before calling `jstack_ui_reference_contract`.
+intake round. When context is ready, display the complete
+`renderedCodexPrompt` and wait for explicit approval or requested changes
+before calling `jstack_ui_reference_contract`, browser capture, or artifact
+creation. Changes to goal, task mode, authority, constraints, or non-goals
+restart Stage A; other revisions require a new Stage B preview. After approval, repeat Stage
+B with the exact internal `promptPreviewReceipt` and approval bound to the
+displayed prompt digest; never infer approval or ask the user to handle receipt
+values. Use only the approved response's receipts.
 
 Accept only user-attached screenshots/Figma exports and exact URLs the user
 explicitly supplied or approved. For URLs, use the host browser capture

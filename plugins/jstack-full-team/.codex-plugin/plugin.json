@@ -1,6 +1,6 @@
 {
   "name": "jstack-full-team",
-  "version": "0.10.0-beta.4",
+  "version": "0.10.0-beta.4.1",
   "description": "Top-level JStack command that prompt-compiles intent before deploying the full 11-role team.",
   "author": {
     "name": "Jarod Froneman",

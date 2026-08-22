@@ -27,6 +27,12 @@ Full roster:
 10. Quant / Backtest Reviewer
 11. Documentation / Handoff Writer
 
+Before repository inspection, durable-memory reads, planning, or
+side-effecting tools, call
+`jstack_prompt_compile(stage="intent", workflow_mode="jstack-full-team",
+raw_request=exact_user_request)`. Preserve the exact Stage A contract and
+receipt; they grant no execution authority or additional staffing authority.
+
 Operating rules:
 
 1. The Lead Engineer owns final scope, synthesis, implementation decisions, verification, and handoff.
@@ -35,7 +41,8 @@ Operating rules:
 4. Documentation / Handoff Writer may edit docs only when assigned.
 5. If concurrency limits prevent all specialists from running at once, dispatch them in waves.
 6. Before dispatch, require a coordination packet.
-7. Pass the actual packet to `jstack_dispatch_check` and call
+7. After the approved Prompt Compiler gate in step 10, pass the actual packet
+   to `jstack_dispatch_check` and call
    `jstack_plan` with `team_mode="full-team"`, the current
    `context_readiness_receipt`, its matching `normalizedBrief` as
    `context_brief`, and
@@ -53,16 +60,25 @@ Operating rules:
    itself is unavailable or unreachable; never relabel a Git requirement or
    failed gate as an MCP attachment failure.
 10. Before team planning or dispatch, inspect repository-answerable context and
-    call `jstack_context_readiness` with
-    `workflow_mode="jstack-full-team"`, source-attributed facts, separate
+    call `jstack_prompt_compile(stage="grounded",
+    workflow_mode="jstack-full-team")` with the exact Stage A contract and
+    receipt, source-attributed facts, separate
     assumptions, and only material open questions. Ask at most the returned
     three questions in normal chat, each with its reason and recommended
     default. Clear prompts ask nothing. Reuse answers and never repeat unchanged
     questions. Low-risk defaults may proceed as disclosed assumptions;
     high-risk material defaults need explicit conversational confirmation.
     Confirm only already displayed assumptions and never apply a new default
-    batch in the same call. No
-    token, signer, digest, or terminal paste is part of this gate.
+    batch in the same call. Do not run a duplicate
+    `jstack_context_readiness` round. No token, signer, digest, or terminal
+    paste is part of this gate. When context is ready, display the complete
+    `renderedCodexPrompt` and wait for explicit approval or requested changes.
+    Stop before team planning or dispatch. Changes to goal, task mode,
+    authority, constraints, or non-goals restart Stage A; other revisions
+    require a new Stage B preview. After approval, repeat Stage B with the exact internal
+    `promptPreviewReceipt` and approval bound to the displayed prompt digest.
+    Never infer approval or ask the user to handle receipt values. Use only the
+    approved response's receipts downstream.
 
 Coordination packet:
 

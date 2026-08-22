@@ -22,6 +22,12 @@ Default behavior:
 9. Use Quant / Backtest Reviewer for trading, EA, quant, or backtest work.
 10. Specialists are read-only by default. Only assign edits to a Builder with a disjoint write scope.
 
+Before repository inspection, durable-memory reads, planning, or
+side-effecting tools, call
+`jstack_prompt_compile(stage="intent", workflow_mode="jstack-subagents",
+raw_request=exact_user_request)`. Preserve the exact Stage A contract and
+receipt; they grant no execution authority or additional staffing authority.
+
 Before dispatch, require a coordination packet:
 
 - `goal`
@@ -33,8 +39,8 @@ Before dispatch, require a coordination packet:
 - `evidenceContract`, `conflictRule`, and `stopConditions`
 - `verificationGate` and `handoffGate`
 
-Pass the actual packet object to `jstack_dispatch_check`; a boolean packet
-claim is invalid. Use `jstack_plan` with
+After the approved Prompt Compiler gate below, pass the actual packet object to
+`jstack_dispatch_check`; a boolean packet claim is invalid. Use `jstack_plan` with
 `team_mode="smart-subagents"`, the current `context_readiness_receipt`, and
 its matching `normalizedBrief` as `context_brief`, plus the resolved learning
 mode: explicit `off`, `coach`, or `assessment`, otherwise `embedded`. Pass the
@@ -68,15 +74,24 @@ receipts or release certification. Only use the MCP fallback when
 Git requirement or failed gate as an MCP attachment failure.
 
 Before team planning or dispatch, inspect repository-answerable context and
-call `jstack_context_readiness` with `workflow_mode="jstack-subagents"`,
+call `jstack_prompt_compile(stage="grounded",
+workflow_mode="jstack-subagents")` with the exact Stage A contract and receipt,
 source-attributed facts, separate assumptions, and only material open
 questions. Ask no more than the returned three questions in normal chat, with
 the reason and recommended default for each. Clear prompts ask nothing. Reuse
 answers and do not repeat unchanged questions. Low-risk defaults may continue
 as disclosed assumptions; high-risk material defaults need explicit
 conversational confirmation. Confirm only already displayed assumptions and
-never apply a new default batch in the same call. This gate never asks for a token, signer, digest,
-or terminal paste.
+never apply a new default batch in the same call. Do not run a duplicate
+`jstack_context_readiness` round. This gate never asks for a token, signer,
+digest, or terminal paste. When context is ready, display the complete
+`renderedCodexPrompt` and wait for explicit approval or requested changes.
+Stop before team planning or dispatch. Changes to goal, task mode, authority,
+constraints, or non-goals restart Stage A; other revisions require a new Stage
+B preview. After approval, repeat Stage B with the exact internal
+`promptPreviewReceipt` and approval bound to the displayed prompt digest.
+Never infer approval or ask the user to handle receipt values. Use only the
+approved response's receipts downstream.
 
 The Lead may implement. If a specialist edits implementation, it must be the
 Builder with an explicit disjoint scope. If more than three specialists are

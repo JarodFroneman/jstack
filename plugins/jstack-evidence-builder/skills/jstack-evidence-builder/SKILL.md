@@ -20,11 +20,20 @@ implemented candidate.
    processing, implementation, or deployment.
 2. Call `jstack_runtime_status` and require a Git-backed project.
 3. Inspect project instructions and established design-system evidence, then
-   call Prompt Compiler Stage B with the exact Stage A contract and receipt and
-   source-labelled grounding. Use its nested context-readiness result rather
+   call `jstack_prompt_compile(stage="grounded",
+   workflow_mode="jstack-evidence-builder")` with the exact Stage A contract
+   and receipt plus source-labelled grounding. Use its nested
+   context-readiness result rather
    than a duplicate general intake round. Resolve at most three returned
-   material questions before collection. Do not deploy subagents unless the
-   user explicitly asks.
+   material questions before collection. When context is ready, display the
+   complete `renderedCodexPrompt` and wait for explicit approval or requested
+   changes before collection or artifact creation. Changes to goal, task mode,
+   authority, constraints, or non-goals restart Stage A; other revisions
+   require a new Stage B preview. After approval, repeat Stage B with the exact internal
+   `promptPreviewReceipt` and approval bound to the displayed prompt digest.
+   Never infer approval or ask the user to handle receipt values. Use only the
+   approved response's receipts. Do not deploy subagents unless the user
+   explicitly asks.
 4. Parse only these inputs:
    - attached PNG, JPEG, or WebP screenshots;
    - PNG, JPEG, or WebP Figma exports;

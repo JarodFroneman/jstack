@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.0-beta.4.1 - 2026-08-22 - Prompt Compiler approval prerelease
+
+### Changed
+
+- Added `jstack.prompt-compilation.v2` and a mandatory final-prompt preview:
+  context-ready compilation now withholds planning and compilation receipts
+  until the user explicitly approves the exact complete prompt shown in the
+  active conversation.
+- Bound approval to an internal preview receipt and rendered-prompt digest.
+  Requested revisions invalidate prior approval and require a new full preview;
+  users never paste tokens, receipts, or digests.
+- Updated all six official workflows and dedicated command skills to stop
+  before planning, dispatch, capture, audit, or execution while approval is
+  pending. The v1 schema remains distributed for compatibility.
+
 ## 0.10.0-beta.4 - 2026-08-21 - Prompt Compiler prerelease
 
 ### Added
