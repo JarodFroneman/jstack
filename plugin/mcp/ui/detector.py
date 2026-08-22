@@ -104,6 +104,28 @@ def _content_rule_applies(platform: str, path: str, suffix: str) -> bool:
     return name == "pubspec.yaml" and platform == "flutter"
 
 
+def _content_rule_matches(
+    platform: str,
+    marker: str,
+    pattern: str,
+    path: str,
+    text: str,
+    suffix: str,
+) -> bool:
+    if not _content_rule_applies(platform, path, suffix):
+        return False
+    if platform == "linux" and marker == "gtk-qt" and suffix == "py":
+        return bool(
+            re.search(
+                r"^\s*(?:from|import)\s+(?:gi(?:\.repository)?|Gtk|PyQt\d*|PySide\d*)\b"
+                r"|\b(?:QtWidgets|Gtk)\.(?:QApplication|QWidget|QMainWindow|Window)\b",
+                text,
+                re.IGNORECASE | re.MULTILINE,
+            )
+        )
+    return bool(re.search(pattern, text, re.IGNORECASE | re.DOTALL))
+
+
 def _web_route_is_ui_capable(path: str, suffix: str) -> bool:
     if suffix not in _WEB_ROUTE_SUFFIXES:
         return False
@@ -194,8 +216,7 @@ def _document_matches(
     for platform, marker, pattern in _CONTENT_RULES:
         if (
             platform != "web"
-            and _content_rule_applies(platform, path, suffix)
-            and re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            and _content_rule_matches(platform, marker, pattern, path, text, suffix)
         ):
             platform_markers[platform].add(marker)
             specific_platforms.add(platform)
@@ -224,8 +245,7 @@ def _document_matches(
         for platform, marker, pattern in _CONTENT_RULES:
             if (
                 platform == "web"
-                and _content_rule_applies(platform, path, suffix)
-                and re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+                and _content_rule_matches(platform, marker, pattern, path, text, suffix)
             ):
                 platform_markers[platform].add(marker)
         if suffix in {"js", "mjs", "cjs", "ts", "mts", "cts"} and re.search(

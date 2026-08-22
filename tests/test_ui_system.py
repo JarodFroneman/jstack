@@ -687,6 +687,10 @@ class ProductInterfaceRegistryTests(unittest.TestCase):
                 "mcp/jstack/ui/motion.py",
                 'SUPPORTED_PLATFORMS = ("react-native", "electron")\n',
             ),
+            (
+                "mcp/jstack/ui/detector.py",
+                (MCP_ROOT / "ui" / "detector.py").read_text(encoding="utf-8"),
+            ),
         ]
         detected = ui.detect_product_ui(documents)
         self.assertFalse(detected["applicable"])
