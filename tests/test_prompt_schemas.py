@@ -19,6 +19,7 @@ SCHEMA_ROOT = ROOT / "mcp" / "jstack" / "schemas"
 SCHEMA_NAMES = (
     "prompt-intent.v1.schema.json",
     "prompt-compilation.v1.schema.json",
+    "prompt-compilation.v2.schema.json",
 )
 
 
@@ -102,6 +103,21 @@ class PromptSchemaStructureTests(unittest.TestCase):
                     "%s:%s" % (name, "/".join(path)),
                 )
 
+    def test_current_compilation_requires_exact_prompt_approval_state(self) -> None:
+        schema = load_schema("prompt-compilation.v2.schema.json")
+        self.assertIn("approval", schema["required"])
+        self.assertEqual(3, len(schema["allOf"]))
+        compilation = sample_compilation()
+        self.assertEqual("jstack.prompt-compilation.v2", compilation["schemaVersion"])
+        self.assertEqual("awaiting_prompt_approval", compilation["readiness"]["state"])
+        self.assertFalse(compilation["readiness"]["readyForPlanning"])
+        self.assertEqual("awaiting-user", compilation["approval"]["state"])
+        self.assertFalse(compilation["approval"]["approved"])
+        self.assertEqual(
+            compilation["renderedPromptSha256"],
+            compilation["approval"]["renderedPromptSha256"],
+        )
+
 
 @unittest.skipIf(jsonschema is None, "jsonschema is not installed in the production runtime")
 class PromptSchemaValidationTests(unittest.TestCase):
@@ -112,14 +128,14 @@ class PromptSchemaValidationTests(unittest.TestCase):
 
     def test_runtime_instances_validate(self) -> None:
         self.validator("prompt-intent.v1.schema.json").validate(sample_intent())
-        self.validator("prompt-compilation.v1.schema.json").validate(
+        self.validator("prompt-compilation.v2.schema.json").validate(
             sample_compilation()
         )
 
     def test_unknown_fields_are_rejected(self) -> None:
         instances = {
             "prompt-intent.v1.schema.json": sample_intent(),
-            "prompt-compilation.v1.schema.json": sample_compilation(),
+            "prompt-compilation.v2.schema.json": sample_compilation(),
         }
         for name, instance in instances.items():
             candidate = copy.deepcopy(instance)

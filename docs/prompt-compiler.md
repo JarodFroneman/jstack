@@ -13,14 +13,23 @@ finish line explicit.
 3. The agent performs only the authorized read-only repository inspection.
 4. The workflow calls `jstack_prompt_compile(stage="grounded")` with
    source-labelled summaries and the exact Stage A result.
-5. Clear work receives a compiled prompt and planning receipts immediately.
-   Material gaps use the existing Adaptive Context Gate, at most three
-   questions per round.
-6. Planning, Loop, or Program validates the current compiler-bound receipt.
+5. Material gaps use the existing Adaptive Context Gate, at most three
+   questions per round. Clear work asks no context questions.
+6. Once context is ready, JStack returns the complete compiled prompt and an
+   internal preview receipt, but no planning receipt. The agent displays the
+   complete prompt and waits for approval or requested changes.
+7. A requested change to the goal, task mode, authority, constraints, or
+   non-goals restarts Stage A; other changes are source-labelled and rerun
+   through Stage B. The revised prompt is displayed in full and the old preview
+   cannot approve it. After explicit approval, the
+   agent repeats Stage B with the internal preview receipt and exact prompt
+   digest. Users never paste those values.
+8. Only the approved response supplies compilation and context-readiness
+   receipts. Planning, Loop, or Program validates those receipts.
 
-The rendered preview is useful when scope is sensitive or the user asks to
-review it. Ordinary clear work should show a concise intent diff rather than
-dumping the full prompt into chat.
+A concise intent diff may accompany the prompt, but it cannot replace the
+mandatory complete prompt preview. Silence and earlier implementation or
+deployment authority do not approve the compiled prompt.
 
 ## Authority Examples
 
@@ -47,7 +56,8 @@ Inference and recommendations cannot become required silently.
 | `uncompiled` | No current Stage A proof | Compile the exact request only |
 | `intent-compiled` | Task mode, goal, constraints, references, and user authority are digest-bound; no project is bound | Authorized read-only inspection |
 | `needs-context` / `needs-confirmation` | Stage B found material gaps | Ask only the returned questions, then rerun Stage B |
-| `grounded-ready` | The exact compilation, context brief, project, policy, compiler, and template are current | Planning or matching loop/program goal readiness |
+| `awaiting-prompt-approval` | Context is ready and the exact full prompt has a preview receipt, but no user approval or planning receipt exists | Display the complete prompt; wait for approval or requested changes |
+| `approved-ready` | The exact displayed prompt was explicitly approved and its compilation, context brief, project, policy, compiler, and template are current | Planning or matching loop/program goal readiness |
 | `invalidated` | Any bound goal, task mode, assumption, workflow, project, Git state, policy, external evidence, compiler, template, session, or expiry changed | Restart from Stage A for a material request change; otherwise rerun the required current stage |
 
 The state is derived from signed receipts and current evidence; JStack does not

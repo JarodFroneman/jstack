@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from mcp.jstack import prompt_compiler
@@ -48,6 +49,19 @@ def stage_a(raw: str, workflow: str = "j-stack-dev") -> dict[str, object]:
     return server.tool_prompt_compile(
         {"stage": "intent", "workflow_mode": workflow, "raw_request": raw}
     )
+
+
+def approve_grounded(
+    args: dict[str, Any], preview: dict[str, Any]
+) -> dict[str, Any]:
+    approved_args = dict(args)
+    approved_args["prompt_preview_receipt"] = preview["promptPreviewReceipt"]
+    approved_args["prompt_approval"] = {
+        "approved": True,
+        "rendered_prompt_sha256": preview["renderedPromptSha256"],
+        "source": "active-conversation",
+    }
+    return server.tool_prompt_compile(approved_args)
 
 
 class PromptCompilerTests(unittest.TestCase):
@@ -130,14 +144,13 @@ class PromptCompilerTests(unittest.TestCase):
             repo = make_repo(Path(temp))
             raw = "Implement strict parser validation in parser.py and add regression tests. Do not deploy."
             first = stage_a(raw)
-            grounded = server.tool_prompt_compile(
-                {
-                    "stage": "grounded",
-                    "workflow_mode": "j-stack-dev",
-                    "project_path": str(repo),
-                    "intent_receipt": first["intentReceipt"],
-                    "intent_contract": first["intentContract"],
-                    "grounding": {
+            grounded_args = {
+                "stage": "grounded",
+                "workflow_mode": "j-stack-dev",
+                "project_path": str(repo),
+                "intent_receipt": first["intentReceipt"],
+                "intent_contract": first["intentContract"],
+                "grounding": {
                         "sources": [
                             {
                                 "field": "parser_location",
@@ -180,11 +193,19 @@ class PromptCompilerTests(unittest.TestCase):
                             "Run the focused parser regression tests."
                         ],
                         "likely_in_scope": ["parser.py", "tests/test_parser.py"],
-                    },
-                }
-            )
-            self.assertEqual("jstack.prompt-compilation.v1", grounded["schemaVersion"])
-            self.assertTrue(grounded["contextReadiness"]["readyForPlanning"])
+                },
+            }
+            preview = server.tool_prompt_compile(grounded_args)
+            self.assertEqual("jstack.prompt-compilation.v2", preview["schemaVersion"])
+            self.assertEqual("awaiting-user", preview["approval"]["state"])
+            self.assertFalse(preview["readiness"]["readyForPlanning"])
+            self.assertTrue(preview["contextReadiness"]["readyForPlanning"])
+            self.assertTrue(preview["promptPreviewReceipt"])
+            self.assertNotIn("compilationReceipt", preview)
+            self.assertNotIn("readinessReceipt", preview["contextReadiness"])
+            grounded = approve_grounded(grounded_args, preview)
+            self.assertEqual("approved", grounded["approval"]["state"])
+            self.assertTrue(grounded["readiness"]["readyForPlanning"])
             self.assertTrue(grounded["compilationReceipt"])
             self.assertIn("Task mode: implement", grounded["renderedCodexPrompt"])
             self.assertIn("[reject-empty | repository | required]", grounded["renderedCodexPrompt"])
@@ -192,15 +213,23 @@ class PromptCompilerTests(unittest.TestCase):
                 grounded["traceability"]["materialRequirementCount"],
                 grounded["traceability"]["tracedMaterialRequirementCount"],
             )
-            for receipt_name in ("compilationReceipt",):
+            receipt_pairs = (
+                (preview, "promptPreviewReceipt"),
+                (grounded, "compilationReceipt"),
+            )
+            for receipt_owner, receipt_name in receipt_pairs:
                 payload = json.loads(
-                    server._b64decode(grounded[receipt_name].split(".", 1)[0]).decode(
+                    server._b64decode(receipt_owner[receipt_name].split(".", 1)[0]).decode(
                         "utf-8"
                     )
                 )
                 serialized = json.dumps(payload, sort_keys=True)
                 self.assertNotIn(raw, serialized)
                 self.assertNotIn("Parser implementation is in parser.py", serialized)
+            self.assertEqual(
+                grounded["renderedPromptSha256"], payload["approvedPromptSha256"]
+            )
+            self.assertEqual("active-conversation", payload["promptApprovalSource"])
             readiness_payload = json.loads(
                 server._b64decode(
                     grounded["contextReadiness"]["readinessReceipt"].split(".", 1)[0]
@@ -222,6 +251,100 @@ class PromptCompilerTests(unittest.TestCase):
             self.assertEqual(
                 grounded["compilationDigest"], compiler_binding["compilationDigest"]
             )
+
+    def test_final_prompt_approval_is_exact_and_revision_sensitive(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp))
+            first = stage_a("Implement strict parser validation in parser.py.")
+            incomplete_args: dict[str, Any] = {
+                "stage": "grounded",
+                "workflow_mode": "j-stack-dev",
+                "project_path": str(repo),
+                "intent_receipt": first["intentReceipt"],
+                "intent_contract": first["intentContract"],
+            }
+            incomplete = server.tool_prompt_compile(incomplete_args)
+            self.assertEqual("not-ready", incomplete["approval"]["state"])
+            self.assertNotIn("promptPreviewReceipt", incomplete)
+            incomplete_args["prompt_preview_receipt"] = "not-a-receipt"
+            incomplete_args["prompt_approval"] = {
+                "approved": True,
+                "rendered_prompt_sha256": incomplete["renderedPromptSha256"],
+                "source": "active-conversation",
+            }
+            with self.assertRaisesRegex(server.ToolError, "until all material context"):
+                server.tool_prompt_compile(incomplete_args)
+
+            grounded_args: dict[str, Any] = {
+                "stage": "grounded",
+                "workflow_mode": "j-stack-dev",
+                "project_path": str(repo),
+                "intent_receipt": first["intentReceipt"],
+                "intent_contract": first["intentContract"],
+                "grounding": {
+                    "sources": [
+                        {
+                            "field": "parser_location",
+                            "value": "Parser implementation is in parser.py.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        },
+                        {
+                            "field": "primary_user",
+                            "value": "Existing parser callers.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        },
+                        {
+                            "field": "stack",
+                            "value": "Use the repository's existing Python stack.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        },
+                        {
+                            "field": "acceptance_criteria",
+                            "value": "Invalid input is rejected.",
+                            "source_kind": "explicit-user",
+                            "source_reference": "raw request",
+                        },
+                    ],
+                    "acceptance_criteria": ["Invalid input is rejected."],
+                    "verification_requirements": ["Run focused parser tests."],
+                },
+            }
+            preview = server.tool_prompt_compile(grounded_args)
+            one_shot = dict(grounded_args)
+            one_shot["prompt_approval"] = {
+                "approved": True,
+                "rendered_prompt_sha256": preview["renderedPromptSha256"],
+                "source": "active-conversation",
+            }
+            with self.assertRaisesRegex(server.ToolError, "prompt_preview_receipt"):
+                server.tool_prompt_compile(one_shot)
+
+            wrong_digest = dict(grounded_args)
+            wrong_digest["prompt_preview_receipt"] = preview["promptPreviewReceipt"]
+            wrong_digest["prompt_approval"] = {
+                "approved": True,
+                "rendered_prompt_sha256": "0" * 64,
+                "source": "active-conversation",
+            }
+            with self.assertRaisesRegex(server.ToolError, "approved prompt digest"):
+                server.tool_prompt_compile(wrong_digest)
+
+            revised = dict(grounded_args)
+            revised["grounding"] = dict(grounded_args["grounding"])
+            revised["grounding"]["acceptance_criteria"] = [
+                "Invalid input is rejected with the existing error type."
+            ]
+            revised["prompt_preview_receipt"] = preview["promptPreviewReceipt"]
+            revised["prompt_approval"] = {
+                "approved": True,
+                "rendered_prompt_sha256": preview["renderedPromptSha256"],
+                "source": "active-conversation",
+            }
+            with self.assertRaisesRegex(server.ToolError, "Prompt preview receipt is stale"):
+                server.tool_prompt_compile(revised)
 
     def test_inference_cannot_silently_become_required(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -329,31 +452,31 @@ class PromptCompilerTests(unittest.TestCase):
                     }
                 )
 
-            grounded = server.tool_prompt_compile(
-                {
-                    "stage": "grounded",
-                    "workflow_mode": "j-stack-dev",
-                    "project_path": str(repo),
-                    "intent_receipt": first["intentReceipt"],
-                    "intent_contract": first["intentContract"],
-                    "grounding": {
-                        "sources": [
-                            {
-                                "field": "parser_location",
-                                "value": "Parser implementation is in parser.py.",
-                                "source_kind": "repository",
-                                "source_reference": "parser.py:1",
-                            }
-                        ],
-                        "acceptance_criteria": [
-                            "Empty input is rejected and valid input remains accepted."
-                        ],
-                        "verification_requirements": [
-                            "Run the focused parser regression tests."
-                        ],
-                    },
-                }
-            )
+            grounded_args = {
+                "stage": "grounded",
+                "workflow_mode": "j-stack-dev",
+                "project_path": str(repo),
+                "intent_receipt": first["intentReceipt"],
+                "intent_contract": first["intentContract"],
+                "grounding": {
+                    "sources": [
+                        {
+                            "field": "parser_location",
+                            "value": "Parser implementation is in parser.py.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        }
+                    ],
+                    "acceptance_criteria": [
+                        "Empty input is rejected and valid input remains accepted."
+                    ],
+                    "verification_requirements": [
+                        "Run the focused parser regression tests."
+                    ],
+                },
+            }
+            preview = server.tool_prompt_compile(grounded_args)
+            grounded = approve_grounded(grounded_args, preview)
             (repo / "drift.txt").write_text("drift\n", encoding="utf-8")
             with self.assertRaisesRegex(server.ToolError, "stale or does not match"):
                 server.tool_plan(
@@ -372,49 +495,49 @@ class PromptCompilerTests(unittest.TestCase):
             repo = make_repo(Path(temp))
             goal = "Implement strict parser validation in parser.py and add regression tests."
             first = stage_a(goal, workflow="jstack-loop")
-            grounded = server.tool_prompt_compile(
-                {
-                    "stage": "grounded",
-                    "workflow_mode": "jstack-loop",
-                    "project_path": str(repo),
-                    "intent_receipt": first["intentReceipt"],
-                    "intent_contract": first["intentContract"],
-                    "grounding": {
-                        "sources": [
-                            {
-                                "field": "parser_location",
-                                "value": "Parser implementation is in parser.py.",
-                                "source_kind": "repository",
-                                "source_reference": "parser.py:1",
-                            },
-                            {
-                                "field": "primary_user",
-                                "value": "Existing parser callers.",
-                                "source_kind": "repository",
-                                "source_reference": "parser.py:1",
-                            },
-                            {
-                                "field": "stack",
-                                "value": "Use the repository's existing Python stack.",
-                                "source_kind": "repository",
-                                "source_reference": "parser.py:1",
-                            },
-                            {
-                                "field": "acceptance_criteria",
-                                "value": "Invalid parser input is rejected and valid input remains accepted.",
-                                "source_kind": "explicit-user",
-                                "source_reference": "raw request",
-                            },
-                        ],
-                        "acceptance_criteria": [
-                            "Invalid parser input is rejected and valid input remains accepted."
-                        ],
-                        "verification_requirements": [
-                            "Run focused parser regression tests."
-                        ],
-                    },
-                }
-            )
+            grounded_args = {
+                "stage": "grounded",
+                "workflow_mode": "jstack-loop",
+                "project_path": str(repo),
+                "intent_receipt": first["intentReceipt"],
+                "intent_contract": first["intentContract"],
+                "grounding": {
+                    "sources": [
+                        {
+                            "field": "parser_location",
+                            "value": "Parser implementation is in parser.py.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        },
+                        {
+                            "field": "primary_user",
+                            "value": "Existing parser callers.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        },
+                        {
+                            "field": "stack",
+                            "value": "Use the repository's existing Python stack.",
+                            "source_kind": "repository",
+                            "source_reference": "parser.py:1",
+                        },
+                        {
+                            "field": "acceptance_criteria",
+                            "value": "Invalid parser input is rejected and valid input remains accepted.",
+                            "source_kind": "explicit-user",
+                            "source_reference": "raw request",
+                        },
+                    ],
+                    "acceptance_criteria": [
+                        "Invalid parser input is rejected and valid input remains accepted."
+                    ],
+                    "verification_requirements": [
+                        "Run focused parser regression tests."
+                    ],
+                },
+            }
+            preview = server.tool_prompt_compile(grounded_args)
+            grounded = approve_grounded(grounded_args, preview)
             binding = server.resolve_project_binding(str(repo))
             explicit = server._prompt_orchestration_binding(
                 {
@@ -481,7 +604,11 @@ class PromptCompilerTests(unittest.TestCase):
             )
 
     def test_public_schemas_are_closed_and_tool_is_canonical_only(self) -> None:
-        for name in ("prompt-intent.v1.schema.json", "prompt-compilation.v1.schema.json"):
+        for name in (
+            "prompt-intent.v1.schema.json",
+            "prompt-compilation.v1.schema.json",
+            "prompt-compilation.v2.schema.json",
+        ):
             schema = json.loads(
                 (ROOT / "mcp" / "jstack" / "schemas" / name).read_text(encoding="utf-8")
             )
@@ -490,6 +617,24 @@ class PromptCompilerTests(unittest.TestCase):
         self.assertIn("jstack_prompt_compile", definitions)
         self.assertNotIn("gstack_prompt_compile", server.TOOLS)
         self.assertEqual(57, len(definitions))
+
+    def test_every_dedicated_workflow_requires_final_prompt_approval(self) -> None:
+        skill_paths = (
+            "plugins/j-stack-dev/skills/j-stack-dev/SKILL.md",
+            "plugins/jstack-subagents/skills/jstack-subagents/SKILL.md",
+            "plugins/jstack-full-team/skills/jstack-full-team/SKILL.md",
+            "plugins/jstack-audit/skills/jstack-audit/SKILL.md",
+            "plugins/jstack-loop/skills/jstack-loop/SKILL.md",
+            "plugins/jstack-evidence-builder/skills/jstack-evidence-builder/SKILL.md",
+        )
+        for relative_path in skill_paths:
+            text = (ROOT / relative_path).read_text(encoding="utf-8")
+            with self.subTest(skill=relative_path):
+                self.assertIn('stage="intent"', text)
+                self.assertIn('stage="grounded"', text)
+                self.assertIn("renderedCodexPrompt", text)
+                self.assertIn("promptPreviewReceipt", text)
+                self.assertIn("explicit approval", text)
 
 
 if __name__ == "__main__":

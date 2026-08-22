@@ -13,13 +13,19 @@ Default behavior:
 
 1. Operate as the Lead Engineer.
 2. Do not deploy subagents. Command mode is authoritative.
-3. Call `jstack_runtime_status` first. A successful call proves the MCP is mounted; never describe a later project or tool rejection as an MCP attachment failure.
-4. Use `jstack_detect_project` and branch on `evidenceMode`:
+3. Before repository inspection, durable-memory reads, planning, or
+   side-effecting tools, call
+   `jstack_prompt_compile(stage="intent", workflow_mode="j-stack-dev",
+   raw_request=exact_user_request)`. Preserve the exact Stage A contract and
+   receipt; they grant no execution authority.
+4. Call `jstack_runtime_status`. A successful call proves the MCP is mounted; never describe a later project or tool rejection as an MCP attachment failure.
+5. Use `jstack_detect_project` and branch on `evidenceMode`:
    - `git`: use the applicable JStack policy, preflight, health, review, security, QA, context, and release tools.
    - `artifact-only`: state `MCP mounted; project binding is artifact-only.`, use `jstack_plan`, do not call tools listed in `blockedTools`, and gather direct hashes, tests, backup, runtime identity, rollback, monitoring, and smoke evidence without claiming JStack receipts or release certification.
-5. Inspect project instructions, stack, relevant files, and durable context,
-   then call `jstack_context_readiness` with
-   `workflow_mode="j-stack-dev"`. Supply source-attributed facts, separate
+6. Inspect project instructions, stack, relevant files, and durable context,
+   then call `jstack_prompt_compile(stage="grounded",
+   workflow_mode="j-stack-dev")` with the exact Stage A contract and receipt.
+   Supply source-attributed facts, separate
    assumptions, and only material open questions. If it returns questions, ask
    no more than three in normal chat, explain why each matters, and show its
    recommended default. Clear prompts ask nothing. Reuse answers, never repeat
@@ -27,17 +33,24 @@ Default behavior:
    recommended defaults may proceed as disclosed assumptions; high-risk
    material defaults require explicit conversational confirmation. Confirm only
    already displayed assumptions and never apply a new default batch in the
-   same call.
-6. Resolve learning mode from an explicit `off`, `coach`, or `assessment`
+   same call. Do not run a duplicate `jstack_context_readiness` round. When
+   context is ready, display the complete `renderedCodexPrompt` and wait for
+   explicit approval or requested changes. Stop before planning or execution.
+   Changes to goal, task mode, authority, constraints, or non-goals restart
+   Stage A; other revisions require a new Stage B preview. After approval, repeat Stage B with
+   the exact internal `promptPreviewReceipt` and approval bound to the
+   displayed prompt digest. Never infer approval or ask the user to handle
+   receipt values. Use only the approved response's receipts downstream.
+7. Resolve learning mode from an explicit `off`, `coach`, or `assessment`
    request; otherwise use `embedded`. Call `jstack_plan` with
    `team_mode="single-lead"`, that resolved mode, and the returned
    `context_readiness_receipt` plus matching `normalizedBrief` as
    `context_brief`. Apply the returned Lead `capabilityIds` as
    bounded methods and evidence requirements; capabilities never authorize
    subagents or expand permissions.
-7. Use the fallback only when `jstack_runtime_status` itself is unavailable or unreachable. A Git requirement, invalid input, policy denial, or failed gate is a tool-specific result, not MCP unavailability.
-8. Respect project `AGENTS.md`, safety rules, branch/deploy rules, and explicit user approvals.
-9. When an active JStack loop supplies a `loopId`, execute only the current
+8. Use the fallback only when `jstack_runtime_status` itself is unavailable or unreachable. A Git requirement, invalid input, policy denial, or failed gate is a tool-specific result, not MCP unavailability.
+9. Respect project `AGENTS.md`, safety rules, branch/deploy rules, and explicit user approvals.
+10. When an active JStack loop supplies a `loopId`, execute only the current
    single-lead iteration. Let `jstack_loop_checkpoint` and
    `jstack_loop_finalize` own convergence and terminal status.
 

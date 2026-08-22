@@ -147,12 +147,18 @@ task mode, explicit goal/constraints/non-goals, named references, ambiguity,
 and the authority envelope in `jstack.prompt-intent.v1`. It does not resolve a
 project and its receipt stores no raw text. Stage B accepts only source-labelled
 grounding after authorized read-only inspection, rejects untraceable required
-inferences, and renders `jstack.prompt-compilation.v1` with observable
+inferences, and renders `jstack.prompt-compilation.v2` with observable
 acceptance, verification, rollback, scope, privacy, and enforcement fields.
 
-Stage B calls the existing Adaptive Context Gate internally. Its current nested
-receipt and normalized brief feed ordinary planning; its compilation receipt
-also binds loop and program goal readiness. Compiler mode, compiler/template
+Stage B calls the existing Adaptive Context Gate internally. A context-ready
+first pass returns the complete prompt and a digest-bound preview receipt but
+withholds planning receipts. Official workflows display the full prompt and
+wait for explicit user approval; a second pass binds that approval to the exact
+prompt digest and then issues the nested readiness and compilation receipts.
+Revisions invalidate the prior preview. The MCP enforces receipt and digest
+binding, while actual display and human approval remain host-dependent. The
+approved compilation receipt also binds loop and program goal readiness.
+Compiler mode, compiler/template
 version, workflow, goal, accepted assumptions, material external evidence,
 policy, project fingerprint, or Git-state drift invalidates proof. Legacy
 direct MCP calls compile through a compatibility bridge, but that bridge cannot

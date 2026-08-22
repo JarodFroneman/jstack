@@ -16,9 +16,10 @@ from typing import Any
 
 
 INTENT_SCHEMA = "jstack.prompt-intent.v1"
-PROMPT_COMPILATION_SCHEMA = "jstack.prompt-compilation.v1"
+PROMPT_COMPILATION_SCHEMA = "jstack.prompt-compilation.v2"
 COMPILER_VERSION = "1.0.0"
 TEMPLATE_VERSION = "jstack.codex-execution-prompt.v1"
+PROMPT_APPROVAL_VERSION = "1.0.0"
 COMPILER_MODES = ("disabled", "shadow", "preview", "enforced")
 WORKFLOW_MODES = (
     "j-stack-dev",
@@ -699,11 +700,31 @@ def compile_grounded(
             "configurationDigest": None,
         },
         "readiness": {
-            "state": readiness.get("state"),
-            "readyForPlanning": bool(readiness.get("readyForPlanning")),
+            "state": (
+                "awaiting_prompt_approval"
+                if readiness.get("readyForPlanning")
+                else readiness.get("state")
+            ),
+            "readyForPlanning": False,
             "briefDigest": readiness.get("briefDigest"),
             "questionCount": int(readiness.get("questionCount") or 0),
             "materialGapCount": int(readiness.get("materialGapCount") or 0),
+        },
+        "approval": {
+            "protocolVersion": PROMPT_APPROVAL_VERSION,
+            "required": True,
+            "state": (
+                "awaiting-user"
+                if readiness.get("readyForPlanning")
+                else "not-ready"
+            ),
+            "approved": False,
+            "renderedPromptSha256": None,
+            "source": "none",
+            "rule": (
+                "Display the complete rendered prompt and wait for explicit approval "
+                "in the active conversation before planning or implementation."
+            ),
         },
         "traceability": {
             "materialRequirementCount": sum(1 for item in requirements if item["material"]),
@@ -730,11 +751,15 @@ def compile_grounded(
                 "source-traceability",
                 "prompt-size-budget",
                 "receipt-expiry-and-project-binding",
+                "preview-receipt-before-final-receipt",
+                "approved-rendered-prompt-digest",
             ],
             "hostDependent": [
                 "stage-a-before-arbitrary-native-host-reads",
                 "use-of-rendered-prompt-outside-jstack-tools",
                 "prevention-of-arbitrary-native-codex-actions",
+                "complete-prompt-displayed-to-user",
+                "human-approval-occurred-in-active-conversation",
             ],
         },
     }
@@ -746,5 +771,9 @@ def compile_grounded(
     contract["renderedPromptSha256"] = hashlib.sha256(
         contract["renderedCodexPrompt"].encode("utf-8")
     ).hexdigest()
+    if contract["approval"]["state"] == "awaiting-user":
+        contract["approval"]["renderedPromptSha256"] = contract[
+            "renderedPromptSha256"
+        ]
     contract["compilationDigest"] = canonical_digest(contract)
     return contract

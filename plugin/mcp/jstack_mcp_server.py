@@ -47,7 +47,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.4"
+SERVER_VERSION = "0.10.0-beta.4.1"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -14574,7 +14574,13 @@ def _prompt_compilation_core(contract: dict[str, Any]) -> dict[str, Any]:
     return {
         key: value
         for key, value in contract.items()
-        if key not in {"compilationDigest", "compilationReceipt", "contextReadiness"}
+        if key
+        not in {
+            "compilationDigest",
+            "compilationReceipt",
+            "promptPreviewReceipt",
+            "contextReadiness",
+        }
     }
 
 
@@ -14592,7 +14598,7 @@ def _verify_prompt_compilation_receipt(
         )
     if not isinstance(contract, dict):
         raise ToolError(
-            "prompt_contract must be the exact jstack.prompt-compilation.v1 object returned by Stage B."
+            "prompt_contract must be the exact approved jstack.prompt-compilation.v2 object returned by Stage B."
         )
     payload = verify_signed_session_token(receipt, "prompt-compilation")
     binding_metadata = _prompt_binding(binding)
@@ -14635,6 +14641,23 @@ def _verify_prompt_compilation_receipt(
         == contract.get("templateVersion")
         == prompt_compiler_core.TEMPLATE_VERSION,
         "ready": contract.get("readiness", {}).get("readyForPlanning") is True,
+        "approval": contract.get("approval")
+        == {
+            "protocolVersion": prompt_compiler_core.PROMPT_APPROVAL_VERSION,
+            "required": True,
+            "state": "approved",
+            "approved": True,
+            "renderedPromptSha256": rendered_digest,
+            "source": "active-conversation",
+            "rule": (
+                "Display the complete rendered prompt and wait for explicit approval "
+                "in the active conversation before planning or implementation."
+            ),
+        },
+        "approvedPromptSha256": payload.get("approvedPromptSha256")
+        == rendered_digest,
+        "promptApprovalSource": payload.get("promptApprovalSource")
+        == "active-conversation",
     }
     for field, value in binding_metadata.items():
         checks[field] = payload.get(field) == value
@@ -14824,6 +14847,145 @@ def _with_required_prompt_requirements(
     return value
 
 
+def _issue_prompt_preview_receipt(
+    *,
+    compilation: dict[str, Any],
+    binding: dict[str, Any],
+    context_workflow: str,
+) -> str:
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0)
+    return issue_receipt(
+        {
+            "kind": "prompt-preview",
+            "schemaVersion": prompt_compiler_core.PROMPT_COMPILATION_SCHEMA,
+            "expiresAt": expires.isoformat(),
+            "draftCompilationDigest": compilation["compilationDigest"],
+            "rawPromptDigest": compilation["rawPromptDigest"],
+            "intentDigest": compilation["intentDigest"],
+            "renderedPromptSha256": compilation["renderedPromptSha256"],
+            "requestedTaskMode": compilation["requestedTaskMode"],
+            "workflowMode": compilation["workflowMode"],
+            "contextWorkflowMode": context_workflow,
+            "riskTier": compilation["riskTier"],
+            "briefDigest": compilation["readiness"]["briefDigest"],
+            "compilerMode": compilation["compilerMode"],
+            "compilerVersion": compilation["compilerVersion"],
+            "templateVersion": compilation["templateVersion"],
+            **_prompt_binding(binding),
+        }
+    )
+
+
+def _verify_prompt_preview_receipt(
+    receipt: Any,
+    compilation: dict[str, Any],
+    *,
+    binding: dict[str, Any],
+    context_workflow: str,
+) -> None:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > 250_000:
+        raise ToolError(
+            "A bounded prompt_preview_receipt from the prior final-prompt preview is required."
+        )
+    payload = verify_signed_session_token(receipt, "prompt-preview")
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == compilation.get("schemaVersion")
+        == prompt_compiler_core.PROMPT_COMPILATION_SCHEMA,
+        "draftCompilationDigest": payload.get("draftCompilationDigest")
+        == compilation.get("compilationDigest"),
+        "rawPromptDigest": payload.get("rawPromptDigest")
+        == compilation.get("rawPromptDigest"),
+        "intentDigest": payload.get("intentDigest")
+        == compilation.get("intentDigest"),
+        "renderedPromptSha256": payload.get("renderedPromptSha256")
+        == compilation.get("renderedPromptSha256"),
+        "requestedTaskMode": payload.get("requestedTaskMode")
+        == compilation.get("requestedTaskMode"),
+        "workflowMode": payload.get("workflowMode")
+        == compilation.get("workflowMode"),
+        "contextWorkflowMode": payload.get("contextWorkflowMode")
+        == context_workflow,
+        "riskTier": payload.get("riskTier") == compilation.get("riskTier"),
+        "briefDigest": payload.get("briefDigest")
+        == compilation.get("readiness", {}).get("briefDigest"),
+        "compilerMode": payload.get("compilerMode")
+        == compilation.get("compilerMode")
+        == _prompt_mode(),
+        "compilerVersion": payload.get("compilerVersion")
+        == compilation.get("compilerVersion")
+        == prompt_compiler_core.COMPILER_VERSION,
+        "templateVersion": payload.get("templateVersion")
+        == compilation.get("templateVersion")
+        == prompt_compiler_core.TEMPLATE_VERSION,
+        "awaitingApproval": compilation.get("approval", {}).get("state")
+        == "awaiting-user",
+    }
+    for field, value in _prompt_binding(binding).items():
+        checks[field] = payload.get(field) == value
+    if not all(checks.values()):
+        raise ToolError(
+            "Prompt preview receipt is stale or does not match the exact rendered prompt, task, workflow, project, policy, or compiler configuration. Display the new prompt and request approval again."
+        )
+
+
+def _apply_prompt_approval(
+    compilation: dict[str, Any],
+    readiness: dict[str, Any],
+    approval: Any,
+) -> None:
+    if not isinstance(approval, dict) or set(approval) != {
+        "approved",
+        "rendered_prompt_sha256",
+        "source",
+    }:
+        raise ToolError(
+            "prompt_approval must contain only approved, rendered_prompt_sha256, and source."
+        )
+    if approval.get("approved") is not True:
+        raise ToolError(
+            "prompt_approval.approved must be true only after explicit approval in the active conversation."
+        )
+    if approval.get("source") != "active-conversation":
+        raise ToolError(
+            "prompt_approval.source must be active-conversation; approval cannot be inferred from a receipt, default, or tool result."
+        )
+    approved_digest = str(approval.get("rendered_prompt_sha256") or "")
+    if approved_digest != compilation.get("renderedPromptSha256"):
+        raise ToolError(
+            "The approved prompt digest does not match the current rendered prompt. Display the new prompt and request approval again."
+        )
+    if not readiness.get("readyForPlanning"):
+        raise ToolError(
+            "The compiled prompt cannot be approved until all material context questions and confirmations are resolved."
+        )
+    compilation["approval"] = {
+        "protocolVersion": prompt_compiler_core.PROMPT_APPROVAL_VERSION,
+        "required": True,
+        "state": "approved",
+        "approved": True,
+        "renderedPromptSha256": approved_digest,
+        "source": "active-conversation",
+        "rule": (
+            "Display the complete rendered prompt and wait for explicit approval "
+            "in the active conversation before planning or implementation."
+        ),
+    }
+    compilation["readiness"] = {
+        "state": readiness.get("state"),
+        "readyForPlanning": True,
+        "briefDigest": readiness.get("briefDigest"),
+        "questionCount": int(readiness.get("questionCount") or 0),
+        "materialGapCount": int(readiness.get("materialGapCount") or 0),
+    }
+    compilation["compilationDigest"] = prompt_compiler_core.canonical_digest(
+        _prompt_compilation_core(compilation)
+    )
+
+
 def tool_prompt_compile(args: dict[str, Any]) -> dict[str, Any]:
     stage = str(args.get("stage") or "").strip().lower()
     workflow_mode = str(args.get("workflow_mode") or "").strip()
@@ -14882,44 +15044,71 @@ def tool_prompt_compile(args: dict[str, Any]) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
+    approval = args.get("prompt_approval")
+    preview_receipt = args.get("prompt_preview_receipt")
+    if approval is None and preview_receipt is not None:
+        raise ToolError(
+            "prompt_preview_receipt is accepted only with prompt_approval after the user approves the displayed prompt."
+        )
+    if approval is not None and not readiness["readyForPlanning"]:
+        raise ToolError(
+            "The compiled prompt cannot be approved until all material context questions and confirmations are resolved."
+        )
     if readiness["readyForPlanning"]:
         binding_before = _prompt_binding(binding)
-        _issue_context_readiness(
-            result=readiness,
-            goal=intent["normalizedGoal"],
-            workflow_mode=context_workflow,
-            binding=binding,
-            compilation=compilation,
-        )
+        if approval is None:
+            compilation["promptPreviewReceipt"] = _issue_prompt_preview_receipt(
+                compilation=compilation,
+                binding=binding,
+                context_workflow=context_workflow,
+            )
+        else:
+            _verify_prompt_preview_receipt(
+                preview_receipt,
+                compilation,
+                binding=binding,
+                context_workflow=context_workflow,
+            )
+            _apply_prompt_approval(compilation, readiness, approval)
+            _issue_context_readiness(
+                result=readiness,
+                goal=intent["normalizedGoal"],
+                workflow_mode=context_workflow,
+                binding=binding,
+                compilation=compilation,
+            )
         binding_after = _prompt_binding(binding)
         if binding_after != binding_before:
             raise ToolError(
                 "The project or policy changed during prompt compilation. Re-run both compilation stages."
             )
-        expires = (
-            _dt.datetime.now(_dt.timezone.utc)
-            + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
-        ).replace(microsecond=0)
-        compilation["compilationReceipt"] = issue_receipt(
-            {
-                "kind": "prompt-compilation",
-                "schemaVersion": prompt_compiler_core.PROMPT_COMPILATION_SCHEMA,
-                "expiresAt": expires.isoformat(),
-                "compilationDigest": compilation["compilationDigest"],
-                "rawPromptDigest": compilation["rawPromptDigest"],
-                "intentDigest": compilation["intentDigest"],
-                "renderedPromptSha256": compilation["renderedPromptSha256"],
-                "requestedTaskMode": compilation["requestedTaskMode"],
-                "workflowMode": workflow_mode,
-                "contextWorkflowMode": context_workflow,
-                "riskTier": compilation["riskTier"],
-                "briefDigest": readiness["briefDigest"],
-                "compilerMode": compilation["compilerMode"],
-                "compilerVersion": compilation["compilerVersion"],
-                "templateVersion": compilation["templateVersion"],
-                **binding_after,
-            }
-        )
+        if approval is not None:
+            expires = (
+                _dt.datetime.now(_dt.timezone.utc)
+                + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+            ).replace(microsecond=0)
+            compilation["compilationReceipt"] = issue_receipt(
+                {
+                    "kind": "prompt-compilation",
+                    "schemaVersion": prompt_compiler_core.PROMPT_COMPILATION_SCHEMA,
+                    "expiresAt": expires.isoformat(),
+                    "compilationDigest": compilation["compilationDigest"],
+                    "rawPromptDigest": compilation["rawPromptDigest"],
+                    "intentDigest": compilation["intentDigest"],
+                    "renderedPromptSha256": compilation["renderedPromptSha256"],
+                    "approvedPromptSha256": compilation["renderedPromptSha256"],
+                    "promptApprovalSource": "active-conversation",
+                    "requestedTaskMode": compilation["requestedTaskMode"],
+                    "workflowMode": workflow_mode,
+                    "contextWorkflowMode": context_workflow,
+                    "riskTier": compilation["riskTier"],
+                    "briefDigest": readiness["briefDigest"],
+                    "compilerMode": compilation["compilerMode"],
+                    "compilerVersion": compilation["compilerVersion"],
+                    "templateVersion": compilation["templateVersion"],
+                    **binding_after,
+                }
+            )
     compilation["contextReadiness"] = readiness
     return compilation
 
@@ -25145,13 +25334,13 @@ PROMPT_ORCHESTRATION_INPUT_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "maxLength": 250_000,
         "description": (
-            "Optional exact Stage B receipt from jstack_prompt_compile. Supply it with prompt_contract to prove explicit pre-inspection compilation; legacy callers use the deterministic compatibility bridge."
+            "Optional exact approval-bound Stage B receipt from jstack_prompt_compile. Supply it with prompt_contract to prove explicit pre-inspection compilation and exact final-prompt approval; legacy callers use the deterministic compatibility bridge."
         ),
     },
     "prompt_contract": {
         "type": "object",
         "description": (
-            "Exact jstack.prompt-compilation.v1 object returned with prompt_compilation_receipt."
+            "Exact approved jstack.prompt-compilation.v2 object returned with prompt_compilation_receipt."
         ),
     },
 }
@@ -26795,11 +26984,15 @@ for _name, _meta in list(TOOLS.items()):
 TOOLS.update(
     {
         "jstack_prompt_compile": {
-            "description": "Compile a raw request through JStack's deterministic two-stage Prompt Compiler. Stage intent runs before repository inspection and returns only normalized intent plus a digest-bound receipt. Stage grounded binds source-labelled repository context, task mode, authority, requirements, acceptance evidence, and a rendered Codex prompt to current project and policy state. The tool performs no model call, project edit, side-effecting command, Git mutation, external action, release, deployment, or production mutation.",
+            "description": "Compile a raw request through JStack's deterministic two-stage Prompt Compiler. Stage intent runs before repository inspection and returns only normalized intent plus a digest-bound receipt. Stage grounded binds source-labelled repository context, task mode, authority, requirements, acceptance evidence, and a rendered Codex prompt to current project and policy state. A context-ready first call returns the complete prompt plus a preview receipt but no planning receipt; after the user explicitly approves that exact displayed prompt, repeat Stage grounded with prompt_approval and the preview receipt to unlock planning. The tool performs no model call, project edit, side-effecting command, Git mutation, external action, release, deployment, or production mutation.",
             "inputSchema": {
                 "type": "object",
                 "additionalProperties": False,
                 "required": ["stage", "workflow_mode"],
+                "dependentRequired": {
+                    "prompt_approval": ["prompt_preview_receipt"],
+                    "prompt_preview_receipt": ["prompt_approval"],
+                },
                 "allOf": [
                     {
                         "if": {"properties": {"stage": {"const": "intent"}}},
@@ -26840,6 +27033,29 @@ TOOLS.update(
                     "intent_contract": {
                         "type": "object",
                         "description": "Exact jstack.prompt-intent.v1 object returned by Stage A.",
+                    },
+                    "prompt_preview_receipt": {
+                        "type": "string",
+                        "maxLength": 250000,
+                        "description": "Exact internal receipt returned with the previously displayed final prompt. Users never paste or handle this receipt.",
+                    },
+                    "prompt_approval": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "approved",
+                            "rendered_prompt_sha256",
+                            "source",
+                        ],
+                        "properties": {
+                            "approved": {"const": True},
+                            "rendered_prompt_sha256": {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{64}$",
+                            },
+                            "source": {"const": "active-conversation"},
+                        },
+                        "description": "Set only after the complete final rendered prompt was shown and the user explicitly approved it in the active conversation. Any revision requires a new preview.",
                     },
                     "risk_tier": {
                         "type": "string",

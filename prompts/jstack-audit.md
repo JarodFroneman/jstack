@@ -210,21 +210,28 @@ publication, release, deployment, or production action.
    signer, digest, or terminal
    paste. This extends the Adaptive Context Gate; do not run a duplicate
    `jstack_context_readiness` round.
-5. Call `jstack_audit` with the exact `context_goal`, Stage B
+5. When context is ready, display the complete `renderedCodexPrompt` and stop
+   for explicit approval or requested changes. Changes to goal, task mode,
+   authority, constraints, or non-goals restart Stage A; other changes require
+   a new Stage B preview. After approval, repeat Stage B with its exact internal
+   `promptPreviewReceipt` and approval bound to the displayed prompt digest.
+   Never infer approval or ask the user to copy a token or digest. Only the
+   approved response's receipts may be used for the audit.
+6. Call `jstack_audit` with the exact `context_goal`, approved Stage B
    `contextReadiness.readinessReceipt`, and matching `normalizedBrief` as
    `context_brief` to bind the profile, scope, repository state, policy,
    control digest, scope-manifest digest, adapters, review evidence, and
    existing `jstack_security_audit` evidence. Pass the parsed focus and apply
    the returned versioned `specialistCapabilityPlan`; selected capability
    domains may strengthen coverage but may never remove profile/policy domains.
-6. Perform candidate generation and a separate challenge pass. Cite exact
+7. Perform candidate generation and a separate challenge pass. Cite exact
    source locations and classify evidence honestly.
-7. Execute no repository-controlled code by default. Quick never executes it.
+8. Execute no repository-controlled code by default. Quick never executes it.
    For other profiles, `--verify` permits only a curated adapter after exact
    approval and subject binding; offline flags are not an OS firewall.
-8. Call `jstack_audit_finalize` with structured coverage, surviving findings,
+9. Call `jstack_audit_finalize` with structured coverage, surviving findings,
    accepted-risk records, and requested output formats.
-9. Report status, coverage, severity-ordered findings, blockers, residual risk,
+10. Report status, coverage, severity-ordered findings, blockers, residual risk,
    and next action. Never turn missing evidence into a pass.
 
 For a release-profile audit, identify observable launch surfaces and risks but

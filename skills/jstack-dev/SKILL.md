@@ -67,16 +67,26 @@ the contract's fixed delivery mode. Let `jstack_loop_checkpoint` and
    `jstack_context_readiness` round. Ask questions returned under
    `contextReadiness` in normal chat,
    never more than three per round, each with its reason and recommended
-   default. Clear prompts continue with zero questions. Pass the resulting
-   nested `readinessReceipt` and matching `normalizedBrief` to planning as
-   `context_readiness_receipt` and `context_brief`. High-risk material defaults require explicit
+   default. Clear prompts continue with zero questions. High-risk material defaults require explicit
    in-conversation confirmation; no token, digest, signer, or terminal paste is
    allowed. A confirmation call confirms only assumptions already shown: carry
    those assumptions forward, set `use_recommended_defaults=false`, and never
    apply a new default batch in the same call. Reuse answered facts and never
-   repeat an unchanged question. Keep the concise intent-to-contract diff
-   visible; show the full rendered prompt only when requested or materially
-   useful. A readiness or compilation receipt remains evidence, not authority.
+   repeat an unchanged question. Once context is ready, display the complete
+   `renderedCodexPrompt` in normal chat and ask the user to approve it or request
+   changes. Stop before planning, edits, dispatch, or other execution. Never
+   infer approval from silence, a prior implementation request, a default, or a
+   receipt. If requested changes alter the goal, task mode, authority,
+   constraints, or non-goals, restart at Stage A with the revised request;
+   otherwise add them as source-labelled user input and rerun Stage B. Display
+   the complete revised prompt; the prior preview is invalid. After explicit
+   approval, repeat Stage B with the exact
+   internal `promptPreviewReceipt` and `prompt_approval` bound to the displayed
+   `renderedPromptSha256`. Users never copy or paste those values. Only the
+   approved response may return `compilationReceipt` and the nested
+   `readinessReceipt`; pass that receipt and its matching `normalizedBrief` to
+   planning as `context_readiness_receipt` and `context_brief`. A readiness or
+   compilation receipt remains evidence, not authority.
 7. For `artifact-only`, state
    `MCP mounted; project binding is artifact-only.`, identify the authoritative
    source and deployment boundary, and do not call tools listed in

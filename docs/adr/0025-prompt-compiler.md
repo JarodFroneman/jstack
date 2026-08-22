@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Decision date: 2026-08-21
-- Target release: 0.10.0-beta.4
+- Approval amendment: 2026-08-22
+- Target release: 0.10.0-beta.4; approval amendment: 0.10.0-beta.4.1
 - Extends: [ADR 0010](0010-adaptive-context-gate.md) and [ADR 0003](0003-goal-readiness-gate.md)
 
 ## Context
@@ -77,12 +78,21 @@ Stage B, `stage="grounded"`, runs after authorized read-only inspection:
   and recommended-assumption summaries;
 - reject inferred or recommended content promoted to a required requirement;
 - reuse the Adaptive Context Gate and its three-question maximum;
-- return `jstack.prompt-compilation.v1`, a fixed-format Codex prompt, a normal
-  context-readiness result, and receipts only when planning-ready.
+- return `jstack.prompt-compilation.v2`, a fixed-format Codex prompt, a normal
+  context-readiness result, and an internal preview receipt when context is
+  ready;
+- require the complete rendered prompt to be shown to the user and withhold
+  planning and compilation receipts until the exact prompt is explicitly
+  approved in the active conversation;
+- invalidate approval when a revision changes the rendered prompt, grounding,
+  task mode, authority, project, policy, compiler, or template binding.
 
-The official workflow passes Stage B's nested `readinessReceipt` and
+The official workflow first presents Stage B's complete prompt. An approval-
+bound second Stage B response supplies the nested `readinessReceipt` and
 `normalizedBrief` to planning. Loop and Program goal-readiness receipts also
-bind the exact compilation digest. Existing direct callers of
+bind the exact approved compilation digest. The original v1 schema remains
+published for compatibility but is no longer emitted by the current compiler.
+Existing direct callers of
 `jstack_context_readiness`, Loop, or Program pass through a deterministic
 compatibility compiler; that bridge cannot claim that Stage A preceded host
 inspection.
@@ -135,6 +145,11 @@ stored.
   source.
 - Make no external model call and permit no silent model fallback in Beta.4.
 
+The MCP can withhold JStack planning receipts until the caller supplies an
+approval bound to the exact preview digest. It cannot prove that a host truly
+displayed the prompt or that a human, rather than an agent, supplied approval.
+Official skills therefore own that conversational boundary.
+
 The compiler cannot intercept arbitrary native Codex reads, shell commands, or
 external actions that bypass JStack tools. Official skill ordering is therefore
 host-compliance guidance; receipt validation is enforceable only at JStack MCP
@@ -142,11 +157,13 @@ boundaries.
 
 ### UX And Modes
 
-Clear low-risk work continues automatically after a concise compiled summary.
-Material unknowns use the existing at-most-three questions with recommended
-defaults. High-risk material assumptions require normal conversational
-confirmation. Users do not paste tokens or terminal commands. Experienced
-users need not review an enormous prompt unless they request the preview.
+Clear low-risk work asks no unnecessary context questions, but it still stops
+once for the final prompt. Every official workflow displays the complete
+rendered prompt and asks the user to approve it or request changes. A requested
+change produces a new full preview; silence, defaults, prior build authority,
+and receipts never count as approval. Users do not paste tokens, digests, or
+terminal commands because preview and approval binding stays internal to the
+host-to-MCP call.
 
 `JSTACK_PROMPT_COMPILER_MODE` supports `enforced` (default), `preview`,
 `shadow`, and `disabled`. Beta.4 always computes the same deterministic
@@ -156,7 +173,8 @@ receipts. Restart the MCP after changing mode.
 
 ### Invalidation
 
-A receipt is invalid after material change to the request digest, task mode,
+A preview or receipt is invalid after material change to the request digest,
+rendered prompt digest, approval state,
 accepted assumption, workflow, risk, project path, Git HEAD/fingerprint,
 policy, compiler version, prompt-template version, or external-evidence digest.
 Session restart and expiry also invalidate it.
@@ -187,8 +205,7 @@ Task decomposition remains planning's responsibility after compilation.
 ## Consequences
 
 The live MCP surface grows to 57 canonical tools while all 52 compatibility
-aliases and all six command names remain fixed. Two public schemas and one
+aliases and all six command names remain fixed. Three public schemas and one
 small standard-library module are installed with the MCP. Existing callers
 continue to work through the compatibility bridge, while official workflows
 gain explicit two-stage ordering and exact compiler binding.
-

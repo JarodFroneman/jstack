@@ -42,4 +42,3 @@ Set `JSTACK_PROMPT_COMPILER_MODE=disabled` and restart the MCP for an immediate
 behavioral rollback, or restore the complete Beta.3 deployment unit. Do not mix
 MCP, plugin source, cache, and marketplace versions. Preserve `~/.jstack`
 state; Beta.4 adds no state migration.
-

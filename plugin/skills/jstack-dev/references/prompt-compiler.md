@@ -18,16 +18,26 @@ Use this sequence for every official JStack command.
 5. If Stage B returns questions, ask only those questions in normal chat, keep
    the recommended defaults visible, reuse answers, and rerun Stage B. Never
    run a separate duplicate `jstack_context_readiness` round.
-6. Use the nested `contextReadiness.readinessReceipt` and `normalizedBrief` for
+6. When context becomes ready, show the complete `renderedCodexPrompt` and wait
+   for the user to approve it or request changes. Do not plan, dispatch, edit,
+   test, or execute while `approval.state="awaiting-user"`. Silence, the
+   original task request, defaults, and receipts are not approval.
+7. For requested changes to goal, task mode, authority, constraints, or
+   non-goals, restart Stage A with the revised request. Preserve other changes
+   as source-labelled user input and rerun Stage B. Show the complete revised
+   prompt. Any changed prompt invalidates the earlier preview. After explicit
+   approval, repeat Stage B with its exact
+   internal `promptPreviewReceipt` and an approval bound to the displayed
+   `renderedPromptSha256`; never ask the user to paste either value.
+8. Use only the approved response's nested
+   `contextReadiness.readinessReceipt` and `normalizedBrief` for
    planning. For Loop or Program, also pass `compilationReceipt` and the exact
    compilation object to goal readiness; its signed receipt carries the
    compiler binding into start/revision.
-7. Show a concise original-to-compiled intent diff by default. Show the full
-   rendered prompt when requested or when material authority/scope needs
-   review.
+9. A concise original-to-compiled intent diff may accompany the prompt, but it
+   never replaces displaying the complete prompt for approval.
 
 If `JSTACK_PROMPT_COMPILER_MODE=disabled`, use the legacy
 `jstack_context_readiness` path and state that compiler enforcement is
 disabled. If the compiler tool itself is unavailable, state the exact runtime
 limitation and use normal Codex fallback; do not pretend compilation occurred.
-

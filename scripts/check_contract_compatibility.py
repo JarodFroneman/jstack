@@ -133,13 +133,13 @@ PROMPT_COMPILATION_INPUT_FIELDS = {
         "type": "string",
         "maxLength": 250_000,
         "description": (
-            "Optional exact Stage B receipt from jstack_prompt_compile. Supply it with prompt_contract to prove explicit pre-inspection compilation; legacy callers use the deterministic compatibility bridge."
+            "Optional exact approval-bound Stage B receipt from jstack_prompt_compile. Supply it with prompt_contract to prove explicit pre-inspection compilation and exact final-prompt approval; legacy callers use the deterministic compatibility bridge."
         ),
     },
     "prompt_contract": {
         "type": "object",
         "description": (
-            "Exact jstack.prompt-compilation.v1 object returned with prompt_compilation_receipt."
+            "Exact approved jstack.prompt-compilation.v2 object returned with prompt_compilation_receipt."
         ),
     },
 }
@@ -235,6 +235,7 @@ ADDITIVE_SCHEMA_FILES = frozenset(
         "ui-reference-contract.v1.schema.json",
         "prompt-intent.v1.schema.json",
         "prompt-compilation.v1.schema.json",
+        "prompt-compilation.v2.schema.json",
     }
 )
 FROZEN_CANONICAL_TOOL_COUNT = 52

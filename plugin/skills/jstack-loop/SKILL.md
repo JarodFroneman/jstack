@@ -21,7 +21,9 @@ Before repository inspection, durable-memory reads, planning, or side-effecting
 tools, call `jstack_prompt_compile(stage="intent",
 workflow_mode="jstack-loop", raw_request=exact_user_request)` and preserve the
 exact intent contract and receipt. After authorized read-only inspection, call
-Stage B with source-labelled grounding. Its nested Adaptive Context Gate is the
+`jstack_prompt_compile(stage="grounded", workflow_mode="jstack-loop")` with
+the exact Stage A contract and receipt plus source-labelled grounding. Its
+nested Adaptive Context Gate is the
 general intake; do not call `jstack_context_readiness` separately. Pass the
 resulting exact `compilationReceipt` and prompt contract to loop or program
 goal readiness. Those tools add the stronger orchestration-specific contract
@@ -29,6 +31,13 @@ without re-asking resolved general context. Keep facts source-attributed,
 assumptions and material inference explicit, and ask only returned questions—at
 most three per round—with reasons and recommended defaults. Reuse prior answers
 and never repeat an unchanged question. Clear, complete contracts ask nothing.
+When context is ready, display the complete `renderedCodexPrompt` and wait for
+explicit approval or requested changes before planning or creating loop/program
+state. Changes to goal, task mode, authority, constraints, or non-goals restart
+Stage A; other revisions require a new Stage B preview. After approval, repeat Stage B
+with the exact internal `promptPreviewReceipt` and approval bound to the
+displayed prompt digest. Never infer approval or ask the user to handle receipt
+values. Use only the approved Stage B compilation and readiness receipts.
 
 ## Select The Orchestration Level
 

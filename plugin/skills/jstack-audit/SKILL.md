@@ -80,19 +80,28 @@ deployment, or production action.
    digest, signer, or terminal paste is
    part of this gate. Stage B extends the Adaptive Context Gate; do not run a
    duplicate `jstack_context_readiness` round.
-7. Call `jstack_audit` with the exact `context_goal`, Stage B
+7. When context is ready, display the complete `renderedCodexPrompt` in normal
+   chat and stop for explicit approval or requested changes. Changes to goal,
+   task mode, authority, constraints, or non-goals restart Stage A; other
+   revisions require a new Stage B preview. Every revision invalidates the
+   earlier one. After
+   approval, repeat Stage B with the exact internal `promptPreviewReceipt` and
+   approval bound to the displayed `renderedPromptSha256`. Never infer approval
+   or ask the user to handle a receipt, token, or digest. Only the approved
+   response's receipts may be used downstream.
+8. Call `jstack_audit` with the exact `context_goal`, approved Stage B
    `contextReadiness.readinessReceipt`, and matching `normalizedBrief` as
    `context_brief` to bind the subject, controls, profile, scope
    manifest,
    adapter inventory, review evidence, existing secret-scan evidence, and the
    focus-routed `specialistCapabilityPlan`. Its capability audit domains may
    strengthen required coverage but may never remove profile or policy domains.
-8. Generate candidate findings from cited source evidence, then run a separate
+9. Generate candidate findings from cited source evidence, then run a separate
    challenge pass that looks for guards, callers, tests, reachability limits,
    and mitigating controls.
-9. Call `jstack_audit_finalize` with the coverage manifest, surviving findings,
+10. Call `jstack_audit_finalize` with the coverage manifest, surviving findings,
    accepted-risk records, and requested formats.
-10. Report the result, coverage, findings, blockers, residual risk, and next
+11. Report the result, coverage, findings, blockers, residual risk, and next
    action. Never translate `incomplete` or `error` into a clean result.
 
 Use [audit-methodology.md](references/audit-methodology.md) for profiles,
