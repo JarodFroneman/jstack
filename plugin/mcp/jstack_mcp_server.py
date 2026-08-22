@@ -47,7 +47,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.4.1"
+SERVER_VERSION = "0.10.0-beta.5"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -83,6 +83,7 @@ UI_REFERENCE_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 UI_CONTRACT_HMAC_KEY_BYTES = 32
 UI_CONTRACT_HMAC_DOMAIN = b"jstack.ui-contract.hmac.v1\0"
 UI_REFERENCE_HMAC_DOMAIN = b"jstack.ui-reference.hmac.v1\0"
+UI_MOTION_HMAC_DOMAIN = b"jstack.ui-motion.hmac.v1\0"
 UI_HINT_MAX_FILES = 5_000
 UI_HINT_MAX_FILE_BYTES = 256_000
 UI_HINT_MAX_TOTAL_BYTES = 8_000_000
@@ -606,6 +607,7 @@ GIT_REQUIRED_TOOLS = [
     "jstack_program_cancel",
     "jstack_program_finalize",
     "jstack_ui_contract",
+    "jstack_ui_motion_spec",
     "jstack_ui_finalize",
     "jstack_ui_reference_contract",
     "jstack_ui_reference_finalize",
@@ -3433,6 +3435,82 @@ def verify_ui_reference_receipt(
         state = "stale" if require_fresh else "invalid"
         raise ToolError(
             f"Product Interface reference receipt is {state} or fails its durable binding."
+        )
+    return payload
+
+
+def _ui_motion_signing_key() -> bytes:
+    return hmac.new(
+        _ui_contract_hmac_key(),
+        UI_MOTION_HMAC_DOMAIN,
+        hashlib.sha256,
+    ).digest()
+
+
+def issue_ui_motion_receipt(payload: dict[str, Any]) -> str:
+    # A motion specification is issued only after a valid UI contract, so the
+    # durable contract key must already exist. This tool creates no new file.
+    key = _ui_motion_signing_key()
+    body = dict(payload)
+    body["serverSession"] = SERVER_SESSION_ID
+    body["issuedAt"] = now_iso()
+    body["keyIdSha256"] = hashlib.sha256(key).hexdigest()
+    body["keyDurability"] = (
+        "posix-user-key-v1"
+        if _ui_contract_key_is_durable()
+        else "server-session-v1"
+    )
+    encoded = _b64encode(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+    signature = _b64encode(
+        hmac.new(key, encoded.encode("ascii"), hashlib.sha256).digest()
+    )
+    return f"{encoded}.{signature}"
+
+
+def verify_ui_motion_receipt(token: str, *, require_fresh: bool) -> dict[str, Any]:
+    try:
+        encoded, supplied_signature = token.split(".", 1)
+        key = _ui_motion_signing_key()
+        expected_signature = _b64encode(
+            hmac.new(key, encoded.encode("ascii"), hashlib.sha256).digest()
+        )
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            raise ValueError("signature mismatch")
+        payload = json.loads(_b64decode(encoded).decode("utf-8"))
+        issued = _dt.datetime.fromisoformat(str(payload["issuedAt"]))
+        expires = _dt.datetime.fromisoformat(str(payload["expiresAt"]))
+        if issued.tzinfo is None or expires.tzinfo is None:
+            raise ValueError("timezone-aware timestamps required")
+    except Exception as exc:
+        raise ToolError(
+            "Product UI motion receipt is malformed or has an invalid durable signature."
+        ) from exc
+    now = _dt.datetime.now(_dt.timezone.utc)
+    checks = {
+        "kind": payload.get("kind") == "ui-motion-spec",
+        "issuerSession": bool(
+            re.fullmatch(r"[0-9a-f]{32}", str(payload.get("serverSession") or ""))
+        ),
+        "keyId": payload.get("keyIdSha256") == hashlib.sha256(key).hexdigest(),
+        "keyDurability": payload.get("keyDurability")
+        == (
+            "posix-user-key-v1"
+            if _ui_contract_key_is_durable()
+            else "server-session-v1"
+        ),
+        "issued": issued <= now,
+        "boundedExpiry": 0
+        < (expires - issued).total_seconds()
+        <= UI_CONTRACT_MAX_AGE_SECONDS,
+    }
+    if require_fresh:
+        checks["fresh"] = issued <= now < expires
+    if not all(checks.values()):
+        state = "stale" if require_fresh else "invalid"
+        raise ToolError(
+            f"Product UI motion receipt is {state} or fails its durable binding."
         )
     return payload
 
@@ -20476,6 +20554,205 @@ def _ui_contract_payload(
     return payload, contract
 
 
+def _ui_motion_runtime_rows(
+    project_path: Path,
+    value: Any,
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not 1 <= len(value) <= len(ui_core.registry.PLATFORM_IDS):
+        raise ToolError("runtime_strategies must contain one to 11 platform rows.")
+    expected = {"platform", "strategy", "evidence_paths", "justification"}
+    tracked: Optional[set[str]] = None
+    result: list[dict[str, Any]] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, dict) or set(raw) != expected:
+            raise ToolError(
+                f"runtime_strategies[{index}] must contain exactly platform, strategy, evidence_paths, and justification."
+            )
+        justification = str(raw.get("justification") or "").strip()
+        if not 1 <= len(justification) <= 1_000 or any(
+            ord(char) < 32 and char not in "\t\n" for char in justification
+        ):
+            raise ToolError(
+                f"runtime_strategies[{index}].justification must be bounded plain text."
+            )
+        paths = raw.get("evidence_paths")
+        if (
+            not isinstance(paths, list)
+            or len(paths) > ui_core.MOTION_MAX_RUNTIME_EVIDENCE
+            or not all(isinstance(path, str) for path in paths)
+            or len(paths) != len(set(paths))
+        ):
+            raise ToolError(
+                f"runtime_strategies[{index}].evidence_paths must contain at most 16 unique repository-relative paths."
+            )
+        if paths and tracked is None:
+            listed = run_complete(
+                ["git", "ls-files", "-z"],
+                project_path,
+                timeout=20,
+                max_bytes=10_000_000,
+            )
+            if not listed["ok"]:
+                raise ToolError("Could not enumerate motion runtime evidence paths.")
+            tracked = {
+                decode_git_relative_path(raw_path, "motion runtime evidence")
+                for raw_path in listed["stdout"].split(b"\0")
+                if raw_path
+            }
+        evidence: list[dict[str, Any]] = []
+        for path_index, raw_path in enumerate(paths):
+            try:
+                relative = decode_git_relative_path(
+                    raw_path.encode("utf-8"),
+                    "motion runtime evidence",
+                )
+                if tracked is None or relative not in tracked:
+                    raise audit_core.AuditError("path is not tracked")
+                size, digest = audit_core.digest_repository_file(
+                    project_path,
+                    relative,
+                    max_bytes=10_000_000,
+                    max_seconds=15,
+                )
+            except (UnicodeEncodeError, audit_core.AuditError) as exc:
+                raise ToolError(
+                    f"runtime_strategies[{index}].evidence_paths[{path_index}] is not one safe tracked regular repository file."
+                ) from exc
+            evidence.append(
+                {
+                    "pathSha256": hashlib.sha256(relative.encode("utf-8")).hexdigest(),
+                    "sha256": digest,
+                    "size": size,
+                }
+            )
+        result.append(
+            {
+                "platform": raw.get("platform"),
+                "strategy": raw.get("strategy"),
+                "evidence": evidence,
+                "justificationSha256": hashlib.sha256(
+                    justification.encode("utf-8")
+                ).hexdigest(),
+            }
+        )
+    return result
+
+
+def tool_ui_motion_spec(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    subject_before = evidence_subject(project_path)
+    if not subject_before["clean"]:
+        raise ToolError(
+            "A Product UI motion specification requires the same clean baseline as its UI contract."
+        )
+    _, contract = _ui_contract_payload(
+        project_path,
+        str(args.get("ui_contract_receipt") or "").strip(),
+        require_fresh=True,
+    )
+    baseline = _ui_git_identity(project_path, subject_before)
+    if baseline != contract["baseline"]:
+        raise ToolError(
+            "The UI contract baseline is stale; create the motion specification before implementation begins."
+        )
+    runtime_rows = _ui_motion_runtime_rows(
+        project_path,
+        args.get("runtime_strategies"),
+    )
+    try:
+        specification = ui_core.build_motion_spec(
+            ui_contract=contract,
+            interactions=args.get("interactions"),
+            runtime_strategies=runtime_rows,
+        )
+    except ui_core.MotionError as exc:
+        raise ToolError(str(exc)) from exc
+    subject_after = evidence_subject(project_path)
+    if subject_after != subject_before or _ui_git_identity(project_path, subject_after) != baseline:
+        raise ToolError(
+            "The repository or Product Interface policy changed while motion intelligence was being derived."
+        )
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=UI_CONTRACT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    token = issue_ui_motion_receipt(
+        {
+            "kind": "ui-motion-spec",
+            "schemaVersion": "jstack.ui.motion-spec-receipt.v1",
+            "projectPath": str(project_path),
+            "gitHead": baseline["gitHead"],
+            "projectFingerprint": baseline["projectFingerprint"],
+            "policyDigest": baseline["policyDigest"],
+            "toolVersion": SERVER_VERSION,
+            "uiContractSha256": contract["contractSha256"],
+            "motionCatalogSha256": specification["catalog"]["sha256"],
+            "motionSpecSha256": specification["specSha256"],
+            "motionSpec": specification,
+            "expiresAt": expires,
+            "passed": False,
+            "executionAuthorized": False,
+        }
+    )
+    if len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError(
+            "The Product UI motion receipt exceeds the bounded 250000-character limit. Narrow the interaction inventory."
+        )
+    return {
+        "schemaVersion": ui_core.MOTION_RESPONSE_SCHEMA_VERSION,
+        "projectPath": str(project_path),
+        "motionSpecification": specification,
+        "motionSpecReceipt": token,
+        "expiresAt": expires,
+        "sourceContentReturned": False,
+        "dependencyAdded": False,
+        "beta6RuntimeAuditIncluded": False,
+        "executionAuthorized": False,
+        "receiptMeaning": (
+            "Digest-bound creation-time motion guidance only; it grants no project-write, Git, release, deployment, external-action, or production authority."
+        ),
+    }
+
+
+def _ui_motion_payload(
+    project_path: Path,
+    token: str,
+    *,
+    require_fresh: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not token or len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("motion_spec_receipt must be one bounded signed receipt.")
+    payload = verify_ui_motion_receipt(token, require_fresh=require_fresh)
+    try:
+        specification = ui_core.validate_motion_spec(payload.get("motionSpec"))
+    except ui_core.MotionError as exc:
+        raise ToolError(str(exc)) from exc
+    binding = specification["uiContract"]
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == "jstack.ui.motion-spec-receipt.v1",
+        "projectPath": payload.get("projectPath") == str(project_path),
+        "gitHead": payload.get("gitHead") == binding.get("gitHead"),
+        "projectFingerprint": payload.get("projectFingerprint")
+        == binding.get("projectFingerprint"),
+        "policyDigest": payload.get("policyDigest") == binding.get("policyDigest"),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "uiContractSha256": payload.get("uiContractSha256")
+        == binding.get("contractSha256"),
+        "motionCatalogSha256": payload.get("motionCatalogSha256")
+        == specification["catalog"]["sha256"],
+        "motionSpecSha256": payload.get("motionSpecSha256")
+        == specification["specSha256"],
+        "notFinalization": payload.get("passed") is False,
+        "noExecutionAuthority": payload.get("executionAuthorized") is False,
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "Product UI motion receipt no longer matches this project, server, UI contract, or motion catalog."
+        )
+    return payload, specification
+
+
 def _validate_ui_candidate_scope(
     candidate_delta: dict[str, Any],
     candidate_scope: dict[str, Any],
@@ -27332,6 +27609,137 @@ TOOLS.update(
             },
             "handler": tool_ui_contract,
             "readOnlyHint": False,
+        },
+        "jstack_ui_motion_spec": {
+            "description": "Derive a deterministic, versioned Product UI motion specification from a current clean-baseline jstack_ui_contract. The tool binds an interaction inventory to contracted surfaces, applies frequency and input-modality limits, selects the smallest platform runtime strategy, and returns reduced-motion and performance-safe token guidance. It performs no implementation, dependency installation, audit, Git action, release, deployment, external action, or production mutation.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "ui_contract_receipt",
+                    "runtime_strategies",
+                    "interactions",
+                ],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "ui_contract_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                    },
+                    "runtime_strategies": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": len(ui_core.registry.PLATFORM_IDS),
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "platform",
+                                "strategy",
+                                "evidence_paths",
+                                "justification",
+                            ],
+                            "properties": {
+                                "platform": {
+                                    "type": "string",
+                                    "enum": list(ui_core.registry.PLATFORM_IDS),
+                                },
+                                "strategy": {
+                                    "type": "string",
+                                    "enum": list(ui_core.MOTION_RUNTIME_STRATEGY_IDS),
+                                },
+                                "evidence_paths": {
+                                    "type": "array",
+                                    "maxItems": ui_core.MOTION_MAX_RUNTIME_EVIDENCE,
+                                    "uniqueItems": True,
+                                    "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 500,
+                                    },
+                                    "description": "Tracked repository files proving an established runtime or the inspected stack. Paths are hashed and never retained in the receipt.",
+                                },
+                                "justification": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 1000,
+                                    "description": "Repository-grounded selection rationale. Only its SHA-256 is retained.",
+                                },
+                            },
+                        },
+                    },
+                    "interactions": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": ui_core.MOTION_MAX_INTERACTIONS,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "id",
+                                "surface_id",
+                                "category",
+                                "trigger",
+                                "frequency",
+                                "input_modes",
+                                "purpose",
+                                "motion",
+                                "omission_reason",
+                            ],
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9._-]{1,79}$",
+                                },
+                                "surface_id": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9._-]{1,79}$",
+                                },
+                                "category": {
+                                    "type": "string",
+                                    "enum": list(ui_core.MOTION_CATEGORY_IDS),
+                                },
+                                "trigger": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500,
+                                },
+                                "frequency": {
+                                    "type": "string",
+                                    "enum": list(ui_core.MOTION_FREQUENCY_IDS),
+                                },
+                                "input_modes": {
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": len(ui_core.MOTION_INPUT_MODE_IDS),
+                                    "uniqueItems": True,
+                                    "items": {
+                                        "type": "string",
+                                        "enum": list(ui_core.MOTION_INPUT_MODE_IDS),
+                                    },
+                                },
+                                "purpose": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500,
+                                },
+                                "motion": {
+                                    "type": "string",
+                                    "enum": ["auto", "omit"],
+                                },
+                                "omission_reason": {
+                                    "type": ["string", "null"],
+                                    "minLength": 1,
+                                    "maxLength": 500,
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "handler": tool_ui_motion_spec,
+            "readOnlyHint": True,
         },
         "jstack_ui_finalize": {
             "description": "Validate a signed Product Interface contract against a clean descendant candidate, a current exact-command QA receipt, fixed private screenshot evidence, objective interaction/accessibility checks, and accountable Product observations. Returns evidence only and authorizes no release or deployment action.",

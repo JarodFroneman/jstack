@@ -707,7 +707,7 @@ class AuditAdversarialStageTests(unittest.TestCase):
             self.assertTrue((ROOT / "mcp" / "jstack" / "schemas" / name).is_file())
         tool_names = {tool["name"] for tool in server.tool_definitions()}
         self.assertIn("jstack_adversarial_capture", tool_names)
-        self.assertEqual(57, len(tool_names))
+        self.assertEqual(58, len(tool_names))
         profile = server.default_mastery_profile()
         profile["tracks"]["audit"]["currentStage"] = 7
         profile["tracks"]["audit"]["attempts"] = [

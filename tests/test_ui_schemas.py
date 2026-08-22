@@ -13,9 +13,11 @@ except ImportError:  # The production runtime intentionally has no schema depend
 
 from mcp.jstack.ui import (
     build_contract,
+    build_motion_spec,
     build_reference_contract,
     detect_product_ui,
     load_catalog,
+    load_motion_catalog,
 )
 from mcp.jstack.ui.detector import PLATFORM_MARKER_IDS
 
@@ -28,6 +30,7 @@ SCHEMA_NAMES = (
     "ui-contract.v2.schema.json",
     "ui-evidence.v1.schema.json",
     "ui-finalization.v1.schema.json",
+    "ui-motion-spec.v1.schema.json",
     "ui-objective-result.v1.schema.json",
     "ui-product-observation.v1.schema.json",
     "ui-reference-analysis.v1.schema.json",
@@ -108,6 +111,33 @@ def sample_reference_bound_contract() -> dict[str, Any]:
         "prototypeSetSha256": SHA,
         "selectedPrototypeId": None,
     })
+
+
+def sample_motion_spec() -> dict[str, Any]:
+    return build_motion_spec(
+        ui_contract=sample_contract(),
+        runtime_strategies=[
+            {
+                "platform": "web",
+                "strategy": "auto",
+                "evidence": [],
+                "justificationSha256": SHA,
+            }
+        ],
+        interactions=[
+            {
+                "id": "account-save",
+                "surface_id": "account",
+                "category": "button",
+                "trigger": "The user presses save.",
+                "frequency": "frequent",
+                "input_modes": ["pointer", "keyboard"],
+                "purpose": "Acknowledge the action and expose its busy state.",
+                "motion": "auto",
+                "omission_reason": None,
+            }
+        ],
+    )
 
 
 def sample_evidence() -> dict[str, Any]:
@@ -444,6 +474,9 @@ class UISchemaStructureTests(unittest.TestCase):
         self.assertEqual(evidence["properties"]["captures"]["maxItems"], 256)
         self.assertEqual(finalization["$defs"]["contractSummary"]["properties"]["surfaceCount"]["maximum"], 64)
         self.assertEqual(finalization["$defs"]["contractSummary"]["properties"]["matrixCellCount"]["maximum"], 256)
+        motion = load_schema("ui-motion-spec.v1.schema.json")
+        self.assertEqual(motion["properties"]["interactions"]["maxItems"], 128)
+        self.assertEqual(len(load_motion_catalog()["categories"]), 24)
         self.assertEqual("jstack.ui.contract.v1", sample_contract()["schemaVersion"])
         self.assertNotIn("referenceBundle", sample_contract())
         self.assertEqual(
@@ -466,6 +499,7 @@ class UISchemaValidationTests(unittest.TestCase):
             "ui-contract.v2.schema.json": sample_reference_bound_contract(),
             "ui-evidence.v1.schema.json": sample_evidence(),
             "ui-finalization.v1.schema.json": sample_finalization(),
+            "ui-motion-spec.v1.schema.json": sample_motion_spec(),
             "ui-objective-result.v1.schema.json": sample_objective_result(),
             "ui-product-observation.v1.schema.json": sample_product_observation(),
             "ui-reference-analysis.v1.schema.json": sample_reference_analysis(),
@@ -484,6 +518,9 @@ class UISchemaValidationTests(unittest.TestCase):
             ),
             "ui-evidence.v1.schema.json": (sample_evidence(), ("captures", 0, "artifact")),
             "ui-finalization.v1.schema.json": (sample_finalization(), ("evidence", "candidate")),
+            "ui-motion-spec.v1.schema.json": (
+                sample_motion_spec(), ("interactions", 0, "pattern")
+            ),
             "ui-objective-result.v1.schema.json": (
                 sample_objective_result(), ("assertions", 0, "evidence")
             ),

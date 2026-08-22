@@ -71,6 +71,60 @@ _NATIVE_DECLARATIVE_SUFFIXES = {
     "axaml", "glade", "qml", "storyboard", "ui", "xaml", "xib",
 }
 
+_CONTENT_SOURCE_SUFFIXES: dict[str, frozenset[str]] = {
+    "web": frozenset({
+        "astro", "cjs", "cshtml", "ejs", "erb", "hbs", "htm", "html",
+        "js", "jsx", "liquid", "mdx", "mjs", "mts", "mustache", "njk",
+        "nunjucks", "php", "pug", "razor", "svelte", "ts", "tsx", "twig",
+        "vue",
+    }),
+    "electron": frozenset({"cjs", "js", "jsx", "mjs", "mts", "ts", "tsx"}),
+    "tauri": frozenset({"rs"}),
+    "react-native": frozenset({"cjs", "js", "jsx", "mjs", "mts", "ts", "tsx"}),
+    "flutter": frozenset({"dart", "yaml", "yml"}),
+    "ios": frozenset({"h", "hpp", "m", "mm", "swift"}),
+    "android": frozenset({"gradle", "java", "kt", "kts", "xml"}),
+    "macos": frozenset({"h", "hpp", "m", "mm", "swift"}),
+    "windows": frozenset({"axaml", "cs", "csproj", "xaml"}),
+    "linux": frozenset({
+        "c", "cc", "cpp", "glade", "h", "hpp", "py", "qml", "ui",
+    }),
+}
+
+
+def _content_rule_applies(platform: str, path: str, suffix: str) -> bool:
+    """Keep framework names in schemas, prompts, and backend data from becoming UI evidence."""
+    if suffix in _CONTENT_SOURCE_SUFFIXES.get(platform, frozenset()):
+        return True
+    name = path.rsplit("/", 1)[-1].lower()
+    if name == "package.json" and platform in {"web", "electron", "react-native"}:
+        return True
+    if name == "cargo.toml" and platform == "tauri":
+        return True
+    return name == "pubspec.yaml" and platform == "flutter"
+
+
+def _content_rule_matches(
+    platform: str,
+    marker: str,
+    pattern: str,
+    path: str,
+    text: str,
+    suffix: str,
+) -> bool:
+    if not _content_rule_applies(platform, path, suffix):
+        return False
+    if platform == "linux" and marker == "gtk-qt" and suffix == "py":
+        return bool(
+            re.search(
+                r"^\s*(?:from|import)\s+(?:gi(?:\.repository)?|Gtk|PyQt\d*|PySide\d*)\b"
+                r"|\b(?:QtWidgets|Gtk)\.(?:QApplication|QWidget|QMainWindow|Window)\b",
+                text,
+                re.IGNORECASE | re.MULTILINE,
+            )
+        )
+    return bool(re.search(pattern, text, re.IGNORECASE | re.DOTALL))
+
 
 def _web_route_is_ui_capable(path: str, suffix: str) -> bool:
     if suffix not in _WEB_ROUTE_SUFFIXES:
@@ -160,7 +214,10 @@ def _document_matches(
             platform_markers[platform].add(marker)
             specific_platforms.add(platform)
     for platform, marker, pattern in _CONTENT_RULES:
-        if platform != "web" and re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+        if (
+            platform != "web"
+            and _content_rule_matches(platform, marker, pattern, path, text, suffix)
+        ):
             platform_markers[platform].add(marker)
             specific_platforms.add(platform)
     if suffix == "swift" and re.search(r"\bSwiftUI\b|\bView\s*\{", text):
@@ -186,7 +243,10 @@ def _document_matches(
             ):
                 platform_markers[platform].add(marker)
         for platform, marker, pattern in _CONTENT_RULES:
-            if platform == "web" and re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+            if (
+                platform == "web"
+                and _content_rule_matches(platform, marker, pattern, path, text, suffix)
+            ):
                 platform_markers[platform].add(marker)
         if suffix in {"js", "mjs", "cjs", "ts", "mts", "cts"} and re.search(
             r"(?:\breturn\s*|=>\s*)\(?\s*<[A-Za-z][A-Za-z0-9._:-]*(?:\s|/?>)",

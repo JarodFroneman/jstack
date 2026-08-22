@@ -677,6 +677,44 @@ class ProductInterfaceRegistryTests(unittest.TestCase):
             )
             self.assertEqual("inactive", applicability["state"])
 
+    def test_framework_names_in_tooling_data_do_not_route_product_ui(self) -> None:
+        documents = [
+            (
+                "mcp/jstack/schemas/ui-motion-spec.v1.schema.json",
+                json.dumps({"enum": ["react-native", "electron"]}),
+            ),
+            (
+                "mcp/jstack/ui/motion.py",
+                'SUPPORTED_PLATFORMS = ("react-native", "electron")\n',
+            ),
+            (
+                "mcp/jstack/ui/detector.py",
+                (MCP_ROOT / "ui" / "detector.py").read_text(encoding="utf-8"),
+            ),
+        ]
+        detected = ui.detect_product_ui(documents)
+        self.assertFalse(detected["applicable"])
+        self.assertEqual([], detected["platforms"])
+
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp), ui_source=False)
+            run(repo, "commit", "--allow-empty", "-qm", "tooling baseline")
+            baseline_head = run(repo, "rev-parse", "HEAD")
+            for path, content in documents:
+                target = repo / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+            run(repo, "add", ".")
+            run(repo, "commit", "-qm", "add agent motion tooling")
+            result = server._ui_applicability(
+                repo,
+                goal="Release the agent workflow capability",
+                paths=[path for path, _ in documents],
+                baseline_head=baseline_head,
+            )
+            self.assertEqual("inactive", result["state"])
+            self.assertEqual("no-ui-evidence-in-change-set", result["reason"])
+
     def test_native_paths_do_not_collapse_into_web_and_ui_intents_auto_route(self) -> None:
         fixtures = {
             "src/views/settings.tsx": ("export const Settings=()=> <main/>;", {"web"}),
@@ -1413,21 +1451,23 @@ class ProductInterfaceServerTests(unittest.TestCase):
         home_patch.start()
         self.addCleanup(home_patch.stop)
 
-    def test_tools_are_57_canonical_52_legacy_and_additive_tools_are_canonical_only(self) -> None:
+    def test_tools_are_58_canonical_52_legacy_and_additive_tools_are_canonical_only(self) -> None:
         definitions = {item["name"]: item for item in server.tool_definitions()}
         names = set(definitions)
         canonical = {name for name in names if name.startswith("jstack_")}
         legacy = {name for name in server.TOOLS if name.startswith("gstack_")}
-        self.assertEqual(57, len(canonical))
+        self.assertEqual(58, len(canonical))
         self.assertEqual(52, len(legacy))
         self.assertIn("jstack_ui_contract", canonical)
         self.assertIn("jstack_ui_finalize", canonical)
         self.assertIn("jstack_ui_reference_contract", canonical)
         self.assertIn("jstack_ui_reference_finalize", canonical)
+        self.assertIn("jstack_ui_motion_spec", canonical)
         self.assertNotIn("gstack_ui_contract", names)
         self.assertNotIn("gstack_ui_finalize", names)
         self.assertNotIn("gstack_ui_reference_contract", names)
         self.assertNotIn("gstack_ui_reference_finalize", names)
+        self.assertNotIn("gstack_ui_motion_spec", names)
         self.assertFalse(
             definitions["jstack_ui_contract"]["annotations"]["readOnlyHint"]
         )
@@ -1439,6 +1479,9 @@ class ProductInterfaceServerTests(unittest.TestCase):
         )
         self.assertTrue(
             definitions["jstack_ui_reference_finalize"]["annotations"]["readOnlyHint"]
+        )
+        self.assertTrue(
+            definitions["jstack_ui_motion_spec"]["annotations"]["readOnlyHint"]
         )
 
     def test_ui_contract_key_is_durable_but_only_fresh_contracts_start_work(self) -> None:

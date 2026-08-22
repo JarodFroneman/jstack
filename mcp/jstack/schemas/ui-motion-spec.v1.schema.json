@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-motion-spec.v1.schema.json",
+  "title": "JStack Product UI motion specification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "catalog",
+    "uiContract",
+    "profileResolution",
+    "runtimeStrategies",
+    "interactions",
+    "requirements",
+    "specSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.motion-spec.v1"},
+    "catalog": {"$ref": "#/$defs/catalogBinding"},
+    "uiContract": {"$ref": "#/$defs/uiContractBinding"},
+    "profileResolution": {"$ref": "#/$defs/profileResolution"},
+    "runtimeStrategies": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/runtimeStrategy"}
+    },
+    "interactions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/interaction"}
+    },
+    "requirements": {"$ref": "#/$defs/requirements"},
+    "specSha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9._-]{1,79}$"},
+    "profile": {"enum": ["editorial-calm", "creative-canvas"]},
+    "platform": {
+      "enum": ["web", "webview", "ios", "android", "react-native", "flutter", "electron", "tauri", "macos", "windows", "linux"]
+    },
+    "category": {
+      "enum": ["button", "link", "navigation", "route", "tab", "segmented-control", "modal", "drawer", "sheet", "popover", "menu", "tooltip", "accordion", "card", "list", "reorder", "form-validation", "form-submission", "loading", "content-replacement", "toast", "icon-transition", "shared-element", "gesture"]
+    },
+    "durationToken": {"enum": ["instant", "press", "fast", "standard", "spatial", "deliberate"]},
+    "easingToken": {"enum": ["linear", "standard", "enter", "exit"]},
+    "springToken": {"type": ["string", "null"], "enum": ["settle", "spatial", null]},
+    "distanceToken": {"enum": ["none", "micro", "small", "medium", "large"]},
+    "scaleToken": {"enum": ["identity", "press", "subtle-in"]},
+    "opacityToken": {"enum": ["hidden", "softened", "visible"]},
+    "blurToken": {"enum": ["none", "subtle", "maximum"]},
+    "staggerToken": {"enum": ["none", "tight", "maximum"]},
+    "allowedProperty": {"enum": ["opacity", "transform", "clip-path"]},
+    "catalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "version", "sha256"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.motion-catalog.v1"},
+        "version": {"const": "1.0.0"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "uiContractBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "contractSha256", "gitHead", "projectFingerprint", "policyDigest"],
+      "properties": {
+        "schemaVersion": {"enum": ["jstack.ui.contract.v1", "jstack.ui.contract.v2"]},
+        "contractSha256": {"$ref": "#/$defs/sha256"},
+        "gitHead": {"$ref": "#/$defs/gitOid"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "policyDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "surfaceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surfaceId", "profile"],
+      "properties": {
+        "surfaceId": {"$ref": "#/$defs/identifier"},
+        "profile": {"$ref": "#/$defs/profile"}
+      }
+    },
+    "profileResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultProfile", "surfaceProfiles"],
+      "properties": {
+        "defaultProfile": {"$ref": "#/$defs/profile"},
+        "surfaceProfiles": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/surfaceProfile"}
+        }
+      }
+    },
+    "runtimeEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pathSha256", "sha256", "size"],
+      "properties": {
+        "pathSha256": {"$ref": "#/$defs/sha256"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 10000000}
+      }
+    },
+    "runtimeStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "requestedStrategy", "selectedStrategy", "evidence", "justificationSha256", "dependencyAdded"],
+      "properties": {
+        "platform": {"$ref": "#/$defs/platform"},
+        "requestedStrategy": {"enum": ["auto", "existing", "css", "view-transitions", "platform-native"]},
+        "selectedStrategy": {"enum": ["existing", "css", "view-transitions", "platform-native"]},
+        "evidence": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/runtimeEvidence"}
+        },
+        "justificationSha256": {"$ref": "#/$defs/sha256"},
+        "dependencyAdded": {"const": false}
+      }
+    },
+    "pattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent", "allowedProperties", "enterDurationToken", "exitDurationToken", "easingToken", "springToken", "distanceToken", "scaleToken", "opacityToken", "blurToken", "staggerToken", "spatialMotionAllowed", "interruptible", "reversible"],
+      "properties": {
+        "intent": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "allowedProperties": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/allowedProperty"}
+        },
+        "enterDurationToken": {"$ref": "#/$defs/durationToken"},
+        "exitDurationToken": {"$ref": "#/$defs/durationToken"},
+        "easingToken": {"$ref": "#/$defs/easingToken"},
+        "springToken": {"$ref": "#/$defs/springToken"},
+        "distanceToken": {"$ref": "#/$defs/distanceToken"},
+        "scaleToken": {"$ref": "#/$defs/scaleToken"},
+        "opacityToken": {"$ref": "#/$defs/opacityToken"},
+        "blurToken": {"$ref": "#/$defs/blurToken"},
+        "staggerToken": {"$ref": "#/$defs/staggerToken"},
+        "spatialMotionAllowed": {"type": "boolean"},
+        "interruptible": {"const": true},
+        "reversible": {"type": "boolean"}
+      }
+    },
+    "reducedMotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "durationToken", "allowedProperties", "preserveStateClarity"],
+      "properties": {
+        "mode": {"enum": ["instant-state", "opacity-only", "static-progress", "direct-state"]},
+        "durationToken": {"enum": ["instant", "fast"]},
+        "allowedProperties": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {"const": "opacity"}
+        },
+        "preserveStateClarity": {"const": true}
+      }
+    },
+    "interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "surfaceId", "surfaceProfile", "platforms", "category", "trigger", "frequency", "inputModes", "purpose", "status", "pattern", "reducedMotion", "omissionReason"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "surfaceId": {"$ref": "#/$defs/identifier"},
+        "surfaceProfile": {"$ref": "#/$defs/profile"},
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/platform"}
+        },
+        "category": {"$ref": "#/$defs/category"},
+        "trigger": {"type": "string", "minLength": 1, "maxLength": 500},
+        "frequency": {"enum": ["rare", "routine", "frequent", "continuous"]},
+        "inputModes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"enum": ["pointer", "touch", "keyboard", "gesture"]}
+        },
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 500},
+        "status": {"enum": ["specified", "omitted"]},
+        "pattern": {"$ref": "#/$defs/pattern"},
+        "reducedMotion": {"$ref": "#/$defs/reducedMotion"},
+        "omissionReason": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 500}
+          ]
+        }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reducedMotionRequired", "motionAsSoleSignalAllowed", "keyboardFocusMustRemainVisible", "automaticDependencyAdditionAllowed", "compositorFriendlyPropertiesPreferred", "cumulativeLayoutShiftAllowed", "rapidInputCancellationRequired", "beta6RuntimeAuditIncluded"],
+      "properties": {
+        "reducedMotionRequired": {"const": true},
+        "motionAsSoleSignalAllowed": {"const": false},
+        "keyboardFocusMustRemainVisible": {"const": true},
+        "automaticDependencyAdditionAllowed": {"const": false},
+        "compositorFriendlyPropertiesPreferred": {"const": true},
+        "cumulativeLayoutShiftAllowed": {"const": false},
+        "rapidInputCancellationRequired": {"const": true},
+        "beta6RuntimeAuditIncluded": {"const": false}
+      }
+    }
+  }
+}

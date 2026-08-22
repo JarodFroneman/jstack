@@ -19,6 +19,7 @@ Resolve profiles per surface, not merely per repository. Record a default profil
 - Use one purposeful product accent plus semantic status colors. Keep light and dark themes calm and distinct without reducing contrast.
 - Prefer stable page frames, clear primary actions, compact secondary actions, and direct language.
 - Use motion to clarify state change or continuity, never to decorate a static screen.
+- Keep routine controls and data work on press or fast timing. Reserve spatial timing for occasional navigation, disclosure, or object continuity that materially improves orientation.
 
 ## Creative Canvas
 
@@ -26,6 +27,7 @@ Resolve profiles per surface, not merely per repository. Record a default profil
 - Separate global navigation, creation tools, object properties, and contextual actions by function and placement.
 - Make selection, focus, active tool, object hierarchy, zoom, and destructive actions unambiguous without relying on color alone.
 - Preserve spatial context during panels, modes, zoom, playback, and object changes. Avoid movement that shifts a user's target unexpectedly.
+- Couple direct manipulation to input, then use a restrained interruptible settle after release. Dense tools, keyboard shortcuts, scrubbing, and repeated property changes must not replay entrance motion.
 - Keep dense controls legible through rhythm, alignment, progressive disclosure, and keyboard access rather than shrinking everything.
 
 ## Hybrid composition
@@ -34,6 +36,7 @@ Resolve profiles per surface, not merely per repository. Record a default profil
 - Permit different density and surface treatment where the task changes: comfortable reading in the shell, compact tools around the canvas.
 - Make the transition explicit through layout and hierarchy, not a competing palette or unrelated component library.
 - Test cross-surface flows such as opening a project, editing it, saving, exporting, error recovery, and returning to the library.
+- Share semantic motion tokens while allowing the shell and workspace to spend them differently: calm route and overlay continuity in the shell, direct manipulation and object continuity in the workspace, and near-instant repeated tools in both.
 
 ## Existing products and themes
 
