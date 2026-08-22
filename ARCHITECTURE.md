@@ -112,7 +112,7 @@ it validates scoring protocol behavior and is not represented as a
 repository-level host benchmark.
 
 `scripts/check_product_boundaries.py` proves that the product has the
-six named commands, 58 canonical MCP tools, the frozen 52 compatibility aliases, 11
+six named commands, 59 canonical MCP tools, the frozen 52 compatibility aliases, 11
 roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
 standard-library core. It also rejects vendor SDKs, network-capable core
 imports, packaged `evals/` content, model or scanner execution in the Proof
@@ -128,7 +128,11 @@ three reference schemas, and the reference-bound UI contract v2; all other
 prior request schemas remain frozen. Beta.4 adds one canonical-only Prompt
 Compiler tool and two closed schemas, plus optional compiler-binding fields on
 loop/program goal readiness; legacy request shapes and all 52 aliases remain
-compatible.
+compatible. Beta.5 adds the canonical-only motion-specification tool and a
+separate closed motion contract. Beta.6 adds the canonical-only motion
+finalizer and four closed evidence/result/audit/finalization schemas, plus two
+paired optional motion-receipt inputs on `jstack_ui_finalize`; its existing
+static request and response path remains valid.
 
 The scorer consumes already-produced run and blinded-review envelopes. It
 retains failed, blocked, and timed-out runs, requires equal limits for

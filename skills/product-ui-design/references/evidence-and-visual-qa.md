@@ -24,16 +24,17 @@ Verify the candidate that will be delivered, not a stale development state. In J
 - Check interaction feedback, target stability, selection clarity, focus visibility, error recovery, responsive transitions, and reduced-motion behavior.
 - Record Product or UX observations as pass, advisory, or blocker with the exact surface and evidence. Use the published `ui-product-observation.v1` artifact; use the published `ui-objective-result.v1` artifact (including digest-bound structured assertion measurements) for objective checks. Human visual approval is optional unless the user or release policy requires it.
 
-## Exercise the Beta.5 motion specification
+## Exercise and finalize the motion specification
 
 - Revisit every `jstack_ui_motion_spec` inventory item at runtime. Confirm its trigger, visible feedback, final state, origin and destination where applicable, exit behavior, and explicit omission reason.
 - Exercise ordinary and reduced-motion modes, keyboard and pointer or touch input, rapid repetition, cancellation, back navigation, interrupted routes, slow content, and unmounting. Focus, target geometry, and semantic state must remain stable.
 - Check that transforms, opacity, clipping, filters, and composited layers do not create cumulative layout shift, stale transitions, long tasks, dropped frames, or an input-blocking pause on representative desktop and mobile hardware.
-- Report the runtime strategy actually used and any divergence from the specification. Beta.5 motion checks are implementation QA notes; the independent capture, report, and pass/fail motion evidence gate remains a Beta.6 capability and must not be claimed here.
+- Report the runtime strategy actually used and any divergence from the specification. Encode every interaction/platform ordinary and reduced result using the published private canonical contracts, then call `jstack_ui_motion_finalize`. A divergence, missing mode, stale or tampered artifact, failed semantic/accessibility assertion, performance-budget breach, or changed candidate blocks the motion receipt.
 
 ## Finalize honestly
 
 - Block completion when required evidence is absent, the Git candidate drifted, a screenshot digest or dimension fails, a critical flow or accessibility check fails, target-platform coverage is missing, or a clipping or overlap blocker remains.
 - Treat a valid receipt as proof that named evidence was bound to a particular goal, catalog, repository baseline, and clean candidate. It does not prove that the evidence producer was honest or that aesthetics are objectively excellent.
 - Keep result, assertion, observation, and screenshot bytes private beneath the server-selected evidence root. The public receipt returns only normalized counts and digests.
+- When motion applies, pass the original motion-spec receipt and the exact-candidate motion-finalization receipt together to `jstack_ui_finalize`. Static work passes neither. The paired receipts bind motion evidence into UI evidence but do not replace QA, screenshot coverage, Product observations, accessibility review, release checks, or human authority.
 - Outside JStack, report the same matrix and checks in the handoff, but do not imply that local notes are a signed finalization receipt.

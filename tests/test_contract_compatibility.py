@@ -14,6 +14,7 @@ from scripts.check_contract_compatibility import (
     ADDITIVE_EXISTING_TOOL_FIELDS,
     ADDITIVE_PLUGIN_LAYOUTS,
     ADDITIVE_SCHEMA_FILES,
+    ADDITIVE_SUCCESSOR_BASE_DIGESTS,
     DEFAULT_FIXTURE,
     _canonical_digest,
     _load_server,
@@ -97,11 +98,14 @@ class CrossVersionContractTests(unittest.TestCase):
                 ).items():
                     self.assertEqual(contract, schema["properties"][field])
                     self.assertNotIn(field, schema.get("required", []))
+                frozen_digest = fixture["canonicalToolInputSchemaSha256"].get(name)
+                if frozen_digest is None:
+                    frozen_digest = ADDITIVE_SUCCESSOR_BASE_DIGESTS[name]
                 self.assertTrue(
                     _matches_approved_existing_tool_successor(
                         name,
                         schema,
-                        fixture["canonicalToolInputSchemaSha256"][name],
+                        frozen_digest,
                     )
                 )
 
@@ -151,6 +155,32 @@ class CrossVersionContractTests(unittest.TestCase):
         self.assertIn(
             "MCP input contract changed without a versioned successor: "
             "jstack_release_readiness",
+            errors,
+        )
+
+    def test_ui_finalize_motion_successor_field_drift_is_detected(self) -> None:
+        server = _load_server()
+        tools = dict(server.TOOLS)
+        name = "jstack_ui_finalize"
+        metadata = dict(tools[name])
+        schema = json.loads(json.dumps(metadata["inputSchema"]))
+        schema["properties"]["motion_finalization_receipt"]["maxLength"] += 1
+        metadata["inputSchema"] = schema
+        tools[name] = metadata
+        fake = SimpleNamespace(
+            TOOLS=tools,
+            SUPPORTED_PROTOCOL_VERSIONS=server.SUPPORTED_PROTOCOL_VERSIONS,
+            SERVER_NAME=server.SERVER_NAME,
+            capability_core=server.capability_core,
+            launch_core=server.launch_core,
+        )
+        with mock.patch(
+            "scripts.check_contract_compatibility._load_server", return_value=fake
+        ):
+            errors = check_contracts()
+        self.assertIn(
+            "MCP input contract changed outside its approved additive successor: "
+            "jstack_ui_finalize",
             errors,
         )
 

@@ -57,6 +57,7 @@ JStack makes those controls explicit.
 | Multiple agents collide or duplicate work | Role permissions, write scopes, coordination packets, and controlled dispatch waves |
 | A generic role receives a generic prompt | Versioned capability routing adds task-specific methods, evidence requirements, stop conditions, and audit/loop controls without granting new authority |
 | Interface output defaults to generic cards and gradients or overwrites a product's visual language | Automatic Product Interface routing preserves the existing design system, selects an editorial or creative profile, and requires exact-state objective visual evidence |
+| Meaningful UI state changes snap, over-animate, or ignore reduced-motion preferences | Product UI Motion Intelligence creates a frequency-aware specification before implementation; Beta.6 binds ordinary and reduced runtime measurements to the exact candidate before UI finalization |
 | Screenshots or websites are used as vague inspiration or mistaken for implementation proof | Evidence Builder records private, digest-bound reference analysis and optional isolated prototypes while keeping source references separate from candidate UI evidence |
 | A launch checklist is incomplete, under-scoped, or “passed” with prose | Risk floors and detected surface hints select 47 controls; JStack derives results from structured, target-bound assertions |
 | A long task loses context or loops forever | Durable state, bounded iteration, leases, circuit breakers, and explicit stop conditions |
@@ -172,36 +173,40 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.5 Prerelease
+## What Is In The v0.10.0-beta.6 Prerelease
 
-`v0.10.0-beta.5` adds creation-time Product UI Motion Intelligence. After a
-Git-bound UI contract is ready and before interface edits begin, Product UI
-Design automatically inventories meaningful interactions and requests a
-strict, deterministic motion specification. The specification selects the
-smallest justified native or existing runtime per platform; varies feedback by
-interaction frequency and input mode; centralizes duration, easing, spring,
-distance, scale, opacity, blur, stagger, overlay, and reduced-motion tokens;
-and records purposeful omissions. It adds no animation runtime dependency and
-does not claim Beta.6 runtime capture or motion-audit evidence. See
-[ADR 0026](docs/adr/0026-product-ui-motion-intelligence.md) and the
-[Beta.5 migration guide](docs/migration-0.10.0-beta.5.md).
+`v0.10.0-beta.6` completes the planned Product UI motion lifecycle. Beta.5
+still creates the frequency-aware, reduced-motion-aware specification before
+implementation. After a clean candidate is built and exercised, the new
+`jstack_ui_motion_finalize` gate validates bounded host-produced runtime
+measurements for every specified interaction and platform in both ordinary and
+reduced modes. It checks exact candidate and artifact binding, timing and
+property conformance, immediate feedback, interruption behavior, focus and
+semantic state, refresh-rate-aware frame budgets, dropped frames, long tasks,
+and layout stability. It writes one deterministic private HTML report and
+issues a candidate-bound receipt that can be paired with the motion
+specification during ordinary `jstack_ui_finalize`. See
+[ADR 0027](docs/adr/0027-product-ui-motion-enforcement.md) and the
+[Beta.6 migration guide](docs/migration-0.10.0-beta.6.md).
 
-Beta.5 retains Beta.4's schema-first Prompt Compiler and Beta.4.1's mandatory
-complete-prompt approval boundary unchanged. The private Evidence Builder and
-existing Product Interface contract/finalization lifecycle also remain
-compatible.
+Beta.6 adds no animation runtime and does not operate a browser or native test
+harness. The host supplies canonical measurement artifacts beneath JStack's
+private UI evidence root; JStack validates those bytes and declared metrics but
+does not certify producer honesty or subjective aesthetic quality. Static UI
+work keeps the existing finalization path. Beta.4's Prompt Compiler,
+Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
+and UI contract v1/v2 remain compatible.
 
-> **Unvalidated prerelease:** `0.10.0-beta.5` adds deterministic creation-time
-> motion guidance, not measured runtime motion quality. Beta.1's 18-image, 216-attempt,
-> 432-review Proof Study remains deferred and byte-bound to the exact annotated
-> `v0.10.0-beta.1` tag. Neither Beta.5 publication nor Product Interface
-> receipts validate that study, prove measured uplift, or establish production
-> readiness.
+> **Unvalidated prerelease:** `0.10.0-beta.6` enforces deterministic motion
+> evidence contracts; it does not itself prove measured design uplift. Beta.1's
+> 18-image, 216-attempt, 432-review Proof Study remains deferred and byte-bound
+> to the exact annotated `v0.10.0-beta.1` tag. Neither publication nor Product
+> Interface receipts validate that study or establish production readiness.
 
 | Capability | What it provides |
 | --- | --- |
 | Prompt Compiler | Stage A pre-inspection intent and authority normalization; Stage B repository-grounded, source-traceable task contracts; mandatory complete-prompt preview and exact approval binding before planning; deterministic rendering, size budgets, secret rejection, signed project-bound receipts, four rollout modes, and no stored raw prompt or hidden reasoning |
-| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, creation-time frequency-aware motion specifications with reduced-motion behavior, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command |
+| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, creation-time frequency-aware motion specifications, candidate-bound ordinary/reduced motion audits and private reports, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command |
 | Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance, uplift, validation, or production-readiness claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
@@ -227,16 +232,16 @@ compatible.
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Six dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
-The MCP exposes 58 canonical `jstack_*` tools, including the canonical-only
+The MCP exposes 59 canonical `jstack_*` tools, including the canonical-only
 `jstack_prompt_compile` two-stage lifecycle, the
 `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` reference
 lifecycle, the `jstack_ui_contract` / `jstack_ui_finalize` candidate lifecycle,
-the creation-time `jstack_ui_motion_spec`, the shared
+the `jstack_ui_motion_spec` / `jstack_ui_motion_finalize` motion lifecycle, the shared
 `jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
 protocol, plus `jstack_performance_capture`, `jstack_adversarial_capture`, and the delivery, audit, loop, continuity,
 specialist-review, and mastery families. The frozen 52 legacy `gstack_*`
-aliases remain available for compatibility; the Prompt Compiler and all five
+aliases remain available for compatibility; the Prompt Compiler and all six
 UI tools deliberately have no legacy aliases.
 
 All six workflows compile intent before inspection, display Stage B's complete
@@ -577,6 +582,7 @@ and SSH authority tests are not claimed as Windows-compatible.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.6 migration guide](docs/migration-0.10.0-beta.6.md) | [Product UI Motion Enforcement](docs/adr/0027-product-ui-motion-enforcement.md) |
 | [v0.10.0-beta.5 migration guide](docs/migration-0.10.0-beta.5.md) | [Product UI Motion Intelligence](docs/adr/0026-product-ui-motion-intelligence.md) |
 | [v0.10.0-beta.4.1 migration guide](docs/migration-0.10.0-beta.4.1.md) | [Prompt Compiler approval amendment](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |
 | [v0.10.0-beta.4 migration guide](docs/migration-0.10.0-beta.4.md) | [Prompt Compiler decision](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |

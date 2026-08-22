@@ -63,12 +63,13 @@ ADDITIVE_CANONICAL_TOOLS = {
     "jstack_ui_reference_contract",
     "jstack_ui_reference_finalize",
     "jstack_ui_motion_spec",
+    "jstack_ui_motion_finalize",
     "jstack_prompt_compile",
 }
 CONTRACT_FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "v0.10.0-alpha.9.json"
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 58
+LIVE_CANONICAL_TOOL_COUNT = 59
 CORE_LOCAL_IMPORTS = {
     "audit",
     "capabilities",
@@ -269,7 +270,7 @@ def main() -> int:
         sys.stderr.write("\n".join(errors) + "\n")
         return 1
     print(
-        "JStack product boundaries are intact: six commands, 58 canonical tools, "
+        "JStack product boundaries are intact: six commands, 59 canonical tools, "
         "52 frozen aliases, stdlib core, no packaged Proof Plane authority."
     )
     return 0

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-motion-audit.v1.schema.json",
+  "title": "JStack Product UI motion audit v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "motionSpec", "candidate", "producerSha256", "capturedAt",
+    "coverage", "thresholds", "evidence", "passed", "blockers",
+    "producerHonestyCertified", "semanticTruthCertified", "auditSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.motion-audit.v1"},
+    "motionSpec": {"$ref": "#/$defs/motionSpec"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "producerSha256": {"$ref": "#/$defs/sha256"},
+    "capturedAt": {"$ref": "#/$defs/timestamp"},
+    "coverage": {"$ref": "#/$defs/coverage"},
+    "thresholds": {"$ref": "#/$defs/thresholds"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "passed": {"const": true},
+    "blockers": {"type": "array", "maxItems": 0},
+    "producerHonestyCertified": {"const": false},
+    "semanticTruthCertified": {"const": false},
+    "auditSha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "timestamp": {"type": "string", "format": "date-time", "minLength": 1, "maxLength": 100},
+    "motionSpec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "sha256", "uiContractSha256", "catalogSha256"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.motion-spec.v1"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "uiContractSha256": {"$ref": "#/$defs/sha256"},
+        "catalogSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gitHead", "treeSha256", "projectFingerprint", "buildSha256", "runtimeSha256"],
+      "properties": {
+        "gitHead": {"$ref": "#/$defs/gitOid"}, "treeSha256": {"$ref": "#/$defs/sha256"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"}, "buildSha256": {"$ref": "#/$defs/sha256"},
+        "runtimeSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["interactionCount", "expectedResultCount", "ordinaryResultCount", "reducedResultCount", "resultSetSha256"],
+      "properties": {
+        "interactionCount": {"type": "integer", "minimum": 1, "maximum": 128},
+        "expectedResultCount": {"type": "integer", "minimum": 2, "maximum": 2816},
+        "ordinaryResultCount": {"type": "integer", "minimum": 1, "maximum": 1408},
+        "reducedResultCount": {"type": "integer", "minimum": 1, "maximum": 1408},
+        "resultSetSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "thresholds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["inputFeedbackMaximumMs", "droppedFrameRatioMaximum", "longTaskThresholdMs", "frameBudgetToleranceMs", "durationToleranceFrames", "cumulativeLayoutShiftMaximum"],
+      "properties": {
+        "inputFeedbackMaximumMs": {"const": 100.0},
+        "droppedFrameRatioMaximum": {"const": 0.05},
+        "longTaskThresholdMs": {"const": 50.0},
+        "frameBudgetToleranceMs": {"const": 1.0},
+        "durationToleranceFrames": {"const": 1.0},
+        "cumulativeLayoutShiftMaximum": {"const": 0.0}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["manifestSha256", "manifestRawSha256", "resultCount", "artifactBytes", "complete", "truncated", "rawArtifactContentReturned"],
+      "properties": {
+        "manifestSha256": {"$ref": "#/$defs/sha256"}, "manifestRawSha256": {"$ref": "#/$defs/sha256"},
+        "resultCount": {"type": "integer", "minimum": 2, "maximum": 2816},
+        "artifactBytes": {"type": "integer", "minimum": 1, "maximum": 250000000},
+        "complete": {"const": true}, "truncated": {"const": false}, "rawArtifactContentReturned": {"const": false}
+      }
+    }
+  }
+}
