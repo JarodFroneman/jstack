@@ -31,6 +31,7 @@ class ProductInterfaceSyncTests(unittest.TestCase):
             "ui-contract.v2.schema.json",
             "ui-evidence.v1.schema.json",
             "ui-finalization.v1.schema.json",
+            "ui-motion-spec.v1.schema.json",
             "ui-objective-result.v1.schema.json",
             "ui-product-observation.v1.schema.json",
             "ui-reference-analysis.v1.schema.json",

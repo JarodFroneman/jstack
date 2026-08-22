@@ -20,6 +20,7 @@ ADDITIVE_CANONICAL_TOOLS = frozenset(
         "jstack_ui_finalize",
         "jstack_ui_reference_contract",
         "jstack_ui_reference_finalize",
+        "jstack_ui_motion_spec",
         "jstack_prompt_compile",
     }
 )
@@ -228,6 +229,7 @@ ADDITIVE_SCHEMA_FILES = frozenset(
         "ui-contract.v2.schema.json",
         "ui-evidence.v1.schema.json",
         "ui-finalization.v1.schema.json",
+        "ui-motion-spec.v1.schema.json",
         "ui-objective-result.v1.schema.json",
         "ui-product-observation.v1.schema.json",
         "ui-reference-analysis.v1.schema.json",
@@ -240,7 +242,7 @@ ADDITIVE_SCHEMA_FILES = frozenset(
 )
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 57
+LIVE_CANONICAL_TOOL_COUNT = 58
 
 
 def _canonical_digest(value: Any) -> str:

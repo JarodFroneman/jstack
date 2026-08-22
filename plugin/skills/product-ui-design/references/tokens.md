@@ -26,9 +26,13 @@ Use the project's established tokens first. Introduce these foundations only for
 
 ## Motion
 
-- Use the shared duration tokens: 120ms for immediate feedback, 180ms for ordinary state transitions, and 240ms for meaningful spatial transitions.
-- Use restrained easing with a fast response and gentle settle. Animate opacity and transforms when practical; avoid layout animation that moves interaction targets.
-- Preserve a visible final state when reduced motion is enabled. Remove parallax, zoom, long travel, and nonessential repeated motion; do not merely slow them down.
+- Preserve an established project motion scale. For missing roles or greenfield work, use `instant` 0ms, `press` 80ms, `fast` 120ms, `standard` 180ms, `spatial` 240ms, and `deliberate` 320ms. Treat 320ms as a ceiling for rare meaningful transitions, not a universal page duration.
+- Use separate standard, entrance, exit, and linear-progress easing roles. Exits are normally faster or quieter than entrances. Use the `settle` and `spatial` spring characters only where the runtime supports interruption safely; never apply one spring to every component.
+- Use semantic distance tiers of 0, 2, 4, 8, and 16px; scale roles of identity, 0.98 press, and 0.985 subtle entrance; no blur by default with 4px measured subtle and 8px maximum; and no stagger by default with 20ms tight and 40ms maximum.
+- Match the motion budget to interaction frequency. Rare interactions may use purposeful spatial continuity, routine interactions stay restrained, frequent interactions use press or fast feedback without travel or stagger, and continuous or keyboard-driven interactions remain direct or instant.
+- Prefer opacity and transforms. Measure clipping, shadows, filters, masks, and large composited layers. Avoid layout animation that shifts an active target, causes cumulative layout shift, or queues stale transitions after rapid input.
+- Preserve a visible and semantic final state when reduced motion is enabled. Remove travel, scale, blur, parallax, zoom, inertial effects, and nonessential repetition instead of merely slowing them down. Keep focus, announcements, progress, and state meaning intact.
+- Read [motion-intelligence.md](motion-intelligence.md) for the interaction matrix, runtime selection, omission rules, and motion QA contract.
 
 ## Component behavior
 

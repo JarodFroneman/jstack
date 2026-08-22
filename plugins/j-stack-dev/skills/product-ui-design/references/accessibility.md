@@ -23,9 +23,12 @@ Target WCAG 2.2 AA for web and webview surfaces and the target platform's native
 
 ## Motion and timing
 
-- Honor reduced-motion preferences. Remove nonessential spatial motion, autoplay, parallax, flashing, and repeated animation while preserving state feedback.
+- Honor reduced-motion preferences with explicit final-state substitutions. Remove nonessential travel, scale, zoom, blur, autoplay, parallax, inertia, flashing, and repeated animation while preserving focus, state feedback, announcements, progress, and content availability. Do not rely on one global near-zero-duration CSS reset that can leave delayed events or invisible content.
+- Never use motion as the only indication of selected, expanded, busy, invalid, completed, destructive, or reordered state. Preserve an equivalent text, icon, semantic property, focus change, live announcement, or stable spatial result.
+- Make motion safe under rapid repeated input, cancellation, route interruption, unmounting, and keyboard operation. Superseded transitions must stop without trapping focus, replaying stale state, or delaying the next action.
+- Avoid large full-screen zoom, rotation, long off-axis travel, parallax, and high-contrast flashing transitions that can cause vestibular or photosensitive discomfort. Direct manipulation remains direct under reduced motion, but inertial and decorative settles are removed.
 - Give users control over meaningful time limits, moving content, and media. Avoid content that flashes more than accessibility thresholds allow.
 
 ## Review evidence
 
-Record the tool and version used for automated analysis, the exact routes or screens tested, keyboard and focus results, relevant assistive-technology observations, contrast or text-fit findings, and unresolved limitations. Never describe a surface as accessible solely because an automated scan passed.
+Record the tool and version used for automated analysis, the exact routes or screens tested, keyboard and focus results, ordinary and reduced-motion behavior, rapid-input and cancellation results, relevant assistive-technology observations, contrast or text-fit findings, and unresolved limitations. Never describe a surface as accessible solely because an automated scan passed.

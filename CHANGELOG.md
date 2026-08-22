@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.10.0-beta.5 - 2026-08-22 - Product UI Motion Intelligence prerelease
+
+### Added
+
+- Added the canonical-only `jstack_ui_motion_spec` tool, taking the live MCP
+  surface to 58 canonical `jstack_*` tools while preserving all 52 frozen
+  `gstack_*` aliases and all six public workflow names.
+- Added the original `jstack.ui.motion-catalog.v1` and strict
+  `jstack.ui.motion-spec.v1` contracts for interaction inventory, frequency and
+  input-mode gating, per-platform runtime selection, tokenized enter/exit
+  behavior, explicit omissions, and reduced-motion substitutions.
+- Added automatic Product UI Design motion guidance covering controls,
+  navigation, routes, tabs, overlays, menus, disclosure, list changes, forms,
+  loading, notifications, shared elements, and gestures, with centralized
+  duration, easing, spring-character, distance, scale, opacity, blur, stagger,
+  overlay, and reduced-motion tokens.
+- Added ADR 0026, a Beta.5 migration guide, provenance notes, and focused motion
+  catalog, schema, receipt, privacy, staleness, compatibility, and tool tests.
+
+### Changed
+
+- Product UI Design now inventories meaningful interactions after
+  `jstack_ui_contract` and before implementation, selects the smallest existing
+  or native runtime per platform, and applies motion automatically without a
+  separate slash command.
+- Advanced public MCP and plugin version metadata to `0.10.0-beta.5`. Existing
+  UI contract v1/v2 schemas, receipts, finalization, loop, and program consumers
+  remain unchanged.
+
+### Accessibility, performance, and privacy
+
+- Frequent and keyboard-driven work is capped at immediate or fast feedback;
+  continuous interaction follows input directly; rare spatial continuity stays
+  bounded and purposeful. Generic hover-scale, pulse loops, stagger spam,
+  uniform fade-on-mount, utility bounce, and decorative parallax are rejected.
+- Every pattern has an explicit reduced-motion result. Focus, semantic state,
+  announcements, gesture alternatives, stable targets, interruption, and
+  cancellation remain mandatory; cumulative layout shift is forbidden.
+- Runtime evidence paths and selection rationale are hashed before entering the
+  specification or receipt. No source contents, screenshots, secrets,
+  credentials, or hidden reasoning are stored. The tool adds no dependency and
+  grants no implementation, Git, release, deployment, or production authority.
+- Runtime capture, independent motion audit, HTML reporting, and pass/fail
+  motion finalization remain explicitly deferred to Beta.6.
+
 ## 0.10.0-beta.4.1 - 2026-08-22 - Prompt Compiler approval prerelease
 
 ### Changed

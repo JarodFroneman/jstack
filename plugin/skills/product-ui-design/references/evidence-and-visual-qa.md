@@ -24,6 +24,13 @@ Verify the candidate that will be delivered, not a stale development state. In J
 - Check interaction feedback, target stability, selection clarity, focus visibility, error recovery, responsive transitions, and reduced-motion behavior.
 - Record Product or UX observations as pass, advisory, or blocker with the exact surface and evidence. Use the published `ui-product-observation.v1` artifact; use the published `ui-objective-result.v1` artifact (including digest-bound structured assertion measurements) for objective checks. Human visual approval is optional unless the user or release policy requires it.
 
+## Exercise the Beta.5 motion specification
+
+- Revisit every `jstack_ui_motion_spec` inventory item at runtime. Confirm its trigger, visible feedback, final state, origin and destination where applicable, exit behavior, and explicit omission reason.
+- Exercise ordinary and reduced-motion modes, keyboard and pointer or touch input, rapid repetition, cancellation, back navigation, interrupted routes, slow content, and unmounting. Focus, target geometry, and semantic state must remain stable.
+- Check that transforms, opacity, clipping, filters, and composited layers do not create cumulative layout shift, stale transitions, long tasks, dropped frames, or an input-blocking pause on representative desktop and mobile hardware.
+- Report the runtime strategy actually used and any divergence from the specification. Beta.5 motion checks are implementation QA notes; the independent capture, report, and pass/fail motion evidence gate remains a Beta.6 capability and must not be claimed here.
+
 ## Finalize honestly
 
 - Block completion when required evidence is absent, the Git candidate drifted, a screenshot digest or dimension fails, a critical flow or accessibility check fails, target-platform coverage is missing, or a clipping or overlap blocker remains.

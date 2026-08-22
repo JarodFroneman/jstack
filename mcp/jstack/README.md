@@ -162,14 +162,14 @@ execution.
 
 ## Tools
 
-The server exposes 57 canonical `jstack_*` tools for runtime status, project
+The server exposes 58 canonical `jstack_*` tools for runtime status, project
 detection, two-stage Prompt Compilation, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
-mastery, and Product Interface reference and candidate
-contracting/finalization. The frozen 52 legacy `gstack_*` aliases remain for
-compatibility; `jstack_prompt_compile` and the four UI tools are canonical-only
+mastery, and Product Interface reference, candidate contracting/finalization,
+and creation-time motion specification. The frozen 52 legacy `gstack_*`
+aliases remain for compatibility; `jstack_prompt_compile` and the five UI tools are canonical-only
 and upstream gstack itself is optional.
 
 Current JStack releases have no custom action-approval tools. JStack never asks for an approval

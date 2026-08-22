@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "jstack.ui.motion-catalog.v1",
+  "catalogVersion": "1.0.0",
+  "principles": [
+    "A control responds immediately enough to acknowledge input before a longer state or navigation transition begins.",
+    "Motion preserves spatial continuity between related states and makes origin, destination, hierarchy, and causality understandable.",
+    "Acceleration, deceleration, and spring behavior remain restrained and appropriate to the product rather than decorative.",
+    "Exits are normally faster or quieter than entrances and never make the user wait for an interaction target to become available.",
+    "Interactions remain interruption-safe and reversible when the underlying product action is reversible.",
+    "Interaction frequency and input modality determine how much motion is useful; repeated and keyboard-driven work stays near-instant.",
+    "Motion never carries state meaning alone and always has an explicit reduced-motion substitution.",
+    "Existing project conventions and platform-native facilities take precedence over introducing another animation runtime."
+  ],
+  "tokens": {
+    "durationMs": {
+      "instant": 0,
+      "press": 80,
+      "fast": 120,
+      "standard": 180,
+      "spatial": 240,
+      "deliberate": 320
+    },
+    "easing": {
+      "linear": "linear",
+      "standard": "cubic-bezier(0.2, 0, 0, 1)",
+      "enter": "cubic-bezier(0.16, 1, 0.3, 1)",
+      "exit": "cubic-bezier(0.4, 0, 1, 1)"
+    },
+    "springs": {
+      "settle": {
+        "character": "subtle-settle",
+        "mass": 1.0,
+        "stiffness": 360,
+        "damping": 34
+      },
+      "spatial": {
+        "character": "restrained-spatial",
+        "mass": 1.0,
+        "stiffness": 300,
+        "damping": 32
+      }
+    },
+    "distancePx": {
+      "none": 0,
+      "micro": 2,
+      "small": 4,
+      "medium": 8,
+      "large": 16
+    },
+    "scale": {
+      "identity": 1.0,
+      "press": 0.98,
+      "subtle-in": 0.985
+    },
+    "opacity": {
+      "hidden": 0.0,
+      "softened": 0.72,
+      "visible": 1.0
+    },
+    "blurPx": {
+      "none": 0,
+      "subtle": 4,
+      "maximum": 8
+    },
+    "staggerMs": {
+      "none": 0,
+      "tight": 20,
+      "maximum": 40
+    },
+    "overlay": {
+      "maximumBackdropOpacity": 0.48,
+      "zAxisPolicy": "Use the established semantic layer scale; transient controls remain above their origin and below blocking dialogs."
+    },
+    "reducedMotion": {
+      "maximumDurationMs": 120,
+      "spatialDistancePx": 0,
+      "scaleChangeAllowed": false,
+      "blurAllowed": false,
+      "repeatedMotionAllowed": false
+    }
+  },
+  "frequencyPolicies": [
+    {
+      "id": "rare",
+      "spatialMotionAllowed": true,
+      "maximumDurationToken": "deliberate",
+      "defaultCharacter": "Purposeful spatial continuity is allowed when it improves orientation."
+    },
+    {
+      "id": "routine",
+      "spatialMotionAllowed": true,
+      "maximumDurationToken": "spatial",
+      "defaultCharacter": "Use restrained state and spatial transitions without delaying the next action."
+    },
+    {
+      "id": "frequent",
+      "spatialMotionAllowed": false,
+      "maximumDurationToken": "fast",
+      "defaultCharacter": "Use immediate feedback and omit nonessential travel, stagger, blur, and overshoot."
+    },
+    {
+      "id": "continuous",
+      "spatialMotionAllowed": false,
+      "maximumDurationToken": "instant",
+      "defaultCharacter": "Follow input directly; animate only a necessary settle or progress signal after input ends."
+    }
+  ],
+  "categories": [
+    {"id":"button","purpose":"Acknowledge press, loading, success, or disabled state without moving the target.","allowedProperties":["opacity","transform"],"enterDurationToken":"press","exitDurationToken":"press","easingToken":"standard","springToken":"settle","distanceToken":"none","scaleToken":"press","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"link","purpose":"Confirm hover, focus, press, and navigation intent without decorative travel.","allowedProperties":["opacity"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"none","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"navigation","purpose":"Communicate destination and selected location while keeping navigation responsive.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"small","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"route","purpose":"Preserve direction and continuity across a meaningful page or screen change.","allowedProperties":["opacity","transform"],"enterDurationToken":"spatial","exitDurationToken":"fast","easingToken":"enter","springToken":null,"distanceToken":"small","scaleToken":"subtle-in","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":false},
+    {"id":"tab","purpose":"Connect the selected control to its panel without replaying the whole page.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"small","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"segmented-control","purpose":"Make the selected segment and associated state change immediately legible.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"small","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"modal","purpose":"Establish a blocking layer from a clear origin while preserving focus and context.","allowedProperties":["opacity","transform"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"enter","springToken":null,"distanceToken":"small","scaleToken":"subtle-in","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"drawer","purpose":"Show where a secondary surface comes from and where it returns.","allowedProperties":["opacity","transform"],"enterDurationToken":"spatial","exitDurationToken":"standard","easingToken":"enter","springToken":null,"distanceToken":"large","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"sheet","purpose":"Connect a transient task surface to its screen edge or invoking control.","allowedProperties":["opacity","transform"],"enterDurationToken":"spatial","exitDurationToken":"standard","easingToken":"enter","springToken":null,"distanceToken":"large","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"popover","purpose":"Reveal contextual content from its invoking control without losing origin.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"enter","springToken":null,"distanceToken":"small","scaleToken":"subtle-in","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"menu","purpose":"Open contextual choices from their anchor and dismiss them promptly.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"enter","springToken":null,"distanceToken":"small","scaleToken":"subtle-in","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"tooltip","purpose":"Expose supporting information quickly without competing with the target.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"micro","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"accordion","purpose":"Make disclosure and collapse causally clear while preserving reading position.","allowedProperties":["opacity","clip-path"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"standard","springToken":null,"distanceToken":"none","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"card","purpose":"Clarify selection, activation, expansion, or drag state without generic hover scaling.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"micro","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"list","purpose":"Preserve item identity during insertion, deletion, sorting, filtering, or replacement.","allowedProperties":["opacity","transform"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"standard","springToken":"settle","distanceToken":"small","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"tight","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"reorder","purpose":"Keep an item spatially attached to the user's action and settle it into its destination.","allowedProperties":["transform"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"standard","springToken":"settle","distanceToken":"medium","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"direct-state","reversible":true},
+    {"id":"form-validation","purpose":"Connect validation feedback to the affected field without startling movement.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"micro","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"form-submission","purpose":"Make busy, completion, and failure states clear while keeping control dimensions stable.","allowedProperties":["opacity"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":null,"distanceToken":"none","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":false},
+    {"id":"loading","purpose":"Communicate bounded progress or activity without layout shift or distracting repetition.","allowedProperties":["opacity","transform"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"linear","springToken":null,"distanceToken":"none","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"static-progress","reversible":false},
+    {"id":"content-replacement","purpose":"Avoid an abrupt flash while keeping stable content and geometry anchored.","allowedProperties":["opacity"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"standard","springToken":null,"distanceToken":"none","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":false},
+    {"id":"toast","purpose":"Announce transient feedback, expose its origin, and dismiss without blocking work.","allowedProperties":["opacity","transform"],"enterDurationToken":"standard","exitDurationToken":"fast","easingToken":"enter","springToken":null,"distanceToken":"small","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"icon-transition","purpose":"Preserve the identity of one compact control as its state icon changes.","allowedProperties":["opacity","transform"],"enterDurationToken":"fast","exitDurationToken":"press","easingToken":"standard","springToken":"settle","distanceToken":"micro","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"instant-state","reversible":true},
+    {"id":"shared-element","purpose":"Maintain object identity across related surfaces when the runtime can do so safely.","allowedProperties":["opacity","transform"],"enterDurationToken":"spatial","exitDurationToken":"standard","easingToken":"enter","springToken":"spatial","distanceToken":"medium","scaleToken":"subtle-in","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"opacity-only","reversible":true},
+    {"id":"gesture","purpose":"Follow touch or pointer input directly and use a restrained settle only after release.","allowedProperties":["transform"],"enterDurationToken":"instant","exitDurationToken":"fast","easingToken":"standard","springToken":"settle","distanceToken":"medium","scaleToken":"identity","opacityToken":"visible","blurToken":"none","staggerToken":"none","reducedMotionMode":"direct-state","reversible":true}
+  ],
+  "antiPatterns": [
+    "Do not scale every hovered control or card.",
+    "Do not pulse, shimmer, bounce, or loop without a necessary progress, attention, or system-status purpose.",
+    "Do not stagger ordinary page content or replay entrance animation after routine state updates.",
+    "Do not apply one fade-on-mount recipe to every conditional render.",
+    "Do not add parallax, zoom, blur, long travel, or elastic overshoot to high-frequency utility work.",
+    "Do not animate layout properties when stable geometry, transforms, opacity, clipping, or an explicit state change can communicate the result."
+  ],
+  "requirements": {
+    "reducedMotionRequired": true,
+    "motionAsSoleSignalAllowed": false,
+    "keyboardFocusMustRemainVisible": true,
+    "automaticDependencyAdditionAllowed": false,
+    "compositorFriendlyPropertiesPreferred": true,
+    "cumulativeLayoutShiftAllowed": false,
+    "rapidInputCancellationRequired": true,
+    "beta6RuntimeAuditIncluded": false
+  }
+}

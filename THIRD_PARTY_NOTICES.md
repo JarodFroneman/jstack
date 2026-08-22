@@ -1,5 +1,24 @@
 # Third-Party Notices
 
+## Product UI Motion Research Reference
+
+JStack Product UI Motion Intelligence is an original, standard-library and
+stack-neutral implementation. The following repository was reviewed for
+general motion-design techniques; no source code, prompts, personas, examples,
+wording, installer, or repository structure is copied or adapted:
+
+- Project: `kylezantos/design-motion-principles`
+- Repository: https://github.com/kylezantos/design-motion-principles
+- Reviewed source commit: `4a9ca879f24a361f4dca4174fe2da0f67b5ddee3`
+- License: MIT
+
+The research informed only general ideas such as purposeful motion,
+interaction-frequency weighting, spatial continuity, reduced-motion behavior,
+performance discipline, and anti-pattern review. JStack supplies its own
+catalog, tokens, interaction taxonomy, schemas, receipt binding, Product UI
+workflow, terminology, and deferred audit boundary. If future work copies or
+adapts upstream material, its copyright and MIT license notice must be added.
+
 ## Prompt Compiler Research References
 
 JStack's Prompt Compiler is an original standard-library implementation. The
