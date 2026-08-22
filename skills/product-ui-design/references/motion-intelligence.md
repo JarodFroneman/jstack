@@ -26,9 +26,11 @@ usually benefits from less motion than occasional spatial navigation.
    `jstack_ui_contract` receipt before source edits. Implement its tokenized
    specification rather than inventing unrelated timings per component.
 6. Verify ordinary and reduced-motion behavior with rapid repeated input,
-   cancellation, keyboard operation, focus restoration, and realistic content.
-   Beta.5 produces creation guidance; the independent runtime audit and final
-   motion evidence gate remain deferred to Beta.6.
+   interruption, cancellation, keyboard operation, focus restoration, and
+   realistic content. For JStack-bound work, encode the measurements in the
+   published motion-result and motion-evidence contracts beneath the private UI
+   evidence root, then call `jstack_ui_motion_finalize` before ordinary UI
+   finalization.
 
 ## Frequency and input gate
 
@@ -144,6 +146,38 @@ Use semantic tokens and map them through the project's existing token system:
 Report the inventory covered, omitted interactions and reasons, runtime choice
 and evidence paths, tokens used, ordinary and reduced-motion behavior tested,
 keyboard and focus results, rapid-input and cancellation results, performance
-checks, unresolved limitations, and whether Beta.6 runtime audit evidence is
-still outstanding. A Beta.5 specification is implementation guidance and never
-release or deployment authority.
+checks, unresolved limitations, and the exact motion-audit outcome. A Beta.5
+specification is implementation guidance and never runtime proof. A Beta.6
+motion-finalization receipt is exact-candidate evidence only and never release
+or deployment authority.
+
+## Beta.6 evidence handoff
+
+The capture harness is host-owned: JStack does not start a browser, simulator,
+or native runner. For every specified interaction/platform pair, produce one
+`jstack.ui.motion-result.v1` artifact for `ordinary` and one for `reduced`, then
+reference those private canonical JSON files from one
+`jstack.ui.motion-evidence.v1` manifest. Bind the manifest to the exact clean
+candidate Git head, tree, project fingerprint, build digest, runtime digest,
+UI contract, motion specification, and producer digest.
+
+The finalizer requires complete untruncated coverage and validates:
+
+- observed properties and measured entrance/exit durations against the
+  specified pattern, with no more than one display frame of timing tolerance;
+- input feedback at or below 100ms;
+- refresh-rate-aware frame budgets, no more than 5% dropped frames, no blocking
+  task of 50ms or more, and zero cumulative layout shift;
+- rapid-input, interruption, cancellation, reversal, keyboard, visible-focus,
+  focus-restoration, semantic-state, and non-motion status behavior; and
+- exact reduced-motion substitution, no prohibited repeated or generic motion,
+  canonical bounded files, private paths, current timestamps, and stable
+  candidate state.
+
+On success JStack writes a deterministic, script-free HTML report beneath the
+same private evidence root and returns a candidate-bound receipt. Call
+`jstack_ui_finalize` with the original motion-spec receipt and this
+motion-finalization receipt as a pair. Static UI work omits both. The report
+does not include raw source contents or arbitrary producer prose, and neither
+the report nor receipt certifies the capture producer's honesty or subjective
+design quality.

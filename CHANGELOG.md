@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.10.0-beta.6 - 2026-08-22 - Product UI Motion Enforcement prerelease
+
+### Added
+
+- Added the canonical-only `jstack_ui_motion_finalize` tool, taking the live
+  MCP surface to 59 canonical `jstack_*` tools while preserving all 52 frozen
+  `gstack_*` aliases and all six public workflow names.
+- Added closed `jstack.ui.motion-evidence.v1`,
+  `jstack.ui.motion-result.v1`, `jstack.ui.motion-audit.v1`, and
+  `jstack.ui.motion-finalization.v1` contracts for exact-candidate runtime
+  measurements, ordinary and reduced-motion coverage, deterministic audit
+  output, and a bounded finalization response.
+- Added deterministic, private, script-free HTML motion reports and focused
+  tests for complete coverage, semantic performance failure, artifact
+  tampering, report idempotence, private file modes, tool exposure, and schema
+  closure.
+- Added ADR 0027 and the Beta.6 migration guide.
+
+### Changed
+
+- Product UI Design now treats the Beta.5 motion specification as the input to
+  a candidate-time evidence gate. For motion-applicable work it submits
+  host-produced canonical measurement artifacts to
+  `jstack_ui_motion_finalize`, then passes both the specification and motion
+  finalization receipts into `jstack_ui_finalize`. Static UI work omits both
+  optional inputs and keeps the existing finalization path.
+- Product Interface finalization now binds the motion specification, audit,
+  report, evidence-manifest, and finalization-receipt digests into its opaque
+  receipt when the paired motion inputs are present. The published
+  `jstack.ui.finalization.v1` response shape remains unchanged.
+- Advanced public MCP and plugin version metadata to `0.10.0-beta.6` without
+  changing UI contract v1/v2 or the Beta.5 motion-specification contract.
+
+### Enforcement, accessibility, performance, and privacy
+
+- The finalizer requires a clean substantive descendant candidate and exact
+  Git tree, project, policy, build, runtime, UI-contract, motion-specification,
+  producer, manifest, and result-artifact binding. Evidence older than 24
+  hours, incomplete coverage, unknown fields, unsafe paths, non-canonical JSON,
+  stale bytes, and changed candidates fail closed.
+- Every interaction/platform pair requires ordinary and reduced-motion
+  results. Timings must match the specified token within one display frame;
+  input feedback must be at most 100ms; dropped frames must be at most 5%;
+  blocking long tasks and cumulative layout shift are rejected. Rapid input,
+  interruption, cancellation, reversal, keyboard, focus, semantic-state, and
+  no-motion-only-signal assertions must pass.
+- Raw measurements stay beneath the existing private UI evidence root. Public
+  outputs expose normalized metrics and digests, not source contents,
+  screenshots, secrets, or hidden reasoning. The report contains no scripts or
+  external resources.
+- JStack validates bounded evidence but does not operate the browser or native
+  capture harness, certify producer honesty or subjective aesthetics, install
+  an animation dependency, or grant implementation, Git, release, deployment,
+  external-action, or production authority.
+
 ## 0.10.0-beta.5 - 2026-08-22 - Product UI Motion Intelligence prerelease
 
 ### Added

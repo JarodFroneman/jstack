@@ -162,14 +162,14 @@ execution.
 
 ## Tools
 
-The server exposes 58 canonical `jstack_*` tools for runtime status, project
+The server exposes 59 canonical `jstack_*` tools for runtime status, project
 detection, two-stage Prompt Compilation, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
 audit, bounded loops, multi-phase programs, context, release, quant review, and
 mastery, and Product Interface reference, candidate contracting/finalization,
-and creation-time motion specification. The frozen 52 legacy `gstack_*`
-aliases remain for compatibility; `jstack_prompt_compile` and the five UI tools are canonical-only
+and Product Interface reference, candidate, and motion specification/finalization lifecycles. The frozen 52 legacy `gstack_*`
+aliases remain for compatibility; `jstack_prompt_compile` and the six UI tools are canonical-only
 and upstream gstack itself is optional.
 
 Current JStack releases have no custom action-approval tools. JStack never asks for an approval
@@ -200,6 +200,15 @@ digest-bound structured assertion measurements. Product observations carry
 the same candidate and producer binding. All referenced bytes remain beneath
 the server-selected private evidence root; receipts return normalized digests
 and counts, never raw artifact content.
+
+Motion evidence producers use `ui-motion-result.v1.schema.json` and
+`ui-motion-evidence.v1.schema.json`. The host browser or native harness writes
+ordinary and reduced-mode measurements for every specified interaction and
+platform; `jstack_ui_motion_finalize` validates those private canonical bytes
+against the clean candidate and `jstack.ui.motion-spec.v1`, derives the closed
+`jstack.ui.motion-audit.v1` object, writes a deterministic script-free private
+HTML report, and returns `jstack.ui.motion-finalization.v1`. JStack does not
+operate the capture harness or certify producer honesty or aesthetic quality.
 
 Evidence Builder producers use the packaged
 `ui-reference-contract.v1.schema.json`,

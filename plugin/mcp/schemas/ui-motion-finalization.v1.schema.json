@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-motion-finalization.v1.schema.json",
+  "title": "JStack Product UI motion finalization v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "projectPath", "baseline", "candidate", "motionSpec",
+    "audit", "report", "passed", "blockers", "motionReceipt",
+    "executionAuthorized", "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.ui.motion-finalization.v1"},
+    "projectPath": {"type": "string", "minLength": 1},
+    "baseline": {"$ref": "#/$defs/baseline"},
+    "candidate": {"$ref": "#/$defs/candidate"},
+    "motionSpec": {"$ref": "#/$defs/motionSpec"},
+    "audit": {"$ref": "#/$defs/audit"},
+    "report": {"$ref": "#/$defs/report"},
+    "passed": {"const": true},
+    "blockers": {"type": "array", "maxItems": 0},
+    "motionReceipt": {"type": "string", "minLength": 1, "maxLength": 250000},
+    "executionAuthorized": {"const": false},
+    "limitations": {
+      "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitOid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "baseline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gitHead", "projectFingerprint", "policyDigest"],
+      "properties": {
+        "gitHead": {"$ref": "#/$defs/gitOid"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "policyDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gitHead", "treeSha256", "projectFingerprint", "changedPathsSha256", "changeRecordsSha256", "diffSha256", "buildSha256", "runtimeSha256"],
+      "properties": {
+        "gitHead": {"$ref": "#/$defs/gitOid"}, "treeSha256": {"$ref": "#/$defs/sha256"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"}, "changedPathsSha256": {"$ref": "#/$defs/sha256"},
+        "changeRecordsSha256": {"$ref": "#/$defs/sha256"}, "diffSha256": {"$ref": "#/$defs/sha256"},
+        "buildSha256": {"$ref": "#/$defs/sha256"}, "runtimeSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "motionSpec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sha256", "uiContractSha256", "catalogSha256", "interactionCount"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"}, "uiContractSha256": {"$ref": "#/$defs/sha256"},
+        "catalogSha256": {"$ref": "#/$defs/sha256"},
+        "interactionCount": {"type": "integer", "minimum": 1, "maximum": 128}
+      }
+    },
+    "audit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "motionSpec", "candidate", "producerSha256", "capturedAt", "coverage", "thresholds", "evidence", "passed", "blockers", "producerHonestyCertified", "semanticTruthCertified", "auditSha256"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.motion-audit.v1"},
+        "motionSpec": {"$ref": "#/$defs/auditMotionSpec"},
+        "candidate": {"$ref": "#/$defs/auditCandidate"},
+        "producerSha256": {"$ref": "#/$defs/sha256"},
+        "capturedAt": {"type": "string", "format": "date-time", "minLength": 1, "maxLength": 100},
+        "coverage": {"$ref": "#/$defs/coverage"},
+        "thresholds": {"$ref": "#/$defs/thresholds"},
+        "evidence": {"$ref": "#/$defs/evidence"},
+        "passed": {"const": true},
+        "blockers": {"type": "array", "maxItems": 0},
+        "producerHonestyCertified": {"const": false},
+        "semanticTruthCertified": {"const": false},
+        "auditSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "auditMotionSpec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "sha256", "uiContractSha256", "catalogSha256"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.ui.motion-spec.v1"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "uiContractSha256": {"$ref": "#/$defs/sha256"},
+        "catalogSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "auditCandidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gitHead", "treeSha256", "projectFingerprint", "buildSha256", "runtimeSha256"],
+      "properties": {
+        "gitHead": {"$ref": "#/$defs/gitOid"}, "treeSha256": {"$ref": "#/$defs/sha256"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"}, "buildSha256": {"$ref": "#/$defs/sha256"},
+        "runtimeSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["interactionCount", "expectedResultCount", "ordinaryResultCount", "reducedResultCount", "resultSetSha256"],
+      "properties": {
+        "interactionCount": {"type": "integer", "minimum": 1, "maximum": 128},
+        "expectedResultCount": {"type": "integer", "minimum": 2, "maximum": 2816},
+        "ordinaryResultCount": {"type": "integer", "minimum": 1, "maximum": 1408},
+        "reducedResultCount": {"type": "integer", "minimum": 1, "maximum": 1408},
+        "resultSetSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "thresholds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["inputFeedbackMaximumMs", "droppedFrameRatioMaximum", "longTaskThresholdMs", "frameBudgetToleranceMs", "durationToleranceFrames", "cumulativeLayoutShiftMaximum"],
+      "properties": {
+        "inputFeedbackMaximumMs": {"const": 100.0},
+        "droppedFrameRatioMaximum": {"const": 0.05},
+        "longTaskThresholdMs": {"const": 50.0},
+        "frameBudgetToleranceMs": {"const": 1.0},
+        "durationToleranceFrames": {"const": 1.0},
+        "cumulativeLayoutShiftMaximum": {"const": 0.0}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["manifestSha256", "manifestRawSha256", "resultCount", "artifactBytes", "complete", "truncated", "rawArtifactContentReturned"],
+      "properties": {
+        "manifestSha256": {"$ref": "#/$defs/sha256"}, "manifestRawSha256": {"$ref": "#/$defs/sha256"},
+        "resultCount": {"type": "integer", "minimum": 2, "maximum": 2816},
+        "artifactBytes": {"type": "integer", "minimum": 1, "maximum": 250000000},
+        "complete": {"const": true}, "truncated": {"const": false}, "rawArtifactContentReturned": {"const": false}
+      }
+    },
+    "report": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relativePath", "pathSha256", "sha256", "size", "mediaType", "created"],
+      "properties": {
+        "relativePath": {"type": "string", "pattern": "^motion-report-[0-9a-f]{64}\\.html$"},
+        "pathSha256": {"$ref": "#/$defs/sha256"}, "sha256": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "mediaType": {"const": "text/html"}, "created": {"type": "boolean"}
+      }
+    }
+  }
+}

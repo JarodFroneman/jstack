@@ -26,12 +26,14 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **Beta.5 prerelease boundary:** install `v0.10.0-beta.5` only from its exact
-> immutable GitHub prerelease tag, retain the prior Beta.4.1 installation as one
+> **Beta.6 prerelease boundary:** install `v0.10.0-beta.6` only from its exact
+> immutable GitHub prerelease tag, retain the prior Beta.5 installation as one
 > complete rollback unit, and verify the installed bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
-> unvalidated. Installing Beta.5 does not satisfy its deferred 216-run study,
-> independent human reviews, or the Beta.6 runtime motion audit.
+> unvalidated. Installing Beta.6 does not satisfy its deferred 216-run study or
+> independent human reviews. A passing Beta.6 motion receipt validates bounded
+> candidate measurements; it does not certify producer honesty, aesthetic
+> quality, release readiness, or production safety.
 
 ## Host Support
 
@@ -47,7 +49,7 @@ presented as complete workflow parity.
 
 ## Prompt Compiler mode
 
-Beta.5 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
+Beta.6 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
 values are `shadow`, `preview`, and `disabled`; use `disabled` only as a bounded
 compatibility rollback while investigating an integration issue. Mode changes
 invalidate existing readiness and compilation receipts. The six packaged
@@ -391,14 +393,14 @@ Expected dedicated layout:
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-beta.5`);
-- `tools/list` includes 58 canonical `jstack_*` tools, including the
+  prerelease, `0.10.0-beta.6`);
+- `tools/list` includes 59 canonical `jstack_*` tools, including the
   canonical-only `jstack_prompt_compile`, `jstack_context_readiness`,
   `jstack_performance_capture`, and
   `jstack_adversarial_capture`, plus the reference lifecycle
   `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` and candidate
-  lifecycle `jstack_ui_contract` / `jstack_ui_finalize`, and the creation-time
-  `jstack_ui_motion_spec`; the frozen
+  lifecycle `jstack_ui_contract` / `jstack_ui_finalize`, and motion lifecycle
+  `jstack_ui_motion_spec` / `jstack_ui_motion_finalize`; the frozen
   compatibility surface remains 52 legacy `gstack_*` aliases and has no UI
   aliases.
 
@@ -413,10 +415,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.10.0-beta.5`, also confirm that GitHub marks the release as a
+For `v0.10.0-beta.6`, also confirm that GitHub marks the release as a
 prerelease and that the checked-out annotated tag resolves to the release
 commit before staging any global files. The rollback snapshot must contain the
-actual published Beta.4.1 installation as one coherent MCP, plugin-source,
+actual published Beta.5 installation as one coherent MCP, plugin-source,
 plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state

@@ -21,6 +21,7 @@ ADDITIVE_CANONICAL_TOOLS = frozenset(
         "jstack_ui_reference_contract",
         "jstack_ui_reference_finalize",
         "jstack_ui_motion_spec",
+        "jstack_ui_motion_finalize",
         "jstack_prompt_compile",
     }
 )
@@ -127,7 +128,31 @@ ADDITIVE_EXISTING_TOOL_FIELDS = {
                 "repository evidence shows UI changes in the release delta."
             ),
         }
+    },
+    "jstack_ui_finalize": {
+        "motion_spec_receipt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 250_000,
+            "description": (
+                "For motion-applicable work, the exact Beta.5 creation-time motion specification receipt. Must be paired with motion_finalization_receipt; static work omits both."
+            ),
+        },
+        "motion_finalization_receipt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 250_000,
+            "description": (
+                "For motion-applicable work, the exact current-candidate receipt from jstack_ui_motion_finalize. Must be paired with motion_spec_receipt."
+            ),
+        },
     }
+}
+ADDITIVE_SUCCESSOR_BASE_DIGESTS = {
+    # jstack_ui_finalize was introduced after the alpha.9 frozen fixture. This
+    # is its exact Beta.5 request schema before Beta.6 added the paired optional
+    # motion receipt fields.
+    "jstack_ui_finalize": "524fc4a68d14cf9b913400ed65c754c12f33972a85ad75684d25d60cd835d6a9",
 }
 PROMPT_COMPILATION_INPUT_FIELDS = {
     "prompt_compilation_receipt": {
@@ -230,6 +255,10 @@ ADDITIVE_SCHEMA_FILES = frozenset(
         "ui-evidence.v1.schema.json",
         "ui-finalization.v1.schema.json",
         "ui-motion-spec.v1.schema.json",
+        "ui-motion-evidence.v1.schema.json",
+        "ui-motion-audit.v1.schema.json",
+        "ui-motion-finalization.v1.schema.json",
+        "ui-motion-result.v1.schema.json",
         "ui-objective-result.v1.schema.json",
         "ui-product-observation.v1.schema.json",
         "ui-reference-analysis.v1.schema.json",
@@ -242,7 +271,7 @@ ADDITIVE_SCHEMA_FILES = frozenset(
 )
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 58
+LIVE_CANONICAL_TOOL_COUNT = 59
 
 
 def _canonical_digest(value: Any) -> str:
@@ -357,6 +386,22 @@ def check_contracts(fixture_path: Path = DEFAULT_FIXTURE) -> list[str]:
             expected_tools[name],
         ):
             errors.append("MCP input contract changed without a versioned successor: %s" % name)
+    for name, base_digest in sorted(ADDITIVE_SUCCESSOR_BASE_DIGESTS.items()):
+        if name not in canonical:
+            continue
+        if canonical[name] == base_digest:
+            errors.append(
+                "approved additive MCP input successor delta is missing: %s" % name
+            )
+        elif not _matches_approved_existing_tool_successor(
+            name,
+            server.TOOLS[name]["inputSchema"],
+            base_digest,
+        ):
+            errors.append(
+                "MCP input contract changed outside its approved additive successor: %s"
+                % name
+            )
 
     aliases = sorted(name for name in server.TOOLS if name.startswith("gstack_"))
     if aliases != fixture["legacyAliases"]:

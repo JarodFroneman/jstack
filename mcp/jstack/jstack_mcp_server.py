@@ -47,7 +47,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.5"
+SERVER_VERSION = "0.10.0-beta.6"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -608,6 +608,7 @@ GIT_REQUIRED_TOOLS = [
     "jstack_program_finalize",
     "jstack_ui_contract",
     "jstack_ui_motion_spec",
+    "jstack_ui_motion_finalize",
     "jstack_ui_finalize",
     "jstack_ui_reference_contract",
     "jstack_ui_reference_finalize",
@@ -20753,6 +20754,219 @@ def _ui_motion_payload(
     return payload, specification
 
 
+def tool_ui_motion_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    motion_token = str(args.get("motion_spec_receipt") or "").strip()
+    _, specification = _ui_motion_payload(
+        project_path, motion_token, require_fresh=False
+    )
+    baseline = specification["uiContract"]
+    candidate_before = _ui_candidate_delta(project_path, baseline["gitHead"])
+    if not candidate_before["clean"]:
+        raise ToolError(
+            "Motion finalization requires a clean committed candidate with no hidden index flags or untracked files."
+        )
+    if not candidate_before["changeRecords"]:
+        raise ToolError(
+            "Motion finalization requires a substantive committed candidate after the motion-spec baseline."
+        )
+    current_subject = evidence_subject(project_path, baseline["gitHead"])
+    if current_subject["policyDigest"] != baseline["policyDigest"]:
+        raise ToolError("Project policy changed after the motion specification was issued.")
+    build_sha256 = str(args.get("build_sha256") or "").strip()
+    runtime_sha256 = str(args.get("runtime_sha256") or "").strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", build_sha256) or not re.fullmatch(
+        r"[0-9a-f]{64}", runtime_sha256
+    ):
+        raise ToolError(
+            "build_sha256 and runtime_sha256 must be lowercase SHA-256 digests."
+        )
+    expected_candidate = {
+        "gitHead": candidate_before["gitHead"],
+        "treeSha256": candidate_before["treeSha256"],
+        "projectFingerprint": candidate_before["projectFingerprint"],
+        "buildSha256": build_sha256,
+        "runtimeSha256": runtime_sha256,
+    }
+    evidence_root = _ui_evidence_root(project_path)
+    _validate_ui_evidence_root_authority(evidence_root)
+    manifest_relative = str(args.get("evidence_manifest") or "").strip()
+    try:
+        audit_first, results_first = ui_core.load_and_validate_motion_evidence(
+            evidence_root,
+            manifest_relative,
+            motion_spec=specification,
+            expected_candidate=expected_candidate,
+        )
+        audit_second, results_second = ui_core.load_and_validate_motion_evidence(
+            evidence_root,
+            manifest_relative,
+            motion_spec=specification,
+            expected_candidate=expected_candidate,
+        )
+    except ui_core.MotionEvidenceError as exc:
+        raise ToolError(str(exc)) from exc
+    if audit_first != audit_second or results_first != results_second:
+        raise ToolError("Motion evidence changed during final verification.")
+    candidate_validated = _ui_candidate_delta(project_path, baseline["gitHead"])
+    if candidate_validated != candidate_before:
+        raise ToolError("The candidate Git state changed during motion evidence validation.")
+    report_bytes = ui_core.render_motion_report(audit_first, results_first)
+    try:
+        report = ui_core.write_private_motion_report(
+            evidence_root, audit_first, report_bytes
+        )
+    except ui_core.MotionEvidenceError as exc:
+        raise ToolError(str(exc)) from exc
+    candidate_after = _ui_candidate_delta(project_path, baseline["gitHead"])
+    if candidate_after != candidate_before:
+        raise ToolError("The candidate Git state changed during motion finalization.")
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+    receipt_payload = {
+        "kind": "ui-motion-finalization",
+        "schemaVersion": ui_core.MOTION_FINALIZATION_RECEIPT_SCHEMA_VERSION,
+        "projectPath": str(project_path),
+        "gitHead": candidate_after["gitHead"],
+        "projectFingerprint": candidate_after["projectFingerprint"],
+        "baseCommit": baseline["gitHead"],
+        "policyDigest": baseline["policyDigest"],
+        "toolVersion": SERVER_VERSION,
+        "treeSha256": candidate_after["treeSha256"],
+        "changedPathsSha256": candidate_after["changedPathsSha256"],
+        "changeRecordsSha256": candidate_after["changeRecordsSha256"],
+        "diffSha256": candidate_after["diffSha256"],
+        "uiContractSha256": baseline["contractSha256"],
+        "motionCatalogSha256": specification["catalog"]["sha256"],
+        "motionSpecSha256": specification["specSha256"],
+        "motionSpecReceiptSha256": hashlib.sha256(
+            motion_token.encode("utf-8")
+        ).hexdigest(),
+        "evidenceManifestSha256": audit_first["evidence"]["manifestSha256"],
+        "evidenceManifestRawSha256": audit_first["evidence"][
+            "manifestRawSha256"
+        ],
+        "resultSetSha256": audit_first["coverage"]["resultSetSha256"],
+        "auditSha256": audit_first["auditSha256"],
+        "reportPathSha256": report["pathSha256"],
+        "reportSha256": report["sha256"],
+        "buildSha256": build_sha256,
+        "runtimeSha256": runtime_sha256,
+        "expiresAt": expires,
+        "complete": True,
+        "passed": True,
+        "executionAuthorized": False,
+    }
+    motion_receipt = issue_receipt(receipt_payload)
+    if len(motion_receipt) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError(
+            "The Product UI motion finalization receipt exceeds the bounded size limit."
+        )
+    return {
+        "schemaVersion": ui_core.MOTION_FINALIZATION_SCHEMA_VERSION,
+        "projectPath": str(project_path),
+        "baseline": {
+            "gitHead": baseline["gitHead"],
+            "projectFingerprint": baseline["projectFingerprint"],
+            "policyDigest": baseline["policyDigest"],
+        },
+        "candidate": {
+            **{
+                key: candidate_after[key]
+                for key in (
+                    "gitHead",
+                    "treeSha256",
+                    "projectFingerprint",
+                    "changedPathsSha256",
+                    "changeRecordsSha256",
+                    "diffSha256",
+                )
+            },
+            "buildSha256": build_sha256,
+            "runtimeSha256": runtime_sha256,
+        },
+        "motionSpec": {
+            "sha256": specification["specSha256"],
+            "uiContractSha256": baseline["contractSha256"],
+            "catalogSha256": specification["catalog"]["sha256"],
+            "interactionCount": len(specification["interactions"]),
+        },
+        "audit": audit_first,
+        "report": report,
+        "passed": True,
+        "blockers": [],
+        "motionReceipt": motion_receipt,
+        "executionAuthorized": False,
+        "limitations": [
+            "JStack validates canonical runtime measurement bytes and deterministic thresholds; it does not operate the browser or native capture harness.",
+            "The receipt does not certify producer honesty, subjective aesthetic quality, or complete accessibility beyond the supplied bounded evidence.",
+            "This receipt authorizes no implementation, Git, release, deployment, external action, or production mutation.",
+        ],
+    }
+
+
+def _ui_motion_finalization_payload(
+    token: str,
+    *,
+    motion_spec_token: str,
+    specification: dict[str, Any],
+    subject: dict[str, Any],
+    candidate: dict[str, Any],
+    build_sha256: str,
+    runtime_sha256: str,
+) -> dict[str, Any]:
+    if not token or len(token) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError(
+            "motion_finalization_receipt must be one bounded signed receipt."
+        )
+    verification = verify_receipt(
+        token,
+        "ui-motion-finalization",
+        subject,
+        expected_subject=subject,
+    )
+    payload = verification["payload"]
+    binding = specification["uiContract"]
+    checks = {
+        **verification["checks"],
+        "schemaVersion": payload.get("schemaVersion")
+        == ui_core.MOTION_FINALIZATION_RECEIPT_SCHEMA_VERSION,
+        "baseCommit": payload.get("baseCommit") == binding["gitHead"],
+        "treeSha256": payload.get("treeSha256") == candidate["treeSha256"],
+        "changedPathsSha256": payload.get("changedPathsSha256")
+        == candidate["changedPathsSha256"],
+        "changeRecordsSha256": payload.get("changeRecordsSha256")
+        == candidate["changeRecordsSha256"],
+        "diffSha256": payload.get("diffSha256") == candidate["diffSha256"],
+        "uiContractSha256": payload.get("uiContractSha256")
+        == binding["contractSha256"],
+        "motionCatalogSha256": payload.get("motionCatalogSha256")
+        == specification["catalog"]["sha256"],
+        "motionSpecSha256": payload.get("motionSpecSha256")
+        == specification["specSha256"],
+        "motionSpecReceiptSha256": payload.get("motionSpecReceiptSha256")
+        == hashlib.sha256(motion_spec_token.encode("utf-8")).hexdigest(),
+        "buildSha256": payload.get("buildSha256") == build_sha256,
+        "runtimeSha256": payload.get("runtimeSha256") == runtime_sha256,
+        "complete": payload.get("complete") is True,
+        "passed": payload.get("passed") is True,
+        "noAuthority": payload.get("executionAuthorized") is False,
+        "auditSha256": bool(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get("auditSha256") or ""))
+        ),
+        "reportSha256": bool(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get("reportSha256") or ""))
+        ),
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "Motion finalization receipt is stale or does not match the exact UI candidate, motion specification, build, runtime, or policy."
+        )
+    return payload
+
+
 def _validate_ui_candidate_scope(
     candidate_delta: dict[str, Any],
     candidate_scope: dict[str, Any],
@@ -20900,6 +21114,51 @@ def tool_ui_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "buildSha256": build_sha256,
         "runtimeSha256": runtime_sha256,
     }
+    motion_spec_token = str(args.get("motion_spec_receipt") or "").strip()
+    motion_finalization_token = str(
+        args.get("motion_finalization_receipt") or ""
+    ).strip()
+    if bool(motion_spec_token) != bool(motion_finalization_token):
+        raise ToolError(
+            "Motion-applicable UI finalization requires both motion_spec_receipt and motion_finalization_receipt; static work must omit both."
+        )
+    motion_binding = None
+    if motion_spec_token:
+        _, motion_specification = _ui_motion_payload(
+            project_path, motion_spec_token, require_fresh=False
+        )
+        expected_motion_contract = {
+            "schemaVersion": contract["schemaVersion"],
+            "contractSha256": contract["contractSha256"],
+            "gitHead": baseline["gitHead"],
+            "projectFingerprint": baseline["projectFingerprint"],
+            "policyDigest": baseline["policyDigest"],
+        }
+        if motion_specification["uiContract"] != expected_motion_contract:
+            raise ToolError(
+                "The motion specification does not bind the UI contract being finalized."
+            )
+        motion_payload = _ui_motion_finalization_payload(
+            motion_finalization_token,
+            motion_spec_token=motion_spec_token,
+            specification=motion_specification,
+            subject=current_subject,
+            candidate=candidate_before,
+            build_sha256=build_sha256,
+            runtime_sha256=runtime_sha256,
+        )
+        motion_binding = {
+            "motionSpecSha256": motion_payload["motionSpecSha256"],
+            "auditSha256": motion_payload["auditSha256"],
+            "reportSha256": motion_payload["reportSha256"],
+            "evidenceManifestSha256": motion_payload[
+                "evidenceManifestSha256"
+            ],
+            "receiptSha256": hashlib.sha256(
+                motion_finalization_token.encode("utf-8")
+            ).hexdigest(),
+            "passed": True,
+        }
     manifest_relative = str(args.get("evidence_manifest") or "").strip()
     evidence_root = _ui_evidence_root(project_path)
     _validate_ui_evidence_root_authority(evidence_root)
@@ -20952,6 +21211,21 @@ def tool_ui_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "buildSha256": build_sha256,
         "runtimeSha256": runtime_sha256,
         "qaReceiptSha256": hashlib.sha256(qa_receipt.encode("utf-8")).hexdigest(),
+        **(
+            {
+                "motionSpecSha256": motion_binding["motionSpecSha256"],
+                "motionAuditSha256": motion_binding["auditSha256"],
+                "motionReportSha256": motion_binding["reportSha256"],
+                "motionEvidenceManifestSha256": motion_binding[
+                    "evidenceManifestSha256"
+                ],
+                "motionFinalizationReceiptSha256": motion_binding[
+                    "receiptSha256"
+                ],
+            }
+            if motion_binding is not None
+            else {}
+        ),
         "complete": True,
         "passed": True,
         "executionAuthorized": False,
@@ -27741,6 +28015,43 @@ TOOLS.update(
             "handler": tool_ui_motion_spec,
             "readOnlyHint": True,
         },
+        "jstack_ui_motion_finalize": {
+            "description": "Validate host-produced Product UI runtime measurements against an exact Beta.5 motion specification and clean committed candidate. The tool enforces ordinary and reduced-motion coverage, timing/property bounds, immediate feedback, rapid-input and interruption safety, focus and semantic-state controls, refresh-rate-aware frame budgets, dropped frames, long tasks, and layout stability. It writes one deterministic script-free HTML report beneath the existing private UI evidence root and returns a candidate-bound pass receipt. It installs no dependency, operates no browser, changes no project file, and authorizes no Git, release, deployment, external, or production action.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "motion_spec_receipt",
+                    "evidence_manifest",
+                    "build_sha256",
+                    "runtime_sha256",
+                ],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "motion_spec_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                    },
+                    "evidence_manifest": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "description": "Safe relative path beneath the server-selected private UI evidence root to one canonical jstack.ui.motion-evidence.v1 manifest.",
+                    },
+                    "build_sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                    },
+                    "runtime_sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                    },
+                },
+            },
+            "handler": tool_ui_motion_finalize,
+            "readOnlyHint": False,
+        },
         "jstack_ui_finalize": {
             "description": "Validate a signed Product Interface contract against a clean descendant candidate, a current exact-command QA receipt, fixed private screenshot evidence, objective interaction/accessibility checks, and accountable Product observations. Returns evidence only and authorizes no release or deployment action.",
             "inputSchema": {
@@ -27754,6 +28065,18 @@ TOOLS.update(
                     "build_command_key": {"type": "string", "minLength": 1, "maxLength": 200},
                     "build_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                     "runtime_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "motion_spec_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                        "description": "For motion-applicable work, the exact Beta.5 creation-time motion specification receipt. Must be paired with motion_finalization_receipt; static work omits both.",
+                    },
+                    "motion_finalization_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                        "description": "For motion-applicable work, the exact current-candidate receipt from jstack_ui_motion_finalize. Must be paired with motion_spec_receipt.",
+                    },
                 },
             },
             "handler": tool_ui_finalize,

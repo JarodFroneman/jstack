@@ -30,6 +30,10 @@ SCHEMA_NAMES = (
     "ui-contract.v2.schema.json",
     "ui-evidence.v1.schema.json",
     "ui-finalization.v1.schema.json",
+    "ui-motion-audit.v1.schema.json",
+    "ui-motion-evidence.v1.schema.json",
+    "ui-motion-finalization.v1.schema.json",
+    "ui-motion-result.v1.schema.json",
     "ui-motion-spec.v1.schema.json",
     "ui-objective-result.v1.schema.json",
     "ui-product-observation.v1.schema.json",
@@ -229,6 +233,190 @@ def sample_evidence() -> dict[str, Any]:
             "approvalSha256": None,
         },
         "manifestSha256": SHA,
+    }
+
+
+def sample_motion_evidence() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.ui.motion-evidence.v1",
+        "motionSpecSha256": SHA,
+        "uiContractSha256": SHA,
+        "candidate": {
+            "gitHead": GIT_OID,
+            "treeSha256": SHA,
+            "projectFingerprint": SHA,
+            "buildSha256": SHA,
+            "runtimeSha256": SHA,
+        },
+        "producer": {
+            "tool": "playwright",
+            "version": "1",
+            "os": "test",
+            "device": "desktop",
+        },
+        "capturedAt": TIMESTAMP,
+        "complete": True,
+        "truncated": False,
+        "results": [
+            {
+                "interactionId": "account-save",
+                "platform": "web",
+                "mode": "ordinary",
+                "status": "pass",
+                "observedAt": TIMESTAMP,
+                "resultSha256": SHA,
+                "resultArtifact": {
+                    "path": "motion-ordinary.json",
+                    "sha256": SHA,
+                    "size": 100,
+                    "mediaType": "application/json",
+                },
+            },
+            {
+                "interactionId": "account-save",
+                "platform": "web",
+                "mode": "reduced",
+                "status": "pass",
+                "observedAt": TIMESTAMP,
+                "resultSha256": SHA,
+                "resultArtifact": {
+                    "path": "motion-reduced.json",
+                    "sha256": SHA,
+                    "size": 100,
+                    "mediaType": "application/json",
+                },
+            },
+        ],
+        "manifestSha256": SHA,
+    }
+
+
+def sample_motion_audit() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.ui.motion-audit.v1",
+        "motionSpec": {
+            "schemaVersion": "jstack.ui.motion-spec.v1",
+            "sha256": SHA,
+            "uiContractSha256": SHA,
+            "catalogSha256": SHA,
+        },
+        "candidate": sample_motion_evidence()["candidate"],
+        "producerSha256": SHA,
+        "capturedAt": TIMESTAMP,
+        "coverage": {
+            "interactionCount": 1,
+            "expectedResultCount": 2,
+            "ordinaryResultCount": 1,
+            "reducedResultCount": 1,
+            "resultSetSha256": SHA,
+        },
+        "thresholds": {
+            "inputFeedbackMaximumMs": 100.0,
+            "droppedFrameRatioMaximum": 0.05,
+            "longTaskThresholdMs": 50.0,
+            "frameBudgetToleranceMs": 1.0,
+            "durationToleranceFrames": 1.0,
+            "cumulativeLayoutShiftMaximum": 0.0,
+        },
+        "evidence": {
+            "manifestSha256": SHA,
+            "manifestRawSha256": SHA,
+            "resultCount": 2,
+            "artifactBytes": 100,
+            "complete": True,
+            "truncated": False,
+            "rawArtifactContentReturned": False,
+        },
+        "passed": True,
+        "blockers": [],
+        "producerHonestyCertified": False,
+        "semanticTruthCertified": False,
+        "auditSha256": SHA,
+    }
+
+
+def sample_motion_result() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.ui.motion-result.v1",
+        "motionSpecSha256": SHA,
+        "interactionId": "account-save",
+        "platform": "web",
+        "mode": "ordinary",
+        "buildSha256": SHA,
+        "runtimeSha256": SHA,
+        "producerSha256": SHA,
+        "observedAt": TIMESTAMP,
+        "runtimeStrategy": "css",
+        "observedProperties": ["opacity", "transform"],
+        "enterDurationMs": 80,
+        "exitDurationMs": 80,
+        "inputFeedbackMs": 40,
+        "refreshRateHz": 60,
+        "frameBudgetMs": 16.6667,
+        "totalFrames": 5,
+        "droppedFrames": 0,
+        "longTaskCount": 0,
+        "maximumLongTaskMs": 0,
+        "cumulativeLayoutShift": 0,
+        "immediateFeedback": True,
+        "rapidInputSafe": True,
+        "interruptionSafe": True,
+        "cancellationSafe": True,
+        "reversibleSafe": True,
+        "keyboardOperable": True,
+        "focusVisible": True,
+        "focusRestored": True,
+        "semanticStateClear": True,
+        "motionIsSoleSignal": False,
+        "reducedMotionMode": None,
+        "spatialDistancePx": 0,
+        "scaleDelta": 0.02,
+        "blurPx": 0,
+        "repeatedMotion": False,
+        "antiPatternsDetected": [],
+        "outcome": "pass",
+    }
+
+
+def sample_motion_finalization() -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.ui.motion-finalization.v1",
+        "projectPath": "/tmp/project",
+        "baseline": {
+            "gitHead": GIT_OID,
+            "projectFingerprint": SHA,
+            "policyDigest": SHA,
+        },
+        "candidate": {
+            **sample_motion_evidence()["candidate"],
+            "changedPathsSha256": SHA,
+            "changeRecordsSha256": SHA,
+            "diffSha256": SHA,
+        },
+        "motionSpec": {
+            "sha256": SHA,
+            "uiContractSha256": SHA,
+            "catalogSha256": SHA,
+            "interactionCount": 1,
+        },
+        "audit": sample_motion_audit(),
+        "report": {
+            "relativePath": f"motion-report-{SHA}.html",
+            "pathSha256": SHA,
+            "sha256": SHA,
+            "size": 100,
+            "mediaType": "text/html",
+            "created": True,
+        },
+        "passed": True,
+        "blockers": [],
+        "motionReceipt": "signed.receipt",
+        "executionAuthorized": False,
+        "limitations": [
+            "bounded evidence",
+            "producer honesty is not certified",
+            "no deployment authority",
+        ],
     }
 
 
@@ -499,6 +687,10 @@ class UISchemaValidationTests(unittest.TestCase):
             "ui-contract.v2.schema.json": sample_reference_bound_contract(),
             "ui-evidence.v1.schema.json": sample_evidence(),
             "ui-finalization.v1.schema.json": sample_finalization(),
+            "ui-motion-audit.v1.schema.json": sample_motion_audit(),
+            "ui-motion-evidence.v1.schema.json": sample_motion_evidence(),
+            "ui-motion-finalization.v1.schema.json": sample_motion_finalization(),
+            "ui-motion-result.v1.schema.json": sample_motion_result(),
             "ui-motion-spec.v1.schema.json": sample_motion_spec(),
             "ui-objective-result.v1.schema.json": sample_objective_result(),
             "ui-product-observation.v1.schema.json": sample_product_observation(),
@@ -518,6 +710,14 @@ class UISchemaValidationTests(unittest.TestCase):
             ),
             "ui-evidence.v1.schema.json": (sample_evidence(), ("captures", 0, "artifact")),
             "ui-finalization.v1.schema.json": (sample_finalization(), ("evidence", "candidate")),
+            "ui-motion-audit.v1.schema.json": (sample_motion_audit(), ("coverage",)),
+            "ui-motion-evidence.v1.schema.json": (
+                sample_motion_evidence(), ("results", 0, "resultArtifact")
+            ),
+            "ui-motion-finalization.v1.schema.json": (
+                sample_motion_finalization(), ("report",)
+            ),
+            "ui-motion-result.v1.schema.json": (sample_motion_result(), ()),
             "ui-motion-spec.v1.schema.json": (
                 sample_motion_spec(), ("interactions", 0, "pattern")
             ),
