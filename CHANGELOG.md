@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.10.0-beta.6.1 - 2026-08-24 - Prompt Compiler professional standard prerelease
+
+### Added
+
+- Added an always-traced professional prompt-engineering requirement to every
+  official JStack workflow. The deterministic execution template retains the
+  requested world-class/top-1% calibration while grounding it in bounded,
+  repository-native, testable, enterprise-professional behavior.
+- Added a task-aware secure-development baseline for authorized implementation
+  and fix work, plus plan-only requests that explicitly create new software or
+  a development workspace.
+- Added positive and negative evaluation cases across all six workflows,
+  including authority preservation, planning-only behavior, deploy-only work,
+  read-only Audit, and Evidence Builder boundaries.
+- Added the Beta.6.1 migration guide and the Prompt Compiler 1.1 amendment to
+  ADR 0025.
+
+### Changed
+
+- Advanced the deterministic Prompt Compiler to `1.1.0` and the execution
+  template to `jstack.codex-execution-prompt.v2`.
+- Reserved the `jstack-professional-standard` and
+  `jstack-secure-development` requirement identifiers so repository grounding
+  cannot replace or weaken them.
+- Advanced public MCP and plugin release metadata to `0.10.0-beta.6.1`.
+  Command names remain at six, canonical MCP tools remain at 59, all 52 frozen
+  `gstack_*` aliases remain unchanged, and no dependency or provider call was
+  added.
+
+### Security, authority, and compatibility
+
+- Security guidance remains proportionate to the authorized task and cannot
+  grant edits, tests, Git operations, external actions, releases, deployment,
+  or production mutation.
+- Audit and Evidence Builder retain their read-only policy floors. Explanation,
+  ordinary planning, deploy-only, and unrelated work do not inherit an
+  unnecessary security programme.
+- The mandatory complete-prompt preview and exact active-conversation approval
+  boundary remains unchanged. Compiler/template version changes invalidate
+  stale preview and compilation receipts as designed.
+- This remains an unvalidated prerelease. The release claims deterministic
+  implementation, compatibility, and verification evidence, not measured
+  prompt-quality uplift, attack immunity, or production readiness.
+
 ## 0.10.0-beta.6 - 2026-08-22 - Product UI Motion Enforcement prerelease
 
 ### Added
