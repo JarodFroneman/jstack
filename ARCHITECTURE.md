@@ -154,6 +154,16 @@ grounding after authorized read-only inspection, rejects untraceable required
 inferences, and renders `jstack.prompt-compilation.v2` with observable
 acceptance, verification, rollback, scope, privacy, and enforcement fields.
 
+Compiler `1.1.0` and execution template v2 add an always-traced professional
+prompt-engineering policy requirement plus a conditional secure-development
+requirement. The professional standard combines the user-requested top-1%
+calibration with concrete enterprise, anti-scope-inflation, anti-slop, and
+complexity-scaling rules. Secure development activates for authorized
+implementation/fix work and explicit plan-only creation of new software or a
+development workspace. It selects proportionate existing JStack security
+controls without expanding authority, weakening read-only workflows, forcing a
+full security programme onto unrelated work, or claiming attack immunity.
+
 Stage B calls the existing Adaptive Context Gate internally. A context-ready
 first pass returns the complete prompt and a digest-bound preview receipt but
 withholds planning receipts. Official workflows display the full prompt and

@@ -4,6 +4,47 @@ JStack Beta.4 compiles the user's request before planning. It does not make a
 prompt longer for its own sake; it makes intent, authority, evidence, and the
 finish line explicit.
 
+The current compiler `1.1.0` and execution template
+`jstack.codex-execution-prompt.v2` add a professional prompt-engineering
+standard and a task-aware secure-development baseline without adding a model
+call, dependency, command, role, or permission.
+
+## Professional Prompt-Engineering Standard
+
+Every Stage B prompt tells the executing agent to operate as a world-class
+prompt-engineering authority at a top-1% quality bar and as a principal
+secure-software specification designer. The phrase is a calibration signal,
+not evidence of expertise and not a source of authority. Concrete rules require
+the result to be objective, bounded, repository-grounded, testable, concise for
+small work, progressively staged only when complexity warrants it, and free of
+generic filler, invented requirements, unnecessary abstraction, dependency
+churn, and low-quality AI output.
+
+The compiler inserts the traced policy requirement
+`jstack-professional-standard` into every workflow. Neither the role framing
+nor the quality bar may change the user's goal, task mode, scope, non-goals, or
+authorized actions.
+
+## Secure-Development Applicability
+
+The compiler adds `jstack-secure-development` and a visible secure-development
+section only when the contract authorizes implementation or repair of code, or
+when a plan-only request explicitly concerns creating a new project,
+application, service, repository, codebase, or development workspace. The
+baseline is not injected into explanations, ordinary plan-only work,
+diagnosis-only work, reviews, audits, or Evidence Builder collection merely
+because they mention security or code.
+
+The baseline considers only applicable trust boundaries, authorization,
+validation and encoding, secrets, sensitive data, dependencies and supply
+chain, injection and request forgery, least privilege, error leakage, logging,
+destructive paths, rollback, and security verification. Substantial or
+sensitive implementation uses `jstack_security_audit` when authorized. The
+existing risk and release policy continues to decide when independent scanner
+or human evidence is mandatory. Optional checks can be skipped only when the
+active policy permits it; a skip remains disclosed residual risk and is never a
+security pass. The compiler does not claim software is immune from attack.
+
 ## Normal Workflow
 
 1. The workflow calls `jstack_prompt_compile(stage="intent")` with the request
@@ -38,6 +79,7 @@ deployment authority do not approve the compiled prompt.
 | `Plan the database migration only.` | Read and plan; no edit, test execution, Git, or deployment. |
 | `Diagnose why login fails. Do not fix it.` | Read and diagnose; no file edit. |
 | `Implement the parser fix and run tests.` | Inspect, edit, and test; no commit, push, PR, or deploy. |
+| `Plan a new client application only.` | Read and plan with the secure-development baseline; no edit, test execution, Git, or deployment. |
 | `Review this PR.` | Read-only review; no merge. |
 | `Implement, test, commit, push, open a PR, and deploy.` | The named sequence is explicit, still subject to host permissions and normal release gates. |
 | `How does deployment work?` | Explanation only; mentioning deployment grants no deploy authority. |

@@ -5,10 +5,11 @@ source, credential, or production data. It covers authority preservation,
 ambiguity, injection, risk-sensitive domains, multimodal references, long and
 multilingual prompts, and zero-to-three-question scenarios.
 
-The checked-in unit test locks deterministic Stage A behavior and explicit
-one-, two-, and three-question Adaptive Context fixtures. A comparative
-evaluation runner may later execute baseline JStack and the compiler against
-the same cases and record:
+The checked-in unit test locks deterministic Stage A behavior, the universal
+professional prompt-engineering standard, explicit secure-development
+applicability/non-applicability cases, and one-, two-, and three-question
+Adaptive Context fixtures. A comparative evaluation runner may later execute
+baseline JStack and the compiler against the same cases and record:
 
 - intent-preservation rate;
 - unsupported- and missing-requirement rates;

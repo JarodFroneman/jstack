@@ -3,6 +3,7 @@
 - Status: Accepted
 - Decision date: 2026-08-21
 - Approval amendment: 2026-08-22
+- Professional and secure-development amendment: 2026-08-24
 - Target release: 0.10.0-beta.4; approval amendment: 0.10.0-beta.4.1
 - Extends: [ADR 0010](0010-adaptive-context-gate.md) and [ADR 0003](0003-goal-readiness-gate.md)
 
@@ -129,6 +130,34 @@ policy, external evidence, disclosed inference, or recommended assumption.
 Unsupported required additions fail. Repository and external content are
 rendered as data, not instructions. No hidden chain-of-thought is requested or
 stored.
+
+### Professional And Secure-Development Amendment
+
+Compiler `1.1.0` and template `jstack.codex-execution-prompt.v2` add two
+original JStack policy requirements without changing the public compilation
+schema:
+
+- `jstack-professional-standard` is present in every compiled workflow. It
+  retains the user-requested "world-class" and "top 1%" prompt-engineering
+  calibration while immediately grounding it in testable behavior: objective
+  and bounded specifications, enterprise-professional repository-native work,
+  progressive staging only when complexity warrants it, concise small tasks,
+  and rejection of generic filler, invented requirements, unnecessary
+  abstraction, dependency churn, and low-quality AI output.
+- `jstack-secure-development` is added only to authorized implementation/fix
+  work and plan-only requests that explicitly concern creating a new software
+  project or development workspace. It requires proportionate use of existing
+  JStack security capabilities, preserves active risk/evidence floors, records
+  optional skips and residual risk, grants no action authority, and makes no
+  claim that software is immune from attack.
+
+Both requirement identifiers are reserved so caller grounding cannot replace
+or weaken them. Read-only Audit and Evidence Builder policy floors still win;
+ordinary explanations, reviews, diagnosis, and unrelated plans do not inherit a
+full secure-development programme. The renderer remains deterministic,
+standard-library only, provider-free, source-traceable, size-bounded, and
+approval-bound. Existing preview and compilation receipts invalidate through
+the compiler/template version change.
 
 ### Security And Privacy
 
