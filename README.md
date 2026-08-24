@@ -173,7 +173,19 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.6 Prerelease
+## What Is In The v0.10.0-beta.6.1 Prerelease
+
+`v0.10.0-beta.6.1` is a focused Prompt Compiler amendment on top of the
+Beta.6 Product UI Motion Enforcement release. Prompt Compiler `1.1.0` and
+execution template `jstack.codex-execution-prompt.v2` now render an
+enterprise-professional prompt-engineering standard for all six workflows and
+add a proportionate secure-development baseline only to authorized code/fix
+work or explicit plan-only creation of new software and development
+workspaces. The change adds no model provider, dependency, command, MCP tool,
+or action authority. See the
+[Beta.6.1 migration guide](docs/migration-0.10.0-beta.6.1.md), the
+[Prompt Compiler guide](docs/prompt-compiler.md), and
+[ADR 0025](docs/adr/0025-prompt-compiler.md).
 
 `v0.10.0-beta.6` completes the planned Product UI motion lifecycle. Beta.5
 still creates the frequency-aware, reduced-motion-aware specification before
@@ -197,15 +209,16 @@ work keeps the existing finalization path. Beta.4's Prompt Compiler,
 Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
 and UI contract v1/v2 remain compatible.
 
-> **Unvalidated prerelease:** `0.10.0-beta.6` enforces deterministic motion
-> evidence contracts; it does not itself prove measured design uplift. Beta.1's
+> **Unvalidated prerelease:** `0.10.0-beta.6.1` adds deterministic Prompt
+> Compiler policy and retains Beta.6 motion evidence contracts; it does not
+> itself prove prompt-quality or measured design uplift. Beta.1's
 > 18-image, 216-attempt, 432-review Proof Study remains deferred and byte-bound
 > to the exact annotated `v0.10.0-beta.1` tag. Neither publication nor Product
 > Interface receipts validate that study or establish production readiness.
 
 | Capability | What it provides |
 | --- | --- |
-| Prompt Compiler | Stage A pre-inspection intent and authority normalization; Stage B repository-grounded, source-traceable task contracts; mandatory complete-prompt preview and exact approval binding before planning; deterministic rendering, size budgets, secret rejection, signed project-bound receipts, four rollout modes, and no stored raw prompt or hidden reasoning |
+| Prompt Compiler | Stage A pre-inspection intent and authority normalization; Stage B repository-grounded, source-traceable task contracts; an enterprise professional prompt-engineering standard; task-aware, proportionate secure-development requirements for code/new-development work; mandatory complete-prompt preview and exact approval binding before planning; deterministic rendering, size budgets, secret rejection, signed project-bound receipts, four rollout modes, and no stored raw prompt or hidden reasoning |
 | Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, creation-time frequency-aware motion specifications, candidate-bound ordinary/reduced motion audits and private reports, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command |
 | Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance, uplift, validation, or production-readiness claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
@@ -582,6 +595,7 @@ and SSH authority tests are not claimed as Windows-compatible.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.6.1 migration guide](docs/migration-0.10.0-beta.6.1.md) | [Prompt Compiler professional and secure-development amendment](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |
 | [v0.10.0-beta.6 migration guide](docs/migration-0.10.0-beta.6.md) | [Product UI Motion Enforcement](docs/adr/0027-product-ui-motion-enforcement.md) |
 | [v0.10.0-beta.5 migration guide](docs/migration-0.10.0-beta.5.md) | [Product UI Motion Intelligence](docs/adr/0026-product-ui-motion-intelligence.md) |
 | [v0.10.0-beta.4.1 migration guide](docs/migration-0.10.0-beta.4.1.md) | [Prompt Compiler approval amendment](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |

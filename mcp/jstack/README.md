@@ -172,6 +172,14 @@ and Product Interface reference, candidate, and motion specification/finalizatio
 aliases remain for compatibility; `jstack_prompt_compile` and the six UI tools are canonical-only
 and upstream gstack itself is optional.
 
+Prompt Compiler `1.1.0` / execution template v2 renders the same professional
+prompt-engineering standard for all six workflows and adds a policy-traced
+secure-development baseline only to authorized implementation/fix work or
+explicit plan-only creation of new software or a development workspace. The
+baseline uses existing JStack security capabilities proportionately, cannot
+expand authority, and does not turn a bypass into evidence or claim attack
+immunity.
+
 Current JStack releases have no custom action-approval tools. JStack never asks for an approval
 token, signing key, challenge file, mailbox response, or terminal command.
 External operations use explicit user scope and normal host/provider

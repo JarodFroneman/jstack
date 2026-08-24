@@ -309,6 +309,7 @@ def _git_stdout(repo_root: Path, arguments: Tuple[str, ...], field: str) -> byte
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/bin:/bin:/usr/local/bin",
+        "TMPDIR": "/tmp",
     }
     try:
         completed = subprocess.run(

@@ -87,6 +87,23 @@ def sample_compilation() -> dict[str, Any]:
 
 
 class PromptSchemaStructureTests(unittest.TestCase):
+    def test_current_schema_versions_match_runtime(self) -> None:
+        for name in (
+            "prompt-intent.v1.schema.json",
+            "prompt-compilation.v2.schema.json",
+        ):
+            properties = load_schema(name)["properties"]
+            self.assertEqual(
+                prompt_compiler.COMPILER_VERSION,
+                properties["compilerVersion"]["const"],
+                name,
+            )
+            self.assertEqual(
+                prompt_compiler.TEMPLATE_VERSION,
+                properties["templateVersion"]["const"],
+                name,
+            )
+
     def test_schemas_are_draft_2020_12_and_close_compiler_contracts(self) -> None:
         for name in SCHEMA_NAMES:
             schema = load_schema(name)

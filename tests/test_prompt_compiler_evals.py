@@ -47,6 +47,28 @@ class PromptCompilerEvalTests(unittest.TestCase):
                 self.assertFalse(intent["privacy"]["rawPromptPersisted"])
                 self.assertFalse(intent["privacy"]["hiddenReasoningStored"])
 
+                compilation = prompt_compiler.compile_grounded(
+                    intent=intent,
+                    workflow_mode="j-stack-dev",
+                    risk_tier="low",
+                    grounding={},
+                    readiness={
+                        "state": "ready",
+                        "readyForPlanning": True,
+                        "briefDigest": "a" * 64,
+                        "questionCount": 0,
+                        "materialGapCount": 0,
+                    },
+                )
+                rendered = compilation["renderedCodexPrompt"]
+                self.assertIn("## Professional Prompt-Engineering Standard", rendered)
+                self.assertIn("top 1% of the industry", rendered)
+                if "expectSecureDevelopment" in task:
+                    if task["expectSecureDevelopment"]:
+                        self.assertIn("## Secure Development Baseline", rendered)
+                    else:
+                        self.assertNotIn("## Secure Development Baseline", rendered)
+
                 if "expectedQuestionCount" in task:
                     fixture = task["contextFixture"]
                     readiness = context_readiness.assess_context(

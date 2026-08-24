@@ -26,14 +26,16 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **Beta.6 prerelease boundary:** install `v0.10.0-beta.6` only from its exact
-> immutable GitHub prerelease tag, retain the prior Beta.5 installation as one
-> complete rollback unit, and verify the installed bytes and tool surface. The
+> **Beta.6.1 prerelease boundary:** install `v0.10.0-beta.6.1` only from its
+> exact immutable GitHub prerelease tag, retain the prior Beta.6 installation
+> as one complete rollback unit, and verify the installed bytes and tool
+> surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
-> unvalidated. Installing Beta.6 does not satisfy its deferred 216-run study or
-> independent human reviews. A passing Beta.6 motion receipt validates bounded
-> candidate measurements; it does not certify producer honesty, aesthetic
-> quality, release readiness, or production safety.
+> unvalidated. Installing Beta.6.1 does not satisfy its deferred 216-run study
+> or independent human reviews. The compiler amendment and a passing Beta.6
+> motion receipt validate bounded contracts and declared evidence only; they
+> do not certify prompt-quality uplift, producer honesty, aesthetic quality,
+> attack immunity, release readiness, or production safety.
 
 ## Host Support
 
@@ -393,7 +395,7 @@ Expected dedicated layout:
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-beta.6`);
+  prerelease, `0.10.0-beta.6.1`);
 - `tools/list` includes 59 canonical `jstack_*` tools, including the
   canonical-only `jstack_prompt_compile`, `jstack_context_readiness`,
   `jstack_performance_capture`, and
@@ -415,10 +417,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.10.0-beta.6`, also confirm that GitHub marks the release as a
+For `v0.10.0-beta.6.1`, also confirm that GitHub marks the release as a
 prerelease and that the checked-out annotated tag resolves to the release
 commit before staging any global files. The rollback snapshot must contain the
-actual published Beta.5 installation as one coherent MCP, plugin-source,
+actual published Beta.6 installation as one coherent MCP, plugin-source,
 plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
