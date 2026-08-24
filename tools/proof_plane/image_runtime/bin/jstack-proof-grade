@@ -544,6 +544,7 @@ def _git_environment() -> Dict[str, str]:
         "GIT_WORK_TREE": str(WORKSPACE_PATH),
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_TERMINAL_PROMPT": "0",
+        "TMPDIR": "/tmp",
     }
 
 

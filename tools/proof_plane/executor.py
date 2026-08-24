@@ -593,6 +593,7 @@ def _git_environment(home: Path) -> Dict[str, str]:
         "GIT_COMMITTER_EMAIL": "proof-plane@example.invalid",
         "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
         "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z",
+        "TMPDIR": "/tmp",
     }
 
 
