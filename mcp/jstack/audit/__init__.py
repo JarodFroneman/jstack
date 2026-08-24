@@ -112,6 +112,7 @@ from .scope import (
     normalize_repo_path,
     normalize_scope,
     read_repository_file,
+    read_repository_file_prefix,
 )
 from .supply_chain import (
     DEPENDENCY_INVENTORY_SCHEMA_VERSION,
@@ -198,6 +199,7 @@ __all__ = [
     "normalize_scope",
     "redact_text",
     "read_repository_file",
+    "read_repository_file_prefix",
     "require_adapter_approval",
     "score_benchmark",
     "score_benchmark_evaluation",

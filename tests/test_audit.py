@@ -248,6 +248,50 @@ class ScopeTests(unittest.TestCase):
             with self.assertRaises(audit.FileIdentityError):
                 audit.digest_repository_file(root, "linked.txt", max_bytes=100)
 
+    def test_descriptor_safe_prefix_reader_is_bounded_and_reports_truncation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            root.mkdir()
+            target = root / "large.txt"
+            target.write_bytes(b"a" * 257)
+
+            prefix, truncated = audit.read_repository_file_prefix(
+                root, "large.txt", max_bytes=64
+            )
+            self.assertEqual(b"a" * 64, prefix)
+            self.assertTrue(truncated)
+
+            complete, complete_truncated = audit.read_repository_file_prefix(
+                root, "large.txt", max_bytes=300
+            )
+            self.assertEqual(b"a" * 257, complete)
+            self.assertFalse(complete_truncated)
+
+            link = root / "linked.txt"
+            try:
+                link.symlink_to(target)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks are unavailable")
+            with self.assertRaises(audit.FileIdentityError):
+                audit.read_repository_file_prefix(root, "linked.txt", max_bytes=64)
+
+            original_identity = audit_scope._same_identity
+            identity_checks = {"count": 0}
+
+            def identity_then_change(
+                left: os.stat_result, right: os.stat_result
+            ) -> bool:
+                identity_checks["count"] += 1
+                if identity_checks["count"] == 1:
+                    return original_identity(left, right)
+                return False
+
+            with mock.patch.object(
+                audit_scope, "_same_identity", side_effect=identity_then_change
+            ):
+                with self.assertRaises(audit.FileIdentityError):
+                    audit.read_repository_file_prefix(root, "large.txt", max_bytes=64)
+
     def test_file_identity_change_fails_inventory_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

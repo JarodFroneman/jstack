@@ -310,6 +310,76 @@ def read_repository_file(
             os.close(parent_fd)
 
 
+def read_repository_file_prefix(
+    repository_root: Any,
+    relative_path: str,
+    max_bytes: int,
+    max_seconds: float = 10.0,
+) -> Tuple[bytes, bool]:
+    """Read one stable regular-file prefix and report whether content was truncated."""
+
+    root = _repository_root(repository_root)
+    relative = normalize_repo_path(relative_path, "relative_path")
+    if relative == ".":
+        raise ScopeError("relative_path must identify a regular file")
+    byte_limit = require_positive_int(max_bytes, "max_bytes", HARD_MAX_BYTES)
+    if isinstance(max_seconds, bool) or not isinstance(max_seconds, (int, float)) or max_seconds <= 0:
+        raise AuditInputError("max_seconds must be a positive number")
+    if max_seconds > HARD_MAX_SECONDS:
+        raise AuditInputError("max_seconds exceeds the hard maximum of %d" % HARD_MAX_SECONDS)
+    deadline = time.monotonic() + float(max_seconds)
+    parts = relative.split("/")
+    parent_fd: Optional[int] = None
+    file_fd: Optional[int] = None
+    before_path: Optional[os.stat_result] = None
+    try:
+        if _supports_dir_fd():
+            parent_fd = _open_directory_chain(root, parts[:-1])
+            before_path = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+            file_fd = os.open(parts[-1], _open_flags(directory=False), dir_fd=parent_fd)
+        else:
+            _fallback_assert_components(root, parts, include_final=False)
+            path = root.joinpath(*parts)
+            before_path = os.lstat(str(path))
+            if stat.S_ISLNK(before_path.st_mode):
+                raise FileIdentityError("repository file is a symlink")
+            file_fd = os.open(str(path), _open_flags(directory=False))
+        opened = os.fstat(file_fd)
+        if not stat.S_ISREG(opened.st_mode):
+            raise FileIdentityError("repository path is not a regular file")
+        if before_path is None or not _same_identity(before_path, opened):
+            raise FileIdentityError("repository file identity changed before read")
+        expected = min(opened.st_size, byte_limit)
+        chunks: List[bytes] = []
+        total = 0
+        while total < expected:
+            if time.monotonic() >= deadline:
+                raise AuditInputError("repository file read exceeded its time limit")
+            chunk = os.read(file_fd, min(_READ_CHUNK, expected - total))
+            if not chunk:
+                break
+            total += len(chunk)
+            chunks.append(chunk)
+        after_fd = os.fstat(file_fd)
+        if _supports_dir_fd():
+            assert parent_fd is not None
+            after_path = os.stat(parts[-1], dir_fd=parent_fd, follow_symlinks=False)
+        else:
+            after_path = os.lstat(str(root.joinpath(*parts)))
+        if not _same_identity(opened, after_fd) or not _same_identity(opened, after_path):
+            raise FileIdentityError("repository file identity changed during read")
+        if total != expected:
+            raise FileIdentityError("repository file size changed during read")
+        return b"".join(chunks), opened.st_size > byte_limit
+    except OSError as exc:
+        raise FileIdentityError("repository file could not be opened safely") from exc
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if parent_fd is not None:
+            os.close(parent_fd)
+
+
 def digest_repository_file(
     repository_root: Any,
     relative_path: str,

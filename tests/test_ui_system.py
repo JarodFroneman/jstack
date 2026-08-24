@@ -2049,7 +2049,7 @@ class ProductInterfaceServerTests(unittest.TestCase):
         ):
             self.assertTrue(server._ui_file_candidate(path), path)
 
-    def test_changed_document_reads_fail_closed_on_oversize_and_git_diff_ignores_textconv(self) -> None:
+    def test_changed_document_reads_are_bounded_and_git_diff_ignores_textconv(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp), ui_source=False)
             backend = repo / "src" / "backend.py"
@@ -2116,6 +2116,72 @@ class ProductInterfaceServerTests(unittest.TestCase):
                 baseline_head=main_baseline,
             )
             self.assertEqual("inactive", main_scope["state"])
+
+    def test_oversized_ambiguous_python_is_bounded_and_requires_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = make_repo(Path(temp), ui_source=False)
+            source = repo / "app" / "server.py"
+            source.parent.mkdir()
+            source.write_bytes(
+                b"def autosave_handler():\n    return {'saved': True}\n"
+                + b"# backend autosave implementation\n" * 45_000
+            )
+            stylesheet = repo / "app" / "static" / "styles.css"
+            stylesheet.parent.mkdir()
+            stylesheet.write_text(
+                ".dashboard { color: #111; }\n"
+                + "/* established interface styles */\n" * 10_000,
+                encoding="utf-8",
+            )
+            self.assertGreater(
+                stylesheet.stat().st_size, server.UI_HINT_MAX_FILE_BYTES
+            )
+            self.assertGreater(
+                source.stat().st_size, server.UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES
+            )
+            run(repo, "add", ".")
+            run(repo, "commit", "-qm", "large Python application server")
+
+            original = server.audit_core.read_repository_file_prefix
+            with mock.patch.object(
+                server.audit_core,
+                "read_repository_file_prefix",
+                wraps=original,
+            ) as bounded_read:
+                detected = server.tool_detect_project({"project_path": str(repo)})
+
+            bounded_read.assert_called_once_with(
+                repo.resolve(),
+                "app/server.py",
+                max_bytes=server.UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
+                max_seconds=10,
+            )
+            product_interface = detected["productInterface"]
+            self.assertEqual("review-required", product_interface["state"])
+            self.assertEqual(
+                "unscoped-ui-inspection-truncated", product_interface["reason"]
+            )
+            self.assertTrue(product_interface["detection"]["inspectionTruncated"])
+            self.assertEqual(2, product_interface["detection"]["candidateFileCount"])
+            self.assertEqual(1, product_interface["detection"]["inspectedFileCount"])
+            self.assertFalse(product_interface["detection"]["contentReturned"])
+
+            baseline_head = run(repo, "rev-parse", "HEAD")
+            source.write_bytes(
+                b"def autosave_handler():\n    return {'saved': 'updated'}\n"
+                + b"# bounded backend update\n" * 50_000
+            )
+            run(repo, "add", ".")
+            run(repo, "commit", "-qm", "update large Python application server")
+            changed = server._ui_applicability(
+                repo,
+                goal="Update the autosave backend",
+                paths=["app/server.py"],
+                baseline_head=baseline_head,
+            )
+            self.assertEqual("review-required", changed["state"])
+            self.assertEqual("changed-ui-inspection-truncated", changed["reason"])
+            self.assertTrue(changed["detection"]["inspectionTruncated"])
 
     def test_tauri_wrapper_context_propagates_to_frontend_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -2390,10 +2456,35 @@ class ProductInterfaceServerTests(unittest.TestCase):
             run(repo, "add", ".")
             run(repo, "commit", "-qm", "oversize UI candidate")
             delta = server._ui_candidate_delta(repo, baseline_head)
-            with self.assertRaisesRegex(server.ToolError, "candidate side"):
-                server._ui_collect_changed_documents(
-                    repo, baseline_head, delta["changeRecords"]
-                )
+            status: dict[str, object] = {}
+            documents = server._ui_collect_changed_documents(
+                repo, baseline_head, delta["changeRecords"], status=status
+            )
+            self.assertIn("src/main.js", {path for path, _ in documents})
+            self.assertFalse(status["inspectionTruncated"])
+
+            strong = repo / "app" / "page.tsx"
+            strong.parent.mkdir(exist_ok=True)
+            strong.write_text(
+                "export default function Page(){ return <main/>; }\n"
+                + "x" * server.UI_HINT_MAX_FILE_BYTES,
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(server.ToolError, "selected repository file"):
+                server._ui_collect_documents(repo, ["app/page.tsx"])
+
+            strong.unlink()
+            target = repo / "real-page.tsx"
+            target.write_text("export default function Page(){ return <main/>; }\n")
+            try:
+                strong.symlink_to(target)
+            except (OSError, NotImplementedError):
+                pass
+            else:
+                with self.assertRaisesRegex(
+                    server.ToolError, "selected repository file"
+                ):
+                    server._ui_collect_documents(repo, ["app/page.tsx"])
 
         with tempfile.TemporaryDirectory() as temp:
             parent = Path(temp)

@@ -173,7 +173,17 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.6.1 Prerelease
+## What Is In The v0.10.0-beta.6.2 Prerelease
+
+`v0.10.0-beta.6.2` hardens Product Interface discovery for large mixed backend
+and frontend repositories. Readable ambiguous candidates such as a Python
+`app/server.py` larger than 1 MB are inspected through a stable-identity,
+bounded prefix and represented as `inspectionTruncated` / `review-required`
+instead of crashing project detection. Unsafe or oversized strong UI files
+remain fail-closed when directly inspected, and candidate-time UI finalization
+still requires complete changed-file inspection. The release adds no command,
+tool, alias, dependency, provider, persisted-state migration, or authority.
+See the [Beta.6.2 migration guide](docs/migration-0.10.0-beta.6.2.md).
 
 `v0.10.0-beta.6.1` is a focused Prompt Compiler amendment on top of the
 Beta.6 Product UI Motion Enforcement release. Prompt Compiler `1.1.0` and
@@ -209,8 +219,9 @@ work keeps the existing finalization path. Beta.4's Prompt Compiler,
 Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
 and UI contract v1/v2 remain compatible.
 
-> **Unvalidated prerelease:** `0.10.0-beta.6.1` adds deterministic Prompt
-> Compiler policy and retains Beta.6 motion evidence contracts; it does not
+> **Unvalidated prerelease:** `0.10.0-beta.6.2` adds deterministic bounded
+> Product Interface detector behavior, retains Beta.6.1 Prompt Compiler policy
+> and Beta.6 motion evidence contracts, and does not
 > itself prove prompt-quality or measured design uplift. Beta.1's
 > 18-image, 216-attempt, 432-review Proof Study remains deferred and byte-bound
 > to the exact annotated `v0.10.0-beta.1` tag. Neither publication nor Product
@@ -595,6 +606,7 @@ and SSH authority tests are not claimed as Windows-compatible.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.10.0-beta.6.2 migration guide](docs/migration-0.10.0-beta.6.2.md) | [Bounded Product Interface detector behavior](CHANGELOG.md#0100-beta62---2026-08-24---product-interface-detector-hardening-prerelease) |
 | [v0.10.0-beta.6.1 migration guide](docs/migration-0.10.0-beta.6.1.md) | [Prompt Compiler professional and secure-development amendment](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |
 | [v0.10.0-beta.6 migration guide](docs/migration-0.10.0-beta.6.md) | [Product UI Motion Enforcement](docs/adr/0027-product-ui-motion-enforcement.md) |
 | [v0.10.0-beta.5 migration guide](docs/migration-0.10.0-beta.5.md) | [Product UI Motion Intelligence](docs/adr/0026-product-ui-motion-intelligence.md) |
