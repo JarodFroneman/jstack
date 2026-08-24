@@ -858,6 +858,7 @@ def _git_bytes(repo_root: Path, arguments: Sequence[str], field: str, *, maximum
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/bin:/bin:/usr/local/bin",
+        "TMPDIR": "/tmp",
     }
     try:
         completed = subprocess.run(

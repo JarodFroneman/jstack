@@ -28,6 +28,9 @@
   Command names remain at six, canonical MCP tools remain at 59, all 52 frozen
   `gstack_*` aliases remain unchanged, and no dependency or provider call was
   added.
+- Made closed Proof Plane Git inspection deterministic under scrubbed macOS QA
+  by declaring its existing `/tmp` scratch boundary explicitly, while retaining
+  fail-closed handling for all Git stderr and non-zero exits.
 
 ### Security, authority, and compatibility
 
