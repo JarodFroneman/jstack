@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.10.0-beta.6.2 - 2026-08-24 - Product Interface detector hardening prerelease
+
+### Fixed
+
+- Oversized ambiguous Product Interface candidates now receive a
+  descriptor-safe, stable-identity prefix inspection instead of being rejected
+  before any bounded content can be read.
+- Readable ambiguous files whose inspection stops at the 1 MB cap now produce
+  `inspectionTruncated: true`; unscoped and changed-scope applicability returns
+  `review-required` instead of throwing.
+- Whole-repository detection stops after its first content-truncated candidate
+  because the result is already incomplete. This avoids cascading into later
+  candidates while retaining the conservative review boundary.
+
+### Security, authority, and compatibility
+
+- Unsafe, unreadable, non-regular, identity-unstable, and oversized strong UI
+  files remain fail-closed. Candidate-time UI finalization also rejects any
+  truncated changed-file inspection.
+- The detector returns no source content, preserves the 1 MB per-file probe
+  ceiling and existing aggregate limits, and reads historical Git blobs by
+  object identity without invoking text-conversion drivers.
+- Added public-handler regression coverage for a Python `app/server.py` larger
+  than 1 MB, changed-scope coverage, descriptor identity/symlink coverage, and
+  a later oversized strong stylesheet.
+- Advanced public MCP and plugin release metadata to `0.10.0-beta.6.2` without
+  adding commands, tools, aliases, dependencies, providers, state migrations,
+  or action authority. The surface remains six commands, 59 canonical tools,
+  and 52 frozen aliases.
+
 ## 0.10.0-beta.6.1 - 2026-08-24 - Prompt Compiler professional standard prerelease
 
 ### Added

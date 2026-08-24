@@ -362,6 +362,7 @@ def detect_product_ui(
     documents: Iterable[tuple[str, str]],
     *,
     candidate_file_count: int | None = None,
+    inspected_file_count: int | None = None,
     inspection_truncated: bool = False,
     context_platforms: Iterable[str] = (),
     context_platforms_by_path: Mapping[str, Iterable[str]] | None = None,
@@ -417,21 +418,27 @@ def detect_product_ui(
         if creative_files.get(kind)
     ]
     applicable = bool(platforms or systems or creative)
+    if inspected_file_count is None:
+        inspected_file_count = len(inspected)
     if candidate_file_count is None:
-        candidate_file_count = len(inspected)
+        candidate_file_count = inspected_file_count
     if (
-        not isinstance(candidate_file_count, int)
+        not isinstance(inspected_file_count, int)
+        or isinstance(inspected_file_count, bool)
+        or inspected_file_count < len(inspected)
+        or inspected_file_count > 5_000
+        or not isinstance(candidate_file_count, int)
         or isinstance(candidate_file_count, bool)
-        or candidate_file_count < len(inspected)
+        or candidate_file_count < inspected_file_count
         or candidate_file_count > 100_000
         or not isinstance(inspection_truncated, bool)
-        or inspection_truncated is not (candidate_file_count > len(inspected))
+        or (candidate_file_count > inspected_file_count and not inspection_truncated)
     ):
         raise ValueError("Product Interface detection inspection metadata is inconsistent.")
     result = {
         "schemaVersion": "jstack.ui.detection.v1",
         "applicable": applicable,
-        "inspectedFileCount": len(inspected),
+        "inspectedFileCount": inspected_file_count,
         "candidateFileCount": candidate_file_count,
         "inspectionTruncated": inspection_truncated,
         "platforms": platforms,

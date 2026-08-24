@@ -416,7 +416,7 @@ def _detection(value: Any) -> dict[str, Any]:
         or isinstance(candidate_count, bool)
         or not inspected <= candidate_count <= 100_000
         or not isinstance(value["inspectionTruncated"], bool)
-        or value["inspectionTruncated"] is not (candidate_count > inspected)
+        or (candidate_count > inspected and not value["inspectionTruncated"])
     ):
         raise UIError("detection candidate count or truncation flag is inconsistent.")
     if not isinstance(value["platforms"], list) or len(value["platforms"]) > len(PLATFORM_IDS):

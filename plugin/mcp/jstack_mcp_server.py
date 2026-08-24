@@ -47,7 +47,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.6.1"
+SERVER_VERSION = "0.10.0-beta.6.2"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -2085,14 +2085,17 @@ def _ui_read_worktree_text_candidate(
     candidate_kind: Optional[str],
     *,
     side: str,
-) -> Optional[bytes]:
-    """Read a UI candidate, cheaply dismissing a bounded oversized weak source."""
+) -> tuple[Optional[bytes], bool]:
+    """Return bounded candidate bytes plus incomplete-inspection state."""
     try:
-        return audit_core.read_repository_file(
-            root,
-            relative,
-            max_bytes=UI_HINT_MAX_FILE_BYTES,
-            max_seconds=10,
+        return (
+            audit_core.read_repository_file(
+                root,
+                relative,
+                max_bytes=UI_HINT_MAX_FILE_BYTES,
+                max_seconds=10,
+            ),
+            False,
         )
     except audit_core.AuditError as first_error:
         if candidate_kind != "ambiguous-text":
@@ -2100,7 +2103,7 @@ def _ui_read_worktree_text_candidate(
                 f"Product Interface detection could not safely read the {side} repository file: {relative}"
             ) from first_error
         try:
-            probe = audit_core.read_repository_file(
+            probe, inspection_truncated = audit_core.read_repository_file_prefix(
                 root,
                 relative,
                 max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
@@ -2111,10 +2114,8 @@ def _ui_read_worktree_text_candidate(
                 f"Product Interface detection could not safely classify the oversized {side} UI-capable file: {relative}"
             ) from exc
         if _ui_ambiguous_text_is_ui(relative, probe):
-            raise ToolError(
-                f"Product Interface detection could not safely read the {side} side of oversized UI-capable file: {relative}"
-            ) from first_error
-        return None
+            return probe, inspection_truncated
+        return None, inspection_truncated
 
 
 def _ui_read_revision_text_candidate(
@@ -2124,11 +2125,12 @@ def _ui_read_revision_text_candidate(
     candidate_kind: Optional[str],
     *,
     side: str,
-) -> tuple[bool, Optional[bytes]]:
-    """Return (present, bytes); bounded oversized non-UI weak sources return None bytes."""
-    size = _ui_revision_blob_size(root, revision, relative)
-    if size is None:
-        return False, None
+) -> tuple[bool, Optional[bytes], bool]:
+    """Return presence, bounded candidate bytes, and incomplete-inspection state."""
+    metadata = _ui_revision_blob_metadata(root, revision, relative)
+    if metadata is None:
+        return False, None, False
+    _, size = metadata
     raw = _audit_stage4_revision_file(
         root,
         revision,
@@ -2136,26 +2138,25 @@ def _ui_read_revision_text_candidate(
         max_bytes=UI_HINT_MAX_FILE_BYTES,
     )
     if raw is not None:
-        return True, raw
-    if candidate_kind != "ambiguous-text" or size > UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES:
+        return True, raw, False
+    if candidate_kind != "ambiguous-text":
         raise ToolError(
             f"Product Interface detection could not safely read the {side} side of changed UI-capable file: {relative}"
         )
-    probe = _audit_stage4_revision_file(
-        root,
-        revision,
-        relative,
-        max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
-    )
-    if probe is None:
+    try:
+        probe, inspection_truncated = _ui_read_revision_blob_prefix(
+            root,
+            revision,
+            relative,
+            max_bytes=UI_HINT_MAX_AMBIGUOUS_SCAN_BYTES,
+        )
+    except ToolError as exc:
         raise ToolError(
             f"Product Interface detection could not safely read the {side} side of changed UI-capable file: {relative}"
-        )
+        ) from exc
     if _ui_ambiguous_text_is_ui(relative, probe):
-        raise ToolError(
-            f"Product Interface detection could not safely read the {side} side of oversized UI-capable file: {relative}"
-        )
-    return True, None
+        return True, probe, inspection_truncated
+    return True, None, inspection_truncated
 
 
 def _ui_validate_path_only_repository_file(root: Path, relative: str) -> int:
@@ -2173,7 +2174,9 @@ def _ui_validate_path_only_repository_file(root: Path, relative: str) -> int:
     return size
 
 
-def _ui_revision_blob_size(root: Path, revision: str, relative: str) -> Optional[int]:
+def _ui_revision_blob_metadata(
+    root: Path, revision: str, relative: str
+) -> Optional[tuple[str, int]]:
     result = run_complete(
         ["git", "ls-tree", "-z", "-l", revision, "--", relative],
         root,
@@ -2197,10 +2200,44 @@ def _ui_revision_blob_size(root: Path, revision: str, relative: str) -> Optional
         or mode not in {"100644", "100755"}
         or kind != "blob"
         or not re.fullmatch(r"[0-9a-f]{40,64}", object_id)
-        or not 0 <= size <= UI_HINT_MAX_ASSET_BYTES
+        or size < 0
     ):
         return None
-    return size
+    return object_id, size
+
+
+def _ui_revision_blob_size(root: Path, revision: str, relative: str) -> Optional[int]:
+    metadata = _ui_revision_blob_metadata(root, revision, relative)
+    if metadata is None or metadata[1] > UI_HINT_MAX_ASSET_BYTES:
+        return None
+    return metadata[1]
+
+
+def _ui_read_revision_blob_prefix(
+    root: Path,
+    revision: str,
+    relative: str,
+    *,
+    max_bytes: int,
+) -> tuple[bytes, bool]:
+    metadata = _ui_revision_blob_metadata(root, revision, relative)
+    if metadata is None:
+        raise ToolError("Product Interface revision blob metadata is unavailable.")
+    object_id, size = metadata
+    blob_result = run_complete(
+        ["git", "cat-file", "blob", object_id],
+        root,
+        timeout=30,
+        max_bytes=max_bytes,
+    )
+    truncated = size > max_bytes
+    if truncated:
+        valid = blob_result["returncode"] == 125 and len(blob_result["stdout"]) == max_bytes
+    else:
+        valid = blob_result["ok"] and len(blob_result["stdout"]) == size
+    if not valid:
+        raise ToolError("Product Interface revision blob could not be read safely.")
+    return blob_result["stdout"], truncated
 
 
 def _ui_collect_documents(
@@ -2242,13 +2279,8 @@ def _ui_collect_documents(
                 f"Product Interface detection exceeds the {UI_HINT_MAX_FILES}-file safety limit."
             )
         selected = selected[:UI_HINT_MAX_FILES]
-    if status is not None:
-        status.update(
-            {
-                "candidateFileCount": candidate_count,
-                "inspectionTruncated": candidate_count > len(selected),
-            }
-        )
+    inspection_truncated = candidate_count > len(selected)
+    inspected_paths: set[str] = set()
     total = 0
     documents: list[tuple[str, str]] = []
     for relative in selected:
@@ -2259,25 +2291,38 @@ def _ui_collect_documents(
         )
         candidate = root / relative
         if not candidate.exists():
+            inspection_truncated = True
             continue
         if candidate_kind == "path-only":
             _ui_validate_path_only_repository_file(root, relative)
+            inspected_paths.add(relative)
             documents.append((relative, ""))
             continue
-        raw = _ui_read_worktree_text_candidate(
+        raw, content_truncated = _ui_read_worktree_text_candidate(
             root,
             relative,
             candidate_kind,
             side="selected",
         )
-        if raw is None:
-            continue
-        total += len(raw)
-        if total > UI_HINT_MAX_TOTAL_BYTES:
-            raise ToolError(
-                f"Product Interface detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
-            )
-        documents.append((relative, raw.decode("utf-8", errors="ignore")))
+        inspected_paths.add(relative)
+        inspection_truncated = inspection_truncated or content_truncated
+        if raw is not None:
+            total += len(raw)
+            if total > UI_HINT_MAX_TOTAL_BYTES:
+                raise ToolError(
+                    f"Product Interface detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
+                )
+            documents.append((relative, raw.decode("utf-8", errors="ignore")))
+        if content_truncated and unscoped:
+            break
+    if status is not None:
+        status.update(
+            {
+                "candidateFileCount": candidate_count,
+                "inspectedFileCount": len(inspected_paths),
+                "inspectionTruncated": inspection_truncated,
+            }
+        )
     return documents
 
 
@@ -2363,6 +2408,8 @@ def _ui_collect_changed_documents(
     project_path: Path,
     baseline_head: str,
     records: list[dict[str, Optional[str]]],
+    *,
+    status: Optional[dict[str, Any]] = None,
 ) -> list[tuple[str, str]]:
     root = Path(git_root(project_path) or project_path).resolve()
     baseline_paths = sorted({
@@ -2370,7 +2417,7 @@ def _ui_collect_changed_documents(
         for record in records
         if record["baselinePath"] is not None
     })
-    candidate_paths = sorted({
+    candidate_record_paths = sorted({
         str(record["candidatePath"])
         for record in records
         if record["candidatePath"] is not None
@@ -2379,9 +2426,12 @@ def _ui_collect_changed_documents(
         root, baseline_paths, revision=baseline_head
     )
     candidate_context_by_path = _ui_repository_context_by_path(
-        root, candidate_paths
+        root, candidate_record_paths
     )
     documents: list[tuple[str, str]] = []
+    candidate_file_paths: set[str] = set()
+    inspected_paths: set[str] = set()
+    inspection_truncated = False
     total = 0
     for record in records:
         if "160000" in {record.get("baselineMode"), record.get("candidateMode")}:
@@ -2394,13 +2444,16 @@ def _ui_collect_changed_documents(
                 context_platforms=baseline_context_by_path.get(baseline_path, ()),
             )
             if baseline_kind == "path-only":
+                candidate_file_paths.add(baseline_path)
                 if _ui_revision_blob_size(root, baseline_head, baseline_path) is None:
                     raise ToolError(
                         f"Could not safely bind the baseline path-only UI asset: {baseline_path}"
                     )
+                inspected_paths.add(baseline_path)
                 documents.append((baseline_path, ""))
             elif baseline_kind is not None:
-                present, raw = _ui_read_revision_text_candidate(
+                candidate_file_paths.add(baseline_path)
+                present, raw, content_truncated = _ui_read_revision_text_candidate(
                     root,
                     baseline_head,
                     baseline_path,
@@ -2411,6 +2464,8 @@ def _ui_collect_changed_documents(
                     raise ToolError(
                         f"Could not safely read the baseline side of changed UI-capable file: {baseline_path}"
                     )
+                inspected_paths.add(baseline_path)
+                inspection_truncated = inspection_truncated or content_truncated
                 if raw is not None:
                     total += len(raw)
                     documents.append((baseline_path, raw.decode("utf-8", errors="ignore")))
@@ -2420,15 +2475,20 @@ def _ui_collect_changed_documents(
                 context_platforms=candidate_context_by_path.get(candidate_path, ()),
             )
             if candidate_kind == "path-only":
+                candidate_file_paths.add(candidate_path)
                 _ui_validate_path_only_repository_file(root, candidate_path)
+                inspected_paths.add(candidate_path)
                 documents.append((candidate_path, ""))
             elif candidate_kind is not None:
-                raw = _ui_read_worktree_text_candidate(
+                candidate_file_paths.add(candidate_path)
+                raw, content_truncated = _ui_read_worktree_text_candidate(
                     root,
                     candidate_path,
                     candidate_kind,
                     side="candidate",
                 )
+                inspected_paths.add(candidate_path)
+                inspection_truncated = inspection_truncated or content_truncated
                 if raw is not None:
                     total += len(raw)
                     documents.append((candidate_path, raw.decode("utf-8", errors="ignore")))
@@ -2436,6 +2496,14 @@ def _ui_collect_changed_documents(
             raise ToolError(
                 f"Product Interface candidate detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
             )
+    if status is not None:
+        status.update(
+            {
+                "candidateFileCount": len(candidate_file_paths),
+                "inspectedFileCount": len(inspected_paths),
+                "inspectionTruncated": inspection_truncated,
+            }
+        )
     return documents
 
 
@@ -2443,6 +2511,8 @@ def _ui_collect_scoped_documents(
     project_path: Path,
     baseline_head: str,
     paths: list[str],
+    *,
+    status: Optional[dict[str, Any]] = None,
 ) -> list[tuple[str, str]]:
     """Read both sides of a bounded changed path set for routing decisions."""
     root = Path(git_root(project_path) or project_path).resolve()
@@ -2472,6 +2542,9 @@ def _ui_collect_scoped_documents(
             f"Product Interface detection exceeds the {UI_HINT_MAX_FILES}-file safety limit."
         )
     documents: list[tuple[str, str]] = []
+    candidate_paths: set[str] = set()
+    inspected_paths: set[str] = set()
+    inspection_truncated = False
     total = 0
     for relative in selected:
         baseline_kind = _ui_file_candidate_kind(
@@ -2482,20 +2555,24 @@ def _ui_collect_scoped_documents(
             relative,
             context_platforms=candidate_context_by_path.get(relative, ()),
         )
+        if baseline_kind is not None or candidate_kind is not None:
+            candidate_paths.add(relative)
         if baseline_kind == "path-only" or candidate_kind == "path-only":
             baseline_present = _ui_revision_blob_size(root, baseline_head, relative) is not None
             if baseline_present and baseline_kind == "path-only":
+                inspected_paths.add(relative)
                 documents.append((relative, ""))
             candidate = root / relative
             if candidate.exists() and candidate_kind == "path-only":
                 _ui_validate_path_only_repository_file(root, relative)
+                inspected_paths.add(relative)
                 documents.append((relative, ""))
             elif not baseline_present:
                 raise ToolError(
                     f"Product Interface detection could not bind either side of changed path: {relative}"
                 )
             continue
-        baseline_present, baseline_raw = _ui_read_revision_text_candidate(
+        baseline_present, baseline_raw, baseline_truncated = _ui_read_revision_text_candidate(
             root,
             baseline_head,
             relative,
@@ -2504,18 +2581,24 @@ def _ui_collect_scoped_documents(
         ) if baseline_kind is not None else (
             _ui_revision_blob_size(root, baseline_head, relative) is not None,
             None,
+            False,
         )
+        if baseline_kind is not None and baseline_present:
+            inspected_paths.add(relative)
+            inspection_truncated = inspection_truncated or baseline_truncated
         if baseline_raw is not None:
             total += len(baseline_raw)
             documents.append((relative, baseline_raw.decode("utf-8", errors="ignore")))
         candidate = root / relative
         if candidate.exists() and candidate_kind is not None:
-            candidate_raw = _ui_read_worktree_text_candidate(
+            candidate_raw, candidate_truncated = _ui_read_worktree_text_candidate(
                 root,
                 relative,
                 candidate_kind,
                 side="changed",
             )
+            inspected_paths.add(relative)
+            inspection_truncated = inspection_truncated or candidate_truncated
             if candidate_raw is not None:
                 total += len(candidate_raw)
                 documents.append((relative, candidate_raw.decode("utf-8", errors="ignore")))
@@ -2527,6 +2610,14 @@ def _ui_collect_scoped_documents(
             raise ToolError(
                 f"Product Interface detection exceeds the {UI_HINT_MAX_TOTAL_BYTES}-byte safety limit."
             )
+    if status is not None:
+        status.update(
+            {
+                "candidateFileCount": len(candidate_paths),
+                "inspectedFileCount": len(inspected_paths),
+                "inspectionTruncated": inspection_truncated,
+            }
+        )
     return documents
 
 
@@ -2864,6 +2955,7 @@ def _ui_detection(project_path: Path, paths: Optional[list[str]] = None) -> dict
     return ui_core.detect_product_ui(
         documents,
         candidate_file_count=status["candidateFileCount"],
+        inspected_file_count=status["inspectedFileCount"],
         inspection_truncated=status["inspectionTruncated"],
         context_platforms_by_path=_ui_repository_context_by_path(
             project_path, document_paths
@@ -2879,6 +2971,7 @@ def _ui_applicability(
     baseline_head: Optional[str] = None,
 ) -> dict[str, Any]:
     gitlink_change = False
+    status: dict[str, Any] = {}
     if paths is not None and baseline_head:
         current_state = project_state(project_path)
         if current_state["clean"]:
@@ -2900,14 +2993,14 @@ def _ui_applicability(
                 for record in records
             )
             documents = _ui_collect_changed_documents(
-                project_path, baseline_head, records
+                project_path, baseline_head, records, status=status
             )
             repository_context = _ui_changed_repository_context_by_path(
                 project_path, baseline_head, records
             )
         else:
             documents = _ui_collect_scoped_documents(
-                project_path, baseline_head, paths
+                project_path, baseline_head, paths, status=status
             )
             normalized_paths = sorted({
                 path.replace("\\", "/") for path in paths
@@ -2920,6 +3013,9 @@ def _ui_applicability(
             )
         detection = ui_core.detect_product_ui(
             documents,
+            candidate_file_count=status["candidateFileCount"],
+            inspected_file_count=status["inspectedFileCount"],
+            inspection_truncated=status["inspectionTruncated"],
             context_platforms_by_path=repository_context,
         )
     else:
@@ -2929,9 +3025,15 @@ def _ui_applicability(
     if gitlink_change:
         state = "review-required"
         reason = "changed-gitlink-requires-independent-ui-resolution"
-    elif explicit_ui or (changed_scope and detection["applicable"]):
+    elif explicit_ui:
         state = "required"
-        reason = "explicit-ui-goal" if explicit_ui else "changed-ui-paths"
+        reason = "explicit-ui-goal"
+    elif changed_scope and detection["inspectionTruncated"]:
+        state = "review-required"
+        reason = "changed-ui-inspection-truncated"
+    elif changed_scope and detection["applicable"]:
+        state = "required"
+        reason = "changed-ui-paths"
     elif changed_scope:
         state = "inactive"
         reason = "no-ui-evidence-in-change-set"
@@ -21062,10 +21164,12 @@ def tool_ui_finalize(args: dict[str, Any]) -> dict[str, Any]:
     current_subject = evidence_subject(project_path, baseline["gitHead"])
     if current_subject["policyDigest"] != baseline["policyDigest"]:
         raise ToolError("Project policy changed after the UI baseline contract was issued.")
+    candidate_status: dict[str, Any] = {}
     candidate_documents = _ui_collect_changed_documents(
         project_path,
         baseline["gitHead"],
         candidate_before["changeRecords"],
+        status=candidate_status,
     )
     repository_context = _ui_changed_repository_context_by_path(
         project_path,
@@ -21073,8 +21177,16 @@ def tool_ui_finalize(args: dict[str, Any]) -> dict[str, Any]:
         candidate_before["changeRecords"],
     )
     candidate_detection = ui_core.detect_product_ui(
-        candidate_documents, context_platforms_by_path=repository_context
+        candidate_documents,
+        candidate_file_count=candidate_status["candidateFileCount"],
+        inspected_file_count=candidate_status["inspectedFileCount"],
+        inspection_truncated=candidate_status["inspectionTruncated"],
+        context_platforms_by_path=repository_context,
     )
+    if candidate_detection["inspectionTruncated"]:
+        raise ToolError(
+            "UI finalization requires complete inspection of every changed UI-capable file."
+        )
     candidate_scope = ui_core.detect_product_ui_scope(
         candidate_documents, context_platforms_by_path=repository_context
     )
