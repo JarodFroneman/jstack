@@ -17,8 +17,8 @@
   ],
   "properties": {
     "schemaVersion": { "const": "jstack.prompt-compilation.v2" },
-    "compilerVersion": { "const": "1.0.0" },
-    "templateVersion": { "const": "jstack.codex-execution-prompt.v1" },
+    "compilerVersion": { "const": "1.1.0" },
+    "templateVersion": { "const": "jstack.codex-execution-prompt.v2" },
     "compilerMode": { "enum": ["disabled", "shadow", "preview", "enforced"] },
     "rawPromptDigest": { "$ref": "#/$defs/sha256" },
     "intentDigest": { "$ref": "#/$defs/sha256" },
