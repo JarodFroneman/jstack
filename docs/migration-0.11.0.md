@@ -100,7 +100,8 @@ If activation, startup, inventory, hash, or smoke verification fails:
 3. preserve current `~/.jstack` state unless a specific incompatibility has
    been demonstrated;
 4. restart Codex; and
-5. verify the restored version, 60/52 tool surface, hashes, and MCP smoke test.
+5. verify the restored Beta.6.2 version, 59/52 tool surface, hashes, and MCP
+   smoke test.
 
 Do not create a mixed installation by restoring individual generated files.
 Receipts bound to the replaced version, policy, provider, host, schema, or Git

@@ -187,6 +187,13 @@ class UnifiedOSArchitectureDecisionTests(unittest.TestCase):
         self.assertIn("No empirical result has been fabricated", evaluation)
         self.assertIn("no comparative or superiority claim", index)
 
+    def test_stable_rollback_documents_the_beta_6_2_surface(self) -> None:
+        migration = (ROOT / "docs" / "migration-0.11.0.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("restored Beta.6.2 version, 59/52 tool surface", migration)
+        self.assertNotIn("restored version, 60/52 tool surface", migration)
+
     def test_all_seventeen_required_adrs_follow_repository_conventions(self) -> None:
         self.assertEqual(17, len(ADR_FILES))
         for number, filename in ADR_FILES.items():
