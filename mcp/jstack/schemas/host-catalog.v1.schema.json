@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/host-catalog.v1.schema.json",
+  "title": "JStack Host Capability Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogVersion", "capabilityIds", "hosts", "invariants"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.host-catalog.v1"},
+    "catalogVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "capabilityIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "hosts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "displayName", "supportLevel", "availableCapabilityIds", "unavailableCapabilityIds", "notes"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "displayName": {"type": "string", "minLength": 1, "maxLength": 160},
+          "supportLevel": {"enum": ["full", "preview", "protocol-only", "unsupported"]},
+          "availableCapabilityIds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+          "unavailableCapabilityIds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+          "notes": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["methodologyDependsOnHost", "unsupportedCapabilityMayBeEmulated", "hostContractGrantsAuthority", "mcpConnectivityImpliesFullParity"],
+      "properties": {
+        "methodologyDependsOnHost": {"const": false},
+        "unsupportedCapabilityMayBeEmulated": {"const": false},
+        "hostContractGrantsAuthority": {"const": false},
+        "mcpConnectivityImpliesFullParity": {"const": false}
+      }
+    }
+  },
+  "$defs": {"id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"}}
+}

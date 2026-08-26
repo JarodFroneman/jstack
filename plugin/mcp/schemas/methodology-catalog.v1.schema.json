@@ -1,0 +1,408 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/methodology-catalog.v1.schema.json",
+  "title": "JStack Methodology Capability Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "catalogVersion",
+    "sourceProvenance",
+    "invariants",
+    "methodologyCapabilities"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.methodology-capability.catalog.v1"
+    },
+    "catalogVersion": {
+      "const": "1.0.0"
+    },
+    "sourceProvenance": {
+      "$ref": "#/$defs/sourceProvenance"
+    },
+    "invariants": {
+      "$ref": "#/$defs/invariants"
+    },
+    "methodologyCapabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/methodology"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "boundedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "identifierList": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/boundedText"
+      }
+    },
+    "taskMode": {
+      "enum": [
+        "explain",
+        "research",
+        "plan-only",
+        "read-only-audit",
+        "diagnose-only",
+        "implement",
+        "test",
+        "review",
+        "fix",
+        "commit",
+        "push",
+        "open-pull-request",
+        "merge",
+        "deploy",
+        "modify-production",
+        "external-action"
+      ]
+    },
+    "operatingMode": {
+      "enum": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ]
+    },
+    "sourceFile": {
+      "enum": [
+        "investigate/SKILL.md.tmpl",
+        "office-hours/SKILL.md.tmpl",
+        "plan-ceo-review/SKILL.md.tmpl",
+        "plan-design-review/SKILL.md.tmpl",
+        "plan-devex-review/SKILL.md.tmpl",
+        "plan-eng-review/SKILL.md.tmpl",
+        "retro/SKILL.md.tmpl"
+      ]
+    },
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "tree",
+        "version",
+        "license",
+        "sourceFiles",
+        "adaptation"
+      ],
+      "properties": {
+        "repository": {
+          "const": "https://github.com/garrytan/gstack.git"
+        },
+        "commit": {
+          "const": "ad8400543cd9ce8d07641362db48d44a95417e33"
+        },
+        "tree": {
+          "const": "993294b0a09f5265d2d5af6d2fb8234ae2efe450"
+        },
+        "version": {
+          "const": "1.69.0.0"
+        },
+        "license": {
+          "const": "MIT"
+        },
+        "sourceFiles": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourceFile"
+          }
+        },
+        "adaptation": {
+          "const": "original-jstack-reexpression"
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorityEffect",
+        "permissionMode",
+        "implicitProviderInvocation",
+        "implicitPersistence",
+        "rawPromptStored",
+        "hiddenReasoningStored",
+        "upstreamPromptCopied"
+      ],
+      "properties": {
+        "authorityEffect": {
+          "const": "none"
+        },
+        "permissionMode": {
+          "const": "inherit-jstack"
+        },
+        "implicitProviderInvocation": {
+          "const": false
+        },
+        "implicitPersistence": {
+          "const": false
+        },
+        "rawPromptStored": {
+          "const": false
+        },
+        "hiddenReasoningStored": {
+          "const": false
+        },
+        "upstreamPromptCopied": {
+          "const": false
+        }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "patterns",
+        "forcedTaskModes"
+      ],
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "forcedTaskModes": {
+          "type": "array",
+          "maxItems": 17,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/taskMode"
+          }
+        }
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "objective",
+        "requiredInputs",
+        "output",
+        "decisionGate"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "objective": {
+          "$ref": "#/$defs/boundedText"
+        },
+        "requiredInputs": {
+          "$ref": "#/$defs/textList"
+        },
+        "output": {
+          "$ref": "#/$defs/boundedText"
+        },
+        "decisionGate": {
+          "$ref": "#/$defs/boundedText"
+        }
+      }
+    },
+    "outputContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "requiredSections"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/identifier"
+        },
+        "requiredSections": {
+          "$ref": "#/$defs/identifierList"
+        }
+      }
+    },
+    "questionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "maximumPerRound",
+        "materialOnly",
+        "recommendedDefaultRequired"
+      ],
+      "properties": {
+        "owner": {
+          "const": "adaptive-context-gate"
+        },
+        "maximumPerRound": {
+          "const": 3
+        },
+        "materialOnly": {
+          "const": true
+        },
+        "recommendedDefaultRequired": {
+          "const": true
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskModePreserved",
+        "implementationAuthority",
+        "externalActionAuthority",
+        "permissionMode",
+        "providerInvocation",
+        "persistence"
+      ],
+      "properties": {
+        "taskModePreserved": {
+          "const": true
+        },
+        "implementationAuthority": {
+          "const": "none"
+        },
+        "externalActionAuthority": {
+          "const": "none"
+        },
+        "permissionMode": {
+          "const": "inherit-jstack"
+        },
+        "providerInvocation": {
+          "const": "explicit-authorization-only"
+        },
+        "persistence": {
+          "const": "none"
+        }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "summary",
+        "sourceFiles",
+        "activation",
+        "allowedTaskModes",
+        "allowedOperatingModeIds",
+        "primarySpecialistId",
+        "specialistIds",
+        "baseCapabilityIds",
+        "phases",
+        "outputContract",
+        "requiredEvidenceContractIds",
+        "stopConditions",
+        "questionPolicy",
+        "authority"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "sourceFiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourceFile"
+          }
+        },
+        "activation": {
+          "$ref": "#/$defs/activation"
+        },
+        "allowedTaskModes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 17,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/taskMode"
+          }
+        },
+        "allowedOperatingModeIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/operatingMode"
+          }
+        },
+        "primarySpecialistId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "specialistIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "baseCapabilityIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "phases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/phase"
+          }
+        },
+        "outputContract": {
+          "$ref": "#/$defs/outputContract"
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "stopConditions": {
+          "$ref": "#/$defs/textList"
+        },
+        "questionPolicy": {
+          "$ref": "#/$defs/questionPolicy"
+        },
+        "authority": {
+          "$ref": "#/$defs/authority"
+        }
+      }
+    }
+  }
+}

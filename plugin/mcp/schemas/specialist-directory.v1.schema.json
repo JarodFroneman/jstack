@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/specialist-directory.v1.schema.json",
+  "title": "JStack Department And Specialist Directory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "directoryVersion",
+    "capabilityCatalog",
+    "sourceProvenance",
+    "departments",
+    "specialists",
+    "invariants"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.organization.directory.v1"
+    },
+    "directoryVersion": {
+      "const": "1.0.0"
+    },
+    "capabilityCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "catalogVersion",
+        "catalogDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.capability.catalog.v1"
+        },
+        "catalogVersion": {
+          "const": "1.1.0"
+        },
+        "catalogDigest": {
+          "const": "65bea701e5a7eced1c33fdd4253fee23b0c1f0ac9d97ece4f24e85ee933c4c28"
+        }
+      }
+    },
+    "sourceProvenance": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/sourceProvenance"
+      }
+    },
+    "departments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/department"
+      }
+    },
+    "specialists": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 35,
+      "items": {
+        "$ref": "#/$defs/specialist"
+      }
+    },
+    "invariants": {
+      "$ref": "#/$defs/invariants"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "canonicalRoleId": {
+      "enum": [
+        "lead",
+        "architect",
+        "investigator",
+        "builder",
+        "reviewer",
+        "qa",
+        "security",
+        "devops",
+        "product",
+        "quant",
+        "docs"
+      ]
+    },
+    "capabilityId": {
+      "enum": [
+        "accessibility-assurance",
+        "agent-systems",
+        "ai-code-security",
+        "api-platform",
+        "codebase-orientation",
+        "compliance-assurance",
+        "database-reliability",
+        "developer-tooling",
+        "email-deliverability",
+        "evidence-led-handoff",
+        "identity-access",
+        "incident-reliability",
+        "minimal-change",
+        "performance-engineering",
+        "privacy-legal-evidence",
+        "product-observability",
+        "web-launch-assurance",
+        "workflow-architecture"
+      ]
+    },
+    "classification": {
+      "enum": [
+        "trivial",
+        "normal",
+        "architecture",
+        "product",
+        "ui_product",
+        "security_compliance",
+        "data_financial",
+        "production_release"
+      ]
+    },
+    "risk": {
+      "enum": [
+        "trivial",
+        "normal",
+        "elevated",
+        "high",
+        "production"
+      ]
+    },
+    "identifierList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sourceType",
+        "sourceReference",
+        "sourceDigest",
+        "license",
+        "adaptationClass",
+        "copiedPromptContent"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "sourceType": {
+          "enum": [
+            "jstack-specification",
+            "external-research"
+          ]
+        },
+        "sourceReference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "sourceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "adaptationClass": {
+          "enum": [
+            "NATIVE",
+            "ADAPTED"
+          ]
+        },
+        "copiedPromptContent": {
+          "const": false
+        }
+      }
+    },
+    "department": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "purpose",
+        "specialistIds",
+        "selectionPolicy",
+        "authorityEffect",
+        "physicalAgentEffect"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "specialistIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 35,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "selectionPolicy": {
+          "const": "dynamic-material-need"
+        },
+        "authorityEffect": {
+          "const": "none"
+        },
+        "physicalAgentEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "specialist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "description",
+        "departmentId",
+        "canonicalRoleId",
+        "capabilityIds",
+        "activation",
+        "riskRequirements",
+        "independence",
+        "providerRequirementIds",
+        "sourceProvenanceIds",
+        "physicalAgentBinding",
+        "authorityMode",
+        "permissionOverridesAllowed"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "departmentId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "canonicalRoleId": {
+          "$ref": "#/$defs/canonicalRoleId"
+        },
+        "capabilityIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/capabilityId"
+          }
+        },
+        "activation": {
+          "$ref": "#/$defs/activation"
+        },
+        "riskRequirements": {
+          "$ref": "#/$defs/riskRequirements"
+        },
+        "independence": {
+          "$ref": "#/$defs/independence"
+        },
+        "providerRequirementIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "sourceProvenanceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "physicalAgentBinding": {
+          "const": "composer-assigned"
+        },
+        "authorityMode": {
+          "const": "inherit-canonical-role"
+        },
+        "permissionOverridesAllowed": {
+          "const": false
+        }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domains",
+        "classifications",
+        "changedSurfaces",
+        "taskSignals"
+      ],
+      "properties": {
+        "domains": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "classifications": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/classification"
+          }
+        },
+        "changedSurfaces": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "taskSignals": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "riskRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mandatoryFor",
+        "prohibitedFor"
+      ],
+      "properties": {
+        "mandatoryFor": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/risk"
+          }
+        },
+        "prohibitedFor": {
+          "type": "array",
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/risk"
+          }
+        }
+      }
+    },
+    "independence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requiredFor",
+        "mustBeIndependentFromRoles"
+      ],
+      "properties": {
+        "requiredFor": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "mustBeIndependentFromRoles": {
+          "type": "array",
+          "maxItems": 11,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/canonicalRoleId"
+          }
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specialistIsPhysicalAgent",
+        "roleIsPersona",
+        "capabilityGrantsPermission",
+        "providerGrantsAuthority",
+        "evidenceGrantsAuthorization",
+        "permissionSource",
+        "physicalAgentAssignmentSource"
+      ],
+      "properties": {
+        "specialistIsPhysicalAgent": {
+          "const": false
+        },
+        "roleIsPersona": {
+          "const": false
+        },
+        "capabilityGrantsPermission": {
+          "const": false
+        },
+        "providerGrantsAuthority": {
+          "const": false
+        },
+        "evidenceGrantsAuthorization": {
+          "const": false
+        },
+        "permissionSource": {
+          "const": "canonical-role"
+        },
+        "physicalAgentAssignmentSource": {
+          "const": "team-composer"
+        }
+      }
+    }
+  }
+}

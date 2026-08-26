@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/unified-os-evals/schemas/study-template.v1.schema.json",
+  "title": "JStack Unified OS Evaluation Study v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "studyId", "title", "conditions", "taskClasses", "metrics", "repetitionsPerCondition", "sourceProvenance", "executionPolicy", "currentResultState", "claimStatus"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.unified-os-eval-study.v1"},
+    "studyId": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 500},
+    "conditions": {"const": ["base-agent", "gstack", "jstack-baseline", "combined-jstack"]},
+    "taskClasses": {"type": "array", "minItems": 14, "maxItems": 14, "uniqueItems": true, "items": {"type": "string"}},
+    "metrics": {"type": "array", "minItems": 16, "maxItems": 16, "uniqueItems": true, "items": {"type": "string"}},
+    "repetitionsPerCondition": {"type": "integer", "minimum": 3, "maximum": 20},
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jstackRepository", "jstackBaselineCommit", "gstackRepository", "gstackCommit", "gstackTree", "gstackLicense", "combinedCandidateBindingRequired"],
+      "properties": {
+        "jstackRepository": {"type": "string", "minLength": 1},
+        "jstackBaselineCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "gstackRepository": {"type": "string", "minLength": 1},
+        "gstackCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "gstackTree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "gstackLicense": {"const": "MIT"},
+        "combinedCandidateBindingRequired": {"const": true}
+      }
+    },
+    "executionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["networkDuringScoring", "missingRunsRemainInDenominator", "unknownMetricsUseNotMeasured", "rawPromptsStored", "sourceCodeStoredInResults", "actionsAuthorizedByStudy", "superiorityClaimGeneratedAutomatically"],
+      "properties": {
+        "networkDuringScoring": {"const": false},
+        "missingRunsRemainInDenominator": {"const": true},
+        "unknownMetricsUseNotMeasured": {"const": true},
+        "rawPromptsStored": {"const": false},
+        "sourceCodeStoredInResults": {"const": false},
+        "actionsAuthorizedByStudy": {"const": false},
+        "superiorityClaimGeneratedAutomatically": {"const": false}
+      }
+    },
+    "currentResultState": {"const": "NOT_MEASURED"},
+    "claimStatus": {"const": "NO_COMPARATIVE_CLAIM"}
+  }
+}

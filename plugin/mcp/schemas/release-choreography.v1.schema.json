@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/release-choreography.v1.schema.json",
+  "title": "JStack Release Choreography v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "candidateFingerprint", "targetEnvironment", "strategy", "stages", "readinessPassed", "releaseRequestObserved", "externalApprovalReferencePresent", "executionAuthorized", "nextAction", "invariants", "authorityEffect", "choreographyDigest"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.release-choreography.v1"},
+    "candidateFingerprint": {"$ref": "#/$defs/sha256"},
+    "targetEnvironment": {"type": "string", "minLength": 1, "maxLength": 64},
+    "strategy": {"enum": ["direct", "canary", "blue-green"]},
+    "stages": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "meaning"],
+        "properties": {
+          "id": {"enum": ["candidate", "tests", "review", "security", "browser-runtime", "launch-assurance", "independent-release-audit", "readiness", "external-action-authority", "canary", "monitor", "rollback"]},
+          "status": {"enum": ["passed", "blocked", "not-applicable", "awaiting-separate-authority", "blocked-by-readiness"]},
+          "meaning": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "readinessPassed": {"type": "boolean"},
+    "releaseRequestObserved": {"type": "boolean"},
+    "externalApprovalReferencePresent": {"type": "boolean"},
+    "executionAuthorized": {"const": false},
+    "nextAction": {"enum": ["resolve-readiness-blockers", "request-separate-host-provider-action-within-user-authority"]},
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readinessIsNotAuthorization", "receiptCannotTriggerAction", "canaryCannotEscalateAuthority", "rollbackCannotBeSkippedForProduction"],
+      "properties": {
+        "readinessIsNotAuthorization": {"const": true},
+        "receiptCannotTriggerAction": {"const": true},
+        "canaryCannotEscalateAuthority": {"const": true},
+        "rollbackCannotBeSkippedForProduction": {"const": true}
+      }
+    },
+    "authorityEffect": {"const": "none"},
+    "choreographyDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

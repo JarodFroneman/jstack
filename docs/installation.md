@@ -26,16 +26,17 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **Beta.6.2 prerelease boundary:** install `v0.10.0-beta.6.2` only from its
-> exact immutable GitHub prerelease tag, retain the prior Beta.6.1 installation
-> as one complete rollback unit, and verify the installed bytes and tool
-> surface. The
+> **v0.11.0 stable release boundary:** install `v0.11.0` only from its exact
+> immutable annotated GitHub release tag, retain the complete
+> `v0.10.0-beta.6.2` installation as one rollback unit, and verify the installed
+> bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
-> unvalidated. Installing Beta.6.2 does not satisfy its deferred 216-run study
-> or independent human reviews. The compiler amendment and a passing Beta.6
-> motion receipt validate bounded contracts and declared evidence only; they
-> do not certify prompt-quality uplift, producer honesty, aesthetic quality,
-> attack immunity, release readiness, or production safety.
+> unvalidated. Stage 19 also remains `NOT_MEASURED`; its 168-cell comparative
+> study has not run. Installing v0.11.0 does not satisfy either deferred study
+> or any project-specific independent review. Receipts validate bounded
+> contracts and declared evidence only; they do not certify prompt-quality
+> uplift, producer honesty, aesthetic quality, attack immunity, or universal
+> production readiness.
 
 ## Host Support
 
@@ -51,7 +52,7 @@ presented as complete workflow parity.
 
 ## Prompt Compiler mode
 
-Beta.6 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
+v0.11.0 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
 values are `shadow`, `preview`, and `disabled`; use `disabled` only as a bounded
 compatibility rollback while investigating an integration issue. Mode changes
 invalidate existing readiness and compilation receipts. The six packaged
@@ -395,8 +396,8 @@ Expected dedicated layout:
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  prerelease, `0.10.0-beta.6.2`);
-- `tools/list` includes 59 canonical `jstack_*` tools, including the
+  release, `0.11.0`);
+- `tools/list` includes 60 canonical `jstack_*` tools, including the
   canonical-only `jstack_prompt_compile`, `jstack_context_readiness`,
   `jstack_performance_capture`, and
   `jstack_adversarial_capture`, plus the reference lifecycle
@@ -417,10 +418,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.10.0-beta.6.2`, also confirm that GitHub marks the release as a
-prerelease and that the checked-out annotated tag resolves to the release
-commit before staging any global files. The rollback snapshot must contain the
-actual published Beta.6.1 installation as one coherent MCP, plugin-source,
+For `v0.11.0`, also confirm that GitHub marks the release as stable and that the
+checked-out annotated tag resolves to the release commit before staging any
+global files. The rollback snapshot must contain the actual published
+`v0.10.0-beta.6.2` installation as one coherent MCP, plugin-source,
 plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state

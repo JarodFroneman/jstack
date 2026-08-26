@@ -103,6 +103,41 @@ when every expected role is present, current, capability-matched, and free of
 unresolved contradictions. See the
 [specialist capability system](docs/specialist-capabilities.md).
 
+### Receipt-bound methodology capabilities
+
+The Unified Engineering OS adds a separate seven-record methodology catalog
+for product discovery, CEO/product review, engineering and design plan review,
+developer-experience review, root-cause investigation, and engineering
+retrospectives. JStack selects only the methods signalled by the approved goal
+and task mode, maps them to existing logical specialists and base capability
+packs, and binds the catalog and selection digests into the signed Team Plan
+receipt. An empty selection is valid; JStack does not run every review for
+every task.
+
+These are original structured JStack records researched from a pinned MIT
+gstack snapshot. JStack does not invoke the upstream prompt skills, import
+their control plane, or gain provider, persistence, write, Git, release,
+deployment, production, or external-action authority from a method. See the
+[Stage 8 methodology design](docs/integration/gstack/LOW_RISK_METHODOLOGIES.md).
+
+Stage 9 turns the selected Root-Cause Investigation method into an evidence-led
+dispatch gate. A mutating fix plan must first run a read-only investigation,
+record reproduction, execution trace, falsifiable hypotheses, and an
+established cause, then present the exact digest-only specialist receipt to
+unlock the original scoped writer. Three unsuccessful hypothesis cycles stop
+unresolved and reject a fourth random-fix attempt. See the
+[Root-Cause Investigation protocol](docs/integration/gstack/ROOT_CAUSE_INVESTIGATION.md).
+
+Stage 10 integrates Product/Design intelligence into the existing Product
+Interface authority plane. It reuses Product Discovery, Product Challenge,
+Design Plan Review, DX Review, the specialist directory, and Evidence Builder;
+it adds no command, provider, router, or physical-agent rule. Material
+exploration produces two or three source-traceable alternatives, displays them
+for human selection, and cannot mutate the candidate or production. The
+selected direction can be bound into additive UI-contract v3/v4 successors,
+which explicitly grant no implementation or production authority. See the
+[Product / Design Department](docs/integration/gstack/PRODUCT_DESIGN_DEPARTMENT.md).
+
 ### Product Interface design and reference evidence
 
 Beta.2 adds `product-ui-design` as an automatic skill for user-facing
@@ -110,9 +145,10 @@ interface work inside the five delivery/audit commands. Backend-only or
 non-interface work does not activate it. The separate
 `/jstack-evidence-builder` command collects approved visual references without
 editing the project and without qualifying them as candidate evidence. The
-resolution order is fixed: an explicit user instruction wins, then the
-project's existing design system, then the domain profile, with
-`editorial-calm` as the fallback. `creative-canvas` is selected for spatial,
+resolution order is fixed: explicit user requirements, the existing design
+system, existing tokens/components, accessibility requirements, an approved
+reference bundle, selected product/domain guidance, then fallback JStack
+guidance. `editorial-calm` is the default fallback; `creative-canvas` is selected for spatial,
 visual, timeline, node, media, and other creation work; hybrid products keep a
 calm shell around the creative workspace.
 
@@ -173,7 +209,25 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In The v0.10.0-beta.6.2 Prerelease
+## What Is In v0.11.0
+
+`v0.11.0` packages the staged JStack × gstack Unified Engineering OS work
+through Stage 20 as a stable release. JStack remains the sole governance and
+orchestration kernel while deterministic Team Composer, operating profiles,
+specialist and methodology catalogs, root-cause investigation, Product/Design
+decision support, bounded browser evidence, host/provider boundaries,
+professional delivery, release choreography, and immutable upstream
+provenance extend the existing workflows and receipt plane.
+
+The release does not install or execute gstack as a second control plane. Its
+pinned MIT-licensed snapshot is research and optional bounded provider input;
+upstream prompts, permissions, state, installers, and release behavior remain
+outside JStack authority. The public compatibility floor remains six commands,
+60 canonical tools, 52 frozen aliases, and a Python-standard-library runtime
+core. Start with the [v0.11.0 migration guide](docs/migration-0.11.0.md) and
+the [Unified Engineering OS index](docs/integration/gstack/README.md).
+
+### Prior Beta.6 line
 
 `v0.10.0-beta.6.2` hardens Product Interface discovery for large mixed backend
 and frontend repositories. Readable ambiguous candidates such as a Python
@@ -219,18 +273,18 @@ work keeps the existing finalization path. Beta.4's Prompt Compiler,
 Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
 and UI contract v1/v2 remain compatible.
 
-> **Unvalidated prerelease:** `0.10.0-beta.6.2` adds deterministic bounded
-> Product Interface detector behavior, retains Beta.6.1 Prompt Compiler policy
-> and Beta.6 motion evidence contracts, and does not
-> itself prove prompt-quality or measured design uplift. Beta.1's
-> 18-image, 216-attempt, 432-review Proof Study remains deferred and byte-bound
-> to the exact annotated `v0.10.0-beta.1` tag. Neither publication nor Product
-> Interface receipts validate that study or establish production readiness.
+> **Stable release, bounded claims:** `0.11.0` is the stable compatibility and
+> distribution target for this architecture. Stage 19 remains `NOT_MEASURED`:
+> its 168-cell comparative study has not run. Beta.1's 18-image, 216-attempt,
+> 432-review Proof Study also remains deferred and byte-bound to the exact
+> annotated `v0.10.0-beta.1` tag. Publication, receipts, and the stable label do
+> not prove comparative uplift, attack immunity, or universal production
+> readiness.
 
 | Capability | What it provides |
 | --- | --- |
 | Prompt Compiler | Stage A pre-inspection intent and authority normalization; Stage B repository-grounded, source-traceable task contracts; an enterprise professional prompt-engineering standard; task-aware, proportionate secure-development requirements for code/new-development work; mandatory complete-prompt preview and exact approval binding before planning; deterministic rendering, size budgets, secret rejection, signed project-bound receipts, four rollout modes, and no stored raw prompt or hidden reasoning |
-| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, creation-time frequency-aware motion specifications, candidate-bound ordinary/reduced motion audits and private reports, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command |
+| Product Interface System | Automatic UI-scoped design guidance with `editorial-calm` and `creative-canvas` profiles, source-traceable Product/Design analysis, two/three bounded alternatives with human selection, hybrid shell/workspace composition, existing-system precedence, platform adapters, Git-bound contracts, creation-time frequency-aware motion specifications, candidate-bound ordinary/reduced motion audits and private reports, objective screenshot-matrix evidence, and release propagation inside delivery workflows; optional reference preprocessing uses the separate Evidence Builder command, and design selection grants no implementation or production authority |
 | Beta.1 Proof Plane | Uninstalled maintainer infrastructure for exact 18-image qualification, reviewed task artifacts, 216 write-once attempts, delayed grading, 432 signed blinded reviews, and independently signed evidence verification; until those external gates run, it proves implementation integrity only and makes no performance, uplift, validation, or production-readiness claim |
 | Safe Security Operator Stage 0 | Two inert, deterministic audit-mastery labs for CIA, authorization, hostile-repository instruction handling, no-execution/no-network/no-secret boundaries, private coordinated disclosure, and explicit non-authority; Stage 0 does not scan, exploit, patch, publish, deploy, or access production |
 | Repository Reconnaissance Stage 1 | A closed `jstack.audit.repository-map.v1` contract that binds static maps to exact Git HEAD/tree state, requires all eight system surfaces, hash-verified source-line citations, graph and trust-boundary integrity, generated-artifact provenance/drift classification, explicit gaps and limitations, and two deterministic independent passes |
@@ -248,6 +302,7 @@ and UI contract v1/v2 remain compatible.
 | Reference Evidence Builder | Private screenshot/Figma/approved-URL bundles, rights and provider disclosures, optional isolated HTML prototypes, and digest-only binding into a later UI contract without candidate-evidence authority |
 | Launch assurance | 22 explicit surfaces, four non-lowerable risk tiers, a versioned 47-control catalog, static hint reconciliation, composite structured evidence, independent high-risk scanning, and fail-closed production receipts |
 | Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the five delivery commands; Evidence Builder remains a separate single-Lead preprocessing workflow |
+| Methodology capabilities | Seven deterministic, immutable-provenance product, plan-review, investigation, and retrospective methods routed through existing specialists, Team Composer evidence, and signed non-authorizing receipts |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
 | Audit system | Read-only quick, standard, deep, and release profiles with deterministic finalization and SARIF output |
 | Goal loops | Versioned contracts, private atomic state, one write lease per checkout, circuit breakers, checkpoints, revision, and terminal receipts |
@@ -256,7 +311,7 @@ and UI contract v1/v2 remain compatible.
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Six dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
-The MCP exposes 59 canonical `jstack_*` tools, including the canonical-only
+The MCP exposes 60 canonical `jstack_*` tools, including the canonical-only
 `jstack_prompt_compile` two-stage lifecycle, the
 `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` reference
 lifecycle, the `jstack_ui_contract` / `jstack_ui_finalize` candidate lifecycle,
@@ -436,7 +491,8 @@ artifacts before release.
 - **Capabilities** add role-bound methods, required evidence, stop conditions,
   and audit/loop controls without expanding those permissions or scopes.
 - **Product Interface** detects UI scope, resolves design-system precedence,
-  and binds implementation/finalization evidence without authorizing changes.
+  binds a human-selected Product/Design direction when applicable, and binds
+  implementation/finalization evidence without authorizing changes.
 - **Evidence** owns current QA, security, audit, output, and approval proofs.
 - **Loop** owns one bounded Phase -> Iteration convergence contract.
 - **Program** owns a project-defined Program -> Phase dependency graph above
@@ -599,13 +655,16 @@ Windows with Python 3.9 and 3.12. Ubuntu and macOS run the complete unit and
 adversarial suite, including the POSIX/macOS Proof Plane authority. Windows
 runs the portable product suite plus portable Proof Plane contract/integrity
 coverage; Apple-container execution and POSIX ownership, mode, link, socket,
-and SSH authority tests are not claimed as Windows-compatible.
+and SSH authority tests are not claimed as Windows-compatible. A separate
+CodeQL workflow scans the exact Python pull-request candidate and main branch;
+all workflow actions are pinned to full immutable commits.
 
 ## Documentation
 
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [v0.11.0 migration guide](docs/migration-0.11.0.md) | [Unified Engineering OS](docs/integration/gstack/README.md) · [0.11.0 changelog](CHANGELOG.md#0110---2026-08-26---unified-engineering-os-stable-release) |
 | [v0.10.0-beta.6.2 migration guide](docs/migration-0.10.0-beta.6.2.md) | [Bounded Product Interface detector behavior](CHANGELOG.md#0100-beta62---2026-08-24---product-interface-detector-hardening-prerelease) |
 | [v0.10.0-beta.6.1 migration guide](docs/migration-0.10.0-beta.6.1.md) | [Prompt Compiler professional and secure-development amendment](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |
 | [v0.10.0-beta.6 migration guide](docs/migration-0.10.0-beta.6.md) | [Product UI Motion Enforcement](docs/adr/0027-product-ui-motion-enforcement.md) |
@@ -649,9 +708,18 @@ and SSH authority tests are not claimed as Windows-compatible.
 
 ## Relationship To gstack
 
-JStack is an independent project. Upstream gstack can provide optional extra
-skills, but it is not a runtime dependency and is not required for any JStack
-workflow.
+JStack is an independent project and remains the sole governance and
+orchestration kernel. The Unified Engineering OS candidate uses one immutable
+gstack snapshot as licensed research and, for explicitly selected surfaces, a
+possible bounded provider source. Upstream prompts, permissions, state,
+installers, and release behavior do not become JStack authority, and gstack is
+not a runtime dependency for ordinary JStack workflows.
+
+The complete repository-grounded architecture, organization, provider,
+security, profile, provenance, evaluation, migration, and release-readiness
+index is [JStack × gstack Unified Engineering OS](docs/integration/gstack/README.md).
+Its empirical program remains `NOT_MEASURED`; no comparative superiority claim
+is made.
 
 ---
 

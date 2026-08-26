@@ -1,0 +1,902 @@
+{
+  "schemaVersion": "jstack.organization.directory.v1",
+  "directoryVersion": "1.0.0",
+  "capabilityCatalog": {
+    "schemaVersion": "jstack.capability.catalog.v1",
+    "catalogVersion": "1.1.0",
+    "catalogDigest": "65bea701e5a7eced1c33fdd4253fee23b0c1f0ac9d97ece4f24e85ee933c4c28"
+  },
+  "sourceProvenance": [
+    {
+      "id": "gstack-research-baseline",
+      "sourceType": "external-research",
+      "sourceReference": "https://github.com/garrytan/gstack.git@ad8400543cd9ce8d07641362db48d44a95417e33",
+      "sourceDigest": "a393523ca34dfdeb3517a3a46f18b2b5d167172c37cdfa14266e2ded1be18f65",
+      "license": "MIT",
+      "adaptationClass": "ADAPTED",
+      "copiedPromptContent": false
+    },
+    {
+      "id": "unified-os-specification",
+      "sourceType": "jstack-specification",
+      "sourceReference": "JSTACK_GSTACK_UNIFIED_ENGINEERING_OS_SPEC.md",
+      "sourceDigest": "00e47070f78be1d10488ff89d001152fcd5827ddcd4718a1cd0d163625a33a2a",
+      "license": "project-authoritative-input",
+      "adaptationClass": "NATIVE",
+      "copiedPromptContent": false
+    }
+  ],
+  "departments": [
+    {
+      "id": "audit-assurance",
+      "displayName": "Audit & Assurance",
+      "purpose": "Provide independent read-only assurance across correctness, security, architecture, operations, and release.",
+      "specialistIds": [
+        "audit-lead",
+        "correctness-auditor",
+        "release-auditor",
+        "security-auditor"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "design",
+      "displayName": "Design",
+      "purpose": "Define coherent product experience, systems, motion, and accessibility without creating implementation authority.",
+      "specialistIds": [
+        "accessibility-specialist",
+        "design-lead",
+        "design-systems-engineer",
+        "motion-designer",
+        "product-designer"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "domain",
+      "displayName": "Domain Specialists",
+      "purpose": "Provide financial, quantitative, and data-domain review where generic engineering expertise is insufficient.",
+      "specialistIds": [
+        "data-specialist",
+        "financial-systems-reviewer",
+        "quant-engineer"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "engineering",
+      "displayName": "Engineering",
+      "purpose": "Own architecture and bounded implementation through existing JStack role authority.",
+      "specialistIds": [
+        "api-platform-engineer",
+        "backend-engineer",
+        "database-engineer",
+        "frontend-engineer",
+        "infrastructure-engineer",
+        "lead-engineer",
+        "software-architect"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "investigation-reliability",
+      "displayName": "Investigation & Reliability",
+      "purpose": "Trace behavior, reproduce defects, falsify hypotheses, and identify root causes before remediation.",
+      "specialistIds": [
+        "production-debugger",
+        "reliability-engineer",
+        "root-cause-investigator"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "product",
+      "displayName": "Product",
+      "purpose": "Clarify product outcomes, scope, user value, and developer experience.",
+      "specialistIds": [
+        "developer-experience-lead",
+        "documentation-handoff-writer",
+        "product-strategist"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "quality",
+      "displayName": "Quality",
+      "purpose": "Design and execute independent verification without gaining remediation authority.",
+      "specialistIds": [
+        "browser-qa-engineer",
+        "qa-engineer",
+        "qa-lead",
+        "regression-engineer"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "release-operations",
+      "displayName": "Release & Operations",
+      "purpose": "Assess delivery, rollback, monitoring, and release readiness without authorizing external action.",
+      "specialistIds": [
+        "devops-engineer",
+        "release-engineer"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    },
+    {
+      "id": "security",
+      "displayName": "Security",
+      "purpose": "Apply security, identity, AI-code, and supply-chain assurance independently from builders.",
+      "specialistIds": [
+        "application-security-engineer",
+        "chief-security-officer",
+        "identity-access-engineer",
+        "supply-chain-security-engineer"
+      ],
+      "selectionPolicy": "dynamic-material-need",
+      "authorityEffect": "none",
+      "physicalAgentEffect": "none"
+    }
+  ],
+  "specialists": [
+    {
+      "id": "accessibility-specialist",
+      "displayName": "Accessibility Specialist",
+      "description": "Reviews inclusive interaction, keyboard, focus, semantic, and reduced-motion behavior.",
+      "departmentId": "design",
+      "canonicalRoleId": "qa",
+      "capabilityIds": ["accessibility-assurance", "evidence-led-handoff"],
+      "activation": {
+        "domains": ["accessibility", "product-ui"],
+        "classifications": ["ui_product"],
+        "changedSurfaces": ["frontend", "mobile", "native-ui"],
+        "taskSignals": ["accessibility", "keyboard", "screen reader", "reduced motion"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": ["accessibility-audit"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "api-platform-engineer",
+      "displayName": "API Platform Engineer",
+      "description": "Implements bounded API contracts and platform integration within assigned write scope.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "builder",
+      "capabilityIds": ["api-platform", "evidence-led-handoff", "minimal-change"],
+      "activation": {
+        "domains": ["api", "backend", "platform"],
+        "classifications": ["architecture", "normal"],
+        "changedSurfaces": ["api", "backend"],
+        "taskSignals": ["api", "endpoint", "integration", "webhook"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "application-security-engineer",
+      "displayName": "Application Security Engineer",
+      "description": "Reviews application trust boundaries, abuse paths, secrets, and exploitability.",
+      "departmentId": "security",
+      "canonicalRoleId": "security",
+      "capabilityIds": ["ai-code-security", "compliance-assurance", "evidence-led-handoff", "identity-access"],
+      "activation": {
+        "domains": ["application-security", "security"],
+        "classifications": ["production_release", "security_compliance"],
+        "changedSurfaces": ["auth", "public-boundary", "security"],
+        "taskSignals": ["auth", "public endpoint", "secret", "security"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["high-risk-security-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "audit-lead",
+      "displayName": "Audit Lead",
+      "description": "Coordinates independent read-only assurance and reconciles audit evidence.",
+      "departmentId": "audit-assurance",
+      "canonicalRoleId": "reviewer",
+      "capabilityIds": ["codebase-orientation", "compliance-assurance", "evidence-led-handoff", "workflow-architecture"],
+      "activation": {
+        "domains": ["assurance", "audit"],
+        "classifications": ["architecture", "production_release", "security_compliance"],
+        "changedSurfaces": ["audit-scope"],
+        "taskSignals": ["audit", "assurance", "release review"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": ["audit"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "backend-engineer",
+      "displayName": "Backend Engineer",
+      "description": "Implements bounded server, persistence, and service changes.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "builder",
+      "capabilityIds": ["api-platform", "database-reliability", "evidence-led-handoff", "minimal-change"],
+      "activation": {
+        "domains": ["backend", "services"],
+        "classifications": ["architecture", "normal"],
+        "changedSurfaces": ["api", "backend", "database"],
+        "taskSignals": ["api", "backend", "server", "service"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "browser-qa-engineer",
+      "displayName": "Browser QA Engineer",
+      "description": "Exercises browser-visible flows and reports candidate-bound runtime observations.",
+      "departmentId": "quality",
+      "canonicalRoleId": "qa",
+      "capabilityIds": ["accessibility-assurance", "evidence-led-handoff", "performance-engineering", "web-launch-assurance"],
+      "activation": {
+        "domains": ["browser", "product-ui", "runtime-qa"],
+        "classifications": ["production_release", "ui_product"],
+        "changedSurfaces": ["browser", "frontend", "web"],
+        "taskSignals": ["browser", "interaction", "responsive", "user flow"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": ["browser-qa"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "chief-security-officer",
+      "displayName": "Chief Security Officer",
+      "description": "Sets the bounded security review frame and identifies mandatory assurance functions.",
+      "departmentId": "security",
+      "canonicalRoleId": "security",
+      "capabilityIds": ["ai-code-security", "compliance-assurance", "evidence-led-handoff", "identity-access"],
+      "activation": {
+        "domains": ["security-governance", "threat-model"],
+        "classifications": ["production_release", "security_compliance"],
+        "changedSurfaces": ["authority", "policy", "security"],
+        "taskSignals": ["high risk", "security architecture", "threat model"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["enterprise-security-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "correctness-auditor",
+      "displayName": "Correctness Auditor",
+      "description": "Audits behavior, invariants, regressions, and unsupported correctness claims.",
+      "departmentId": "audit-assurance",
+      "canonicalRoleId": "reviewer",
+      "capabilityIds": ["codebase-orientation", "evidence-led-handoff", "minimal-change", "performance-engineering"],
+      "activation": {
+        "domains": ["audit", "correctness"],
+        "classifications": ["architecture", "normal", "production_release"],
+        "changedSurfaces": ["candidate", "tests"],
+        "taskSignals": ["audit", "correctness", "regression"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": ["correctness-audit"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "data-specialist",
+      "displayName": "Data Specialist",
+      "description": "Reviews data provenance, freshness, transformations, and analytical validity.",
+      "departmentId": "domain",
+      "canonicalRoleId": "quant",
+      "capabilityIds": ["evidence-led-handoff"],
+      "activation": {
+        "domains": ["analytics", "data"],
+        "classifications": ["data_financial"],
+        "changedSurfaces": ["data", "pipeline"],
+        "taskSignals": ["analytics", "data", "dataset", "pipeline"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": ["material-data-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "database-engineer",
+      "displayName": "Database Engineer",
+      "description": "Implements bounded schema, query, and persistence changes with migration awareness.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "builder",
+      "capabilityIds": ["database-reliability", "evidence-led-handoff", "minimal-change"],
+      "activation": {
+        "domains": ["database", "persistence"],
+        "classifications": ["architecture", "normal"],
+        "changedSurfaces": ["database", "migration"],
+        "taskSignals": ["database", "migration", "query", "schema"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high"], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "design-lead",
+      "displayName": "Design Lead",
+      "description": "Owns design coherence, hierarchy, and approved design-direction recommendations.",
+      "departmentId": "design",
+      "canonicalRoleId": "product",
+      "capabilityIds": ["accessibility-assurance", "evidence-led-handoff", "product-observability", "workflow-architecture"],
+      "activation": {
+        "domains": ["design", "product-ui"],
+        "classifications": ["product", "ui_product"],
+        "changedSurfaces": ["design-system", "frontend", "native-ui"],
+        "taskSignals": ["design direction", "design system", "interface"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "design-systems-engineer",
+      "displayName": "Design Systems Engineer",
+      "description": "Implements reusable tokens and interface primitives in a bounded write scope.",
+      "departmentId": "design",
+      "canonicalRoleId": "builder",
+      "capabilityIds": ["accessibility-assurance", "developer-tooling", "evidence-led-handoff", "minimal-change"],
+      "activation": {
+        "domains": ["design-system", "frontend"],
+        "classifications": ["architecture", "ui_product"],
+        "changedSurfaces": ["component-library", "design-system", "frontend"],
+        "taskSignals": ["component library", "design token", "design system"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "developer-experience-lead",
+      "displayName": "Developer Experience Lead",
+      "description": "Reviews developer workflows, API usability, setup friction, and maintainable handoff.",
+      "departmentId": "product",
+      "canonicalRoleId": "product",
+      "capabilityIds": ["evidence-led-handoff", "product-observability", "workflow-architecture"],
+      "activation": {
+        "domains": ["developer-experience", "tooling"],
+        "classifications": ["architecture", "product"],
+        "changedSurfaces": ["api", "developer-workflow", "tooling"],
+        "taskSignals": ["developer experience", "onboarding", "setup", "tooling"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "devops-engineer",
+      "displayName": "DevOps Engineer",
+      "description": "Assesses environments, delivery mechanics, rollback, and operational safety.",
+      "departmentId": "release-operations",
+      "canonicalRoleId": "devops",
+      "capabilityIds": ["database-reliability", "incident-reliability", "product-observability", "web-launch-assurance"],
+      "activation": {
+        "domains": ["deployment", "infrastructure", "operations"],
+        "classifications": ["production_release"],
+        "changedSurfaces": ["deployment", "infrastructure", "operations"],
+        "taskSignals": ["deploy", "infrastructure", "production", "rollback"]
+      },
+      "riskRequirements": {"mandatoryFor": ["production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["production-release"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "documentation-handoff-writer",
+      "displayName": "Documentation / Handoff Writer",
+      "description": "Documents changed behavior, decisions, verification, limitations, and durable handoff context.",
+      "departmentId": "product",
+      "canonicalRoleId": "docs",
+      "capabilityIds": ["codebase-orientation", "evidence-led-handoff", "minimal-change", "workflow-architecture"],
+      "activation": {
+        "domains": ["documentation", "handoff"],
+        "classifications": ["architecture", "product", "production_release"],
+        "changedSurfaces": ["documentation", "release-notes"],
+        "taskSignals": ["documentation", "handoff", "readme", "release notes"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "financial-systems-reviewer",
+      "displayName": "Financial Systems Reviewer",
+      "description": "Reviews financial invariants, data assumptions, bias, and regression evidence.",
+      "departmentId": "domain",
+      "canonicalRoleId": "quant",
+      "capabilityIds": ["evidence-led-handoff"],
+      "activation": {
+        "domains": ["financial-systems", "risk"],
+        "classifications": ["data_financial"],
+        "changedSurfaces": ["calculation", "financial-model"],
+        "taskSignals": ["financial", "portfolio", "risk calculation", "trading"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["financial-calculation-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "frontend-engineer",
+      "displayName": "Frontend Engineer",
+      "description": "Implements bounded user-facing interface behavior using the existing design system.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "builder",
+      "capabilityIds": ["accessibility-assurance", "developer-tooling", "evidence-led-handoff", "minimal-change"],
+      "activation": {
+        "domains": ["frontend", "product-ui"],
+        "classifications": ["normal", "ui_product"],
+        "changedSurfaces": ["frontend", "mobile", "native-ui"],
+        "taskSignals": ["component", "frontend", "screen", "ui"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "identity-access-engineer",
+      "displayName": "Identity & Access Engineer",
+      "description": "Reviews authentication, authorization, OAuth, OIDC, sessions, and negative auth paths.",
+      "departmentId": "security",
+      "canonicalRoleId": "security",
+      "capabilityIds": ["ai-code-security", "api-platform", "evidence-led-handoff", "identity-access"],
+      "activation": {
+        "domains": ["authentication", "authorization", "identity"],
+        "classifications": ["security_compliance"],
+        "changedSurfaces": ["auth", "identity", "session"],
+        "taskSignals": ["authentication", "authorization", "oauth", "sso"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["enterprise-auth-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "infrastructure-engineer",
+      "displayName": "Infrastructure Engineer",
+      "description": "Implements bounded infrastructure-as-code and environment changes within assigned source scope.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "builder",
+      "capabilityIds": ["database-reliability", "developer-tooling", "evidence-led-handoff", "minimal-change"],
+      "activation": {
+        "domains": ["infrastructure", "platform"],
+        "classifications": ["architecture", "production_release"],
+        "changedSurfaces": ["deployment-config", "infrastructure", "workflow"],
+        "taskSignals": ["infrastructure", "terraform", "workflow"]
+      },
+      "riskRequirements": {"mandatoryFor": ["elevated", "high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "lead-engineer",
+      "displayName": "Lead Engineer",
+      "description": "Owns bounded scope, team coordination, contradiction resolution, synthesis, and handoff.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "lead",
+      "capabilityIds": ["agent-systems", "evidence-led-handoff", "minimal-change", "workflow-architecture"],
+      "activation": {
+        "domains": ["engineering-leadership"],
+        "classifications": ["architecture", "normal", "product", "production_release", "security_compliance", "trivial", "ui_product"],
+        "changedSurfaces": ["all"],
+        "taskSignals": ["all authorized engineering work"]
+      },
+      "riskRequirements": {"mandatoryFor": ["trivial", "normal", "elevated", "high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "motion-designer",
+      "displayName": "Motion Designer",
+      "description": "Specifies restrained motion that communicates hierarchy, causality, and state.",
+      "departmentId": "design",
+      "canonicalRoleId": "product",
+      "capabilityIds": ["accessibility-assurance", "evidence-led-handoff", "product-observability"],
+      "activation": {
+        "domains": ["motion-design", "product-ui"],
+        "classifications": ["ui_product"],
+        "changedSurfaces": ["animation", "frontend", "native-ui"],
+        "taskSignals": ["animation", "motion", "transition"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "product-designer",
+      "displayName": "Product Designer",
+      "description": "Defines usable user flows and visual behavior within explicit product constraints.",
+      "departmentId": "design",
+      "canonicalRoleId": "product",
+      "capabilityIds": ["accessibility-assurance", "evidence-led-handoff", "privacy-legal-evidence"],
+      "activation": {
+        "domains": ["product-design", "product-ui"],
+        "classifications": ["product", "ui_product"],
+        "changedSurfaces": ["frontend", "user-flow"],
+        "taskSignals": ["design", "screen", "user experience", "workflow"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "product-strategist",
+      "displayName": "Product Strategist",
+      "description": "Challenges product intent, scope, differentiation, and user value before costly execution.",
+      "departmentId": "product",
+      "canonicalRoleId": "product",
+      "capabilityIds": ["evidence-led-handoff", "product-observability", "workflow-architecture"],
+      "activation": {
+        "domains": ["product-strategy"],
+        "classifications": ["product"],
+        "changedSurfaces": ["product-direction", "requirements"],
+        "taskSignals": ["greenfield", "product strategy", "roadmap", "scope"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "production-debugger",
+      "displayName": "Production Debugger",
+      "description": "Traces production-like failures without turning diagnosis into mutation authority.",
+      "departmentId": "investigation-reliability",
+      "canonicalRoleId": "investigator",
+      "capabilityIds": ["codebase-orientation", "evidence-led-handoff", "incident-reliability"],
+      "activation": {
+        "domains": ["debugging", "production"],
+        "classifications": ["production_release"],
+        "changedSurfaces": ["incident", "runtime"],
+        "taskSignals": ["incident", "production bug", "production failure"]
+      },
+      "riskRequirements": {"mandatoryFor": ["production"], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "qa-engineer",
+      "displayName": "QA Engineer",
+      "description": "Designs and runs focused verification against observable acceptance criteria.",
+      "departmentId": "quality",
+      "canonicalRoleId": "qa",
+      "capabilityIds": ["accessibility-assurance", "ai-code-security", "evidence-led-handoff", "performance-engineering"],
+      "activation": {
+        "domains": ["quality", "testing"],
+        "classifications": ["normal", "production_release", "ui_product"],
+        "changedSurfaces": ["candidate", "tests"],
+        "taskSignals": ["implement", "test", "verify"]
+      },
+      "riskRequirements": {"mandatoryFor": ["normal", "elevated", "high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["independent-qa"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "qa-lead",
+      "displayName": "QA Lead",
+      "description": "Owns the verification strategy, coverage sufficiency, and honest incomplete states.",
+      "departmentId": "quality",
+      "canonicalRoleId": "qa",
+      "capabilityIds": ["agent-systems", "evidence-led-handoff", "performance-engineering", "web-launch-assurance"],
+      "activation": {
+        "domains": ["quality-leadership", "testing"],
+        "classifications": ["architecture", "production_release"],
+        "changedSurfaces": ["cross-cutting", "test-strategy"],
+        "taskSignals": ["complex feature", "release", "test strategy"]
+      },
+      "riskRequirements": {"mandatoryFor": ["production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["release-qa"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "quant-engineer",
+      "displayName": "Quant Engineer",
+      "description": "Reviews quantitative methods, mathematical invariants, cost models, and robustness evidence.",
+      "departmentId": "domain",
+      "canonicalRoleId": "quant",
+      "capabilityIds": ["evidence-led-handoff"],
+      "activation": {
+        "domains": ["finance", "quantitative-engineering"],
+        "classifications": ["data_financial"],
+        "changedSurfaces": ["backtest", "calculation", "model"],
+        "taskSignals": ["backtest", "financial model", "quant", "risk formula"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["quantitative-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "regression-engineer",
+      "displayName": "Regression Engineer",
+      "description": "Targets changed behavior, historical failures, edges, and compatibility regressions.",
+      "departmentId": "quality",
+      "canonicalRoleId": "qa",
+      "capabilityIds": ["ai-code-security", "evidence-led-handoff", "performance-engineering"],
+      "activation": {
+        "domains": ["regression", "testing"],
+        "classifications": ["architecture", "normal", "production_release"],
+        "changedSurfaces": ["candidate", "compatibility", "tests"],
+        "taskSignals": ["bug fix", "compatibility", "regression"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": ["regression-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "release-auditor",
+      "displayName": "Release Auditor",
+      "description": "Independently audits release evidence, rollback readiness, and unsupported ship claims.",
+      "departmentId": "audit-assurance",
+      "canonicalRoleId": "devops",
+      "capabilityIds": ["compliance-assurance", "evidence-led-handoff", "product-observability", "web-launch-assurance"],
+      "activation": {
+        "domains": ["audit", "release"],
+        "classifications": ["production_release"],
+        "changedSurfaces": ["deployment", "release"],
+        "taskSignals": ["deploy", "release", "ship"]
+      },
+      "riskRequirements": {"mandatoryFor": ["production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["release-audit"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "release-engineer",
+      "displayName": "Release Engineer",
+      "description": "Prepares release, rollback, and monitoring plans without gaining action authority.",
+      "departmentId": "release-operations",
+      "canonicalRoleId": "devops",
+      "capabilityIds": ["compliance-assurance", "evidence-led-handoff", "product-observability", "web-launch-assurance"],
+      "activation": {
+        "domains": ["release", "release-assurance"],
+        "classifications": ["production_release"],
+        "changedSurfaces": ["deployment", "release"],
+        "taskSignals": ["canary", "deploy", "release", "rollback"]
+      },
+      "riskRequirements": {"mandatoryFor": ["production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["production-release"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "reliability-engineer",
+      "displayName": "Reliability Engineer",
+      "description": "Reviews failure modes, resilience, operational behavior, and recovery evidence.",
+      "departmentId": "investigation-reliability",
+      "canonicalRoleId": "investigator",
+      "capabilityIds": ["codebase-orientation", "evidence-led-handoff", "incident-reliability"],
+      "activation": {
+        "domains": ["reliability", "resilience"],
+        "classifications": ["architecture", "production_release"],
+        "changedSurfaces": ["operations", "reliability", "runtime"],
+        "taskSignals": ["incident", "reliability", "resilience", "recovery"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "root-cause-investigator",
+      "displayName": "Root-Cause Investigator",
+      "description": "Reproduces defects, traces execution, tests hypotheses, and reports root cause before fixes.",
+      "departmentId": "investigation-reliability",
+      "canonicalRoleId": "investigator",
+      "capabilityIds": ["codebase-orientation", "evidence-led-handoff", "incident-reliability"],
+      "activation": {
+        "domains": ["debugging", "investigation"],
+        "classifications": ["architecture", "normal", "production_release"],
+        "changedSurfaces": ["defect", "runtime"],
+        "taskSignals": ["broken", "debug", "diagnose", "root cause"]
+      },
+      "riskRequirements": {"mandatoryFor": [], "prohibitedFor": []},
+      "independence": {"requiredFor": [], "mustBeIndependentFromRoles": []},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "security-auditor",
+      "displayName": "Security Auditor",
+      "description": "Independently audits security claims, controls, evidence, and residual risk.",
+      "departmentId": "audit-assurance",
+      "canonicalRoleId": "security",
+      "capabilityIds": ["ai-code-security", "compliance-assurance", "evidence-led-handoff", "identity-access"],
+      "activation": {
+        "domains": ["audit", "security"],
+        "classifications": ["production_release", "security_compliance"],
+        "changedSurfaces": ["auth", "security", "supply-chain"],
+        "taskSignals": ["security audit", "security review"]
+      },
+      "riskRequirements": {"mandatoryFor": ["high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["security-audit"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "software-architect",
+      "displayName": "Software Architect",
+      "description": "Reviews system boundaries, contracts, migrations, and long-term maintainability.",
+      "departmentId": "engineering",
+      "canonicalRoleId": "architect",
+      "capabilityIds": ["agent-systems", "api-platform", "database-reliability", "workflow-architecture"],
+      "activation": {
+        "domains": ["architecture", "systems"],
+        "classifications": ["architecture", "production_release", "security_compliance"],
+        "changedSurfaces": ["architecture", "contract", "cross-cutting", "migration"],
+        "taskSignals": ["architecture", "cross-cutting", "migration", "new provider"]
+      },
+      "riskRequirements": {"mandatoryFor": ["elevated", "high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["architecture-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    },
+    {
+      "id": "supply-chain-security-engineer",
+      "displayName": "Supply-Chain Security Engineer",
+      "description": "Reviews dependency, build, workflow, provenance, and artifact integrity risks.",
+      "departmentId": "security",
+      "canonicalRoleId": "security",
+      "capabilityIds": ["ai-code-security", "compliance-assurance", "evidence-led-handoff", "web-launch-assurance"],
+      "activation": {
+        "domains": ["build-security", "supply-chain"],
+        "classifications": ["architecture", "production_release", "security_compliance"],
+        "changedSurfaces": ["build", "dependency", "release", "workflow"],
+        "taskSignals": ["dependency", "package", "supply chain", "workflow"]
+      },
+      "riskRequirements": {"mandatoryFor": ["elevated", "high", "production"], "prohibitedFor": []},
+      "independence": {"requiredFor": ["supply-chain-review"], "mustBeIndependentFromRoles": ["builder"]},
+      "providerRequirementIds": [],
+      "sourceProvenanceIds": ["gstack-research-baseline", "unified-os-specification"],
+      "physicalAgentBinding": "composer-assigned",
+      "authorityMode": "inherit-canonical-role",
+      "permissionOverridesAllowed": false
+    }
+  ],
+  "invariants": {
+    "specialistIsPhysicalAgent": false,
+    "roleIsPersona": false,
+    "capabilityGrantsPermission": false,
+    "providerGrantsAuthority": false,
+    "evidenceGrantsAuthorization": false,
+    "permissionSource": "canonical-role",
+    "physicalAgentAssignmentSource": "team-composer"
+  }
+}

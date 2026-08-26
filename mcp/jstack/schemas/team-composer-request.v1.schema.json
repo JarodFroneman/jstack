@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/team-composer-request.v1.schema.json",
+  "title": "JStack Team Composer Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "normalizedGoal",
+    "requestedTaskMode",
+    "operatingModeId",
+    "operatingProfileId",
+    "scopeStrategyId",
+    "requestedRiskClass",
+    "classifications",
+    "changedSurfaces",
+    "domains",
+    "repositorySignals",
+    "dependencyChanges",
+    "requiredIndependenceIds",
+    "providerAvailability",
+    "hostCapabilities",
+    "contextTokenBudget",
+    "explicitSpecialistIds",
+    "authorizedReadScopes",
+    "authorizedWriteScopes",
+    "policyControls",
+    "bindings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.team-composer.request.v1"
+    },
+    "normalizedGoal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 12000
+    },
+    "requestedTaskMode": {
+      "$ref": "#/$defs/requestedTaskMode"
+    },
+    "operatingModeId": {
+      "$ref": "#/$defs/operatingModeId"
+    },
+    "operatingProfileId": {
+      "enum": [
+        "solo",
+        "professional",
+        "enterprise"
+      ]
+    },
+    "scopeStrategyId": {
+      "enum": [
+        "MINIMAL",
+        "BALANCED",
+        "COMPLETE"
+      ]
+    },
+    "requestedRiskClass": {
+      "$ref": "#/$defs/riskClass"
+    },
+    "classifications": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "architecture",
+          "data_financial",
+          "normal",
+          "product",
+          "production_release",
+          "security_compliance",
+          "trivial",
+          "ui_product"
+        ]
+      }
+    },
+    "changedSurfaces": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "domains": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "repositorySignals": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "dependencyChanges": {
+      "type": "boolean"
+    },
+    "requiredIndependenceIds": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "providerAvailability": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/providerAvailability"
+      }
+    },
+    "hostCapabilities": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "contextTokenBudget": {
+      "type": "integer",
+      "minimum": 2000,
+      "maximum": 200000
+    },
+    "explicitSpecialistIds": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "authorizedReadScopes": {
+      "$ref": "#/$defs/scopeList"
+    },
+    "authorizedWriteScopes": {
+      "$ref": "#/$defs/scopeList"
+    },
+    "policyControls": {
+      "$ref": "#/$defs/policyControls"
+    },
+    "bindings": {
+      "$ref": "#/$defs/bindings"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "identifierList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "scopeList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "riskClass": {
+      "enum": [
+        "trivial",
+        "normal",
+        "elevated",
+        "high",
+        "production"
+      ]
+    },
+    "requestedTaskMode": {
+      "enum": [
+        "explain",
+        "research",
+        "plan-only",
+        "read-only-audit",
+        "diagnose-only",
+        "implement",
+        "test",
+        "review",
+        "fix",
+        "commit",
+        "push",
+        "open-pull-request",
+        "merge",
+        "deploy",
+        "modify-production",
+        "external-action"
+      ]
+    },
+    "operatingModeId": {
+      "enum": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team",
+        "jstack-loop",
+        "jstack-audit",
+        "jstack-evidence-builder"
+      ]
+    },
+    "providerAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerId",
+        "status"
+      ],
+      "properties": {
+        "providerId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unsupported"
+          ]
+        }
+      }
+    },
+    "policyControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requiredSpecialistIds",
+        "forbiddenSpecialistIds",
+        "maximumPhysicalAgents",
+        "maximumSpecialists",
+        "requiredEvidenceContractIds",
+        "requireIndependentQa",
+        "requireIndependentSecurity",
+        "broadScopeAuthorized"
+      ],
+      "properties": {
+        "requiredSpecialistIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "forbiddenSpecialistIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "maximumPhysicalAgents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "maximumSpecialists": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "requireIndependentQa": {
+          "type": "boolean"
+        },
+        "requireIndependentSecurity": {
+          "type": "boolean"
+        },
+        "broadScopeAuthorized": {
+          "type": "boolean"
+        }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectDigest",
+        "repositoryFingerprint",
+        "policyDigest",
+        "promptCompilationDigest",
+        "contextReadinessDigest"
+      ],
+      "properties": {
+        "projectDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "repositoryFingerprint": {
+          "$ref": "#/$defs/sha256"
+        },
+        "policyDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "promptCompilationDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contextReadinessDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/team-composer-policy.v1.schema.json",
+  "title": "JStack Team Composer Policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "policyVersion",
+    "specialistDirectory",
+    "operatingModes",
+    "operatingProfiles",
+    "scopeStrategies",
+    "riskFloors",
+    "decisionRules",
+    "invariants"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.team-composer-policy.v1"
+    },
+    "policyVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "specialistDirectory": {
+      "$ref": "#/$defs/specialistDirectory"
+    },
+    "operatingModes": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/operatingMode"
+      }
+    },
+    "operatingProfiles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/operatingProfile"
+      }
+    },
+    "scopeStrategies": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/scopeStrategy"
+      }
+    },
+    "riskFloors": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/riskFloor"
+      }
+    },
+    "decisionRules": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/decisionRule"
+      }
+    },
+    "invariants": {
+      "$ref": "#/$defs/invariants"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "identifierList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "nonEmptyIdentifierList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "riskClass": {
+      "enum": [
+        "trivial",
+        "normal",
+        "elevated",
+        "high",
+        "production"
+      ]
+    },
+    "specialistDirectory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "directoryVersion",
+        "directoryDigest"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.organization.directory.v1"
+        },
+        "directoryVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "directoryDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "operatingMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "topology",
+        "maximumPhysicalAgents",
+        "maximumSpecialists",
+        "readOnlyByDefinition",
+        "allowsIndependentCheckEscalation"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "j-stack-dev",
+            "jstack-subagents",
+            "jstack-full-team",
+            "jstack-loop",
+            "jstack-audit",
+            "jstack-evidence-builder"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "topology": {
+          "enum": [
+            "single-lead",
+            "small-specialist-team",
+            "dynamic-complete-team",
+            "orchestration-wrapper",
+            "read-only-audit-team",
+            "evidence-workflow"
+          ]
+        },
+        "maximumPhysicalAgents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "maximumSpecialists": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "readOnlyByDefinition": {
+          "type": "boolean"
+        },
+        "allowsIndependentCheckEscalation": {
+          "const": true
+        }
+      }
+    },
+    "operatingProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "governanceRank",
+        "minimumControlIds",
+        "ceremonyPolicy"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "solo",
+            "professional",
+            "enterprise"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "governanceRank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "minimumControlIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "ceremonyPolicy": {
+          "enum": [
+            "minimal-proportional",
+            "professional-default",
+            "comprehensive-governed"
+          ]
+        }
+      }
+    },
+    "scopeStrategy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "completionBias",
+        "adjacentCleanupPolicy",
+        "broadScopeRequiresExplicitAuthority"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "MINIMAL",
+            "BALANCED",
+            "COMPLETE"
+          ]
+        },
+        "completionBias": {
+          "enum": [
+            "smallest-coherent-change",
+            "complete-requested-feature",
+            "complete-approved-surface"
+          ]
+        },
+        "adjacentCleanupPolicy": {
+          "enum": [
+            "prohibited",
+            "required-only",
+            "approved-only"
+          ]
+        },
+        "broadScopeRequiresExplicitAuthority": {
+          "const": true
+        }
+      }
+    },
+    "riskFloor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "riskClass",
+        "minimumSpecialistIds",
+        "requiredEvidenceContractIds",
+        "requiresIndependentCheck"
+      ],
+      "properties": {
+        "riskClass": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "minimumSpecialistIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "requiresIndependentCheck": {
+          "type": "boolean"
+        }
+      }
+    },
+    "decisionRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "priority",
+        "detector",
+        "minimumRiskClass",
+        "requiredSpecialistIds",
+        "requiredEvidenceContractIds",
+        "selectionReason"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "detector": {
+          "enum": [
+            "production-release",
+            "authentication",
+            "financial-calculation",
+            "security-boundary",
+            "destructive-migration",
+            "infrastructure",
+            "data-pipeline",
+            "dependency-change",
+            "frontend-feature",
+            "backend-api",
+            "tiny-ui",
+            "diagnosis-only",
+            "read-only-audit"
+          ]
+        },
+        "minimumRiskClass": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "requiredSpecialistIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "selectionReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deterministicSelection",
+        "smallestCompetentTeam",
+        "riskFloorsMayBeLowered",
+        "specialistsGrantAuthority",
+        "providersGrantAuthority",
+        "evidenceGrantsAuthorization",
+        "teamPlanGrantsAuthority",
+        "rawPromptStored",
+        "hiddenReasoningStored"
+      ],
+      "properties": {
+        "deterministicSelection": {
+          "const": true
+        },
+        "smallestCompetentTeam": {
+          "const": true
+        },
+        "riskFloorsMayBeLowered": {
+          "const": false
+        },
+        "specialistsGrantAuthority": {
+          "const": false
+        },
+        "providersGrantAuthority": {
+          "const": false
+        },
+        "evidenceGrantsAuthorization": {
+          "const": false
+        },
+        "teamPlanGrantsAuthority": {
+          "const": false
+        },
+        "rawPromptStored": {
+          "const": false
+        },
+        "hiddenReasoningStored": {
+          "const": false
+        }
+      }
+    }
+  }
+}

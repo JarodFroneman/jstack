@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "jstack.host-catalog.v1",
+  "catalogVersion": "1.0.0",
+  "capabilityIds": [
+    "bounded-subagents",
+    "codex-command-packaging",
+    "codex-skill-packaging",
+    "durable-goal-continuation",
+    "host-approval-ui",
+    "host-native-browser-control",
+    "local-process-provider",
+    "stdio-mcp"
+  ],
+  "hosts": [
+    {
+      "id": "claude-code",
+      "displayName": "Claude Code",
+      "supportLevel": "preview",
+      "availableCapabilityIds": [
+        "host-approval-ui",
+        "local-process-provider",
+        "stdio-mcp"
+      ],
+      "unavailableCapabilityIds": [
+        "bounded-subagents",
+        "codex-command-packaging",
+        "codex-skill-packaging",
+        "durable-goal-continuation",
+        "host-native-browser-control"
+      ],
+      "notes": "JStack exposes its complete stdio MCP plane, but no Claude-native command package or unattended continuation parity is claimed."
+    },
+    {
+      "id": "codex",
+      "displayName": "Codex Desktop and CLI",
+      "supportLevel": "full",
+      "availableCapabilityIds": [
+        "bounded-subagents",
+        "codex-command-packaging",
+        "codex-skill-packaging",
+        "durable-goal-continuation",
+        "host-approval-ui",
+        "local-process-provider",
+        "stdio-mcp"
+      ],
+      "unavailableCapabilityIds": [
+        "host-native-browser-control"
+      ],
+      "notes": "Release-tested command, skill, MCP, subagent, and Goal integration. Browser evidence still uses an explicitly selected bounded provider contract."
+    },
+    {
+      "id": "generic-mcp",
+      "displayName": "Generic MCP Client",
+      "supportLevel": "protocol-only",
+      "availableCapabilityIds": [
+        "stdio-mcp"
+      ],
+      "unavailableCapabilityIds": [
+        "bounded-subagents",
+        "codex-command-packaging",
+        "codex-skill-packaging",
+        "durable-goal-continuation",
+        "host-approval-ui",
+        "host-native-browser-control",
+        "local-process-provider"
+      ],
+      "notes": "Protocol connectivity may work, but JStack does not claim release-tested workflow or provider parity."
+    }
+  ],
+  "invariants": {
+    "methodologyDependsOnHost": false,
+    "unsupportedCapabilityMayBeEmulated": false,
+    "hostContractGrantsAuthority": false,
+    "mcpConnectivityImpliesFullParity": false
+  }
+}

@@ -69,16 +69,22 @@ class CrossVersionContractTests(unittest.TestCase):
         self.assertEqual(set(fixture["pluginLayouts"]) | ADDITIVE_PLUGIN_LAYOUTS, plugin_layouts)
         self.assertFalse(any(name.startswith("gstack_ui_") for name in aliases))
 
-    def test_release_readiness_successor_adds_only_optional_ui_receipt(self) -> None:
+    def test_release_readiness_successor_adds_only_approved_optional_fields(self) -> None:
         fixture = json.loads(DEFAULT_FIXTURE.read_text(encoding="utf-8"))
         server = _load_server()
         name = "jstack_release_readiness"
         schema = server.TOOLS[name]["inputSchema"]
         approved = ADDITIVE_EXISTING_TOOL_FIELDS[name]
-        self.assertEqual(approved["ui_receipt"], schema["properties"]["ui_receipt"])
-        self.assertNotIn("ui_receipt", schema.get("required", []))
+        self.assertEqual(
+            {"ui_receipt", "release_strategy"},
+            set(approved),
+        )
+        for field, contract in approved.items():
+            self.assertEqual(contract, schema["properties"][field])
+            self.assertNotIn(field, schema.get("required", []))
         frozen_shape = json.loads(json.dumps(schema))
-        del frozen_shape["properties"]["ui_receipt"]
+        for field in approved:
+            del frozen_shape["properties"][field]
         self.assertEqual(
             fixture["canonicalToolInputSchemaSha256"][name],
             _canonical_digest(frozen_shape),

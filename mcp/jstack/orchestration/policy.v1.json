@@ -1,0 +1,424 @@
+{
+  "schemaVersion": "jstack.team-composer-policy.v1",
+  "policyVersion": "1.0.0",
+  "specialistDirectory": {
+    "schemaVersion": "jstack.organization.directory.v1",
+    "directoryVersion": "1.0.0",
+    "directoryDigest": "2eeaf7f2b24a77fb0a6dc85a17d507e5e78a9d48f802e6d3e75c6127c112f83a"
+  },
+  "operatingModes": [
+    {
+      "id": "j-stack-dev",
+      "displayName": "JStack Dev",
+      "topology": "single-lead",
+      "maximumPhysicalAgents": 2,
+      "maximumSpecialists": 12,
+      "readOnlyByDefinition": false,
+      "allowsIndependentCheckEscalation": true
+    },
+    {
+      "id": "jstack-audit",
+      "displayName": "JStack Audit",
+      "topology": "read-only-audit-team",
+      "maximumPhysicalAgents": 8,
+      "maximumSpecialists": 20,
+      "readOnlyByDefinition": true,
+      "allowsIndependentCheckEscalation": true
+    },
+    {
+      "id": "jstack-evidence-builder",
+      "displayName": "JStack Evidence Builder",
+      "topology": "evidence-workflow",
+      "maximumPhysicalAgents": 3,
+      "maximumSpecialists": 12,
+      "readOnlyByDefinition": true,
+      "allowsIndependentCheckEscalation": true
+    },
+    {
+      "id": "jstack-full-team",
+      "displayName": "JStack Full Team",
+      "topology": "dynamic-complete-team",
+      "maximumPhysicalAgents": 8,
+      "maximumSpecialists": 35,
+      "readOnlyByDefinition": false,
+      "allowsIndependentCheckEscalation": true
+    },
+    {
+      "id": "jstack-loop",
+      "displayName": "JStack Loop",
+      "topology": "orchestration-wrapper",
+      "maximumPhysicalAgents": 8,
+      "maximumSpecialists": 35,
+      "readOnlyByDefinition": false,
+      "allowsIndependentCheckEscalation": true
+    },
+    {
+      "id": "jstack-subagents",
+      "displayName": "JStack Subagents",
+      "topology": "small-specialist-team",
+      "maximumPhysicalAgents": 4,
+      "maximumSpecialists": 20,
+      "readOnlyByDefinition": false,
+      "allowsIndependentCheckEscalation": true
+    }
+  ],
+  "operatingProfiles": [
+    {
+      "id": "enterprise",
+      "displayName": "Enterprise",
+      "governanceRank": 3,
+      "minimumControlIds": [
+        "independent-review",
+        "policy-conformance",
+        "quality-assurance",
+        "risk-register"
+      ],
+      "ceremonyPolicy": "comprehensive-governed"
+    },
+    {
+      "id": "professional",
+      "displayName": "Professional",
+      "governanceRank": 2,
+      "minimumControlIds": [
+        "independent-review",
+        "quality-assurance"
+      ],
+      "ceremonyPolicy": "professional-default"
+    },
+    {
+      "id": "solo",
+      "displayName": "Solo",
+      "governanceRank": 1,
+      "minimumControlIds": [
+        "proportional-verification"
+      ],
+      "ceremonyPolicy": "minimal-proportional"
+    }
+  ],
+  "scopeStrategies": [
+    {
+      "id": "BALANCED",
+      "completionBias": "complete-requested-feature",
+      "adjacentCleanupPolicy": "required-only",
+      "broadScopeRequiresExplicitAuthority": true
+    },
+    {
+      "id": "COMPLETE",
+      "completionBias": "complete-approved-surface",
+      "adjacentCleanupPolicy": "approved-only",
+      "broadScopeRequiresExplicitAuthority": true
+    },
+    {
+      "id": "MINIMAL",
+      "completionBias": "smallest-coherent-change",
+      "adjacentCleanupPolicy": "prohibited",
+      "broadScopeRequiresExplicitAuthority": true
+    }
+  ],
+  "riskFloors": [
+    {
+      "riskClass": "trivial",
+      "minimumSpecialistIds": [],
+      "requiredEvidenceContractIds": [
+        "focused-change-evidence"
+      ],
+      "requiresIndependentCheck": false
+    },
+    {
+      "riskClass": "normal",
+      "minimumSpecialistIds": [
+        "qa-engineer"
+      ],
+      "requiredEvidenceContractIds": [
+        "focused-test-result",
+        "secure-development-check"
+      ],
+      "requiresIndependentCheck": true
+    },
+    {
+      "riskClass": "elevated",
+      "minimumSpecialistIds": [
+        "qa-engineer",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "architecture-review",
+        "focused-test-result",
+        "secure-development-check"
+      ],
+      "requiresIndependentCheck": true
+    },
+    {
+      "riskClass": "high",
+      "minimumSpecialistIds": [
+        "qa-engineer",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "architecture-review",
+        "focused-test-result",
+        "secure-development-check",
+        "security-review"
+      ],
+      "requiresIndependentCheck": true
+    },
+    {
+      "riskClass": "production",
+      "minimumSpecialistIds": [
+        "devops-engineer",
+        "qa-lead",
+        "release-auditor",
+        "release-engineer",
+        "security-auditor",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "architecture-review",
+        "independent-release-audit",
+        "release-readiness",
+        "rollback-evidence",
+        "security-review"
+      ],
+      "requiresIndependentCheck": true
+    }
+  ],
+  "decisionRules": [
+    {
+      "id": "production-release",
+      "priority": 100,
+      "detector": "production-release",
+      "minimumRiskClass": "production",
+      "requiredSpecialistIds": [
+        "devops-engineer",
+        "qa-lead",
+        "release-auditor",
+        "release-engineer",
+        "reliability-engineer",
+        "security-auditor",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "candidate-bound-release-evidence",
+        "independent-release-audit",
+        "monitoring-plan",
+        "release-readiness",
+        "rollback-evidence"
+      ],
+      "selectionReason": "Production or public-release work requires release, rollback, reliability, security, and independent assurance coverage."
+    },
+    {
+      "id": "authentication",
+      "priority": 95,
+      "detector": "authentication",
+      "minimumRiskClass": "high",
+      "requiredSpecialistIds": [
+        "application-security-engineer",
+        "backend-engineer",
+        "identity-access-engineer",
+        "qa-engineer",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "auth-negative-tests",
+        "security-review",
+        "trust-boundary-review"
+      ],
+      "selectionReason": "Authentication and authorization changes require architecture, IAM, AppSec, backend, and independent QA expertise."
+    },
+    {
+      "id": "financial-calculation",
+      "priority": 94,
+      "detector": "financial-calculation",
+      "minimumRiskClass": "high",
+      "requiredSpecialistIds": [
+        "backend-engineer",
+        "financial-systems-reviewer",
+        "qa-engineer",
+        "quant-engineer",
+        "regression-engineer",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "financial-regression",
+        "historical-regression",
+        "mathematical-invariants"
+      ],
+      "selectionReason": "Financial calculation changes require quantitative invariants, independent financial review, regression coverage, and bounded implementation expertise."
+    },
+    {
+      "id": "security-boundary",
+      "priority": 93,
+      "detector": "security-boundary",
+      "minimumRiskClass": "high",
+      "requiredSpecialistIds": [
+        "application-security-engineer",
+        "backend-engineer",
+        "qa-engineer",
+        "security-auditor",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "abuse-path-review",
+        "security-review",
+        "trust-boundary-review"
+      ],
+      "selectionReason": "A material security boundary requires independent application-security and security-audit coverage."
+    },
+    {
+      "id": "destructive-migration",
+      "priority": 92,
+      "detector": "destructive-migration",
+      "minimumRiskClass": "high",
+      "requiredSpecialistIds": [
+        "database-engineer",
+        "qa-engineer",
+        "regression-engineer",
+        "security-auditor",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "data-integrity-tests",
+        "migration-recovery",
+        "rollback-evidence"
+      ],
+      "selectionReason": "Migrations or destructive data operations require database, recovery, regression, security, and architecture controls."
+    },
+    {
+      "id": "infrastructure",
+      "priority": 80,
+      "detector": "infrastructure",
+      "minimumRiskClass": "elevated",
+      "requiredSpecialistIds": [
+        "devops-engineer",
+        "infrastructure-engineer",
+        "qa-engineer",
+        "reliability-engineer",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "infrastructure-plan",
+        "recovery-plan",
+        "verification-evidence"
+      ],
+      "selectionReason": "Infrastructure work requires architecture, bounded infrastructure implementation, operations, reliability, and QA expertise."
+    },
+    {
+      "id": "data-pipeline",
+      "priority": 75,
+      "detector": "data-pipeline",
+      "minimumRiskClass": "elevated",
+      "requiredSpecialistIds": [
+        "data-specialist",
+        "database-engineer",
+        "qa-engineer",
+        "regression-engineer",
+        "software-architect"
+      ],
+      "requiredEvidenceContractIds": [
+        "data-integrity-tests",
+        "pipeline-recovery",
+        "source-provenance"
+      ],
+      "selectionReason": "A material data pipeline requires data, persistence, architecture, regression, and QA coverage."
+    },
+    {
+      "id": "dependency-change",
+      "priority": 70,
+      "detector": "dependency-change",
+      "minimumRiskClass": "elevated",
+      "requiredSpecialistIds": [
+        "qa-engineer",
+        "software-architect",
+        "supply-chain-security-engineer"
+      ],
+      "requiredEvidenceContractIds": [
+        "dependency-inventory",
+        "supply-chain-review"
+      ],
+      "selectionReason": "Dependency or workflow changes require compatibility, architecture, and supply-chain review."
+    },
+    {
+      "id": "frontend-feature",
+      "priority": 60,
+      "detector": "frontend-feature",
+      "minimumRiskClass": "normal",
+      "requiredSpecialistIds": [
+        "frontend-engineer",
+        "product-designer",
+        "qa-engineer"
+      ],
+      "requiredEvidenceContractIds": [
+        "accessibility-check",
+        "product-ui-evidence",
+        "responsive-ui-check"
+      ],
+      "selectionReason": "A user-facing frontend feature requires bounded UI implementation, product design, and QA coverage."
+    },
+    {
+      "id": "backend-api",
+      "priority": 55,
+      "detector": "backend-api",
+      "minimumRiskClass": "normal",
+      "requiredSpecialistIds": [
+        "api-platform-engineer",
+        "qa-engineer"
+      ],
+      "requiredEvidenceContractIds": [
+        "api-contract-tests",
+        "compatibility-tests"
+      ],
+      "selectionReason": "A backend API feature requires API contract implementation and independent QA coverage."
+    },
+    {
+      "id": "tiny-ui",
+      "priority": 50,
+      "detector": "tiny-ui",
+      "minimumRiskClass": "trivial",
+      "requiredSpecialistIds": [],
+      "requiredEvidenceContractIds": [
+        "focused-change-evidence"
+      ],
+      "selectionReason": "A contained visual adjustment is intentionally handled by one Lead with Product UI capability and focused verification."
+    },
+    {
+      "id": "diagnosis-only",
+      "priority": 40,
+      "detector": "diagnosis-only",
+      "minimumRiskClass": "normal",
+      "requiredSpecialistIds": [
+        "root-cause-investigator"
+      ],
+      "requiredEvidenceContractIds": [
+        "behavior-trace",
+        "root-cause-evidence"
+      ],
+      "selectionReason": "Diagnosis requires reproducible root-cause evidence and does not authorize remediation."
+    },
+    {
+      "id": "read-only-audit",
+      "priority": 39,
+      "detector": "read-only-audit",
+      "minimumRiskClass": "normal",
+      "requiredSpecialistIds": [
+        "audit-lead",
+        "correctness-auditor"
+      ],
+      "requiredEvidenceContractIds": [
+        "audit-findings",
+        "scope-evidence"
+      ],
+      "selectionReason": "A read-only audit requires independent assurance and cannot create remediation authority."
+    }
+  ],
+  "invariants": {
+    "deterministicSelection": true,
+    "smallestCompetentTeam": true,
+    "riskFloorsMayBeLowered": false,
+    "specialistsGrantAuthority": false,
+    "providersGrantAuthority": false,
+    "evidenceGrantsAuthorization": false,
+    "teamPlanGrantsAuthority": false,
+    "rawPromptStored": false,
+    "hiddenReasoningStored": false
+  }
+}

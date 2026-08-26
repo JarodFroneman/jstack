@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/delivery-pipeline.v1.schema.json",
+  "title": "JStack Professional Delivery Pipeline v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "teamPlanId",
+    "teamPlanDigest",
+    "authorityArchitectureId",
+    "operatingProfileId",
+    "requestedTaskMode",
+    "riskClass",
+    "baselineRepositoryFingerprint",
+    "phases",
+    "candidatePolicy",
+    "profilePolicy",
+    "authorityEffect",
+    "pipelineDigest"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "jstack.delivery-pipeline.v1"},
+    "teamPlanId": {"type": "string", "minLength": 1, "maxLength": 160},
+    "teamPlanDigest": {"$ref": "#/$defs/sha256"},
+    "authorityArchitectureId": {"const": "jstack-authority-kernel-v1"},
+    "operatingProfileId": {"enum": ["solo", "professional", "enterprise"]},
+    "requestedTaskMode": {
+      "enum": [
+        "explain", "research", "plan-only", "read-only-audit", "diagnose-only",
+        "implement", "test", "review", "fix", "commit", "push",
+        "open-pull-request", "merge", "deploy", "modify-production", "external-action"
+      ]
+    },
+    "riskClass": {"enum": ["trivial", "normal", "elevated", "high", "production"]},
+    "baselineRepositoryFingerprint": {"$ref": "#/$defs/sha256"},
+    "phases": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {"$ref": "#/$defs/phasePlan"},
+        {"$ref": "#/$defs/phaseImplement"},
+        {"$ref": "#/$defs/phaseReview"},
+        {"$ref": "#/$defs/phaseQa"},
+        {"$ref": "#/$defs/phaseBrowser"},
+        {"$ref": "#/$defs/phaseSecurity"},
+        {"$ref": "#/$defs/phaseEvidence"}
+      ],
+      "items": false
+    },
+    "candidatePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutationPhaseId", "candidateChangeInvalidatesPhaseIds", "revalidationRequiredAfterCandidateChange"],
+      "properties": {
+        "mutationPhaseId": {"type": ["string", "null"], "enum": ["implement", null]},
+        "candidateChangeInvalidatesPhaseIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["implement", "review", "qa", "browser-qa", "security", "evidence"]}
+        },
+        "revalidationRequiredAfterCandidateChange": {"const": true}
+      }
+    },
+    "profilePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sameAuthorityArchitectureForAllProfiles", "profilesMayStrengthenEvidenceAndIndependenceOnly", "profilesMayNotExpandAuthority"],
+      "properties": {
+        "sameAuthorityArchitectureForAllProfiles": {"const": true},
+        "profilesMayStrengthenEvidenceAndIndependenceOnly": {"const": true},
+        "profilesMayNotExpandAuthority": {"const": true}
+      }
+    },
+    "authorityEffect": {"const": "none"},
+    "pipelineDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specialistId", "canonicalRoleId", "physicalAgentId"],
+      "properties": {
+        "specialistId": {"type": "string", "minLength": 1, "maxLength": 100},
+        "canonicalRoleId": {"type": "string", "minLength": 1, "maxLength": 100},
+        "physicalAgentId": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sequence", "dependsOn", "required", "candidateBound", "sourceMutationAllowed", "assignmentRefs", "evidenceContractIds", "purpose", "authorityEffect"],
+      "properties": {
+        "id": {"enum": ["plan", "implement", "review", "qa", "browser-qa", "security", "evidence"]},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 7},
+        "dependsOn": {"type": "array", "maxItems": 1, "items": {"type": "string"}},
+        "required": {"type": "boolean"},
+        "candidateBound": {"type": "boolean"},
+        "sourceMutationAllowed": {"type": "boolean"},
+        "assignmentRefs": {"type": "array", "maxItems": 35, "items": {"$ref": "#/$defs/assignment"}},
+        "evidenceContractIds": {"type": "array", "uniqueItems": true, "maxItems": 128, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "authorityEffect": {"const": "none"}
+      }
+    },
+    "phasePlan": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "plan"}, "sequence": {"const": 1}, "dependsOn": {"maxItems": 0}, "candidateBound": {"const": false}, "sourceMutationAllowed": {"const": false}}}]},
+    "phaseImplement": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "implement"}, "sequence": {"const": 2}, "dependsOn": {"const": ["plan"]}, "candidateBound": {"const": true}}}]},
+    "phaseReview": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "review"}, "sequence": {"const": 3}, "dependsOn": {"const": ["implement"]}, "candidateBound": {"const": true}, "sourceMutationAllowed": {"const": false}}}]},
+    "phaseQa": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "qa"}, "sequence": {"const": 4}, "dependsOn": {"const": ["review"]}, "candidateBound": {"const": true}, "sourceMutationAllowed": {"const": false}}}]},
+    "phaseBrowser": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "browser-qa"}, "sequence": {"const": 5}, "dependsOn": {"const": ["qa"]}, "candidateBound": {"const": true}, "sourceMutationAllowed": {"const": false}}}]},
+    "phaseSecurity": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "security"}, "sequence": {"const": 6}, "dependsOn": {"const": ["browser-qa"]}, "candidateBound": {"const": true}, "sourceMutationAllowed": {"const": false}}}]},
+    "phaseEvidence": {"allOf": [{"$ref": "#/$defs/phase"}, {"properties": {"id": {"const": "evidence"}, "sequence": {"const": 7}, "dependsOn": {"const": ["security"]}, "candidateBound": {"const": true}, "sourceMutationAllowed": {"const": false}}}]}
+  }
+}

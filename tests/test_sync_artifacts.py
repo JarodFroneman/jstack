@@ -29,6 +29,9 @@ class ProductInterfaceSyncTests(unittest.TestCase):
             "ui-catalog.v1.schema.json",
             "ui-contract.v1.schema.json",
             "ui-contract.v2.schema.json",
+            "ui-contract.v3.schema.json",
+            "ui-contract.v4.schema.json",
+            "ui-design-decision.v1.schema.json",
             "ui-evidence.v1.schema.json",
             "ui-finalization.v1.schema.json",
             "ui-motion-spec.v1.schema.json",
@@ -37,6 +40,15 @@ class ProductInterfaceSyncTests(unittest.TestCase):
             "ui-reference-analysis.v1.schema.json",
             "ui-reference-bundle.v1.schema.json",
             "ui-reference-contract.v1.schema.json",
+            "browser-provider-contract.v1.schema.json",
+            "browser-provider-result.v1.schema.json",
+            "browser-finding.v1.schema.json",
+            "delivery-phase-evidence.v1.schema.json",
+            "delivery-pipeline.v1.schema.json",
+            "host-catalog.v1.schema.json",
+            "host-contract.v1.schema.json",
+            "release-choreography.v1.schema.json",
+            "security-tooling-catalog.v1.schema.json",
         ):
             source = ROOT / "mcp" / "jstack" / "schemas" / name
             self.assertEqual(
@@ -87,6 +99,67 @@ class ProductInterfaceSyncTests(unittest.TestCase):
             ),
         }
         self.assertTrue(expected.issubset(set(sync_artifacts.TREE_MIRRORS)))
+
+    def test_browser_provider_tree_is_a_closed_plugin_mirror(self) -> None:
+        provider_root = ROOT / "mcp" / "jstack" / "providers"
+        provider_sources = {
+            path
+            for path in provider_root.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        }
+        self.assertTrue(provider_sources)
+        for source in provider_sources:
+            relative = source.relative_to(provider_root)
+            self.assertEqual(
+                [ROOT / "plugin" / "mcp" / "providers" / relative],
+                sync_artifacts.FILE_MAP[source],
+            )
+        self.assertIn(
+            (
+                provider_root,
+                ROOT / "plugin" / "mcp" / "providers",
+            ),
+            sync_artifacts.TREE_MIRRORS,
+        )
+
+    def test_stage_13_to_18_runtime_packages_are_closed_plugin_mirrors(self) -> None:
+        for package in ("hosts", "orchestration", "providers", "release"):
+            source_root = ROOT / "mcp" / "jstack" / package
+            target_root = ROOT / "plugin" / "mcp" / package
+            sources = {
+                path
+                for path in source_root.rglob("*")
+                if path.is_file()
+                and "__pycache__" not in path.parts
+                and path.suffix != ".pyc"
+            }
+            self.assertTrue(sources)
+            for source in sources:
+                relative = source.relative_to(source_root)
+                self.assertEqual(
+                    [target_root / relative],
+                    sync_artifacts.FILE_MAP[source],
+                )
+            self.assertIn(
+                (source_root, target_root),
+                sync_artifacts.TREE_MIRRORS,
+            )
+
+    def test_stage_19_development_harness_is_not_packaged(self) -> None:
+        evaluation_root = ROOT / "unified_os_evals"
+        self.assertTrue(evaluation_root.is_dir())
+        managed = {
+            *sync_artifacts.FILE_MAP,
+            *(
+                target
+                for targets in sync_artifacts.FILE_MAP.values()
+                for target in targets
+            ),
+        }
+        self.assertFalse(
+            any("unified_os_evals" in path.parts for path in managed)
+        )
+        self.assertFalse((ROOT / "plugin" / "unified_os_evals").exists())
 
 
 if __name__ == "__main__":

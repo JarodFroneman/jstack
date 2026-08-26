@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "jstack.security-tooling-catalog.v1",
+  "catalogVersion": "1.0.0",
+  "controls": [
+    {
+      "id": "bounded-secret-scan",
+      "category": "secret-scanning",
+      "implementation": "Existing jstack_security_audit bounded credential-pattern scan.",
+      "status": "active",
+      "independence": "jstack-self-check",
+      "network": "none",
+      "executesProjectCode": false,
+      "minimumRiskClass": "normal",
+      "claimBoundary": "Heuristic pattern coverage only; a clean result does not prove that no secret exists."
+    },
+    {
+      "id": "browser-provider-adversarial-controls",
+      "category": "provider-hardening",
+      "implementation": "Closed browser evidence schema, local-only route validation, digest-only output, repository mutation detection, and bounded execution.",
+      "status": "active",
+      "independence": "jstack-self-check",
+      "network": "offline-requested-not-enforced",
+      "executesProjectCode": true,
+      "minimumRiskClass": "normal",
+      "claimBoundary": "The local runner is not an OS or network sandbox; untrusted project scripts require external isolation."
+    },
+    {
+      "id": "external-sast-evidence",
+      "category": "sast",
+      "implementation": "Provider-neutral signed scanner JSON or SARIF evidence accepted by Launch Assurance.",
+      "status": "optional",
+      "independence": "independent-provider",
+      "network": "external",
+      "executesProjectCode": false,
+      "minimumRiskClass": "high",
+      "claimBoundary": "JStack validates target binding and completeness claims, not producer honesty or full rule coverage."
+    },
+    {
+      "id": "offline-osv-sca",
+      "category": "sca",
+      "implementation": "Existing curated osv-scanner-offline adapter with a caller-provisioned database outside the repository.",
+      "status": "optional",
+      "independence": "independent-provider",
+      "network": "offline-requested-not-enforced",
+      "executesProjectCode": false,
+      "minimumRiskClass": "elevated",
+      "claimBoundary": "Coverage is limited to the installed scanner and locally supplied advisory database."
+    },
+    {
+      "id": "provenance-attestation-verification",
+      "category": "provenance",
+      "implementation": "Existing immutable upstream provenance, proof-plane attestations, and digest-bound release evidence.",
+      "status": "active",
+      "independence": "external-control",
+      "network": "none",
+      "executesProjectCode": false,
+      "minimumRiskClass": "production",
+      "claimBoundary": "Attestation verifies recorded identities and digests; it does not itself authorize publication or deployment."
+    },
+    {
+      "id": "sbom-production-evidence",
+      "category": "sbom",
+      "implementation": "Consume and verify separately generated SPDX or CycloneDX artifacts; JStack does not silently generate or publish them.",
+      "status": "optional",
+      "independence": "external-control",
+      "network": "external",
+      "executesProjectCode": false,
+      "minimumRiskClass": "production",
+      "claimBoundary": "Presence of an SBOM does not prove completeness, absence of vulnerabilities, or deployment authority."
+    },
+    {
+      "id": "workflow-static-security",
+      "category": "workflow-security",
+      "implementation": "Existing bounded GitHub Actions parser checks immutable uses references and top-level permissions.",
+      "status": "active",
+      "independence": "jstack-self-check",
+      "network": "none",
+      "executesProjectCode": false,
+      "minimumRiskClass": "elevated",
+      "claimBoundary": "Closed static parsing does not execute workflows or prove behavior outside the supported syntax."
+    }
+  ],
+  "invariants": {
+    "toolAvailabilityGrantsAuthority": false,
+    "scannerPassProvesNoVulnerabilities": false,
+    "localRunnerProvidesSandbox": false,
+    "rawScannerOutputStoredByCatalog": false
+  }
+}

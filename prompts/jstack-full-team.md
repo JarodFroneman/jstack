@@ -1,5 +1,5 @@
 ---
-description: Run JStack with the full 11-role engineering team
+description: Run JStack with complete dynamically composed engineering coverage
 argument-hint: [GOAL]
 ---
 
@@ -11,7 +11,8 @@ $ARGUMENTS
 Mode: `full-team`.
 
 The user invoked `/jstack-full-team`, which is explicit approval to deploy the
-full JStack specialist team when multi-agent tools are available.
+dynamically composed complete JStack team when multi-agent tools are available.
+It is staffing approval only and does not expand task or action authority.
 
 Before repository inspection, durable-memory reads, planning, or
 side-effecting tools, call
@@ -51,82 +52,102 @@ restart Stage A; other revisions require a new Stage B preview. Every revision
 invalidates the old preview. After approval, repeat Stage B with the exact internal
 `promptPreviewReceipt` and approval bound to the displayed
 `renderedPromptSha256`; never infer approval or ask the user to handle those
-values. Use only the approved response's receipts downstream.
+values. Use only the approved response's receipts downstream. For `implement`
+or `fix`, include a source-labelled `authorized_write_scopes` context fact
+whose value is a bounded repository-relative path or JSON string array derived
+from inspected task boundaries. It constrains one primary writer and grants no
+action authority.
 
-Use the full 11-role roster:
+Full Team means every materially required engineering function and mandatory
+independence boundary is represented. It never means dispatching the same
+fixed employee roster. Keep one accountable Lead, add the appropriate Builder
+for implementation, add independent review and QA when required, and select
+Product, Design, IAM, AppSec, Data, Quant, SRE, DevOps, Browser QA,
+Accessibility, Performance, Supply Chain, Release, or other expertise only
+when task facts, risk, or policy require it. Logical specialists may share a
+physical agent unless the Team Plan requires independence.
 
-1. Lead Engineer
-2. Architect
-3. Code Investigator
-4. Builder
-5. Reviewer
-6. QA Engineer
-7. Security Engineer
-8. DevOps / Release Engineer
-9. Product / UX Reviewer
-10. Quant / Backtest Reviewer
-11. Documentation / Handoff Writer
-
-The Lead Engineer remains accountable. Specialists are read-only by default.
-Builder is the only specialist that may edit implementation files, and only with
-an explicitly assigned disjoint write scope. Documentation / Handoff Writer may
-edit docs only when assigned.
-
-If platform concurrency limits prevent all specialists from running at once,
-dispatch them in waves while preserving the full-team evidence contract.
-
-Full team means complete professional coverage, not uncontrolled concurrency.
-Before dispatching, create a coordination packet with:
-
-- `goal`: exact objective
-- `riskClass`: array of every matched risk class
-- `mode`: `full-team`
-- `rolesUsed`: all 11 roles and reasons
-- `rolesNotUsed`: empty because all 11 are accounted for
-- `readWritePermissions`
-- `fileOwnershipMap`
-- actual `capabilityPlan` and exact per-role `capabilityIds`
-- `evidenceContract`
-- `conflictRule`
-- `stopConditions`
-- `verificationGate`
-- `handoffGate`
-
-Use `jstack_team_plan` with `team_mode="full-team"`, the Stage B
+Use `jstack_team_plan` with `team_mode="full-team"`,
+`operating_profile=explicit_user_profile_or_professional`,
+`host_id=current_supported_host`, the Stage B
 `contextReadiness.readinessReceipt`, and its matching `normalizedBrief` as
 `context_brief`, and
-`jstack_dispatch_check` with `team_mode="full-team"` and
-the actual `coordination_packet` object when available. Also use
-`jstack_plan(team_mode="full-team", learning_mode=resolved_learning_mode,
+`jstack_dispatch_check` with `team_mode="full-team"`, the complete returned
+`team` object, and its exact `dynamicCoordinationPacket`. Also use
+`jstack_plan(team_mode="full-team", quality_level="enterprise",
+operating_profile=explicit_user_profile_or_professional,
+host_id=current_supported_host, learning_mode=resolved_learning_mode,
 context_readiness_receipt=stage_b.contextReadiness.readinessReceipt,
 context_brief=stage_b.contextReadiness.normalizedBrief)`. The MCP
 plans and validates the team; platform multi-agent tools perform real dispatch.
+Proceed only when `team.executionSource="team-composer"` and
+`team.dispatchEligible=true`. Treat the exact signed `unifiedTeamPlan` as the
+composition source. A blocked, shadow, or preview-only plan must stop; never
+fall back silently. `team.agents` and its 11 canonical roles are a temporary
+compatibility view for old callers and receipts, not the active roster.
+
+Consume the signed `hostContract`, `professionalDeliveryPipeline`, and
+`securityProviderPlan`. Use only host capabilities marked `AVAILABLE`, follow
+only required delivery phases, and leave independent-security gaps visible.
+These contracts cannot expand scope or authorize execution.
 If multi-agent tools are unavailable, write `No subagents deployed:` and give
 the concrete reason. Retain `team_mode="full-team"` in planning and apply
 the full-team evidence rubric while one Lead performs the actual work.
 
-When concurrency would create noise, dispatch the full team in waves:
+Read the receipt-bound `team.methodologyPlan` before dispatch. Apply only its
+selected JStack-native methodology records and route their phases, output
+contracts, evidence, and stop conditions to the mapped logical specialists.
+An empty selection is valid. Never invoke upstream gstack skills or prompts
+directly. Methodology cannot expand the approved task mode, scope, role
+authority, provider access, persistence, write ownership, release authority,
+or external-action authority.
 
-1. Discovery: Architect, Code Investigator, Product/UX, and Quant. Every role
-   returns bounded evidence, even when its finding is "not applicable".
-2. Build: Builder only after Lead approval of scope.
-3. Review: Reviewer, QA, Security, DevOps, Documentation.
+When `root-cause-investigation` is selected, it is a hard dependency before
+the Build wave. For `fix` or an investigation-selected `implement`, first call
+`jstack_dispatch_check(dispatch_phase="investigation")` and dispatch only its
+read-only `executionSlice`; no writer may run or edit source. The investigator
+submits `jstack.investigation.v1` through `jstack_specialist_result`. Three
+consecutive falsified or inconclusive hypotheses require a later revised
+execution trace, changed hypotheses, explicit unresolved state, and a stop;
+never schedule a fourth random patch. Only an established cause on the
+unchanged candidate may be passed to
+`jstack_dispatch_check(dispatch_phase="remediation",
+investigation_receipt=...)`; dispatch only the returned remediation slice
+under the original Team Plan scope. Diagnosis-only or unresolved work cannot
+enter the Build wave.
+
+When concurrency would create noise, dispatch the selected physical agents in
+dependency-aware waves:
+
+1. Discovery: selected read-only architecture, product, domain, or investigation
+   specialists produce bounded evidence.
+2. Build: the single Team Plan writer operates only inside its exact scope.
+3. Review: selected independent review, QA, security, browser, reliability, or
+   release specialists evaluate the resulting candidate.
 4. Synthesis: Lead reconciles findings, verifies, and hands off.
 
-Every role receives only its routed capability subset. Capabilities add method,
-required evidence, stop conditions, audit domains, and loop controls while
-inheriting core-role permissions; they never grant tools, writes, delegation,
-approvals, or release authority. Every wave returns
-`jstack.specialist.result.v1` plus metadata-only
-`jstack.specialist.telemetry.v1` per role, including Lead. Call
-`jstack_specialist_result` for all 11 exact assignments and then
-`jstack_specialist_handoff_check`. Raw prompts, messages, tool arguments,
+Every physical agent receives only its mapped logical specialists; every
+logical specialist receives only its exact capabilities and scopes.
+Capabilities and specialist titles inherit canonical-role permissions and
+never grant tools, writes, delegation, approvals, or release authority. Every
+logical specialist returns `jstack.specialist.result.v1` plus metadata-only
+`jstack.specialist.telemetry.v1`. Call `jstack_specialist_result` with the
+exact `unifiedTeamPlanReceipt`, `specialistId`, `physicalAgentId`, canonical
+`roleId`, capability IDs, and write scope for every
+`dynamicReceiptAssignments` entry. The `root-cause-investigator` result must
+also contain its exact in-memory
+`investigation_contract`; the signed receipt retains only digest/count
+certification metadata. Then call
+`jstack_specialist_handoff_check` with the same Team Plan receipt and ordered
+role/capability projection. Raw prompts, messages, tool arguments,
 command/model output, source contents, and secrets are forbidden. Missing,
-stale, partial, capability-drifted, permission-unsafe, or contradictory receipt
-sets block handoff until explicitly reconciled with evidence.
+stale, partial, scope-drifted, capability-drifted, permission-unsafe, or
+contradictory logical-specialist receipt sets block handoff.
 
-For an active full-team loop, pass the current validated
-`specialist_handoff_receipt` to every checkpoint and finalization.
+`/jstack-loop` remains a separate persistent orchestration workflow. For an
+active loop, obey its frozen delivery-mode and capability contract; do not
+inject a dynamic Team Plan or v2 handoff receipt into persisted Loop state
+unless that Loop response explicitly exposes the matching versioned binding.
 
 For production/release work, the Lead declares `core` plus every applicable
 surface, risk tier, and immutable deployment fingerprint on the clean
