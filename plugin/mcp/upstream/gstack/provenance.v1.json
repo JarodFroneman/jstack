@@ -4453,8 +4453,8 @@
         },
         {
           "path": "tests/test_gstack_provenance.py",
-          "sha256": "78854c572bec872eca3eb09770185e1211649624a6a35196f2f44a3b8df72efd",
-          "sizeBytes": 14073
+          "sha256": "9e7a09426123bfd3ac658850597e33b2a5cd6cc04b79d0eec7fab3fc2ebdbe2e",
+          "sizeBytes": 15218
         },
         {
           "path": "tests/test_root_cause_investigation.py",
@@ -4468,7 +4468,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack contract, deterministic validator, phased dispatch, receipt certification, tests, and host instructions; no upstream prompt, router, state, provider, installer, updater, or action authority is copied or activated."
       },
-      "recordDigest": "86974c0298f5a3dca206208506e5e736e850bc0ff6b118a97e01706c00c5407c"
+      "recordDigest": "21ec927b0ca0e6baaedc75c494873d53a9bb16d8351c068d08b65f6ca5b693bc"
     },
     {
       "id": "gstack-product-design-department-adaptation",
@@ -4587,8 +4587,8 @@
         },
         {
           "path": "tests/test_gstack_provenance.py",
-          "sha256": "78854c572bec872eca3eb09770185e1211649624a6a35196f2f44a3b8df72efd",
-          "sizeBytes": 14073
+          "sha256": "9e7a09426123bfd3ac658850597e33b2a5cd6cc04b79d0eec7fab3fc2ebdbe2e",
+          "sizeBytes": 15218
         },
         {
           "path": "tests/test_product_design_department.py",
@@ -4612,7 +4612,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack policy, deterministic contract successor, human-selection gate, source traceability, tests, and host guidance; no upstream prompt, persona, router, provider, state, browser runtime, installer, updater, dependency, auto-commit, or mutation authority is copied or activated."
       },
-      "recordDigest": "939e69b49aaced5be11395e9df01d1a21b5ccce54ae396b4133a1c0bd2f22ae5"
+      "recordDigest": "334701f5e540a652ad75ffd0a6e099f3af19e989aae22fed2f7b819e29feb724"
     },
     {
       "id": "gstack-provider-candidates",
@@ -5066,8 +5066,8 @@
         },
         {
           "path": "tests/test_gstack_provenance.py",
-          "sha256": "78854c572bec872eca3eb09770185e1211649624a6a35196f2f44a3b8df72efd",
-          "sizeBytes": 14073
+          "sha256": "9e7a09426123bfd3ac658850597e33b2a5cd6cc04b79d0eec7fab3fc2ebdbe2e",
+          "sizeBytes": 15218
         },
         {
           "path": "tests/test_sync_artifacts.py",
@@ -5081,7 +5081,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original standard-library JStack protocol and adapter. No upstream TypeScript, browser binary, prompt, state, cookie, telemetry, installer, dependency, provider runtime, source mutation, Git, release, deployment, or production authority is copied, vendored, or activated."
       },
-      "recordDigest": "4b6c4299d13328a62de6826f495e7b16fd107f3eed86734854765258441de4a5"
+      "recordDigest": "63e2a22e164bec4e803f83dc38b49fc10a18008d04e998bc7bc91675612d3046"
     },
     {
       "id": "gstack-browser-qa-remediation-adaptation",
@@ -5153,8 +5153,8 @@
         },
         {
           "path": "tests/test_gstack_provenance.py",
-          "sha256": "78854c572bec872eca3eb09770185e1211649624a6a35196f2f44a3b8df72efd",
-          "sizeBytes": 14073
+          "sha256": "9e7a09426123bfd3ac658850597e33b2a5cd6cc04b79d0eec7fab3fc2ebdbe2e",
+          "sizeBytes": 15218
         },
         {
           "path": "tests/test_sync_artifacts.py",
@@ -5168,7 +5168,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack finding, handoff, stale-evidence, and re-QA contracts. Upstream automatic fixes, commits, pushes, browser runtime, prompts, state, installer, dependencies, and action authority are not copied or activated."
       },
-      "recordDigest": "a98e9947fdaed948597ce164af48ab241d0d8c09b289565284c068aec2338b03"
+      "recordDigest": "f7155840e5841ee0c24ff9f70a1f584c77b8dd5679c2a98e79290fe61d880125"
     },
     {
       "id": "gstack-professional-delivery-adaptation",
@@ -6070,5 +6070,5 @@
     "planDigest": "6f4f581f3d2ebe9ede92b9bea270202411e4c47d430da1d4ea74db5d68564d47",
     "generatedBy": "scripts/build_gstack_provenance.py"
   },
-  "manifestDigest": "8ddaca83faadc11e0b2ce3f31171be006c05e173901bb4662f165cf494b78392"
+  "manifestDigest": "71e56baa29e938bb9296edb63454bf445eb2c1dc0195044c3f1542acc3f37a85"
 }

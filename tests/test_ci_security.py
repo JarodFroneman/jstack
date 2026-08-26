@@ -7,10 +7,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_ROOT = ROOT / ".github" / "workflows"
+GIT_ATTRIBUTES = ROOT / ".gitattributes"
 IMMUTABLE_ACTION = re.compile(r"^\s*-?\s*uses:\s*[^@\s]+@([0-9a-f]{40})(?:\s+#.*)?$")
 
 
 class CiSecurityTests(unittest.TestCase):
+    def test_text_checkouts_are_lf_stable_across_supported_runners(self) -> None:
+        attributes = GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines()
+        self.assertIn("* text=auto eol=lf", attributes)
+        self.assertIn("*.png binary", attributes)
+
     def test_every_github_action_is_pinned_to_a_full_commit(self) -> None:
         action_lines = []
         for path in sorted(WORKFLOW_ROOT.glob("*.yml")):

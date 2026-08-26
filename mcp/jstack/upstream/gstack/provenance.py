@@ -158,6 +158,8 @@ def _read_regular_file(root: Path, relative: str, *, max_bytes: int) -> bytes:
     flags = os.O_RDONLY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
     try:
         descriptor = os.open(candidate, flags)
     except OSError as exc:

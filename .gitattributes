@@ -1,3 +1,8 @@
+# Canonical manifests and generated copies are compared byte-for-byte. Keep
+# every detected text file LF-stable on every supported checkout platform.
+* text=auto eol=lf
+*.png binary
+
 evals/**/*.json text eol=lf
 evals/**/*.py text eol=lf
 evals/**/*.md text eol=lf

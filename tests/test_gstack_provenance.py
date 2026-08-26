@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Iterator
+from unittest import mock
 
 from mcp.jstack.upstream.gstack import provenance
 
@@ -29,6 +31,34 @@ def walk_objects(value: Any) -> Iterator[dict[str, Any]]:
 
 
 class GstackProvenanceTests(unittest.TestCase):
+    def test_descriptor_reader_uses_binary_mode_when_the_platform_exposes_it(self) -> None:
+        sentinel = 1 << 29
+        observed_flags = []
+        real_open = os.open
+
+        def open_without_synthetic_flag(path: Path, flags: int) -> int:
+            observed_flags.append(flags)
+            return real_open(path, flags & ~sentinel)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "sample.txt").write_bytes(b"one\r\ntwo\r\n")
+            with mock.patch.object(provenance.os, "O_BINARY", sentinel, create=True), mock.patch.object(
+                provenance.os,
+                "open",
+                side_effect=open_without_synthetic_flag,
+            ):
+                self.assertEqual(
+                    b"one\r\ntwo\r\n",
+                    provenance._read_regular_file(
+                        root,
+                        "sample.txt",
+                        max_bytes=100,
+                    ),
+                )
+        self.assertEqual(1, len(observed_flags))
+        self.assertTrue(observed_flags[0] & sentinel)
+
     def test_production_manifest_is_pinned_complete_and_plan_bound(self) -> None:
         manifest = provenance.load_manifest()
         self.assertEqual("jstack.upstream.provenance.v1", manifest["schemaVersion"])
