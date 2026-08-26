@@ -71,7 +71,7 @@
       "additionalProperties": false,
       "required": ["schemaVersion", "contractSha256", "gitHead", "projectFingerprint", "policyDigest"],
       "properties": {
-        "schemaVersion": {"enum": ["jstack.ui.contract.v1", "jstack.ui.contract.v2"]},
+        "schemaVersion": {"enum": ["jstack.ui.contract.v1", "jstack.ui.contract.v2", "jstack.ui.contract.v3", "jstack.ui.contract.v4"]},
         "contractSha256": {"$ref": "#/$defs/sha256"},
         "gitHead": {"$ref": "#/$defs/gitOid"},
         "projectFingerprint": {"$ref": "#/$defs/sha256"},

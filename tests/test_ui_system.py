@@ -1456,7 +1456,7 @@ class ProductInterfaceServerTests(unittest.TestCase):
         names = set(definitions)
         canonical = {name for name in names if name.startswith("jstack_")}
         legacy = {name for name in server.TOOLS if name.startswith("gstack_")}
-        self.assertEqual(59, len(canonical))
+        self.assertEqual(60, len(canonical))
         self.assertEqual(52, len(legacy))
         self.assertIn("jstack_ui_contract", canonical)
         self.assertIn("jstack_ui_finalize", canonical)

@@ -9,11 +9,19 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+from .design import (
+    DesignDecisionError,
+    build_design_decision,
+    validate_design_decision,
+)
+
 
 CATALOG_SCHEMA_VERSION = "jstack.ui.catalog.v1"
 CATALOG_VERSION = "1.0.0"
 CONTRACT_SCHEMA_VERSION = "jstack.ui.contract.v1"
 REFERENCE_CONTRACT_SCHEMA_VERSION = "jstack.ui.contract.v2"
+DESIGN_CONTRACT_SCHEMA_VERSION = "jstack.ui.contract.v3"
+REFERENCE_DESIGN_CONTRACT_SCHEMA_VERSION = "jstack.ui.contract.v4"
 DEFAULT_CATALOG_PATH = Path(__file__).with_name("catalog.v1.json")
 PROFILE_IDS = ("editorial-calm", "creative-canvas")
 PLATFORM_IDS = ("web", "webview", "ios", "android", "react-native", "flutter", "electron", "tauri", "macos", "windows", "linux")
@@ -681,6 +689,7 @@ def build_contract(
     redesign_approval_reference: Any = None,
     redesign_approval_sha256: Any = None,
     reference_bundle: Any = None,
+    design_decision: Any = None,
 ) -> dict[str, Any]:
     catalog = load_catalog()
     normalized_detection = _detection(detection)
@@ -844,12 +853,27 @@ def build_contract(
     for field in ("projectFingerprint", "treeSha256", "policyDigest"):
         if not SHA256_RE.fullmatch(str(baseline[field])):
             raise UIError(f"baseline.{field} must be a lowercase SHA-256 digest.")
+    normalized_design_decision = None
+    if design_decision is not None:
+        try:
+            normalized_design_decision = build_design_decision(
+                design_decision,
+                reference_bundle=normalized_reference_bundle,
+                existing_system_present=existing_system["present"],
+                redesign_approved=redesign_approved,
+            )
+        except DesignDecisionError as exc:
+            raise UIError(str(exc)) from exc
+    if normalized_reference_bundle is not None and normalized_design_decision is not None:
+        contract_schema_version = REFERENCE_DESIGN_CONTRACT_SCHEMA_VERSION
+    elif normalized_design_decision is not None:
+        contract_schema_version = DESIGN_CONTRACT_SCHEMA_VERSION
+    elif normalized_reference_bundle is not None:
+        contract_schema_version = REFERENCE_CONTRACT_SCHEMA_VERSION
+    else:
+        contract_schema_version = CONTRACT_SCHEMA_VERSION
     contract = {
-        "schemaVersion": (
-            REFERENCE_CONTRACT_SCHEMA_VERSION
-            if normalized_reference_bundle is not None
-            else CONTRACT_SCHEMA_VERSION
-        ),
+        "schemaVersion": contract_schema_version,
         "goal": _text(goal, "goal", maximum=4_000),
         "catalog": {
             "schemaVersion": CATALOG_SCHEMA_VERSION,
@@ -877,6 +901,8 @@ def build_contract(
     }
     if normalized_reference_bundle is not None:
         contract["referenceBundle"] = normalized_reference_bundle
+    if normalized_design_decision is not None:
+        contract["designDecision"] = normalized_design_decision
     contract["contractSha256"] = canonical_digest(contract)
     return contract
 
@@ -893,11 +919,27 @@ def validate_contract(value: Any) -> dict[str, Any]:
     if schema_version == CONTRACT_SCHEMA_VERSION:
         expected = v1_expected
         reference_bundle = None
+        design_decision = None
     elif schema_version == REFERENCE_CONTRACT_SCHEMA_VERSION:
         expected = v1_expected | {"referenceBundle"}
         reference_bundle = value.get("referenceBundle")
+        design_decision = None
         if reference_bundle is None:
             raise UIError("UI contract v2 requires a referenceBundle binding.")
+    elif schema_version == DESIGN_CONTRACT_SCHEMA_VERSION:
+        expected = v1_expected | {"designDecision"}
+        reference_bundle = None
+        design_decision = value.get("designDecision")
+        if design_decision is None:
+            raise UIError("UI contract v3 requires a designDecision binding.")
+    elif schema_version == REFERENCE_DESIGN_CONTRACT_SCHEMA_VERSION:
+        expected = v1_expected | {"referenceBundle", "designDecision"}
+        reference_bundle = value.get("referenceBundle")
+        design_decision = value.get("designDecision")
+        if reference_bundle is None or design_decision is None:
+            raise UIError(
+                "UI contract v4 requires referenceBundle and designDecision bindings."
+            )
     else:
         raise UIError("UI contract schemaVersion is unsupported.")
     if set(value) != expected:
@@ -918,6 +960,7 @@ def validate_contract(value: Any) -> dict[str, Any]:
         redesign_approved=value["profileResolution"]["redesignApproved"],
         redesign_approval_sha256=value["profileResolution"]["redesignApprovalReferenceSha256"],
         reference_bundle=reference_bundle,
+        design_decision=design_decision,
     )
     # Rebuilding can intentionally choose a different named precedence source for an
     # inherited system, so compare every immutable semantic field directly.
@@ -926,8 +969,20 @@ def validate_contract(value: Any) -> dict[str, Any]:
         "platformExclusions", "platforms", "themes", "viewports", "surfaces",
         "evidenceMatrix", "requirements",
     ]
-    if schema_version == REFERENCE_CONTRACT_SCHEMA_VERSION:
+    if schema_version in {
+        REFERENCE_CONTRACT_SCHEMA_VERSION,
+        REFERENCE_DESIGN_CONTRACT_SCHEMA_VERSION,
+    }:
         semantic_fields.append("referenceBundle")
+    if schema_version in {
+        DESIGN_CONTRACT_SCHEMA_VERSION,
+        REFERENCE_DESIGN_CONTRACT_SCHEMA_VERSION,
+    }:
+        try:
+            validate_design_decision(value["designDecision"])
+        except DesignDecisionError as exc:
+            raise UIError(str(exc)) from exc
+        semantic_fields.append("designDecision")
     for field in semantic_fields:
         if value[field] != rebuilt[field]:
             raise UIError(f"UI contract field is not normalized: {field}")

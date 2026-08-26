@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.11.0 - 2026-08-26 - Unified Engineering OS stable release
+
+### Added
+
+- Added the JStack × gstack Unified Engineering OS architecture while keeping
+  JStack as the sole governance, orchestration, policy, receipt, persistence,
+  and release-authority kernel.
+- Added deterministic organization, specialist-directory, Team Composer,
+  operating-profile, host, provider, delivery, release-choreography, and
+  root-cause-investigation contracts. The existing public commands select the
+  smallest permitted physical team; specialists and capabilities never grant
+  tools, write scope, or side-effect authority.
+- Added seven JStack-native methodology records, Product/Design decision
+  integration, bounded browser-provider evidence, separate QA remediation,
+  optional security-tool discovery, and cross-host support declarations.
+- Added immutable gstack research provenance for commit
+  `ad8400543cd9ce8d07641362db48d44a95417e33` and tree
+  `993294b0a09f5265d2d5af6d2fb8234ae2efe450`, including source-to-local
+  digests, MIT attribution, update procedures, and generated-copy checks.
+- Added the complete architecture, security, organization, provider, profile,
+  evaluation, migration, and upstream-sync documentation set plus ADRs 0028
+  through 0045.
+- Added a pull-request and main-branch CodeQL scan for Python. All GitHub
+  Actions used by JStack CI are pinned to full immutable commits.
+
+### Changed
+
+- Advanced the public MCP and all seven plugin manifests to stable `0.11.0`.
+  The supported distribution remains six commands, 60 canonical `jstack_*`
+  tools, 52 frozen `gstack_*` aliases, and a Python-standard-library runtime
+  core.
+- Extended the existing Prompt Compiler, Context Readiness, canonical roles,
+  Product Interface System, Audit, Loop, Program, Launch Assurance, and
+  release-readiness planes instead of introducing a parallel control plane.
+- Added Solo, Professional, and Enterprise profile projections with
+  non-lowerable risk floors. Missing optional providers report unavailable or
+  unsupported without breaking unrelated JStack workflows or silently
+  substituting another provider.
+- Preserved Codex as the release-tested full host. Claude Code remains an MCP
+  preview, and generic MCP clients remain protocol-level integrations without
+  claimed command, skill, subagent, continuation, or approval parity.
+
+### Security, authority, compatibility, and evidence
+
+- Repository, issue, web, screenshot, provider, and upstream prompt content is
+  treated as untrusted data unless a validated JStack contract explicitly
+  grants a narrower role. No upstream installer, router, state, permission, or
+  release behavior is imported.
+- Release, deployment, Git, provider, and production actions remain bounded by
+  explicit user authority and normal host/provider controls. Readiness and
+  evidence receipts never authorize an action.
+- High/production security paths retain independent scanner requirements;
+  critical paths also retain accountable independent human review. The stable
+  version label does not waive those project-specific gates or certify every
+  generated project as production-ready.
+- Stage 19 remains `NOT_MEASURED`. Its 168-cell protocol has not been run, so
+  this release makes no comparative uplift, superiority, attack-immunity, or
+  empirical productivity claim about combined JStack, baseline JStack,
+  gstack, or a base agent.
+
 ## 0.10.0-beta.6.2 - 2026-08-24 - Product Interface detector hardening prerelease
 
 ### Fixed

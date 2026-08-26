@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/ui-design-decision.v1.schema.json",
+  "title": "JStack Product and Design decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "mode",
+    "capabilities",
+    "productContext",
+    "findings",
+    "alternatives",
+    "selection",
+    "existingSystemDisposition",
+    "explicitNonGoals",
+    "sourceReferences",
+    "policy",
+    "authority",
+    "decisionSha256"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.ui.design-decision.v1"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "preserve-and-extend",
+        "directed",
+        "exploration"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "product-discovery",
+          "product-challenge",
+          "design-consultation",
+          "design-analysis",
+          "design-review",
+          "design-alternatives",
+          "ux-analysis",
+          "design-systems",
+          "accessibility",
+          "dx-review",
+          "ui-implementation-guidance"
+        ]
+      }
+    },
+    "productContext": {
+      "$ref": "#/$defs/productContext"
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/alternative"
+      }
+    },
+    "selection": {
+      "$ref": "#/$defs/selection"
+    },
+    "existingSystemDisposition": {
+      "type": "string",
+      "enum": [
+        "not-applicable",
+        "preserve",
+        "extend",
+        "replace"
+      ]
+    },
+    "explicitNonGoals": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "sourceReferences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sourceReference"
+      }
+    },
+    "policy": {
+      "$ref": "#/$defs/policyBinding"
+    },
+    "authority": {
+      "$ref": "#/$defs/authority"
+    },
+    "decisionSha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{1,79}$"
+    },
+    "policyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.ui.design-policy.v1"
+        },
+        "version": {
+          "const": "1.0.0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "productContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetUsers",
+        "primaryJobs",
+        "desiredOutcomes"
+      ],
+      "properties": {
+        "targetUsers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "primaryJobs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "desiredOutcomes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "capabilityId",
+        "disposition",
+        "statement",
+        "sourceReferenceIds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "capabilityId": {
+          "type": "string",
+          "enum": [
+            "product-discovery",
+            "product-challenge",
+            "design-consultation",
+            "design-analysis",
+            "design-review",
+            "design-alternatives",
+            "ux-analysis",
+            "design-systems",
+            "accessibility",
+            "dx-review",
+            "ui-implementation-guidance"
+          ]
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "fact",
+            "recommendation",
+            "assumption",
+            "unknown"
+          ]
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "sourceReferenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      }
+    },
+    "alternative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "summary",
+        "productRationale",
+        "hierarchy",
+        "userFlow",
+        "designSystemStrategy",
+        "visualDirection",
+        "interactionModel",
+        "responsiveStrategy",
+        "accessibilityRequirements",
+        "stateRequirements",
+        "tradeoffs",
+        "implementationGuidance",
+        "sourceReferenceIds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "productRationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "hierarchy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "userFlow": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "designSystemStrategy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "visualDirection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "interactionModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "responsiveStrategy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1500
+        },
+        "accessibilityRequirements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "stateRequirements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "tradeoffs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "implementationGuidance": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "sourceReferenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alternativeId",
+        "source",
+        "approvalReference",
+        "approvalSha256",
+        "referencePrototypeId"
+      ],
+      "properties": {
+        "alternativeId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "active-conversation",
+            "approved-reference-bundle"
+          ]
+        },
+        "approvalReference": {
+          "type": "null"
+        },
+        "approvalSha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256"
+            }
+          ]
+        },
+        "referencePrototypeId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/identifier"
+            }
+          ]
+        }
+      }
+    },
+    "sourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "explicit-user",
+            "verified-repository",
+            "jstack-policy",
+            "approved-reference-bundle",
+            "verified-external",
+            "product-domain-guidance",
+            "disclosed-inference"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorityEffect",
+        "implementationAuthorized",
+        "candidateMutationAuthorized",
+        "productionMutationAuthorized",
+        "providerInvocationAuthorized"
+      ],
+      "properties": {
+        "authorityEffect": {
+          "const": "none"
+        },
+        "implementationAuthorized": {
+          "const": false
+        },
+        "candidateMutationAuthorized": {
+          "const": false
+        },
+        "productionMutationAuthorized": {
+          "const": false
+        },
+        "providerInvocationAuthorized": {
+          "const": false
+        }
+      }
+    }
+  }
+}

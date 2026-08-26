@@ -23,6 +23,7 @@ ADDITIVE_CANONICAL_TOOLS = frozenset(
         "jstack_ui_motion_spec",
         "jstack_ui_motion_finalize",
         "jstack_prompt_compile",
+        "jstack_browser_capture",
     }
 )
 ADDITIVE_COMMAND_NAMES = frozenset({"jstack-evidence-builder.md"})
@@ -148,6 +149,132 @@ ADDITIVE_EXISTING_TOOL_FIELDS = {
         },
     }
 }
+ADDITIVE_EXISTING_TOOL_FIELDS["jstack_specialist_result"].update(
+    {
+        "investigation_contract": {
+            "type": "object",
+            "description": "Exact jstack.investigation.v1 contract for the receipt-bound root-cause-investigator. The packaged investigation-contract.v1.schema.json and deterministic server validator are authoritative.",
+        },
+        "specialist_id": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Logical specialistId from dynamicReceiptAssignments. Supply only with team_plan_receipt and physical_agent_id.",
+        },
+        "physical_agent_id": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Exact physicalAgentId assigned to specialist_id by the signed Unified Team Plan.",
+        },
+        "team_plan_receipt": {
+            "type": "string",
+            "maxLength": 250_000,
+            "description": "Exact dispatch-eligible unifiedTeamPlanReceipt returned by jstack_team_plan. When present, logical-specialist receipt v2 validation replaces the legacy fixed-role route.",
+        },
+    }
+)
+ADDITIVE_EXISTING_TOOL_FIELDS.setdefault("jstack_dispatch_check", {}).update(
+    {
+        "dispatch_phase": {
+            "type": "string",
+            "enum": ["standard", "investigation", "remediation", "browser-remediation"],
+            "default": "standard",
+            "description": "Stage 9/12 phase. Fix work validates investigation before remediation; a failing browser receipt uses browser-remediation to route only the original scoped Builder and require fresh re-QA.",
+        },
+        "investigation_receipt": {
+            "type": "string",
+            "maxLength": 200000,
+            "description": "Exact passing root-cause specialist receipt required for remediation dispatch against the unchanged candidate.",
+        },
+        "browser_evidence_receipt": {
+            "type": "string",
+            "maxLength": 250000,
+            "description": "Exact current-candidate failing browser-evidence receipt required only with dispatch_phase=browser-remediation. It is evidence, not source-write authority.",
+        },
+        "browser_finding": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "schemaVersion", "id", "category", "severity", "title",
+                "claim", "expectedBehavior", "observedBehavior",
+                "reproductionStatus", "remediationRecommendation",
+                "evidenceReferences", "evidenceSha256", "scenarioDigest",
+                "sourceMutationAttempted",
+            ],
+            "properties": {
+                "schemaVersion": {"const": "jstack.browser-finding.v1"},
+                "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+                "category": {"type": "string", "enum": ["accessibility", "console", "content", "interaction", "network", "performance", "responsive", "visual"]},
+                "severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"]},
+                "title": {"type": "string", "minLength": 1, "maxLength": 200},
+                "claim": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "expectedBehavior": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "observedBehavior": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "reproductionStatus": {"type": "string", "enum": ["reproduced", "intermittent"]},
+                "remediationRecommendation": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "evidenceReferences": {
+                    "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
+                    "items": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+                },
+                "evidenceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "scenarioDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "sourceMutationAttempted": {"const": False},
+            },
+            "description": "Exact jstack.browser-finding.v1 QA finding bound to browser_evidence_receipt. QA may recommend remediation but cannot mutate source.",
+        },
+    }
+)
+ADDITIVE_EXISTING_TOOL_FIELDS.setdefault("jstack_plan", {}).update(
+    {
+        "operating_profile": {
+            "type": "string",
+            "enum": ["solo", "professional", "enterprise"],
+            "default": "professional",
+            "description": "Governance floor, independent of execution topology and legacy quality_level. A weaker profile never lowers a mandatory risk floor.",
+        },
+        "host_id": {
+            "type": "string",
+            "enum": ["codex", "claude-code", "generic-mcp"],
+            "default": "codex",
+            "description": "Explicit host capability contract. Missing host-native features report UNAVAILABLE rather than being emulated.",
+        },
+    }
+)
+ADDITIVE_EXISTING_TOOL_FIELDS.setdefault("jstack_team_plan", {}).update(
+    {
+        "operating_profile": {
+            "type": "string",
+            "enum": ["solo", "professional", "enterprise"],
+            "default": "professional",
+            "description": "Governance floor, independent of team_mode. A weaker profile never lowers a mandatory risk floor.",
+        },
+        "host_id": {
+            "type": "string",
+            "enum": ["codex", "claude-code", "generic-mcp"],
+            "default": "codex",
+            "description": "Explicit host capability contract. MCP connectivity alone does not imply command or continuation parity.",
+        },
+    }
+)
+ADDITIVE_EXISTING_TOOL_FIELDS.setdefault("jstack_release_readiness", {}).update(
+    {
+        "release_strategy": {
+            "type": "string",
+            "enum": ["direct", "canary", "blue-green"],
+            "description": "Readiness UX strategy only. It never authorizes or executes a release.",
+        }
+    }
+)
+ADDITIVE_EXISTING_TOOL_FIELDS["jstack_specialist_handoff_check"].update(
+    {
+        "team_plan_receipt": {
+            "type": "string",
+            "maxLength": 250_000,
+            "description": "Exact dispatch-eligible unifiedTeamPlanReceipt. When present, expected_agents is the ordered role/capability projection of dynamicReceiptAssignments and handoff validates every logical specialist.",
+        }
+    }
+)
 ADDITIVE_SUCCESSOR_BASE_DIGESTS = {
     # jstack_ui_finalize was introduced after the alpha.9 frozen fixture. This
     # is its exact Beta.5 request schema before Beta.6 added the paired optional
@@ -252,6 +379,9 @@ ADDITIVE_SCHEMA_FILES = frozenset(
         "ui-catalog.v1.schema.json",
         "ui-contract.v1.schema.json",
         "ui-contract.v2.schema.json",
+        "ui-contract.v3.schema.json",
+        "ui-contract.v4.schema.json",
+        "ui-design-decision.v1.schema.json",
         "ui-evidence.v1.schema.json",
         "ui-finalization.v1.schema.json",
         "ui-motion-spec.v1.schema.json",
@@ -267,11 +397,29 @@ ADDITIVE_SCHEMA_FILES = frozenset(
         "prompt-intent.v1.schema.json",
         "prompt-compilation.v1.schema.json",
         "prompt-compilation.v2.schema.json",
+        "unified-os-domain.v1.schema.json",
+        "upstream-provenance.v1.schema.json",
+        "specialist-directory.v1.schema.json",
+        "team-composer-policy.v1.schema.json",
+        "team-composer-request.v1.schema.json",
+        "team-coordination.v2.schema.json",
+        "methodology-catalog.v1.schema.json",
+        "methodology-plan.v1.schema.json",
+        "investigation-contract.v1.schema.json",
+        "browser-provider-contract.v1.schema.json",
+        "browser-provider-result.v1.schema.json",
+        "browser-finding.v1.schema.json",
+        "delivery-phase-evidence.v1.schema.json",
+        "delivery-pipeline.v1.schema.json",
+        "host-catalog.v1.schema.json",
+        "host-contract.v1.schema.json",
+        "release-choreography.v1.schema.json",
+        "security-tooling-catalog.v1.schema.json",
     }
 )
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 59
+LIVE_CANONICAL_TOOL_COUNT = 60
 
 
 def _canonical_digest(value: Any) -> str:

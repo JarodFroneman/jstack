@@ -10,9 +10,12 @@ $ARGUMENTS
 
 Mode: `single-lead`.
 
-This command is intentionally the non-subagent version. Never spawn subagents
-under this command. If the user also asks for subagents, stop and direct them to
-`/jstack-subagents` or `/jstack-full-team`.
+This command uses the `j-stack-dev` operating topology: one accountable Lead
+and normally one physical agent. Do not add optional staffing. A mandatory
+risk-floor independence check returned by Team Composer may add one read-only
+physical assurance agent; that safety escalation does not change the command,
+task mode, write authority, or user scope. If optional breadth is requested,
+direct the user to `/jstack-subagents` or `/jstack-full-team`.
 
 Use one Lead Engineer to run the enterprise gates:
 
@@ -52,14 +55,57 @@ planning call.
    exact internal `promptPreviewReceipt` and approval bound to the displayed
    `renderedPromptSha256`. Never infer approval or ask the user to handle those
    values. Only the approved response's `compilationReceipt` and nested
-   `readinessReceipt` may be used downstream.
+   `readinessReceipt` may be used downstream. For `implement` or `fix`,
+   repository inspection must also supply one source-labelled
+   `authorized_write_scopes` fact whose value is a bounded
+   repository-relative path or JSON string array. This constrains the eventual
+   writer; it is not action approval. Never use the repository root, an
+   invented placeholder, or unrelated dirty paths as scope.
 6. For `git`, use `jstack_policy_check`,
-   `jstack_plan(team_mode="single-lead", learning_mode=resolved_learning_mode,
+   `jstack_plan(team_mode="single-lead", quality_level="enterprise",
+   operating_profile=explicit_user_profile_or_professional,
+   host_id=current_supported_host,
+   learning_mode=resolved_learning_mode,
    context_readiness_receipt=stage_b.contextReadiness.readinessReceipt,
    context_brief=stage_b.contextReadiness.normalizedBrief)`,
    apply the returned Lead `capabilityIds`, and use `jstack_preflight` when
-   applicable. Capability packs specialize the Lead but never authorize
-   subagents or expand permissions.
+   applicable. Capability packs specialize the Lead but never expand
+   permissions. Treat `agentTeam.unifiedTeamPlan` as the execution source only
+   when `agentTeam.executionSource="team-composer"` and
+   `agentTeam.dispatchEligible=true`. Its logical specialists, physical-agent
+   allocation, scopes, independence boundaries, and evidence contracts are
+   exact. If the plan is blocked or preview-only, stop and resolve its stated
+   binding/scope issue; never fall back silently. The `agents` array is a
+   temporary legacy compatibility view, not a dispatch roster. If an
+   independent physical agent is required, pass the complete `agentTeam`
+   object and exact `dynamicCoordinationPacket` to `jstack_dispatch_check`
+   before dispatch.
+   Read the receipt-bound `agentTeam.methodologyPlan` before execution. Apply
+   only its selected JStack-native methodology records, phases, output
+   contract, evidence requirements, and stop conditions; an empty selection is
+   valid. Never invoke an upstream gstack skill or giant prompt directly.
+   Methodology selection adds required expertise and evidence but cannot alter
+   the approved task mode, scope, permissions, provider access, persistence,
+   implementation authority, or external-action authority.
+   Also consume the receipt-bound `hostContract`,
+   `professionalDeliveryPipeline`, and `securityProviderPlan`. Use only
+   `AVAILABLE` host capabilities, follow only required delivery phases, and
+   disclose security gaps. Profile, host, or evidence state never grants
+   action authority.
+   When `root-cause-investigation` is selected, call
+   `jstack_dispatch_check` even if every logical specialty maps to the Lead.
+   For `fix` or an investigation-selected `implement`, first use
+   `dispatch_phase="investigation"` and execute only its read-only
+   `executionSlice`; do not edit source. The exact root-cause assignment must
+   return `jstack.investigation.v1` through `jstack_specialist_result`. Three
+   consecutive falsified or inconclusive hypotheses require a later revised
+   trace, changed hypotheses, `status="unresolved"`, and an immediate stop;
+   never try a fourth random patch. Remediation may begin only after
+   `jstack_dispatch_check(dispatch_phase="remediation",
+   investigation_receipt=...)` accepts that unchanged-candidate specialist
+   receipt. Execute only its remediation slice under the original writer
+   scope. `diagnose-only`, an unresolved cause, and evidence/readiness never
+   authorize a fix.
 7. For `artifact-only`, state
    `MCP mounted; project binding is artifact-only.`, use `jstack_plan` with the
    current readiness receipt and normalized brief, do not
@@ -80,12 +126,19 @@ planning call.
    risk also requires independent human security review and permits no waiver.
    Public-web, commercial, payment, and regulated-data profiles also require a
    release-profile audit by default. Launch readiness is evidence only.
-11. In Git mode, submit the Lead's exact `jstack.specialist.result.v1` and
-   metadata-only `jstack.specialist.telemetry.v1` through
-   `jstack_specialist_result`, then validate the one-role set with
-   `jstack_specialist_handoff_check`. Never store raw prompts, messages, tool
-   arguments, command/model output, source contents, or secrets. A failed,
-   partial, stale, or capability-incomplete receipt blocks completion.
+11. In Git mode, submit one exact `jstack.specialist.result.v1` and
+   metadata-only `jstack.specialist.telemetry.v1` for every
+   `dynamicReceiptAssignments` entry. Pass the exact
+   `unifiedTeamPlanReceipt`, `specialistId`, `physicalAgentId`, canonical
+   `roleId`, capability IDs, and write scope to `jstack_specialist_result`.
+   The exact `root-cause-investigator` call must also include the in-memory
+   `investigation_contract`; only its digest-only certification may enter the
+   receipt.
+   Then call `jstack_specialist_handoff_check` with the same Team Plan receipt
+   and the ordered role/capability projection of those assignments. Never
+   store raw prompts, messages, tool arguments, command/model output, source
+   contents, or secrets. A missing, failed, partial, stale, scope-drifted, or
+   capability-incomplete logical-specialist receipt blocks completion.
 12. Report outcome, evidence, residual risk, then an optional three-line mastery
    capsule.
 
@@ -98,8 +151,9 @@ irreversible work, follow the host's ordinary approval UI when it appears, and
 never infer permission for a materially different action. Audit remains
 read-only, and evidence/readiness results never execute actions by themselves.
 
-If the task grows beyond a single Lead Engineer, stop and recommend
-`/jstack-subagents` or `/jstack-full-team` rather than silently escalating.
+If the task needs optional breadth beyond the Team Composer's mandatory Dev
+risk floor, stop and recommend `/jstack-subagents` or `/jstack-full-team`
+rather than silently widening the operating topology.
 
 Use the installed `jstack-dev` skill and normal Codex fallback only when
 `jstack_runtime_status` itself is unavailable or unreachable. Never relabel a

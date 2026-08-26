@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/host-contract.v1.schema.json",
+  "title": "JStack Host Capability Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogVersion", "catalogDigest", "hostId", "displayName", "supportLevel", "knownHost", "capabilities", "notes", "methodologyPortable", "executionAuthorized", "authorityEffect", "contractDigest"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.host-contract.v1"},
+    "catalogVersion": {"type": "string", "minLength": 1, "maxLength": 50},
+    "catalogDigest": {"$ref": "#/$defs/sha256"},
+    "hostId": {"$ref": "#/$defs/id"},
+    "displayName": {"type": "string", "minLength": 1, "maxLength": 160},
+    "supportLevel": {"enum": ["full", "preview", "protocol-only", "unsupported"]},
+    "knownHost": {"type": "boolean"},
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "status": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNSUPPORTED"]}
+        }
+      }
+    },
+    "notes": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "methodologyPortable": {"const": true},
+    "executionAuthorized": {"const": false},
+    "authorityEffect": {"const": "none"},
+    "contractDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

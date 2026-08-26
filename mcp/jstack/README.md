@@ -162,7 +162,7 @@ execution.
 
 ## Tools
 
-The server exposes 59 canonical `jstack_*` tools for runtime status, project
+The server exposes 60 canonical `jstack_*` tools for runtime status, project
 detection, two-stage Prompt Compilation, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
@@ -200,6 +200,44 @@ The capability-specific entry points are `jstack_capability_catalog`,
 `jstack_specialist_result`, and `jstack_specialist_handoff_check`; planning,
 audit, and loop tools also expose capability fields.
 
+`jstack_capability_catalog` also returns the separate
+`jstack.methodology-capability.catalog.v1`. Existing `jstack_plan` and
+`jstack_team_plan` deterministically select its seven Stage 8 methods, route
+required specialists and evidence through Team Composer, and return a
+`jstack.methodology-plan.v1`. The signed Team Plan receipt binds the catalog
+and selection digests. Methods contain no upstream executable prompt, provider
+invocation, persistence, or action authority.
+
+Stage 9 uses the existing dispatch and specialist-result tools to enforce
+Root-Cause Investigation. When a mutating Team Plan selects that method,
+`jstack_dispatch_check` requires `dispatch_phase="investigation"` before any
+writer can run. The exact read-only investigator submits
+`jstack.investigation.v1` through `jstack_specialist_result`; only a passing,
+unchanged-candidate, digest-only certification can be supplied as
+`investigation_receipt` for `dispatch_phase="remediation"`. Three consecutive
+falsified or inconclusive attempts require a revised trace and explicit
+`hypothesis-limit` stop; a fourth attempt is invalid. Diagnosis-only and
+unresolved results remain non-mutating. See
+`docs/integration/gstack/ROOT_CAUSE_INVESTIGATION.md`.
+
+Stage 10 uses the existing `jstack_ui_contract` entry point for bounded
+Product/Design intelligence. Its optional `design_decision` input records one
+directed selection or two/three source-traceable alternatives with an explicit
+human-selected direction. The normalized decision retains only digest-bound
+sources and approval, rejects unapproved established-system replacement and
+reference-selection drift, and carries no implementation, provider,
+candidate-mutation, production, Git, release, deployment, or external-action
+authority. Ordinary and reference-only callers remain on closed UI-contract
+v1/v2; design-bound callers use additive v3/v4. See
+`docs/integration/gstack/PRODUCT_DESIGN_DEPARTMENT.md`.
+
+The full staged integration and release-readiness documentation is indexed at
+`docs/integration/gstack/README.md`. It distinguishes operating mode, profile,
+scope, risk, specialist, canonical role, capability, provider, evidence, and
+physical-agent concerns while retaining one JStack authority kernel. The
+empirical protocol is present but remains `NOT_MEASURED`; MCP availability or
+a passing receipt does not establish a comparative claim or authorize release.
+
 Product Interface evidence producers use the packaged
 `ui-evidence.v1.schema.json`, `ui-objective-result.v1.schema.json`, and
 `ui-product-observation.v1.schema.json` contracts. Objective results bind the
@@ -226,6 +264,10 @@ can contribute only a digest-bound reference to a later UI contract; they never
 satisfy candidate screenshots, objective checks, security evidence, or release
 approval. Reference-free UI contracts retain the v1 shape; reference-bound
 contracts use the packaged additive `ui-contract.v2.schema.json` successor.
+Optional human-selected Product/Design decisions use the closed
+`ui-design-decision.v1.schema.json` contract and additive UI-contract v3, or v4
+when a reference is also bound. None of these receipts authorizes
+implementation or production mutation.
 
 ## Install
 

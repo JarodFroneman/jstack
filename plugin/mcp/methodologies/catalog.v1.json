@@ -1,0 +1,867 @@
+{
+  "schemaVersion": "jstack.methodology-capability.catalog.v1",
+  "catalogVersion": "1.0.0",
+  "sourceProvenance": {
+    "repository": "https://github.com/garrytan/gstack.git",
+    "commit": "ad8400543cd9ce8d07641362db48d44a95417e33",
+    "tree": "993294b0a09f5265d2d5af6d2fb8234ae2efe450",
+    "version": "1.69.0.0",
+    "license": "MIT",
+    "sourceFiles": [
+      "investigate/SKILL.md.tmpl",
+      "office-hours/SKILL.md.tmpl",
+      "plan-ceo-review/SKILL.md.tmpl",
+      "plan-design-review/SKILL.md.tmpl",
+      "plan-devex-review/SKILL.md.tmpl",
+      "plan-eng-review/SKILL.md.tmpl",
+      "retro/SKILL.md.tmpl"
+    ],
+    "adaptation": "original-jstack-reexpression"
+  },
+  "invariants": {
+    "authorityEffect": "none",
+    "permissionMode": "inherit-jstack",
+    "implicitProviderInvocation": false,
+    "implicitPersistence": false,
+    "rawPromptStored": false,
+    "hiddenReasoningStored": false,
+    "upstreamPromptCopied": false
+  },
+  "methodologyCapabilities": [
+    {
+      "id": "ceo-product-review",
+      "name": "CEO and Product Review",
+      "summary": "Challenge product value, scope posture, leverage, and trade-offs without silently changing the approved goal.",
+      "sourceFiles": [
+        "plan-ceo-review/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\bceo(?:/product)?\\s+review\\b",
+          "\\bfounder\\s+review\\b",
+          "\\bproduct\\s+(?:strategy|premise|scope)\\s+review\\b",
+          "\\bchallenge\\s+(?:the\\s+)?product\\s+premise\\b"
+        ],
+        "forcedTaskModes": []
+      },
+      "allowedTaskModes": [
+        "explain",
+        "research",
+        "plan-only",
+        "review"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "product-strategist",
+      "specialistIds": [
+        "product-strategist"
+      ],
+      "baseCapabilityIds": [
+        "evidence-led-handoff",
+        "product-observability",
+        "workflow-architecture"
+      ],
+      "phases": [
+        {
+          "id": "scope-posture",
+          "objective": "State the approved goal, explicit non-goals, and whether the review is holding, reducing, selectively improving, or proposing expansion of scope.",
+          "requiredInputs": [
+            "approved task mode",
+            "compiled goal and constraints",
+            "source-labelled repository facts"
+          ],
+          "output": "A review posture that cannot silently alter the user's scope.",
+          "decisionGate": "Any material scope change remains a proposal until the user explicitly accepts it."
+        },
+        {
+          "id": "value-challenge",
+          "objective": "Test the product premise, target outcome, differentiation, and use of existing product or repository leverage.",
+          "requiredInputs": [
+            "user outcome",
+            "target users",
+            "known product evidence"
+          ],
+          "output": "Source-labelled strengths, risks, unknowns, and premise challenges.",
+          "decisionGate": "Unsupported product claims remain unknowns rather than requirements."
+        },
+        {
+          "id": "bounded-alternatives",
+          "objective": "Compare two or three coherent options, including a minimal path where credible, with visible trade-offs.",
+          "requiredInputs": [
+            "scope posture",
+            "value challenge findings"
+          ],
+          "output": "A small decision set with costs, benefits, and risk.",
+          "decisionGate": "A material product choice is selected by the user or stays unresolved."
+        },
+        {
+          "id": "review-decision",
+          "objective": "Return a concise decision record aligned to the original intent and current evidence.",
+          "requiredInputs": [
+            "selected or unresolved alternative",
+            "explicit constraints and non-goals"
+          ],
+          "output": "A review decision, open questions, and measurable product acceptance outcomes.",
+          "decisionGate": "The review cannot authorize implementation, release, deployment, or an external action."
+        }
+      ],
+      "outputContract": {
+        "kind": "product-review-record",
+        "requiredSections": [
+          "intent-check",
+          "scope-posture",
+          "evidence",
+          "alternatives",
+          "decision",
+          "open-questions"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "product-review-decision",
+        "scope-decision",
+        "source-traceability"
+      ],
+      "stopConditions": [
+        "The requested review target or task mode is materially ambiguous.",
+        "A proposed scope change lacks explicit user acceptance.",
+        "A product claim would require unsupported external evidence.",
+        "The method is being treated as implementation or release authority."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    },
+    {
+      "id": "design-plan-review",
+      "name": "Design Plan Review",
+      "summary": "Review a user-interface plan for hierarchy, states, reuse, responsiveness, accessibility, trust, and visual coherence before implementation.",
+      "sourceFiles": [
+        "plan-design-review/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\bdesign\\s+plan\\s+review\\b",
+          "\\b(?:ui|ux|interface)\\s+plan\\s+review\\b",
+          "\\breview\\s+(?:the\\s+)?(?:ui|ux|interface)\\s+design\\s+plan\\b",
+          "\\breview\\s+(?:the\\s+)?(?:ui|ux|interface|frontend)\\s+plan\\b",
+          "\\bplan\\s+(?:the\\s+)?(?:ui|ux|interface)\\s+(?:design|redesign)\\b"
+        ],
+        "forcedTaskModes": []
+      },
+      "allowedTaskModes": [
+        "research",
+        "plan-only",
+        "review",
+        "implement",
+        "fix"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "design-lead",
+      "specialistIds": [
+        "design-lead"
+      ],
+      "baseCapabilityIds": [
+        "accessibility-assurance",
+        "evidence-led-handoff",
+        "product-observability",
+        "workflow-architecture"
+      ],
+      "phases": [
+        {
+          "id": "applicability",
+          "objective": "Confirm that the requested surface is user-facing and identify the exact design-plan scope.",
+          "requiredInputs": [
+            "compiled goal",
+            "changed or proposed surfaces",
+            "task mode"
+          ],
+          "output": "An applicable, not-applicable, or blocked design-review state.",
+          "decisionGate": "Non-UI work does not receive decorative design requirements."
+        },
+        {
+          "id": "system-evidence",
+          "objective": "Inspect and prefer the repository's established components, tokens, patterns, and interaction conventions.",
+          "requiredInputs": [
+            "design-system evidence",
+            "existing interface evidence",
+            "explicit reference evidence"
+          ],
+          "output": "A reuse map separating verified design facts from recommendations.",
+          "decisionGate": "No framework, library, asset, or visual language is invented without evidence or approval."
+        },
+        {
+          "id": "experience-coverage",
+          "objective": "Review hierarchy, core journeys, loading, empty, error, success, permission, responsive, keyboard, and assistive-technology states where applicable.",
+          "requiredInputs": [
+            "user journeys",
+            "state inventory",
+            "platform constraints"
+          ],
+          "output": "A proportional state and accessibility coverage matrix.",
+          "decisionGate": "Missing material states remain explicit blockers or questions."
+        },
+        {
+          "id": "design-decision",
+          "objective": "Return bounded design recommendations and acceptance evidence without editing the product.",
+          "requiredInputs": [
+            "reuse map",
+            "experience coverage findings"
+          ],
+          "output": "A concise design-plan review with priorities, non-goals, and verification needs.",
+          "decisionGate": "Visual exploration or provider use requires separate authority and an applicable provider gate."
+        }
+      ],
+      "outputContract": {
+        "kind": "design-plan-review-record",
+        "requiredSections": [
+          "applicability",
+          "design-system-evidence",
+          "experience-states",
+          "accessibility",
+          "recommendations",
+          "verification"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "design-plan-review",
+        "design-system-evidence",
+        "state-coverage"
+      ],
+      "stopConditions": [
+        "The interface scope or target users are materially unknown.",
+        "Repository design-system evidence has not been inspected.",
+        "A recommendation would override an explicit user or established design constraint.",
+        "The review is being used as authority to edit or invoke a provider."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    },
+    {
+      "id": "developer-experience-review",
+      "name": "Developer Experience Review",
+      "summary": "Review a developer-facing API, CLI, SDK, library, tool, platform, document set, agent, or MCP journey using repository evidence.",
+      "sourceFiles": [
+        "plan-devex-review/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\b(?:developer|dev)\\s+experience\\s+review\\b",
+          "\\bdx\\s+review\\b",
+          "\\b(?:api|cli|sdk|library|tooling|mcp)\\s+ergonomics\\b",
+          "\\btime\\s+to\\s+first\\s+(?:value|success)\\b",
+          "\\bdeveloper\\s+(?:onboarding|journey|workflow|documentation)\\b"
+        ],
+        "forcedTaskModes": []
+      },
+      "allowedTaskModes": [
+        "explain",
+        "research",
+        "plan-only",
+        "review",
+        "implement",
+        "fix"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "developer-experience-lead",
+      "specialistIds": [
+        "developer-experience-lead"
+      ],
+      "baseCapabilityIds": [
+        "evidence-led-handoff",
+        "product-observability",
+        "workflow-architecture"
+      ],
+      "phases": [
+        {
+          "id": "surface-and-user",
+          "objective": "Classify the developer-facing surface and the concrete developer audience it serves.",
+          "requiredInputs": [
+            "compiled goal",
+            "repository surface evidence",
+            "known developer audience"
+          ],
+          "output": "A bounded surface and developer-audience statement.",
+          "decisionGate": "An invented persona cannot substitute for missing material user context."
+        },
+        {
+          "id": "journey-evidence",
+          "objective": "Trace discovery, setup, first success, normal use, debugging, and upgrade behavior only where the repository supports them.",
+          "requiredInputs": [
+            "entry points",
+            "installation and usage evidence",
+            "errors, help, and documentation evidence"
+          ],
+          "output": "A source-backed developer journey with missing evidence marked.",
+          "decisionGate": "Claims about time, competitors, or usability require observed evidence."
+        },
+        {
+          "id": "friction-review",
+          "objective": "Identify ambiguity, unnecessary steps, unsafe defaults, error-quality gaps, and compatibility risks.",
+          "requiredInputs": [
+            "developer journey",
+            "public contract constraints"
+          ],
+          "output": "Prioritized friction findings with impact and traceability.",
+          "decisionGate": "Recommendations preserve existing contracts unless change is explicitly authorized."
+        },
+        {
+          "id": "dx-decision",
+          "objective": "Recommend the smallest coherent improvements and their verification criteria.",
+          "requiredInputs": [
+            "friction findings",
+            "scope and compatibility constraints"
+          ],
+          "output": "A DX review record with first-use evidence needs and bounded recommendations.",
+          "decisionGate": "The review does not authorize implementation, publishing, or telemetry."
+        }
+      ],
+      "outputContract": {
+        "kind": "developer-experience-review-record",
+        "requiredSections": [
+          "surface",
+          "developer-audience",
+          "journey",
+          "friction",
+          "recommendations",
+          "verification"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "developer-journey-review",
+        "first-use-evidence",
+        "source-traceability"
+      ],
+      "stopConditions": [
+        "The developer-facing surface or target developer is materially unclear.",
+        "A usability or timing claim lacks observed evidence.",
+        "A recommendation would silently break a public contract.",
+        "External research or telemetry is proposed without explicit authority."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    },
+    {
+      "id": "engineering-plan-review",
+      "name": "Engineering Plan Review",
+      "summary": "Review an engineering plan against inspected repository architecture, failure paths, tests, performance, security, and compatibility.",
+      "sourceFiles": [
+        "plan-eng-review/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\bengineering\\s+plan\\s+review\\b",
+          "\\btechnical\\s+plan\\s+review\\b",
+          "\\barchitecture\\s+plan\\s+review\\b",
+          "\\breview\\s+(?:the\\s+)?implementation\\s+plan\\b",
+          "\\bplan(?:ning)?\\b.{0,80}\\b(?:engineering|technical|architecture|implementation|code|backend|frontend|api|database|migration|feature|upgrade|change)\\b",
+          "\\b(?:engineering|technical|architecture|implementation|code|backend|frontend|api|database|migration|feature|upgrade|change)\\b.{0,80}\\bplan\\b"
+        ],
+        "forcedTaskModes": []
+      },
+      "allowedTaskModes": [
+        "plan-only",
+        "review",
+        "implement",
+        "fix"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "software-architect",
+      "specialistIds": [
+        "software-architect"
+      ],
+      "baseCapabilityIds": [
+        "workflow-architecture"
+      ],
+      "phases": [
+        {
+          "id": "target-confirmation",
+          "objective": "Bind the review to the exact plan, task mode, repository, and approved scope.",
+          "requiredInputs": [
+            "compiled task specification",
+            "repository binding",
+            "proposed engineering plan"
+          ],
+          "output": "An unambiguous review subject and authority ceiling.",
+          "decisionGate": "If the review subject is materially ambiguous, return to Context Readiness."
+        },
+        {
+          "id": "repository-fit",
+          "objective": "Compare the plan with existing architecture, built-in capabilities, contracts, conventions, and likely change surfaces.",
+          "requiredInputs": [
+            "source-labelled repository facts",
+            "existing architecture and contract evidence"
+          ],
+          "output": "A repository-fit assessment that favors the smallest adequate design.",
+          "decisionGate": "No system, dependency, file, API, or schema is invented without evidence."
+        },
+        {
+          "id": "failure-and-quality",
+          "objective": "Review failure paths, edge cases, security, performance, observability, compatibility, testing, migration, and rollback where applicable.",
+          "requiredInputs": [
+            "risk classification",
+            "acceptance criteria",
+            "affected boundaries"
+          ],
+          "output": "A proportional engineering-quality coverage record.",
+          "decisionGate": "High-risk unknowns remain blocking; low-risk ceremony stays proportional."
+        },
+        {
+          "id": "plan-decision",
+          "objective": "Return plan corrections, sequencing, verification, and unresolved decisions without changing code.",
+          "requiredInputs": [
+            "repository-fit assessment",
+            "quality coverage record"
+          ],
+          "output": "An approved, revisions-required, or blocked engineering-plan review.",
+          "decisionGate": "Review completion does not authorize implementation or any later side effect."
+        }
+      ],
+      "outputContract": {
+        "kind": "engineering-plan-review-record",
+        "requiredSections": [
+          "review-subject",
+          "repository-fit",
+          "failure-paths",
+          "verification",
+          "required-revisions",
+          "decision"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "engineering-plan-review",
+        "repository-evidence",
+        "verification-plan"
+      ],
+      "stopConditions": [
+        "The plan or repository binding is materially ambiguous.",
+        "The plan depends on invented repository facts or undeclared dependencies.",
+        "A material failure, security, migration, or rollback path is unresolved.",
+        "The review is being treated as implementation authority."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    },
+    {
+      "id": "engineering-retrospective",
+      "name": "Engineering Retrospective",
+      "summary": "Produce a bounded, read-only retrospective from an explicit repository and time window while separating measurements from interpretation.",
+      "sourceFiles": [
+        "retro/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\bengineering\\s+retrospective\\b",
+          "\\bsprint\\s+retro(?:spective)?\\b",
+          "\\bteam\\s+retro(?:spective)?\\b",
+          "\\brepository\\s+retrospective\\b",
+          "\\bretrospective\\s+(?:report|review|analysis)\\b"
+        ],
+        "forcedTaskModes": []
+      },
+      "allowedTaskModes": [
+        "explain",
+        "research",
+        "plan-only",
+        "read-only-audit",
+        "review"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "documentation-handoff-writer",
+      "specialistIds": [
+        "documentation-handoff-writer"
+      ],
+      "baseCapabilityIds": [
+        "codebase-orientation",
+        "evidence-led-handoff",
+        "workflow-architecture"
+      ],
+      "phases": [
+        {
+          "id": "window-binding",
+          "objective": "Bind the retrospective to an explicit repository subject, base, end state, and time window with freshness disclosed.",
+          "requiredInputs": [
+            "repository evidence",
+            "time window",
+            "available history"
+          ],
+          "output": "A bounded retrospective subject and evidence-availability statement.",
+          "decisionGate": "Missing, stale, or incomplete history is disclosed and cannot support fabricated narrative."
+        },
+        {
+          "id": "measurement",
+          "objective": "Collect proportional repository metrics for change volume, hotspots, tests, backlog signals, and delivery patterns.",
+          "requiredInputs": [
+            "bounded repository history",
+            "declared measurement definitions"
+          ],
+          "output": "Reproducible measurements with source references and limitations.",
+          "decisionGate": "Personal ranking, hidden surveillance, and unsupported productivity scoring are excluded."
+        },
+        {
+          "id": "interpretation",
+          "objective": "Separate measured facts from cautious interpretations, contributing conditions, and evidence gaps.",
+          "requiredInputs": [
+            "measurements",
+            "known project context"
+          ],
+          "output": "Traceable trends and hypotheses without false causality.",
+          "decisionGate": "Inference is labelled and cannot be presented as measured fact."
+        },
+        {
+          "id": "improvement-actions",
+          "objective": "Propose a small set of measurable team or process improvements for explicit acceptance.",
+          "requiredInputs": [
+            "validated trends",
+            "current project constraints"
+          ],
+          "output": "A retrospective report with owners left unassigned unless explicitly provided.",
+          "decisionGate": "No issue, message, state, or external system is changed automatically."
+        }
+      ],
+      "outputContract": {
+        "kind": "engineering-retrospective-record",
+        "requiredSections": [
+          "window",
+          "freshness",
+          "measurements",
+          "interpretations",
+          "limitations",
+          "improvement-actions"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "measured-trends",
+        "retrospective-window",
+        "source-traceability"
+      ],
+      "stopConditions": [
+        "The repository subject or retrospective window is not bounded.",
+        "History is unavailable or stale enough to make the requested conclusion unsafe.",
+        "A conclusion would rank or blame individuals without a valid governance purpose.",
+        "Persistence, network fetch, or an external write has not been explicitly authorized."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    },
+    {
+      "id": "product-discovery",
+      "name": "Product Discovery",
+      "summary": "Turn an uncertain product premise into a bounded, evidence-labelled product brief without inventing demand, users, or implementation scope.",
+      "sourceFiles": [
+        "office-hours/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\bproduct\\s+discovery\\b",
+          "\\bvalidate\\s+(?:the\\s+)?product\\s+(?:idea|premise|demand)\\b",
+          "\\bdefine\\s+(?:the\\s+)?(?:customer|user)\\s+problem\\b",
+          "\\bidentify\\s+(?:the\\s+)?(?:initial|narrowest)\\s+(?:wedge|use case)\\b"
+        ],
+        "forcedTaskModes": []
+      },
+      "allowedTaskModes": [
+        "explain",
+        "research",
+        "plan-only",
+        "review"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "product-strategist",
+      "specialistIds": [
+        "product-strategist"
+      ],
+      "baseCapabilityIds": [
+        "evidence-led-handoff",
+        "product-observability",
+        "workflow-architecture"
+      ],
+      "phases": [
+        {
+          "id": "intent-frame",
+          "objective": "Preserve the raw product goal while identifying the proposed user, problem, outcome, constraints, and explicit non-goals.",
+          "requiredInputs": [
+            "compiled user intent",
+            "explicit constraints",
+            "known user facts"
+          ],
+          "output": "A source-labelled problem frame with unknowns separated from facts.",
+          "decisionGate": "An uncertain solution idea is not promoted into a product requirement."
+        },
+        {
+          "id": "evidence-and-premise",
+          "objective": "Assess observations, status quo, demand signals, risks, and premise weaknesses without fabricating market evidence.",
+          "requiredInputs": [
+            "available product evidence",
+            "current user behavior or workflow evidence"
+          ],
+          "output": "An evidence ledger and disclosed hypotheses.",
+          "decisionGate": "External research requires privacy-safe scope and explicit authorization."
+        },
+        {
+          "id": "opportunity-shape",
+          "objective": "Define the narrowest coherent opportunity and compare two or three bounded approaches with trade-offs.",
+          "requiredInputs": [
+            "problem frame",
+            "evidence ledger"
+          ],
+          "output": "A small alternative set with a recommended default when evidence supports one.",
+          "decisionGate": "Material product choices remain with the user."
+        },
+        {
+          "id": "discovery-brief",
+          "objective": "Produce a testable product brief with outcome, users, requirements, non-goals, success measures, assumptions, and remaining questions.",
+          "requiredInputs": [
+            "selected or unresolved approach",
+            "accepted facts and assumptions"
+          ],
+          "output": "A product-discovery brief suitable for later planning, not implementation.",
+          "decisionGate": "The brief cannot authorize code changes, Git actions, deployment, or external action."
+        }
+      ],
+      "outputContract": {
+        "kind": "product-discovery-brief",
+        "requiredSections": [
+          "problem",
+          "target-users",
+          "evidence",
+          "hypotheses",
+          "alternatives",
+          "success-measures",
+          "non-goals",
+          "open-questions"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "decision-alternatives",
+        "product-discovery-brief",
+        "source-traceability"
+      ],
+      "stopConditions": [
+        "The user, problem, or desired outcome is materially ambiguous after the question budget.",
+        "A product claim would require invented demand or external evidence.",
+        "A material alternative has not been selected or explicitly left open.",
+        "The discovery brief is being treated as implementation authority."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    },
+    {
+      "id": "root-cause-investigation",
+      "name": "Root-Cause Investigation",
+      "summary": "Investigate symptoms through reproducible evidence and testable hypotheses while preserving diagnosis-only and fix-authority boundaries.",
+      "sourceFiles": [
+        "investigate/SKILL.md.tmpl"
+      ],
+      "activation": {
+        "patterns": [
+          "\\broot\\s+cause\\b",
+          "\\binvestigate\\b",
+          "\\bdiagnos(?:e|is|tic)\\b",
+          "\\breproduc(?:e|tion|ible)\\b",
+          "\\bwhy\\s+(?:is|does|did|has)\\b.{0,80}\\b(?:fail|failing|failed|break|broken|error)\\b"
+        ],
+        "forcedTaskModes": [
+          "diagnose-only",
+          "fix"
+        ]
+      },
+      "allowedTaskModes": [
+        "research",
+        "diagnose-only",
+        "implement",
+        "test",
+        "review",
+        "fix"
+      ],
+      "allowedOperatingModeIds": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ],
+      "primarySpecialistId": "root-cause-investigator",
+      "specialistIds": [
+        "root-cause-investigator"
+      ],
+      "baseCapabilityIds": [
+        "codebase-orientation",
+        "evidence-led-handoff",
+        "incident-reliability"
+      ],
+      "phases": [
+        {
+          "id": "symptom-binding",
+          "objective": "Bind the observed symptom, environment, reproduction, affected path, and recent relevant change without editing the candidate.",
+          "requiredInputs": [
+            "observed symptom",
+            "reproduction evidence",
+            "repository and runtime context"
+          ],
+          "output": "A precise symptom record and evidence gaps.",
+          "decisionGate": "A presumed cause is not treated as fact."
+        },
+        {
+          "id": "hypothesis-set",
+          "objective": "Create a small, ranked set of falsifiable hypotheses grounded in the observed code path and evidence.",
+          "requiredInputs": [
+            "symptom record",
+            "execution path evidence",
+            "recent relevant changes"
+          ],
+          "output": "Testable hypotheses with discriminating evidence for each.",
+          "decisionGate": "Untestable or unsupported explanations are discarded or labelled unknown."
+        },
+        {
+          "id": "bounded-tests",
+          "objective": "Run the smallest authorized read-only or test action that can distinguish the leading hypotheses, one evidence step at a time.",
+          "requiredInputs": [
+            "ranked hypotheses",
+            "authorized read and test scope"
+          ],
+          "output": "A hypothesis log recording support, contradiction, and new evidence.",
+          "decisionGate": "After three failed hypothesis cycles, escalate the model instead of random patching."
+        },
+        {
+          "id": "root-cause-conclusion",
+          "objective": "State the supported root cause, confidence, residual unknowns, and a separate minimal fix proposal if the task mode permits remediation.",
+          "requiredInputs": [
+            "hypothesis log",
+            "current task-mode authority"
+          ],
+          "output": "A diagnosis record or a diagnosis plus separately authorized fix plan.",
+          "decisionGate": "Diagnosis-only never becomes a fix; Stage 9 enforces the no-random-fix investigation and remediation boundary."
+        }
+      ],
+      "outputContract": {
+        "kind": "root-cause-investigation-record",
+        "requiredSections": [
+          "symptom",
+          "reproduction",
+          "hypotheses",
+          "tests",
+          "root-cause",
+          "confidence",
+          "residual-unknowns"
+        ]
+      },
+      "requiredEvidenceContractIds": [
+        "hypothesis-log",
+        "reproduction-evidence",
+        "root-cause-evidence"
+      ],
+      "stopConditions": [
+        "The symptom or reproduction cannot be established within the authorized scope.",
+        "Three consecutive hypothesis cycles fail to improve the evidence model.",
+        "The next diagnostic action requires unavailable authority, secrets, or external access.",
+        "A diagnosis-only request is being converted into remediation."
+      ],
+      "questionPolicy": {
+        "owner": "adaptive-context-gate",
+        "maximumPerRound": 3,
+        "materialOnly": true,
+        "recommendedDefaultRequired": true
+      },
+      "authority": {
+        "taskModePreserved": true,
+        "implementationAuthority": "none",
+        "externalActionAuthority": "none",
+        "permissionMode": "inherit-jstack",
+        "providerInvocation": "explicit-authorization-only",
+        "persistence": "none"
+      }
+    }
+  ]
+}

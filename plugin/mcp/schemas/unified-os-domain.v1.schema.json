@@ -1,0 +1,1405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/unified-os-domain.v1.schema.json",
+  "title": "JStack Unified Engineering OS Domain Contracts v1",
+  "description": "Closed, non-authorizing contracts for the ten distinct Stage 2 Unified Engineering OS concepts.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/operatingMode"
+    },
+    {
+      "$ref": "#/$defs/operatingProfile"
+    },
+    {
+      "$ref": "#/$defs/scopeStrategy"
+    },
+    {
+      "$ref": "#/$defs/department"
+    },
+    {
+      "$ref": "#/$defs/specialist"
+    },
+    {
+      "$ref": "#/$defs/canonicalRole"
+    },
+    {
+      "$ref": "#/$defs/capability"
+    },
+    {
+      "$ref": "#/$defs/provider"
+    },
+    {
+      "$ref": "#/$defs/evidenceContract"
+    },
+    {
+      "$ref": "#/$defs/teamPlan"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "identifierList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "nonEmptyIdentifierList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "nonEmptyTextList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      }
+    },
+    "riskClass": {
+      "enum": [
+        "trivial",
+        "normal",
+        "elevated",
+        "high",
+        "production"
+      ]
+    },
+    "operatingModeId": {
+      "enum": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team",
+        "jstack-loop",
+        "jstack-audit",
+        "jstack-evidence-builder"
+      ]
+    },
+    "operatingProfileId": {
+      "enum": [
+        "solo",
+        "professional",
+        "enterprise"
+      ]
+    },
+    "scopeStrategyId": {
+      "enum": [
+        "MINIMAL",
+        "BALANCED",
+        "COMPLETE"
+      ]
+    },
+    "canonicalRoleId": {
+      "enum": [
+        "lead",
+        "architect",
+        "investigator",
+        "builder",
+        "reviewer",
+        "qa",
+        "security",
+        "devops",
+        "product",
+        "quant",
+        "docs"
+      ]
+    },
+    "canonicalRoleIdList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 11,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/canonicalRoleId"
+      }
+    },
+    "effectSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRead",
+        "sourceWrite",
+        "gitRead",
+        "gitWrite",
+        "networkAccess",
+        "browserControl",
+        "deployment",
+        "productionMutation",
+        "externalAction"
+      ],
+      "properties": {
+        "sourceRead": {
+          "type": "boolean"
+        },
+        "sourceWrite": {
+          "type": "boolean"
+        },
+        "gitRead": {
+          "type": "boolean"
+        },
+        "gitWrite": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "type": "boolean"
+        },
+        "browserControl": {
+          "type": "boolean"
+        },
+        "deployment": {
+          "type": "boolean"
+        },
+        "productionMutation": {
+          "type": "boolean"
+        },
+        "externalAction": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceType",
+        "sourceReference",
+        "sourceDigest",
+        "license",
+        "adaptationClass"
+      ],
+      "properties": {
+        "sourceType": {
+          "enum": [
+            "jstack-native",
+            "external-research"
+          ]
+        },
+        "sourceReference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "sourceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "adaptationClass": {
+          "enum": [
+            "NATIVE",
+            "RESEARCHED",
+            "ADAPTED",
+            "WRAPPED",
+            "VENDORED",
+            "FORKED"
+          ]
+        }
+      }
+    },
+    "operatingMode": {
+      "$anchor": "OperatingMode",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "purpose",
+        "physicalAgentPolicy",
+        "specialistSelection",
+        "allowsIndependentCheckEscalation",
+        "readOnlyByDefinition",
+        "authorityEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.operating-mode.v1"
+        },
+        "entityKind": {
+          "const": "operating-mode"
+        },
+        "id": {
+          "$ref": "#/$defs/operatingModeId"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "purpose": {
+          "$ref": "#/$defs/summary"
+        },
+        "physicalAgentPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "topology",
+            "minimum",
+            "default",
+            "maximum"
+          ],
+          "properties": {
+            "topology": {
+              "enum": [
+                "single-lead",
+                "small-specialist-team",
+                "dynamic-complete-team",
+                "orchestration-wrapper",
+                "read-only-audit-team",
+                "evidence-workflow"
+              ]
+            },
+            "minimum": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            "default": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            "maximum": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            }
+          }
+        },
+        "specialistSelection": {
+          "const": "team-composer"
+        },
+        "allowsIndependentCheckEscalation": {
+          "const": true
+        },
+        "readOnlyByDefinition": {
+          "type": "boolean"
+        },
+        "authorityEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "operatingProfile": {
+      "$anchor": "OperatingProfile",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "purpose",
+        "governanceRank",
+        "minimumControlIds",
+        "ceremonyPolicy",
+        "riskFloorPolicy",
+        "authorityEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.operating-profile.v1"
+        },
+        "entityKind": {
+          "const": "operating-profile"
+        },
+        "id": {
+          "$ref": "#/$defs/operatingProfileId"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "purpose": {
+          "$ref": "#/$defs/summary"
+        },
+        "governanceRank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "minimumControlIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "ceremonyPolicy": {
+          "enum": [
+            "minimal-proportional",
+            "professional-default",
+            "comprehensive-governed"
+          ]
+        },
+        "riskFloorPolicy": {
+          "const": "may-strengthen-never-weaken"
+        },
+        "authorityEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "scopeStrategy": {
+      "$anchor": "ScopeStrategy",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "rule",
+        "recommendedContexts",
+        "completionBias",
+        "adjacentCleanupPolicy",
+        "preservesExplicitNonGoals",
+        "broadScopeRequiresExplicitAuthority",
+        "authorityEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.scope-strategy.v1"
+        },
+        "entityKind": {
+          "const": "scope-strategy"
+        },
+        "id": {
+          "$ref": "#/$defs/scopeStrategyId"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "rule": {
+          "$ref": "#/$defs/summary"
+        },
+        "recommendedContexts": {
+          "$ref": "#/$defs/textList"
+        },
+        "completionBias": {
+          "enum": [
+            "smallest-coherent-change",
+            "complete-requested-feature",
+            "complete-approved-surface"
+          ]
+        },
+        "adjacentCleanupPolicy": {
+          "enum": [
+            "prohibited",
+            "required-only",
+            "approved-only"
+          ]
+        },
+        "preservesExplicitNonGoals": {
+          "const": true
+        },
+        "broadScopeRequiresExplicitAuthority": {
+          "const": true
+        },
+        "authorityEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "department": {
+      "$anchor": "Department",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "purpose",
+        "specialistIds",
+        "selectionPolicy",
+        "authorityEffect",
+        "physicalAgentEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.department.v1"
+        },
+        "entityKind": {
+          "const": "department"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "purpose": {
+          "$ref": "#/$defs/summary"
+        },
+        "specialistIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "selectionPolicy": {
+          "const": "dynamic-material-need"
+        },
+        "authorityEffect": {
+          "const": "none"
+        },
+        "physicalAgentEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "specialist": {
+      "$anchor": "Specialist",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "description",
+        "departmentId",
+        "canonicalRoleId",
+        "capabilityIds",
+        "activation",
+        "riskRequirements",
+        "independence",
+        "providerRequirementIds",
+        "sourceProvenance",
+        "physicalAgentBinding",
+        "authorityMode",
+        "permissionOverridesAllowed"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.specialist.v1"
+        },
+        "entityKind": {
+          "const": "specialist"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "description": {
+          "$ref": "#/$defs/summary"
+        },
+        "departmentId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "canonicalRoleId": {
+          "$ref": "#/$defs/canonicalRoleId"
+        },
+        "capabilityIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "activation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "domains",
+            "changedSurfaces",
+            "taskSignals"
+          ],
+          "properties": {
+            "domains": {
+              "$ref": "#/$defs/textList"
+            },
+            "changedSurfaces": {
+              "$ref": "#/$defs/textList"
+            },
+            "taskSignals": {
+              "$ref": "#/$defs/textList"
+            }
+          }
+        },
+        "riskRequirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mandatoryFor",
+            "prohibitedFor"
+          ],
+          "properties": {
+            "mandatoryFor": {
+              "type": "array",
+              "maxItems": 5,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/riskClass"
+              }
+            },
+            "prohibitedFor": {
+              "type": "array",
+              "maxItems": 5,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/riskClass"
+              }
+            }
+          }
+        },
+        "independence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredFor",
+            "mustBeIndependentFromRoles"
+          ],
+          "properties": {
+            "requiredFor": {
+              "$ref": "#/$defs/identifierList"
+            },
+            "mustBeIndependentFromRoles": {
+              "type": "array",
+              "maxItems": 11,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/canonicalRoleId"
+              }
+            }
+          }
+        },
+        "providerRequirementIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "sourceProvenance": {
+          "$ref": "#/$defs/sourceProvenance"
+        },
+        "physicalAgentBinding": {
+          "const": "composer-assigned"
+        },
+        "authorityMode": {
+          "const": "inherit-canonical-role"
+        },
+        "permissionOverridesAllowed": {
+          "const": false
+        }
+      }
+    },
+    "canonicalRole": {
+      "$anchor": "CanonicalRole",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "purpose",
+        "authorityCeiling",
+        "permissionSource",
+        "capabilitiesMayExpandAuthority",
+        "specialistsMayOverrideAuthority"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.canonical-role.v1"
+        },
+        "entityKind": {
+          "const": "canonical-role"
+        },
+        "id": {
+          "$ref": "#/$defs/canonicalRoleId"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "purpose": {
+          "$ref": "#/$defs/summary"
+        },
+        "authorityCeiling": {
+          "$ref": "#/$defs/effectSet"
+        },
+        "permissionSource": {
+          "const": "jstack-policy"
+        },
+        "capabilitiesMayExpandAuthority": {
+          "const": false
+        },
+        "specialistsMayOverrideAuthority": {
+          "const": false
+        }
+      }
+    },
+    "capability": {
+      "$anchor": "Capability",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "summary",
+        "classification",
+        "method",
+        "activationSignals",
+        "allowedRoleIds",
+        "defaultRoleIds",
+        "requiredEvidenceContractIds",
+        "providerRequirementIds",
+        "sourceProvenance",
+        "permissionMode",
+        "authorityEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.capability.v1"
+        },
+        "entityKind": {
+          "const": "capability"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "classification": {
+          "enum": [
+            "jstack-native",
+            "methodology-adaptation",
+            "provider-mediated"
+          ]
+        },
+        "method": {
+          "$ref": "#/$defs/nonEmptyTextList"
+        },
+        "activationSignals": {
+          "$ref": "#/$defs/textList"
+        },
+        "allowedRoleIds": {
+          "$ref": "#/$defs/canonicalRoleIdList"
+        },
+        "defaultRoleIds": {
+          "$ref": "#/$defs/canonicalRoleIdList"
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "providerRequirementIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "sourceProvenance": {
+          "$ref": "#/$defs/sourceProvenance"
+        },
+        "permissionMode": {
+          "const": "inherit-canonical-role"
+        },
+        "authorityEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "provider": {
+      "$anchor": "Provider",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "summary",
+        "providerType",
+        "runtime",
+        "declaredEffects",
+        "requiredAuthorizationScopes",
+        "evidenceContractIds",
+        "statePolicy",
+        "telemetryPolicy",
+        "inputTrust",
+        "orchestrator",
+        "canSelfAuthorize",
+        "authorityEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.provider.v1"
+        },
+        "entityKind": {
+          "const": "provider"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "providerType": {
+          "enum": [
+            "browser",
+            "scanner",
+            "model",
+            "git",
+            "host",
+            "deployment",
+            "device",
+            "artifact",
+            "runtime"
+          ]
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "optional",
+            "dependency",
+            "unavailableBehavior"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "python-stdlib",
+                "optional-node",
+                "optional-bun",
+                "host-native",
+                "mcp",
+                "external-service",
+                "device-runtime"
+              ]
+            },
+            "optional": {
+              "type": "boolean"
+            },
+            "dependency": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "unavailableBehavior": {
+              "enum": [
+                "UNAVAILABLE",
+                "UNSUPPORTED"
+              ]
+            }
+          }
+        },
+        "declaredEffects": {
+          "$ref": "#/$defs/effectSet"
+        },
+        "requiredAuthorizationScopes": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "evidenceContractIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "statePolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "namespace",
+            "persistence",
+            "crossProjectAllowed"
+          ],
+          "properties": {
+            "namespace": {
+              "$ref": "#/$defs/identifier"
+            },
+            "persistence": {
+              "enum": [
+                "none",
+                "ephemeral",
+                "project-bound",
+                "user-bound"
+              ]
+            },
+            "crossProjectAllowed": {
+              "const": false
+            }
+          }
+        },
+        "telemetryPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "metadataOnly",
+            "rawContentAllowed",
+            "silentEgressAllowed"
+          ],
+          "properties": {
+            "metadataOnly": {
+              "const": true
+            },
+            "rawContentAllowed": {
+              "const": false
+            },
+            "silentEgressAllowed": {
+              "const": false
+            }
+          }
+        },
+        "inputTrust": {
+          "const": "data-unless-authorized-instruction"
+        },
+        "orchestrator": {
+          "const": false
+        },
+        "canSelfAuthorize": {
+          "const": false
+        },
+        "authorityEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "evidenceContract": {
+      "$anchor": "EvidenceContract",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "id",
+        "displayName",
+        "evidenceType",
+        "producerKinds",
+        "requiredObservationFields",
+        "subjectBinding",
+        "statusVocabulary",
+        "verification",
+        "passPolicy",
+        "authorizationEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.evidence-contract.v1"
+        },
+        "entityKind": {
+          "const": "evidence-contract"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "displayName": {
+          "$ref": "#/$defs/displayName"
+        },
+        "evidenceType": {
+          "$ref": "#/$defs/identifier"
+        },
+        "producerKinds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "jstack-runtime",
+              "specialist",
+              "provider",
+              "independent-provider",
+              "human-reviewer"
+            ]
+          }
+        },
+        "requiredObservationFields": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "subjectBinding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "project",
+            "candidate",
+            "policy",
+            "provider",
+            "freshness"
+          ],
+          "properties": {
+            "project": {
+              "type": "boolean"
+            },
+            "candidate": {
+              "type": "boolean"
+            },
+            "policy": {
+              "type": "boolean"
+            },
+            "provider": {
+              "type": "boolean"
+            },
+            "freshness": {
+              "type": "boolean"
+            }
+          }
+        },
+        "statusVocabulary": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "observed",
+              "passed",
+              "failed",
+              "incomplete",
+              "unavailable",
+              "unsupported",
+              "review-required",
+              "stale"
+            ]
+          }
+        },
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "verifierType",
+            "verificationRule"
+          ],
+          "properties": {
+            "verifierType": {
+              "enum": [
+                "deterministic",
+                "jstack-policy",
+                "independent-provider",
+                "human",
+                "composite"
+              ]
+            },
+            "verificationRule": {
+              "$ref": "#/$defs/summary"
+            }
+          }
+        },
+        "passPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "completeEvidenceRequired",
+            "truncatedMayPass",
+            "staleMayPass",
+            "failedMayPass",
+            "successMustDiscloseUnproven"
+          ],
+          "properties": {
+            "completeEvidenceRequired": {
+              "const": true
+            },
+            "truncatedMayPass": {
+              "const": false
+            },
+            "staleMayPass": {
+              "const": false
+            },
+            "failedMayPass": {
+              "const": false
+            },
+            "successMustDiscloseUnproven": {
+              "const": true
+            }
+          }
+        },
+        "authorizationEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "teamPlan": {
+      "$anchor": "TeamPlan",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "entityKind",
+        "teamPlanId",
+        "revision",
+        "createdAt",
+        "bindings",
+        "operatingModeId",
+        "operatingProfileId",
+        "scopeStrategyId",
+        "riskClass",
+        "requestedTaskMode",
+        "riskResolution",
+        "requiredDepartmentIds",
+        "selectedSpecialists",
+        "physicalAgents",
+        "independenceRequirements",
+        "requiredEvidenceContractIds",
+        "requiredProviderIds",
+        "omittedDepartments",
+        "omittedSpecialists",
+        "contradictionResolutionOwnerSpecialistId",
+        "selectionSummary",
+        "limits",
+        "permissionInvariant",
+        "evidenceInvariant",
+        "authorityInvariant",
+        "authorityEffect"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "jstack.team-plan.v1"
+        },
+        "entityKind": {
+          "const": "team-plan"
+        },
+        "teamPlanId": {
+          "type": "string",
+          "pattern": "^team-plan-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "bindings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "projectDigest",
+            "repositoryFingerprint",
+            "policyDigest",
+            "promptCompilationDigest",
+            "contextReadinessDigest",
+            "compositionInputDigest"
+          ],
+          "properties": {
+            "projectDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "repositoryFingerprint": {
+              "$ref": "#/$defs/sha256"
+            },
+            "policyDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "promptCompilationDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "contextReadinessDigest": {
+              "$ref": "#/$defs/sha256"
+            },
+            "compositionInputDigest": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "operatingModeId": {
+          "$ref": "#/$defs/operatingModeId"
+        },
+        "operatingProfileId": {
+          "$ref": "#/$defs/operatingProfileId"
+        },
+        "scopeStrategyId": {
+          "$ref": "#/$defs/scopeStrategyId"
+        },
+        "riskClass": {
+          "$ref": "#/$defs/riskClass"
+        },
+        "requestedTaskMode": {
+          "enum": [
+            "explain",
+            "research",
+            "plan-only",
+            "read-only-audit",
+            "diagnose-only",
+            "implement",
+            "test",
+            "review",
+            "fix",
+            "commit",
+            "push",
+          "open-pull-request",
+          "merge",
+          "deploy",
+            "modify-production",
+            "external-action"
+          ]
+        },
+        "riskResolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestedRiskClass",
+            "resolvedRiskClass",
+            "reasons"
+          ],
+          "properties": {
+            "requestedRiskClass": {
+              "$ref": "#/$defs/riskClass"
+            },
+            "resolvedRiskClass": {
+              "$ref": "#/$defs/riskClass"
+            },
+            "reasons": {
+              "$ref": "#/$defs/nonEmptyTextList"
+            }
+          }
+        },
+        "requiredDepartmentIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "selectedSpecialists": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/specialistAssignment"
+          }
+        },
+        "physicalAgents": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/physicalAgentAssignment"
+          }
+        },
+        "independenceRequirements": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/independenceRequirement"
+          }
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "requiredProviderIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "omittedDepartments": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/omittedDepartment"
+          }
+        },
+        "omittedSpecialists": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/omittedSpecialist"
+          }
+        },
+        "contradictionResolutionOwnerSpecialistId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "selectionSummary": {
+          "$ref": "#/$defs/reason"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maximumPhysicalAgents",
+            "maximumSpecialists"
+          ],
+          "properties": {
+            "maximumPhysicalAgents": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            },
+            "maximumSpecialists": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            }
+          }
+        },
+        "permissionInvariant": {
+          "const": "specialists-and-capabilities-inherit-canonical-role-authority"
+        },
+        "evidenceInvariant": {
+          "const": "evidence-and-readiness-never-authorize-side-effects"
+        },
+        "authorityInvariant": {
+          "const": "team-plan-never-grants-tool-or-external-action-authority"
+        },
+        "authorityEffect": {
+          "const": "none"
+        }
+      }
+    },
+    "specialistAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specialistId",
+        "departmentId",
+        "canonicalRoleId",
+        "capabilityIds",
+        "physicalAgentId",
+        "readScopes",
+        "writeScopes",
+        "evidenceContractIds",
+        "providerRequirementIds",
+        "selectionReason"
+      ],
+      "properties": {
+        "specialistId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "departmentId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "canonicalRoleId": {
+          "$ref": "#/$defs/canonicalRoleId"
+        },
+        "capabilityIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "physicalAgentId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "readScopes": {
+          "$ref": "#/$defs/textList"
+        },
+        "writeScopes": {
+          "$ref": "#/$defs/textList"
+        },
+        "evidenceContractIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "providerRequirementIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "selectionReason": {
+          "$ref": "#/$defs/reason"
+        }
+      }
+    },
+    "physicalAgentAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "physicalAgentId",
+        "specialistIds",
+        "canonicalRoleIds",
+        "independentFromPhysicalAgentIds",
+        "assignmentReason"
+      ],
+      "properties": {
+        "physicalAgentId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "specialistIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "canonicalRoleIds": {
+          "$ref": "#/$defs/canonicalRoleIdList"
+        },
+        "independentFromPhysicalAgentIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "assignmentReason": {
+          "$ref": "#/$defs/reason"
+        }
+      }
+    },
+    "independenceRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "subjectSpecialistId",
+        "independentFromSpecialistIds",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "subjectSpecialistId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "independentFromSpecialistIds": {
+          "$ref": "#/$defs/nonEmptyIdentifierList"
+        },
+        "reason": {
+          "$ref": "#/$defs/reason"
+        }
+      }
+    },
+    "omittedDepartment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "departmentId",
+        "reason"
+      ],
+      "properties": {
+        "departmentId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reason": {
+          "$ref": "#/$defs/reason"
+        }
+      }
+    },
+    "omittedSpecialist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "specialistId",
+        "reason"
+      ],
+      "properties": {
+        "specialistId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reason": {
+          "$ref": "#/$defs/reason"
+        }
+      }
+    }
+  }
+}

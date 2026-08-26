@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/upstream-provenance.v1.schema.json",
+  "title": "JStack Immutable Upstream Provenance v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "manifestVersion",
+    "source",
+    "sourceInventory",
+    "sourceInventoryDigest",
+    "records",
+    "syncMetadata",
+    "manifestDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.upstream.provenance.v1"
+    },
+    "manifestVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "sourceInventory": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "$ref": "#/$defs/fileRecord"
+      }
+    },
+    "sourceInventoryDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/provenanceRecord"
+      }
+    },
+    "syncMetadata": {
+      "$ref": "#/$defs/manifestSync"
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\\\u0000-\\u001f]+$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "tree",
+        "version",
+        "license",
+        "licenseFile",
+        "licenseSha256"
+      ],
+      "properties": {
+        "repository": {
+          "const": "https://github.com/garrytan/gstack.git"
+        },
+        "commit": {
+          "const": "ad8400543cd9ce8d07641362db48d44a95417e33"
+        },
+        "tree": {
+          "const": "993294b0a09f5265d2d5af6d2fb8234ae2efe450"
+        },
+        "version": {
+          "const": "1.69.0.0"
+        },
+        "license": {
+          "const": "MIT"
+        },
+        "licenseFile": {
+          "const": "LICENSE"
+        },
+        "licenseSha256": {
+          "const": "e56fbb5b3d95756f3fa1cfefa24732ec79f18ece1ad08a4e79e00df57e8b198c"
+        }
+      }
+    },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "sizeBytes"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777216
+        }
+      }
+    },
+    "provenanceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "purpose",
+        "adaptationType",
+        "disposition",
+        "sourceFiles",
+        "sourceDigest",
+        "localTargets",
+        "syncMetadata",
+        "recordDigest"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "adaptationType": {
+          "enum": [
+            "RESEARCHED",
+            "ADAPTED",
+            "WRAPPED",
+            "VENDORED",
+            "FORKED"
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D",
+            "MIXED"
+          ]
+        },
+        "sourceFiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "sourceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "localTargets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/fileRecord"
+          }
+        },
+        "syncMetadata": {
+          "$ref": "#/$defs/recordSync"
+        },
+        "recordDigest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "recordSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reviewedAt",
+        "sourceCommit",
+        "note"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "current",
+            "deferred",
+            "rejected",
+            "stale"
+          ]
+        },
+        "reviewedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sourceCommit": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "manifestSync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reviewedAt",
+        "sourceCommit",
+        "generatorVersion",
+        "planDigest",
+        "generatedBy"
+      ],
+      "properties": {
+        "status": {
+          "const": "current"
+        },
+        "reviewedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "sourceCommit": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "generatorVersion": {
+          "const": "1.0.0"
+        },
+        "planDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "generatedBy": {
+          "const": "scripts/build_gstack_provenance.py"
+        }
+      }
+    }
+  }
+}

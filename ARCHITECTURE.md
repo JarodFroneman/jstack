@@ -112,7 +112,7 @@ it validates scoring protocol behavior and is not represented as a
 repository-level host benchmark.
 
 `scripts/check_product_boundaries.py` proves that the product has the
-six named commands, 59 canonical MCP tools, the frozen 52 compatibility aliases, 11
+six named commands, 60 canonical MCP tools, the frozen 52 compatibility aliases, 11
 roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
 standard-library core. It also rejects vendor SDKs, network-capable core
 imports, packaged `evals/` content, model or scanner execution in the Proof
@@ -230,6 +230,76 @@ The Lead may record an evidence-referenced resolution, but cannot bypass a
 missing role, invalid signature, stale project state, or failed specialist
 result. These receipts attest structural validation and binding, not semantic
 truth or release authority.
+
+## Methodology Capability Protocol
+
+Stage 8 keeps gstack-derived methods in a separate
+`jstack.methodology-capability.catalog.v1` because the existing 18-pack base
+capability registry is pinned to a different immutable source. Seven original
+JStack records cover product discovery, CEO/product review, engineering-plan
+review, design-plan review, developer-experience review, root-cause
+investigation, and engineering retrospective. The records contain bounded
+phases, output sections, evidence, stops, specialist bindings, and constant
+non-authority rules—not executable upstream prompts.
+
+The deterministic selector consumes the normalized goal, preserved task mode,
+and existing operating mode. It feeds required specialists and evidence into
+Team Composer, so there is still one task router and one authority model. The
+signed Team Plan receipt binds the methodology catalog and selection digests;
+dispatch rejects catalog, goal, task-mode, operating-mode, or plan drift. An
+empty selection is valid. Methods cannot invoke providers, persist state,
+grant writes, or authorize Git, release, deployment, production, or external
+actions. Loop, Audit, and Evidence Builder remain separate workflows.
+
+## Root-Cause Investigation Protocol
+
+Stage 9 enforces the specification's `NO FIX WITHOUT SUFFICIENT INVESTIGATION`
+discipline without adding another router or command. Every `fix` selects the
+existing Root-Cause Investigation methodology. For a mutating selected plan,
+`jstack_dispatch_check` rejects standard dispatch and exposes two bounded
+phases: a read-only `investigation` slice containing only the investigator,
+then a `remediation` slice that requires the exact passing investigator receipt
+for the unchanged candidate and restores only the original Team Plan scopes.
+
+The investigator submits a closed `jstack.investigation.v1` contract through
+`jstack_specialist_result`. Deterministic validation requires observed
+behavior, reproduction state, execution traces, distinct falsifiable
+hypotheses, falsification evidence, and either an established root cause or an
+explicit unresolved stop. Three consecutive unsuccessful attempts require a
+revised trace bound to all three attempts and `hypothesis-limit`; a fourth
+attempt is rejected. Receipts retain only digest/count certification metadata,
+never raw prompts, source or evidence content, command/model output, secrets,
+or hidden reasoning. Diagnosis-only work and unresolved evidence never gain
+write authority. See
+[`ROOT_CAUSE_INVESTIGATION.md`](docs/integration/gstack/ROOT_CAUSE_INVESTIGATION.md)
+and [ADR 0045](docs/adr/0045-root-cause-investigation-gate.md).
+
+## Product / Design Department
+
+Stage 10 reuses the existing Product Interface authority plane, Stage 8
+product/design methods, specialist directory, and Evidence Builder. The pure
+`mcp/jstack/ui/design.py` validator normalizes one directed selection or two to
+three bounded alternatives with source traceability and explicit human
+selection. It retains only an approval digest, rejects unapproved established-
+system replacement or mismatched reference prototypes, and hard-codes no
+implementation, provider, candidate-mutation, or production authority.
+
+`jstack_ui_contract` remains the only UI contract entry point. Existing v1/v2
+contracts remain unchanged; additive v3/v4 successors bind the selected design
+decision, with v4 also binding a finalized reference bundle. The host must
+display material alternatives and wait for selection before separately
+authorized implementation. The MCP validates the selection but cannot
+intercept arbitrary host-native edits or prove the human's identity. See
+[`PRODUCT_DESIGN_DEPARTMENT.md`](docs/integration/gstack/PRODUCT_DESIGN_DEPARTMENT.md)
+and [ADR 0042](docs/adr/0042-product-design-integration.md).
+
+The staged Unified Engineering OS documentation is consolidated in
+[`docs/integration/gstack/README.md`](docs/integration/gstack/README.md). That
+index binds the immutable baseline, organization and specialist model, Team
+Composer, profiles, providers, security, upstream synchronization, migration,
+and release-readiness boundaries without creating a second authority plane.
+The Stage 19 empirical protocol remains `NOT_MEASURED`; architecture and test
+completion are not represented as comparative performance evidence.
 
 ## Launch Assurance Protocol
 

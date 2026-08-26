@@ -65,19 +65,27 @@ ADDITIVE_CANONICAL_TOOLS = {
     "jstack_ui_motion_spec",
     "jstack_ui_motion_finalize",
     "jstack_prompt_compile",
+    "jstack_browser_capture",
 }
 CONTRACT_FIXTURE = ROOT / "tests" / "fixtures" / "contracts" / "v0.10.0-alpha.9.json"
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 59
+LIVE_CANONICAL_TOOL_COUNT = 60
 CORE_LOCAL_IMPORTS = {
     "audit",
     "capabilities",
     "context_readiness",
+    "hosts",
+    "investigation",
     "launch",
     "loop",
+    "methodologies",
+    "organization",
+    "orchestration",
     "program",
     "prompt_compiler",
+    "providers",
+    "release",
     "ui",
 }
 CORE_STDLIB_IMPORTS = {
@@ -117,6 +125,8 @@ CORE_STDLIB_IMPORTS = {
 NETWORK_IMPORTS = {"aiohttp", "ftplib", "http", "httpx", "requests", "smtplib", "socket", "urllib3"}
 VENDOR_IMPORTS = {"anthropic", "azure", "boto3", "github", "gitlab", "google", "openai", "semgrep", "snyk", "trivy"}
 PROOF_MAINTAINER_ROOT = ROOT / "tools" / "proof_plane"
+DEVELOPMENT_EVALUATION_ROOTS = (ROOT / "evals", ROOT / "unified_os_evals")
+EVALUATION_PATH_PARTS = {"evals", "unified_os_evals"}
 
 
 def _load_module(name: str, path: Path) -> Any:
@@ -145,28 +155,29 @@ def _absolute_import_roots(root: Path) -> set[str]:
 
 def _evals_forbidden_actions() -> list[str]:
     errors: list[str] = []
-    for path in (ROOT / "evals").rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                module = ""
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        root = alias.name.split(".", 1)[0]
-                        if root in NETWORK_IMPORTS | VENDOR_IMPORTS | {"subprocess"}:
-                            errors.append("Proof Plane imports forbidden execution/network module %s in %s" % (root, path.relative_to(ROOT)))
-                elif node.level == 0 and node.module:
-                    module = node.module.split(".", 1)[0]
-                    if module in NETWORK_IMPORTS | VENDOR_IMPORTS | {"subprocess"}:
-                        errors.append("Proof Plane imports forbidden execution/network module %s in %s" % (module, path.relative_to(ROOT)))
-            if isinstance(node, ast.Call):
-                function = node.func
-                if isinstance(function, ast.Attribute) and function.attr in {"write_bytes", "write_text", "unlink", "rename", "mkdir", "rmdir"}:
-                    errors.append("Proof Plane contains a filesystem mutation call %s in %s" % (function.attr, path.relative_to(ROOT)))
-                if isinstance(function, ast.Name) and function.id == "open" and len(node.args) >= 2:
-                    mode = node.args[1]
-                    if isinstance(mode, ast.Constant) and isinstance(mode.value, str) and any(flag in mode.value for flag in "wax+"):
-                        errors.append("Proof Plane opens a writable file in %s" % path.relative_to(ROOT))
+    for evaluation_root in DEVELOPMENT_EVALUATION_ROOTS:
+        for path in evaluation_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    module = ""
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            root = alias.name.split(".", 1)[0]
+                            if root in NETWORK_IMPORTS | VENDOR_IMPORTS | {"subprocess"}:
+                                errors.append("Proof Plane imports forbidden execution/network module %s in %s" % (root, path.relative_to(ROOT)))
+                    elif node.level == 0 and node.module:
+                        module = node.module.split(".", 1)[0]
+                        if module in NETWORK_IMPORTS | VENDOR_IMPORTS | {"subprocess"}:
+                            errors.append("Proof Plane imports forbidden execution/network module %s in %s" % (module, path.relative_to(ROOT)))
+                if isinstance(node, ast.Call):
+                    function = node.func
+                    if isinstance(function, ast.Attribute) and function.attr in {"write_bytes", "write_text", "unlink", "rename", "mkdir", "rmdir"}:
+                        errors.append("Proof Plane contains a filesystem mutation call %s in %s" % (function.attr, path.relative_to(ROOT)))
+                    if isinstance(function, ast.Name) and function.id == "open" and len(node.args) >= 2:
+                        mode = node.args[1]
+                        if isinstance(mode, ast.Constant) and isinstance(mode.value, str) and any(flag in mode.value for flag in "wax+"):
+                            errors.append("Proof Plane opens a writable file in %s" % path.relative_to(ROOT))
     return errors
 
 
@@ -192,7 +203,7 @@ def check_boundaries() -> list[str]:
         errors.append("frozen legacy MCP alias snapshot must remain at 52 tools")
     if len(canonical) != LIVE_CANONICAL_TOOL_COUNT or canonical != expected_canonical:
         errors.append(
-            "canonical MCP tool inventory must be the frozen 52 plus exactly five Product Interface tools and the Prompt Compiler"
+            "canonical MCP tool inventory must be the frozen 52 plus exactly eight canonical-only JStack additions"
         )
     if len(aliases) != FROZEN_ALIAS_COUNT or aliases != frozen_aliases:
         errors.append("legacy MCP alias inventory must remain the exact frozen 52")
@@ -235,15 +246,19 @@ def check_boundaries() -> list[str]:
 
     sync = _load_module("jstack_boundary_sync", ROOT / "scripts" / "sync_artifacts.py")
     managed_paths = [*sync.FILE_MAP.keys(), *(target for targets in sync.FILE_MAP.values() for target in targets)]
-    if any("evals" in path.parts for path in managed_paths):
+    if any(EVALUATION_PATH_PARTS & set(path.parts) for path in managed_paths):
         errors.append("Proof Plane files must not be synchronized into installed artifacts")
-    if any("evals" in source.parts or "evals" in target.parts for source, target in sync.TREE_MIRRORS):
+    if any(
+        EVALUATION_PATH_PARTS & set(source.parts)
+        or EVALUATION_PATH_PARTS & set(target.parts)
+        for source, target in sync.TREE_MIRRORS
+    ):
         errors.append("Proof Plane trees must not be mirrored into installed artifacts")
-    if any("evals" in path.parts for path in (ROOT / "plugin").rglob("*")):
+    if any(EVALUATION_PATH_PARTS & set(path.parts) for path in (ROOT / "plugin").rglob("*")):
         errors.append("umbrella plugin must not package the Proof Plane")
-    if any("evals" in path.parts for path in (ROOT / "plugins").rglob("*")):
+    if any(EVALUATION_PATH_PARTS & set(path.parts) for path in (ROOT / "plugins").rglob("*")):
         errors.append("dedicated plugins must not package the Proof Plane")
-    if "evals" in imports:
+    if imports & EVALUATION_PATH_PARTS:
         errors.append("installed MCP must not import the Proof Plane")
     if not PROOF_MAINTAINER_ROOT.is_dir():
         errors.append("maintainer-only Proof Plane tooling is missing")
@@ -270,7 +285,7 @@ def main() -> int:
         sys.stderr.write("\n".join(errors) + "\n")
         return 1
     print(
-        "JStack product boundaries are intact: six commands, 59 canonical tools, "
+        "JStack product boundaries are intact: six commands, 60 canonical tools, "
         "52 frozen aliases, stdlib core, no packaged Proof Plane authority."
     )
     return 0

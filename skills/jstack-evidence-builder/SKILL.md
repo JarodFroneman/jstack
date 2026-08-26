@@ -87,7 +87,11 @@ Follow [prototype-workflow.md](references/prototype-workflow.md).
    bytes unless the user separately asks to inspect their own local file.
 4. For a later UI implementation, pass the current
    `referenceFinalizationReceipt` to `jstack_ui_contract` as
-   `reference_bundle_receipt`. It only binds design input into the UI contract.
+   `reference_bundle_receipt`. When Product and Design Intelligence produced
+   alternatives, the Product UI workflow must also present them for human
+   selection and may bind the selected `design_decision`; the reference's
+   `selectedPrototypeId` must match. These fields only bind design input into
+   the UI contract and do not authorize implementation.
 5. Never use the reference receipt as `ui_contract_receipt`, `ui_receipt`, QA,
    security, launch, release, deployment, or approval evidence.
 

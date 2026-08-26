@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/unified-os-evals/schemas/result.v1.schema.json",
+  "title": "JStack Unified OS Evaluation Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "planDigest", "runId", "pairId", "taskClass", "condition", "repetition", "status", "metrics", "evidenceDigest", "rawContentStored", "externalActionObserved"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.unified-os-eval-result.v1"},
+    "planDigest": {"$ref": "#/$defs/sha256"},
+    "runId": {"type": "string", "minLength": 1, "maxLength": 200},
+    "pairId": {"type": "string", "minLength": 1, "maxLength": 200},
+    "taskClass": {"type": "string", "minLength": 1, "maxLength": 100},
+    "condition": {"enum": ["base-agent", "gstack", "jstack-baseline", "combined-jstack"]},
+    "repetition": {"type": "integer", "minimum": 1, "maximum": 20},
+    "status": {"enum": ["completed", "failed", "blocked", "timed-out"]},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["browserQaValue", "candidateCodeModified", "completion", "deploymentObserved", "developerExperience", "escapedDefects", "evidenceCompleteness", "falsePositives", "gitMutationObserved", "humanInterventions", "latencyMs", "regressions", "repeatable", "scopeDriftFiles", "tokens", "unauthorizedActions"],
+      "properties": {
+        "browserQaValue": {"$ref": "#/$defs/countOrUnknown"},
+        "candidateCodeModified": {"$ref": "#/$defs/boolOrUnknown"},
+        "completion": {"$ref": "#/$defs/boolOrUnknown"},
+        "deploymentObserved": {"$ref": "#/$defs/boolOrUnknown"},
+        "developerExperience": {"oneOf": [{"type": "number", "minimum": 1, "maximum": 5}, {"const": "NOT_MEASURED"}]},
+        "escapedDefects": {"$ref": "#/$defs/countOrUnknown"},
+        "evidenceCompleteness": {"oneOf": [{"type": "number", "minimum": 0, "maximum": 1}, {"const": "NOT_MEASURED"}]},
+        "falsePositives": {"$ref": "#/$defs/countOrUnknown"},
+        "gitMutationObserved": {"$ref": "#/$defs/boolOrUnknown"},
+        "humanInterventions": {"$ref": "#/$defs/countOrUnknown"},
+        "latencyMs": {"oneOf": [{"type": "number", "minimum": 0}, {"const": "NOT_MEASURED"}]},
+        "regressions": {"$ref": "#/$defs/countOrUnknown"},
+        "repeatable": {"$ref": "#/$defs/boolOrUnknown"},
+        "scopeDriftFiles": {"$ref": "#/$defs/countOrUnknown"},
+        "tokens": {"$ref": "#/$defs/countOrUnknown"},
+        "unauthorizedActions": {"$ref": "#/$defs/countOrUnknown"}
+      }
+    },
+    "evidenceDigest": {"$ref": "#/$defs/sha256"},
+    "rawContentStored": {"const": false},
+    "externalActionObserved": {"type": "boolean"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "countOrUnknown": {"oneOf": [{"type": "integer", "minimum": 0}, {"const": "NOT_MEASURED"}]},
+    "boolOrUnknown": {"oneOf": [{"type": "boolean"}, {"const": "NOT_MEASURED"}]}
+  }
+}

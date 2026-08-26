@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/investigation-contract.v1.schema.json",
+  "title": "JStack Evidence-Led Root-Cause Investigation Contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authorityEffect",
+    "executionTraces",
+    "hiddenReasoningStored",
+    "hypothesisAttempts",
+    "observedBehavior",
+    "problem",
+    "rawContentStored",
+    "remediationAttempted",
+    "reproduction",
+    "rootCause",
+    "schemaVersion",
+    "status",
+    "stopReason"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "jstack.investigation.v1" },
+    "status": { "enum": ["established", "unresolved"] },
+    "problem": { "$ref": "#/$defs/evidenceRecord" },
+    "observedBehavior": { "$ref": "#/$defs/evidenceRecord" },
+    "reproduction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary", "evidenceReferences"],
+      "properties": {
+        "status": { "enum": ["intermittent", "not-reproduced", "reproduced"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "evidenceReferences": { "$ref": "#/$defs/evidenceReferences" }
+      }
+    },
+    "executionTraces": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceReferences",
+          "revision",
+          "summary",
+          "triggeredByFailedAttemptIds"
+        ],
+        "properties": {
+          "revision": { "type": "integer", "minimum": 1, "maximum": 8 },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "evidenceReferences": { "$ref": "#/$defs/evidenceReferences" },
+          "triggeredByFailedAttemptIds": {
+            "type": "array",
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/identifier" }
+          }
+        }
+      }
+    },
+    "hypothesisAttempts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "attemptId",
+          "evidenceReferences",
+          "expectedDiscriminator",
+          "falsificationTest",
+          "hypothesis",
+          "result",
+          "sequence",
+          "sourceMutationAttempted",
+          "traceRevision"
+        ],
+        "properties": {
+          "attemptId": { "$ref": "#/$defs/identifier" },
+          "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "hypothesis": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "traceRevision": { "type": "integer", "minimum": 1, "maximum": 8 },
+          "falsificationTest": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "expectedDiscriminator": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "result": { "enum": ["falsified", "inconclusive", "supported"] },
+          "evidenceReferences": { "$ref": "#/$defs/evidenceReferences" },
+          "sourceMutationAttempted": { "const": false }
+        }
+      }
+    },
+    "rootCause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "evidenceReferences",
+        "residualUnknowns",
+        "status",
+        "summary",
+        "supportingAttemptId"
+      ],
+      "properties": {
+        "status": { "enum": ["established", "unresolved"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "supportingAttemptId": {
+          "oneOf": [
+            { "$ref": "#/$defs/identifier" },
+            { "type": "null" }
+          ]
+        },
+        "confidence": { "enum": ["high", "low", "medium"] },
+        "evidenceReferences": { "$ref": "#/$defs/evidenceReferences" },
+        "residualUnknowns": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        }
+      }
+    },
+    "stopReason": {
+      "enum": [
+        "authority-required",
+        "evidence-insufficient",
+        "hypothesis-limit",
+        "reproduction-unavailable",
+        "root-cause-established"
+      ]
+    },
+    "remediationAttempted": { "const": false },
+    "rawContentStored": { "const": false },
+    "hiddenReasoningStored": { "const": false },
+    "authorityEffect": { "const": "none" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "evidenceReferences": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+    },
+    "evidenceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "evidenceReferences"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "evidenceReferences": { "$ref": "#/$defs/evidenceReferences" }
+      }
+    }
+  }
+}

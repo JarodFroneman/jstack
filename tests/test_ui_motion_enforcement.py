@@ -486,7 +486,7 @@ class MotionEnforcementTests(unittest.TestCase):
         self.assertFalse(
             definitions["jstack_ui_motion_finalize"]["annotations"]["readOnlyHint"]
         )
-        self.assertEqual(59, len(definitions))
+        self.assertEqual(60, len(definitions))
         self.assertEqual(
             52, len([name for name in server.TOOLS if name.startswith("gstack_")])
         )

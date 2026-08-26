@@ -12,15 +12,14 @@ Treat this command as explicit user approval to deploy subagents when multi-agen
 Default behavior:
 
 1. Keep the Lead Engineer accountable for scope, synthesis, implementation decisions, verification, and handoff.
-2. Deploy the right specialist team for the task, normally two or three specialists.
-3. Use Code Investigator plus Reviewer for normal feature or bug work.
-4. Add QA Engineer when verification risk is meaningful.
-5. Use Architect for architecture, API, database, or integration-sensitive work.
-6. Use Product / UX Reviewer for UI and product work.
-7. Use Security Engineer for security or compliance work.
-8. Use DevOps / Release Engineer for production, deploy, and release work.
-9. Use Quant / Backtest Reviewer for trading, EA, quant, or backtest work.
-10. Specialists are read-only by default. Only assign edits to a Builder with a disjoint write scope.
+2. Deploy the Team Composer's smallest competent logical specialist set,
+   normally mapped to two or three physical specialist agents.
+3. Permit a fourth physical agent only when a mandatory risk floor requires
+   independence; never drop expertise or collapse independence to fit a budget.
+4. Keep specialists read-only except the one exact Team Plan writer with a
+   source-labelled bounded scope.
+5. Treat specialist titles, capabilities, plans, and receipts as
+   non-authorizing views of stable canonical roles.
 
 Before repository inspection, durable-memory reads, planning, or
 side-effecting tools, call
@@ -28,37 +27,59 @@ side-effecting tools, call
 raw_request=exact_user_request)`. Preserve the exact Stage A contract and
 receipt; they grant no execution authority or additional staffing authority.
 
-Before dispatch, require a coordination packet:
+Before dispatch, require the exact signed `unifiedTeamPlan` and returned
+`jstack.team-coordination.v2` packet. They bind the physical agents, logical
+specialists, canonical roles, scopes, independence, evidence, and stop rules.
 
-- `goal`
-- `riskClass` array
-- `mode: smart-subagents`
-- `rolesUsed` and `rolesNotUsed`
-- `readWritePermissions` and `fileOwnershipMap`
-- actual `capabilityPlan` and exact per-role `capabilityIds`
-- `evidenceContract`, `conflictRule`, and `stopConditions`
-- `verificationGate` and `handoffGate`
-
-After the approved Prompt Compiler gate below, pass the actual packet object to
-`jstack_dispatch_check`; a boolean packet claim is invalid. Use `jstack_plan` with
+After the approved Prompt Compiler gate below, pass the complete returned
+`team` object and exact `dynamicCoordinationPacket` to
+`jstack_dispatch_check`; a boolean, altered, or regenerated packet is invalid.
+Use `jstack_plan` with
 `team_mode="smart-subagents"`, the current `context_readiness_receipt`, and
 its matching `normalizedBrief` as `context_brief`, plus the resolved learning
 mode: explicit `off`, `coach`, or `assessment`, otherwise `embedded`. Pass the
 same receipt and brief to `jstack_team_plan`.
-The MCP plans and validates; platform multi-agent tools perform actual
-dispatch, collection, and closure.
+Proceed only when `executionSource="team-composer"` and
+`dispatchEligible=true`. A blocked, shadow, or preview-only plan stops; never
+fall back silently. The legacy `agents` array is not the active roster. The MCP
+plans and validates; platform multi-agent tools perform actual dispatch,
+collection, and closure.
 
-Dispatch each specialist with only the capability subset returned for its core
-role. Capability packs add methods, evidence requirements, stop conditions,
-audit domains, and loop controls; they never grant tools, writes, delegation,
-approvals, or release authority. Each routed role, including the Lead, returns
-a `jstack.specialist.result.v1` object and metadata-only
-`jstack.specialist.telemetry.v1`. The Lead calls `jstack_specialist_result` for
-each exact role/capability assignment and calls
-`jstack_specialist_handoff_check` before completion, passing the routed
-capability plan's exact `selectionDigest` as `capability_selection_digest` to
-both tools. The digest is mandatory when ordinary and Product Interface
-routing share a role roster. Raw prompts, messages,
+Read the receipt-bound `methodologyPlan` before dispatch. Apply only selected
+JStack-native methodology records and pass their phases, output contracts,
+evidence, and stop conditions to the mapped logical specialists. An empty
+selection is valid. Never run upstream gstack skills or prompt templates
+directly. Methodologies inherit task mode, scope, canonical-role permissions,
+and normal provider controls; they grant no new authority or persistence.
+
+When `root-cause-investigation` is selected, sequence it before any writer.
+For `fix` or an investigation-selected `implement`, call
+`jstack_dispatch_check(dispatch_phase="investigation")` and dispatch only the
+returned read-only `executionSlice`; no source edit is allowed. The exact
+root-cause assignment returns `jstack.investigation.v1` through
+`jstack_specialist_result`. Three consecutive falsified or inconclusive
+hypotheses require a later revised execution trace, genuinely changed
+hypotheses, explicit unresolved state, and a stop; a fourth random patch or
+hypothesis is invalid. Call
+`jstack_dispatch_check(dispatch_phase="remediation",
+investigation_receipt=...)` only for an established cause on the unchanged
+candidate, then dispatch only the returned remediation slice under the
+original Team Plan scope. `diagnose-only`, unresolved evidence, staffing
+approval, and a receipt do not grant fix authority.
+
+Dispatch physical agents exactly as mapped and give each only its logical
+specialist assignments. Capabilities add methods, evidence requirements, stop
+conditions, audit domains, and loop controls; they never grant tools, writes,
+delegation, approvals, or release authority. Each logical specialist returns a
+`jstack.specialist.result.v1` object and metadata-only
+`jstack.specialist.telemetry.v1`. The Lead calls `jstack_specialist_result`
+with the exact Team Plan receipt, specialist ID, physical-agent ID, canonical
+role, capability IDs, and scope for every `dynamicReceiptAssignments` entry,
+and the exact `root-cause-investigator` call also carries its in-memory
+`investigation_contract`; the signed receipt retains only its digest-only
+certification. The Lead then calls `jstack_specialist_handoff_check` with the
+same receipt and ordered
+role/capability projection. Raw prompts, messages,
 tool arguments, command/model output, source contents, and secrets are
 forbidden in telemetry. Missing, stale, partial, conflicting, permission-unsafe,
 or capability-drifted receipts block handoff; contradictions need an explicit
@@ -91,17 +112,19 @@ constraints, or non-goals restart Stage A; other revisions require a new Stage
 B preview. After approval, repeat Stage B with the exact internal
 `promptPreviewReceipt` and approval bound to the displayed prompt digest.
 Never infer approval or ask the user to handle receipt values. Use only the
-approved response's receipts downstream.
+approved response's receipts downstream. For `implement` or `fix`, include a
+source-labelled `authorized_write_scopes` context fact containing a bounded
+repository-relative path or JSON string array derived from inspection. It
+constrains one writer and grants no action authority.
 
-The Lead may implement. If a specialist edits implementation, it must be the
-Builder with an explicit disjoint scope. If more than three specialists are
-required, stop and recommend `/jstack-full-team`.
+The one Team Plan writer may implement only in its exact scope. If mandatory
+independence exceeds this mode's physical-agent limit, stop and recommend
+`/jstack-full-team`; never omit a required logical specialist.
 
-When an active JStack loop supplies a `loopId`, keep
-`team_mode="smart-subagents"` fixed for that contract and execute only the
-current iteration. Pass the current validated `specialist_handoff_receipt` to
-every checkpoint and finalization; the loop owns convergence and terminal
-status.
+`/jstack-loop` remains a separate persistent orchestration workflow. For an
+active loop, obey its frozen delivery-mode and capability contract; do not
+inject a dynamic Team Plan or v2 handoff receipt into persisted Loop state
+unless that Loop response explicitly exposes the matching versioned binding.
 
 No two editing agents may own the same file or module. If scope cannot be split
 cleanly, use one Builder. The Lead Engineer resolves conflicts using evidence,

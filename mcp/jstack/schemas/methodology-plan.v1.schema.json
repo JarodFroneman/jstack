@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.local/schemas/methodology-plan.v1.schema.json",
+  "title": "JStack Methodology Selection Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "catalogVersion",
+    "catalogDigest",
+    "selectionDigest",
+    "goalDigest",
+    "requestedTaskMode",
+    "operatingModeId",
+    "selectedMethodologyIds",
+    "assignments",
+    "requiredSpecialistIds",
+    "requiredBaseCapabilityIds",
+    "requiredEvidenceContractIds",
+    "stopConditions",
+    "permissionInvariant",
+    "evidenceInvariant",
+    "authorityEffect"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "jstack.methodology-plan.v1"
+    },
+    "catalogVersion": {
+      "const": "1.0.0"
+    },
+    "catalogDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "selectionDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "goalDigest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "requestedTaskMode": {
+      "$ref": "#/$defs/taskMode"
+    },
+    "operatingModeId": {
+      "$ref": "#/$defs/operatingMode"
+    },
+    "selectedMethodologyIds": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "assignments": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    },
+    "requiredSpecialistIds": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "requiredBaseCapabilityIds": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "requiredEvidenceContractIds": {
+      "$ref": "#/$defs/identifierList"
+    },
+    "stopConditions": {
+      "$ref": "#/$defs/textList"
+    },
+    "permissionInvariant": {
+      "const": "methodologies-inherit-jstack-role-and-task-mode-authority"
+    },
+    "evidenceInvariant": {
+      "const": "methodology-output-is-evidence-not-action-authorization"
+    },
+    "authorityEffect": {
+      "const": "none"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "maxLength": 100
+    },
+    "boundedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "identifierList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/boundedText"
+      }
+    },
+    "taskMode": {
+      "enum": [
+        "explain",
+        "research",
+        "plan-only",
+        "read-only-audit",
+        "diagnose-only",
+        "implement",
+        "test",
+        "review",
+        "fix",
+        "commit",
+        "push",
+        "open-pull-request",
+        "merge",
+        "deploy",
+        "modify-production",
+        "external-action"
+      ]
+    },
+    "operatingMode": {
+      "enum": [
+        "j-stack-dev",
+        "jstack-subagents",
+        "jstack-full-team"
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "objective",
+        "requiredInputs",
+        "output",
+        "decisionGate"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "objective": {
+          "$ref": "#/$defs/boundedText"
+        },
+        "requiredInputs": {
+          "$ref": "#/$defs/textList"
+        },
+        "output": {
+          "$ref": "#/$defs/boundedText"
+        },
+        "decisionGate": {
+          "$ref": "#/$defs/boundedText"
+        }
+      }
+    },
+    "outputContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "requiredSections"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/identifier"
+        },
+        "requiredSections": {
+          "$ref": "#/$defs/identifierList"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskModePreserved",
+        "implementationAuthority",
+        "externalActionAuthority",
+        "permissionMode",
+        "providerInvocation",
+        "persistence"
+      ],
+      "properties": {
+        "taskModePreserved": {
+          "const": true
+        },
+        "implementationAuthority": {
+          "const": "none"
+        },
+        "externalActionAuthority": {
+          "const": "none"
+        },
+        "permissionMode": {
+          "const": "inherit-jstack"
+        },
+        "providerInvocation": {
+          "const": "explicit-authorization-only"
+        },
+        "persistence": {
+          "const": "none"
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "methodologyId",
+        "primarySpecialistId",
+        "specialistIds",
+        "baseCapabilityIds",
+        "phases",
+        "outputContract",
+        "requiredEvidenceContractIds",
+        "stopConditions",
+        "selectionReasons",
+        "authority"
+      ],
+      "properties": {
+        "methodologyId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "primarySpecialistId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "specialistIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "baseCapabilityIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "phases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/phase"
+          }
+        },
+        "outputContract": {
+          "$ref": "#/$defs/outputContract"
+        },
+        "requiredEvidenceContractIds": {
+          "$ref": "#/$defs/identifierList"
+        },
+        "stopConditions": {
+          "$ref": "#/$defs/textList"
+        },
+        "selectionReasons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/boundedText"
+          }
+        },
+        "authority": {
+          "$ref": "#/$defs/authority"
+        }
+      }
+    }
+  }
+}

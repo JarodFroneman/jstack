@@ -62,10 +62,25 @@ for source in sorted((ROOT / "mcp" / "jstack" / "context_readiness").rglob("*"))
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "context_readiness")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "context_readiness" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "investigation").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "investigation")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "investigation" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "prompt_compiler").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "prompt_compiler")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "prompt_compiler" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "providers").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "providers")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "providers" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "hosts").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "hosts")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "hosts" / relative]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "launch").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
@@ -77,15 +92,40 @@ for source in sorted((ROOT / "mcp" / "jstack" / "loop").rglob("*")):
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "loop")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "loop" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "methodologies").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "methodologies")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "methodologies" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "organization").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "organization")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "organization" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "orchestration").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "orchestration")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "orchestration" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "program").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "program")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "program" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "release").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "release")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "release" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "ui").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "ui")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "ui" / relative]
+
+for source in sorted((ROOT / "mcp" / "jstack" / "upstream").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "upstream")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "upstream" / relative]
 
 for source in sorted((ROOT / "mcp" / "jstack" / "schemas").glob("*.json")):
     FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "schemas" / source.name]
@@ -150,13 +190,36 @@ TREE_MIRRORS = (
         ROOT / "plugin" / "mcp" / "context_readiness",
     ),
     (
+        ROOT / "mcp" / "jstack" / "investigation",
+        ROOT / "plugin" / "mcp" / "investigation",
+    ),
+    (
         ROOT / "mcp" / "jstack" / "prompt_compiler",
         ROOT / "plugin" / "mcp" / "prompt_compiler",
     ),
+    (
+        ROOT / "mcp" / "jstack" / "providers",
+        ROOT / "plugin" / "mcp" / "providers",
+    ),
+    (ROOT / "mcp" / "jstack" / "hosts", ROOT / "plugin" / "mcp" / "hosts"),
     (ROOT / "mcp" / "jstack" / "launch", ROOT / "plugin" / "mcp" / "launch"),
     (ROOT / "mcp" / "jstack" / "loop", ROOT / "plugin" / "mcp" / "loop"),
+    (
+        ROOT / "mcp" / "jstack" / "methodologies",
+        ROOT / "plugin" / "mcp" / "methodologies",
+    ),
+    (
+        ROOT / "mcp" / "jstack" / "organization",
+        ROOT / "plugin" / "mcp" / "organization",
+    ),
+    (
+        ROOT / "mcp" / "jstack" / "orchestration",
+        ROOT / "plugin" / "mcp" / "orchestration",
+    ),
     (ROOT / "mcp" / "jstack" / "program", ROOT / "plugin" / "mcp" / "program"),
+    (ROOT / "mcp" / "jstack" / "release", ROOT / "plugin" / "mcp" / "release"),
     (ROOT / "mcp" / "jstack" / "ui", ROOT / "plugin" / "mcp" / "ui"),
+    (ROOT / "mcp" / "jstack" / "upstream", ROOT / "plugin" / "mcp" / "upstream"),
     (ROOT / "mcp" / "jstack" / "schemas", ROOT / "plugin" / "mcp" / "schemas"),
     (ROOT / "skills" / "jstack-audit", ROOT / "plugin" / "skills" / "jstack-audit"),
     (

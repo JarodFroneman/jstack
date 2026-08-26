@@ -1,5 +1,58 @@
 # Third-Party Notices
 
+## gstack Unified Engineering OS Research Baseline
+
+JStack's Unified Engineering OS integration is an original JStack governance,
+contract, orchestration, provider, and evidence architecture. The following
+repository was inspected at an immutable baseline for professional engineering
+methods and optional runtime-provider candidates:
+
+- Project: `garrytan/gstack`
+- Repository: https://github.com/garrytan/gstack
+- Pinned source commit: `ad8400543cd9ce8d07641362db48d44a95417e33`
+- Pinned tree: `993294b0a09f5265d2d5af6d2fb8234ae2efe450`
+- Upstream version: `1.69.0.0`
+- License: MIT
+- License-file SHA-256:
+  `e56fbb5b3d95756f3fa1cfefa24732ec79f18ece1ad08a4e79e00df57e8b198c`
+
+The immutable, file-level research record is generated from
+`mcp/jstack/upstream/gstack/provenance-plan.v1.json` into
+`mcp/jstack/upstream/gstack/provenance.v1.json`. It distinguishes researched,
+adapted, wrapped, vendored, and forked material; records local targets; and
+fails closed when the upstream commit, tree, license, source bytes, local
+target bytes, or sync metadata do not match.
+
+At introduction, the manifest records research and disposition only. It does
+not copy or activate gstack's prompts, skills, installer, updater, router,
+state, memory, telemetry, browser, Git, release, or deployment runtime. Later
+adapted or wrapped behavior must add its own traceable provenance record before
+its stage gate can pass.
+
+Upstream license notice:
+
+> MIT License
+>
+> Copyright (c) 2026 Garry Tan
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+
 ## Product UI Motion Research Reference
 
 JStack Product UI Motion Intelligence is an original, standard-library and

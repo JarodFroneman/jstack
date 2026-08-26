@@ -12,7 +12,9 @@ except ImportError:  # The production runtime intentionally has no schema depend
     jsonschema = None  # type: ignore[assignment]
 
 from mcp.jstack.ui import (
+    DESIGN_CAPABILITY_IDS,
     build_contract,
+    build_design_decision,
     build_motion_spec,
     build_reference_contract,
     detect_product_ui,
@@ -28,6 +30,9 @@ SCHEMA_NAMES = (
     "ui-catalog.v1.schema.json",
     "ui-contract.v1.schema.json",
     "ui-contract.v2.schema.json",
+    "ui-contract.v3.schema.json",
+    "ui-contract.v4.schema.json",
+    "ui-design-decision.v1.schema.json",
     "ui-evidence.v1.schema.json",
     "ui-finalization.v1.schema.json",
     "ui-motion-audit.v1.schema.json",
@@ -60,7 +65,10 @@ def walk_schema(value: Any, path: Tuple[str, ...] = ()) -> Iterator[Tuple[Tuple[
             yield from walk_schema(child, path + (str(index),))
 
 
-def sample_contract(reference_bundle: Any = None) -> dict[str, Any]:
+def sample_contract(
+    reference_bundle: Any = None,
+    design_decision: Any = None,
+) -> dict[str, Any]:
     return build_contract(
         goal="Build the account interface",
         baseline={
@@ -99,6 +107,7 @@ def sample_contract(reference_bundle: Any = None) -> dict[str, Any]:
         ],
         allowed_paths=["app/**"],
         reference_bundle=reference_bundle,
+        design_decision=design_decision,
     )
 
 
@@ -115,6 +124,103 @@ def sample_reference_bound_contract() -> dict[str, Any]:
         "prototypeSetSha256": SHA,
         "selectedPrototypeId": None,
     })
+
+
+def sample_design_decision_input(*, with_reference: bool = False) -> dict[str, Any]:
+    source_references = [
+        {"id": "user-direction", "kind": "explicit-user", "sha256": SHA}
+    ]
+    alternative_sources = ["user-direction"]
+    if with_reference:
+        source_references.append(
+            {
+                "id": "reference-bundle",
+                "kind": "approved-reference-bundle",
+                "sha256": SHA,
+            }
+        )
+        alternative_sources.append("reference-bundle")
+    return {
+        "schemaVersion": "jstack.ui.design-decision-input.v1",
+        "mode": "directed",
+        "capabilities": [
+            "design-analysis",
+            "ux-analysis",
+            "design-systems",
+            "accessibility",
+            "ui-implementation-guidance",
+        ],
+        "productContext": {
+            "targetUsers": ["Account operators"],
+            "primaryJobs": ["Review account status"],
+            "desiredOutcomes": ["Complete the task with clear system feedback"],
+        },
+        "findings": [
+            {
+                "id": "primary-action",
+                "capabilityId": "design-analysis",
+                "disposition": "fact",
+                "statement": "The primary account action must remain visually dominant.",
+                "sourceReferenceIds": ["user-direction"],
+            }
+        ],
+        "alternatives": [
+            {
+                "id": "calm-focus",
+                "title": "Calm focus",
+                "summary": "A restrained direction with one dominant account action.",
+                "productRationale": "It supports the stated operator outcome without expanding scope.",
+                "hierarchy": "One primary action, compact supporting facts, and quiet secondary controls.",
+                "userFlow": "Review status, resolve the primary action, then confirm the resulting state.",
+                "designSystemStrategy": "Reuse the contracted profile, tokens, and established components.",
+                "visualDirection": "Editorial density with restrained contrast and no decorative effects.",
+                "interactionModel": "Immediate semantic feedback with motion only where it clarifies state.",
+                "responsiveStrategy": "Preserve task order and control prominence at narrow widths.",
+                "accessibilityRequirements": [
+                    "Preserve keyboard order, visible focus, names, and status announcements."
+                ],
+                "stateRequirements": [
+                    "Cover normal, loading, error, empty, disabled, and success states where applicable."
+                ],
+                "tradeoffs": ["The direction favors clarity over decorative variety."],
+                "implementationGuidance": [
+                    "Make the smallest coherent change using shared Product Interface primitives."
+                ],
+                "sourceReferenceIds": alternative_sources,
+            }
+        ],
+        "selection": {
+            "alternativeId": "calm-focus",
+            "source": "active-conversation",
+            "approvalReference": "The user selected Calm focus in this conversation.",
+            "approvalSha256": None,
+            "referencePrototypeId": None,
+        },
+        "existingSystemDisposition": "not-applicable",
+        "explicitNonGoals": ["Do not deploy or alter production."],
+        "sourceReferences": source_references,
+    }
+
+
+def sample_design_bound_contract() -> dict[str, Any]:
+    return sample_contract(design_decision=sample_design_decision_input())
+
+
+def sample_reference_design_bound_contract() -> dict[str, Any]:
+    reference = sample_reference_bound_contract()["referenceBundle"]
+    return sample_contract(
+        reference,
+        design_decision=sample_design_decision_input(with_reference=True),
+    )
+
+
+def sample_design_decision() -> dict[str, Any]:
+    return build_design_decision(
+        sample_design_decision_input(),
+        reference_bundle=None,
+        existing_system_present=False,
+        redesign_approved=False,
+    )
 
 
 def sample_motion_spec() -> dict[str, Any]:
@@ -626,7 +732,12 @@ def sample_finalization() -> dict[str, Any]:
 
 class UISchemaStructureTests(unittest.TestCase):
     def test_contract_schema_platform_markers_match_runtime_detector(self) -> None:
-        for name in ("ui-contract.v1.schema.json", "ui-contract.v2.schema.json"):
+        for name in (
+            "ui-contract.v1.schema.json",
+            "ui-contract.v2.schema.json",
+            "ui-contract.v3.schema.json",
+            "ui-contract.v4.schema.json",
+        ):
             contract = load_schema(name)
             schema_markers = set(
                 contract["$defs"]["detectionPlatform"]["properties"]["markers"]["items"]["enum"]
@@ -671,6 +782,28 @@ class UISchemaStructureTests(unittest.TestCase):
             "jstack.ui.contract.v2",
             sample_reference_bound_contract()["schemaVersion"],
         )
+        self.assertEqual(
+            "jstack.ui.contract.v3",
+            sample_design_bound_contract()["schemaVersion"],
+        )
+        self.assertEqual(
+            "jstack.ui.contract.v4",
+            sample_reference_design_bound_contract()["schemaVersion"],
+        )
+        design = load_schema("ui-design-decision.v1.schema.json")
+        self.assertEqual(
+            list(DESIGN_CAPABILITY_IDS),
+            design["properties"]["capabilities"]["items"]["enum"],
+        )
+        self.assertEqual(
+            [
+                "jstack.ui.contract.v1",
+                "jstack.ui.contract.v2",
+                "jstack.ui.contract.v3",
+                "jstack.ui.contract.v4",
+            ],
+            motion["$defs"]["uiContractBinding"]["properties"]["schemaVersion"]["enum"],
+        )
 
 
 @unittest.skipIf(jsonschema is None, "jsonschema is not installed in the production runtime")
@@ -685,6 +818,9 @@ class UISchemaValidationTests(unittest.TestCase):
             "ui-catalog.v1.schema.json": load_catalog(),
             "ui-contract.v1.schema.json": sample_contract(),
             "ui-contract.v2.schema.json": sample_reference_bound_contract(),
+            "ui-contract.v3.schema.json": sample_design_bound_contract(),
+            "ui-contract.v4.schema.json": sample_reference_design_bound_contract(),
+            "ui-design-decision.v1.schema.json": sample_design_decision(),
             "ui-evidence.v1.schema.json": sample_evidence(),
             "ui-finalization.v1.schema.json": sample_finalization(),
             "ui-motion-audit.v1.schema.json": sample_motion_audit(),
@@ -707,6 +843,16 @@ class UISchemaValidationTests(unittest.TestCase):
             "ui-contract.v1.schema.json": (sample_contract(), ("surfaces", 0)),
             "ui-contract.v2.schema.json": (
                 sample_reference_bound_contract(), ("referenceBundle",)
+            ),
+            "ui-contract.v3.schema.json": (
+                sample_design_bound_contract(), ("designDecision", "authority")
+            ),
+            "ui-contract.v4.schema.json": (
+                sample_reference_design_bound_contract(),
+                ("designDecision", "selection"),
+            ),
+            "ui-design-decision.v1.schema.json": (
+                sample_design_decision(), ("authority",)
             ),
             "ui-evidence.v1.schema.json": (sample_evidence(), ("captures", 0, "artifact")),
             "ui-finalization.v1.schema.json": (sample_finalization(), ("evidence", "candidate")),

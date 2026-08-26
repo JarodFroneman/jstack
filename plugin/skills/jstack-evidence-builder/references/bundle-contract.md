@@ -29,5 +29,8 @@ Use the packaged `ui-reference-contract.v1.schema.json`,
 `ui-reference-analysis.v1.schema.json` as the public machine-readable
 contracts.
 Passing the final reference receipt to `jstack_ui_contract` produces a
-`jstack.ui.contract.v2` candidate contract. Calls without a reference retain
-the existing `jstack.ui.contract.v1` shape.
+`jstack.ui.contract.v2` candidate contract. When the Product UI workflow also
+binds a human-selected Product/Design decision, the combined successor is
+`jstack.ui.contract.v4`; a design decision without a reference uses v3. Calls
+without either optional binding retain the existing `jstack.ui.contract.v1`
+shape. Every version remains non-authorizing.

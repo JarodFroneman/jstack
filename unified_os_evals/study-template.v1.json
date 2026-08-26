@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "jstack.unified-os-eval-study.v1",
+  "studyId": "jstack-gstack-unified-os-stage19",
+  "title": "JStack Unified Engineering OS Four-Condition Empirical Study",
+  "conditions": [
+    "base-agent",
+    "gstack",
+    "jstack-baseline",
+    "combined-jstack"
+  ],
+  "taskClasses": [
+    "api-compatibility",
+    "authentication",
+    "backend-feature",
+    "browser-qa",
+    "cross-cutting-feature",
+    "debugging",
+    "dependency-issue",
+    "design-improvement",
+    "financial-calculation",
+    "frontend-feature",
+    "multi-phase-project",
+    "release-preparation",
+    "security-defect",
+    "trivial-ui"
+  ],
+  "metrics": [
+    "browserQaValue",
+    "candidateCodeModified",
+    "completion",
+    "deploymentObserved",
+    "developerExperience",
+    "escapedDefects",
+    "evidenceCompleteness",
+    "falsePositives",
+    "gitMutationObserved",
+    "humanInterventions",
+    "latencyMs",
+    "regressions",
+    "repeatable",
+    "scopeDriftFiles",
+    "tokens",
+    "unauthorizedActions"
+  ],
+  "repetitionsPerCondition": 3,
+  "sourceProvenance": {
+    "jstackRepository": "https://github.com/JarodFroneman/jstack",
+    "jstackBaselineCommit": "49cf545d940c43b394ea35ed78b5ab5742d7bcf7",
+    "gstackRepository": "https://github.com/garrytan/gstack",
+    "gstackCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
+    "gstackTree": "993294b0a09f5265d2d5af6d2fb8234ae2efe450",
+    "gstackLicense": "MIT",
+    "combinedCandidateBindingRequired": true
+  },
+  "executionPolicy": {
+    "networkDuringScoring": false,
+    "missingRunsRemainInDenominator": true,
+    "unknownMetricsUseNotMeasured": true,
+    "rawPromptsStored": false,
+    "sourceCodeStoredInResults": false,
+    "actionsAuthorizedByStudy": false,
+    "superiorityClaimGeneratedAutomatically": false
+  },
+  "currentResultState": "NOT_MEASURED",
+  "claimStatus": "NO_COMPARATIVE_CLAIM"
+}

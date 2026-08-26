@@ -39,15 +39,21 @@ if str(_SERVER_DIR) not in sys.path:
 import audit as audit_core
 import capabilities as capability_core
 import context_readiness as context_readiness_core
+import hosts as hosts_core
+import investigation as investigation_core
 import launch as launch_core
 import loop as loop_core
+import methodologies as methodology_core
+import orchestration as orchestration_core
 import prompt_compiler as prompt_compiler_core
+import providers as provider_core
 import program as program_core
+import release as release_core
 import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.10.0-beta.6.2"
+SERVER_VERSION = "0.11.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -574,6 +580,7 @@ GIT_REQUIRED_TOOLS = [
     "jstack_review",
     "jstack_security_audit",
     "jstack_qa",
+    "jstack_browser_capture",
     "jstack_performance_capture",
     "jstack_adversarial_capture",
     "jstack_context_save",
@@ -4217,7 +4224,7 @@ WORK_CLASSIFICATIONS = [
         "id": "normal",
         "label": "Normal feature or bug",
         "patterns": [r"\bfeature\b", r"\bbug\b", r"\bfix\b", r"\bchange\b", r"\bimplement\b"],
-        "skills": ["spec", "plan-eng-review", "health", "review", "qa", "context-save"],
+        "skills": ["spec", "health", "review", "qa", "context-save"],
         "requiredGates": ["context", "planning", "build", "quality", "handoff"],
         "releaseBlockers": ["No focused verification for changed behavior."],
     },
@@ -4234,7 +4241,7 @@ WORK_CLASSIFICATIONS = [
             r"multi[- ]module",
             r"integration",
         ],
-        "skills": ["spec", "autoplan", "plan-eng-review", "health", "review", "context-save"],
+        "skills": ["spec", "autoplan", "health", "review", "context-save"],
         "requiredGates": ["context", "planning", "safety", "build", "quality", "handoff"],
         "releaseBlockers": ["Architecture/data/API impact not reviewed before implementation."],
     },
@@ -4242,7 +4249,7 @@ WORK_CLASSIFICATIONS = [
         "id": "product",
         "label": "Product or feature-shaping work",
         "patterns": [r"product", r"roadmap", r"requirements", r"workflow", r"persona", r"pricing", r"moneti[sz]ation"],
-        "skills": ["office-hours", "spec", "autoplan", "plan-ceo-review", "context-save"],
+        "skills": ["spec", "autoplan", "context-save"],
         "requiredGates": ["context", "planning", "handoff"],
         "releaseBlockers": ["Acceptance criteria or user/workflow impact is unclear."],
     },
@@ -4250,7 +4257,7 @@ WORK_CLASSIFICATIONS = [
         "id": "ui_product",
         "label": "UI/product-sensitive change",
         "patterns": list(UI_INTENT_PATTERNS),
-        "skills": ["product-ui-design", "plan-design-review", "design-review", "design-consultation", "qa", "browse", "context-save"],
+        "skills": ["product-ui-design", "design-review", "design-consultation", "qa", "browse", "context-save"],
         "requiredGates": ["context", "planning", "build", "product-ui-qa", "quality", "handoff"],
         "releaseBlockers": ["No visual/browser QA for user-facing UI changes."],
     },
@@ -4292,7 +4299,7 @@ WORK_CLASSIFICATIONS = [
             r"provider",
             r"api",
         ],
-        "skills": ["spec", "plan-eng-review", "cso", "health", "review", "qa", "document-release"],
+        "skills": ["spec", "cso", "health", "review", "qa", "document-release"],
         "requiredGates": ["context", "planning", "build", "security-compliance", "quality", "handoff"],
         "releaseBlockers": ["No verification for calculation/data/source-attribution behavior."],
     },
@@ -4319,8 +4326,8 @@ WORKFLOW_PROFILE = [
     },
     {
         "category": "Planning",
-        "skills": ["spec", "office-hours", "autoplan", "plan-eng-review", "plan-ceo-review", "plan-design-review", "plan-devex-review"],
-        "purpose": "Turn unclear work into acceptance criteria and validate architecture, product, design, or developer experience before implementation.",
+        "skills": ["spec", "autoplan", "receipt-bound-methodology-plan"],
+        "purpose": "Turn unclear work into acceptance criteria and apply only the deterministic JStack methodology capabilities selected for architecture, product, design, developer experience, investigation, or retrospective work.",
     },
     {
         "category": "Safety",
@@ -4334,8 +4341,8 @@ WORKFLOW_PROFILE = [
     },
     {
         "category": "Code quality",
-        "skills": ["health", "review", "investigate"],
-        "purpose": "Check repo health, review diffs for bugs/regressions, and investigate root causes before or after changing code.",
+        "skills": ["health", "review", "root-cause-investigation"],
+        "purpose": "Check repository health, review diffs for regressions, and use the receipt-bound JStack root-cause method only when selected.",
     },
     {
         "category": "Security/compliance",
@@ -5174,11 +5181,6 @@ def choose_skills(goal: str, quality_level: str = "enterprise") -> list[str]:
     rules = [
         ("spec|requirements|scope|acceptance", "spec"),
         ("autoplan|whole plan|parallel plan|full plan|broad|multi-step", "autoplan"),
-        ("ceo|product|business|strategy|positioning", "plan-ceo-review"),
-        ("office hours|customer|persona|pricing|market|demand", "office-hours"),
-        ("architecture|schema|database|migration|api|integration|refactor", "plan-eng-review"),
-        ("developer experience|docs|sdk|cli|onboarding", "plan-devex-review"),
-        ("bug|error|broken|debug|root cause|login", "investigate"),
         ("security|audit|csrf|xss|secret|credential|compliance|auth|rbac|payment|pii|webhook", "cso"),
         ("destructive|dangerous|reset|delete|force", "careful"),
         ("guard|boundary|restricted", "guard"),
@@ -5202,7 +5204,7 @@ def choose_skills(goal: str, quality_level: str = "enterprise") -> list[str]:
         if re.search(pattern, goal_l):
             add(skill)
     if not selected:
-        selected = ["spec", "plan-eng-review", "health", "review", "qa", "context-save"]
+        selected = ["spec", "health", "review", "qa", "context-save"]
     limit = 6 if quality_level == "standard" else 12
     return selected[:limit]
 
@@ -14695,6 +14697,16 @@ def _issue_context_readiness(
                 ),
             }
         )
+        approval = compilation.get("approval") or {}
+        if approval.get("approved") is True:
+            receipt_payload.update(
+                {
+                    "promptApprovalSource": approval.get("source"),
+                    "approvedPromptSha256": approval.get(
+                        "renderedPromptSha256"
+                    ),
+                }
+            )
     result["readinessReceipt"] = issue_receipt(receipt_payload)
 
 
@@ -14918,6 +14930,1180 @@ def _prompt_orchestration_binding(
         "compilerVersion": compilation["compilerVersion"],
         "templateVersion": compilation["templateVersion"],
     }
+
+
+def _unified_os_mode() -> str:
+    try:
+        return orchestration_core.unified_os_mode()
+    except orchestration_core.ModeIntegrationError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _unified_project_binding(binding: dict[str, Any]) -> dict[str, Any]:
+    project_path_digest = hashlib.sha256(
+        str(binding["projectPath"]).encode("utf-8")
+    ).hexdigest()
+    project_digest = orchestration_core.canonical_digest(
+        {
+            "evidenceMode": binding["evidenceMode"],
+            "projectPathDigest": project_path_digest,
+        }
+    )
+    if binding["evidenceMode"] == "git":
+        subject = evidence_subject(Path(binding["gitRoot"]))
+        return {
+            "projectDigest": project_digest,
+            "repositoryFingerprint": subject["projectFingerprint"],
+            "projectPath": subject["gitRoot"],
+            "evidenceMode": "git",
+            "gitHead": subject["gitHead"],
+            "projectPolicyDigest": subject["policyDigest"],
+            "candidateBindingAvailable": True,
+        }
+    return {
+        "projectDigest": project_digest,
+        "repositoryFingerprint": orchestration_core.canonical_digest(
+            {
+                "state": "artifact-only-candidate-fingerprint-unavailable",
+                "projectDigest": project_digest,
+            }
+        ),
+        "projectPath": binding["projectPath"],
+        "evidenceMode": "artifact-only",
+        "gitHead": None,
+        "projectPolicyDigest": None,
+        "candidateBindingAvailable": False,
+    }
+
+
+def _unified_prompt_binding(
+    args: dict[str, Any],
+    *,
+    goal: str,
+    workflow_mode: str,
+    binding: dict[str, Any],
+    context_readiness: Optional[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    prompt = (
+        context_readiness.get("promptCompilation")
+        if isinstance(context_readiness, dict)
+        else None
+    )
+    if isinstance(prompt, dict) and prompt.get("bound"):
+        return {
+            "bound": True,
+            "source": "context-readiness-receipt",
+            "compilationDigest": prompt.get("compilationDigest"),
+            "requestedTaskMode": prompt.get("requestedTaskMode"),
+            "approvalBound": bool(prompt.get("approvalBound")),
+            "approvalSource": prompt.get("approvalSource"),
+        }
+    legacy = _prompt_orchestration_binding(
+        args,
+        goal=goal,
+        workflow_mode=workflow_mode,
+        binding=binding,
+    )
+    if legacy is not None:
+        legacy = dict(legacy)
+        legacy["approvalBound"] = False
+        legacy["approvalSource"] = None
+    return legacy
+
+
+def _issue_unified_team_plan_receipt(
+    *,
+    plan: dict[str, Any],
+    delivery_pipeline: dict[str, Any],
+    security_provider_plan: dict[str, Any],
+    host_contract: dict[str, Any],
+    goal: str,
+    team_mode: str,
+    unified_mode: str,
+    project_binding: dict[str, Any],
+    dispatch_eligible: bool,
+    prompt_approval_bound: bool,
+    methodology_plan: dict[str, Any],
+) -> str:
+    expires = (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0)
+    assignments = orchestration_core.receipt_assignments(plan)
+    return issue_receipt(
+        {
+            "kind": "unified-team-plan",
+            "schemaVersion": "jstack.team-plan-receipt.v1",
+            "expiresAt": expires.isoformat(),
+            "teamPlanId": plan["teamPlanId"],
+            "teamPlanDigest": orchestration_core.team_plan_digest(plan),
+            "semanticTeamPlanDigest": orchestration_core.semantic_team_plan_digest(
+                plan
+            ),
+            "deliveryPipelineDigest": delivery_pipeline["pipelineDigest"],
+            "authorityArchitectureId": delivery_pipeline[
+                "authorityArchitectureId"
+            ],
+            "securityProviderPlanDigest": security_provider_plan[
+                "planDigest"
+            ],
+            "hostId": host_contract["hostId"],
+            "hostContractDigest": host_contract["contractDigest"],
+            "compositionInputDigest": plan["bindings"][
+                "compositionInputDigest"
+            ],
+            "goalDigest": context_goal_digest(goal),
+            "teamMode": team_mode,
+            "operatingModeId": plan["operatingModeId"],
+            "requestedTaskMode": plan["requestedTaskMode"],
+            "unifiedOSMode": unified_mode,
+            "projectDigest": project_binding["projectDigest"],
+            "repositoryFingerprint": project_binding["repositoryFingerprint"],
+            "projectPath": project_binding["projectPath"],
+            "evidenceMode": project_binding["evidenceMode"],
+            "gitHead": project_binding["gitHead"],
+            "projectPolicyDigest": project_binding["projectPolicyDigest"],
+            "teamComposerPolicyDigest": orchestration_core.policy_digest(),
+            "methodologyCatalogVersion": methodology_plan["catalogVersion"],
+            "methodologyCatalogDigest": methodology_plan["catalogDigest"],
+            "methodologySelectionDigest": methodology_plan["selectionDigest"],
+            "selectedMethodologyIds": methodology_plan[
+                "selectedMethodologyIds"
+            ],
+            "promptCompilationDigest": plan["bindings"][
+                "promptCompilationDigest"
+            ],
+            "contextReadinessDigest": plan["bindings"][
+                "contextReadinessDigest"
+            ],
+            "promptApprovalBound": prompt_approval_bound,
+            "dispatchEligible": dispatch_eligible,
+            "teamRoleIds": sorted(
+                {str(item["roleId"]) for item in assignments}
+            ),
+            "assignments": assignments,
+            "authorityEffect": "none",
+        }
+    )
+
+
+def _unified_blocked_result(
+    *,
+    mode: str,
+    code: str,
+    message: str,
+    metadata: Optional[dict[str, Any]] = None,
+    methodology_plan: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    if mode == "enforced":
+        raise ToolError(message)
+    return {
+        "mode": mode,
+        "state": "blocked",
+        "executionSource": "legacy-compatibility-view",
+        "dispatchEligible": False,
+        "blockers": [{"code": code, "message": message}],
+        "metadata": metadata or {},
+        "methodologyPlan": methodology_plan,
+        "teamPlan": None,
+        "teamPlanReceipt": None,
+        "deliveryPipeline": None,
+        "securityProviderPlan": None,
+        "hostContract": None,
+        "coordinationPacket": None,
+        "receiptAssignments": [],
+    }
+
+
+def _compose_unified_team(
+    args: dict[str, Any],
+    *,
+    goal: str,
+    workflow_mode: str,
+    requested_team_mode: str,
+    quality_level: str,
+    classifications: list[dict[str, Any]],
+    changed_paths: list[str],
+    ui_applicability: dict[str, Any],
+    binding: dict[str, Any],
+    context_readiness: Optional[dict[str, Any]],
+    legacy_team: dict[str, Any],
+) -> dict[str, Any]:
+    mode = _unified_os_mode()
+    if mode == "disabled":
+        return {
+            "mode": mode,
+            "state": "disabled",
+            "executionSource": "legacy-compatibility-view",
+            "dispatchEligible": True,
+            "blockers": [],
+            "metadata": {
+                "rollback": True,
+                "reason": "JSTACK_UNIFIED_OS_MODE=disabled restores the prior planner.",
+            },
+            "methodologyPlan": None,
+            "teamPlan": None,
+            "teamPlanReceipt": None,
+            "deliveryPipeline": None,
+            "securityProviderPlan": None,
+            "hostContract": None,
+            "coordinationPacket": None,
+            "receiptAssignments": [],
+        }
+
+    prompt_binding = _unified_prompt_binding(
+        args,
+        goal=goal,
+        workflow_mode=workflow_mode,
+        binding=binding,
+        context_readiness=context_readiness,
+    )
+    if prompt_binding is None:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-PROMPT-BINDING-REQUIRED",
+            message=(
+                "Team Composer requires Prompt Compilation unless the complete Unified OS "
+                "rollback mode is disabled."
+            ),
+        )
+    compilation_digest = str(prompt_binding.get("compilationDigest") or "")
+    requested_task_mode = str(prompt_binding.get("requestedTaskMode") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", compilation_digest):
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-PROMPT-BINDING-INVALID",
+            message="Team Composer received an invalid Prompt Compilation binding.",
+        )
+
+    context_bound = isinstance(context_readiness, dict)
+    context_digest = (
+        str(context_readiness.get("briefDigest") or "")
+        if context_bound
+        else orchestration_core.canonical_digest(
+            {
+                "state": "context-readiness-unbound",
+                "goalDigest": context_goal_digest(goal),
+                "workflowMode": workflow_mode,
+            }
+        )
+    )
+    if not re.fullmatch(r"[0-9a-f]{64}", context_digest):
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-CONTEXT-BINDING-INVALID",
+            message="Team Composer received an invalid Context Readiness binding.",
+        )
+
+    project_binding = _unified_project_binding(binding)
+    try:
+        host_contract = hosts_core.host_contract(
+            str(args.get("host_id") or "codex")
+        )
+    except hosts_core.HostCapabilityError as exc:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-HOST-CONTRACT-BLOCKED",
+            message=str(exc),
+        )
+    available_host_capabilities = [
+        item["id"]
+        for item in host_contract["capabilities"]
+        if item["status"] == "AVAILABLE"
+    ]
+    try:
+        request, metadata = orchestration_core.build_request(
+            goal=goal,
+            requested_task_mode=requested_task_mode,
+            requested_team_mode=requested_team_mode,
+            legacy_result_mode=str(legacy_team.get("mode") or ""),
+            quality_level=quality_level,
+            operating_profile=str(
+                args.get("operating_profile") or "professional"
+            ),
+            classifications=[str(item["id"]) for item in classifications],
+            changed_paths=changed_paths,
+            ui_required=ui_applicability.get("state") == "required",
+            context_risk_tier=(
+                str(context_readiness.get("riskTier") or "")
+                if context_bound
+                else None
+            ),
+            context_brief=(
+                context_readiness.get("normalizedBrief")
+                if context_bound
+                else None
+            ),
+            project_digest=project_binding["projectDigest"],
+            repository_fingerprint=project_binding["repositoryFingerprint"],
+            prompt_compilation_digest=compilation_digest,
+            context_readiness_digest=context_digest,
+            host_capabilities=available_host_capabilities,
+        )
+    except (orchestration_core.ModeIntegrationError, ValueError) as exc:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-COMPOSITION-INPUT-INVALID",
+            message=str(exc),
+        )
+
+    methodology_plan = metadata.pop("methodologyPlan")
+
+    if not metadata["writeScopesResolved"]:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-WRITE-SCOPE-REQUIRED",
+            message=(
+                "Implementation and fix Team Plans require a bounded write scope. "
+                "After repository inspection, add one source-labelled context fact named "
+                "authorized_write_scopes whose value is a repository-relative path or JSON string array."
+            ),
+            metadata=metadata,
+            methodology_plan=methodology_plan,
+        )
+
+    approval_bound = bool(prompt_binding.get("approvalBound"))
+    dispatch_eligible = context_bound and approval_bound and mode in {
+        "preview",
+        "enforced",
+    }
+    if mode == "enforced" and not dispatch_eligible:
+        raise ToolError(
+            "Enforced Team Composer dispatch requires the approved final Prompt Compilation and its exact Context Readiness receipt."
+        )
+    try:
+        plan = orchestration_core.compose_team(request)
+    except orchestration_core.TeamCompositionError as exc:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-COMPOSITION-BLOCKED",
+            message=str(exc),
+            metadata=metadata,
+            methodology_plan=methodology_plan,
+        )
+    try:
+        delivery_pipeline = orchestration_core.build_delivery_pipeline(plan)
+    except orchestration_core.DeliveryContractError as exc:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-DELIVERY-PIPELINE-BLOCKED",
+            message=str(exc),
+            metadata=metadata,
+            methodology_plan=methodology_plan,
+        )
+    try:
+        security_provider_plan = provider_core.build_security_plan(
+            risk_class=plan["riskClass"],
+            dependency_change=bool(request["dependencyChanges"]),
+            browser_provider_selected=any(
+                phase["id"] == "browser-qa" and phase["required"]
+                for phase in delivery_pipeline["phases"]
+            ),
+        )
+    except provider_core.SecurityToolingError as exc:
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-SECURITY-PROVIDER-PLAN-BLOCKED",
+            message=str(exc),
+            metadata=metadata,
+            methodology_plan=methodology_plan,
+        )
+    packet = orchestration_core.coordination_packet(
+        plan,
+        team_mode=metadata["resolvedTeamMode"],
+    )
+    receipt = _issue_unified_team_plan_receipt(
+        plan=plan,
+        delivery_pipeline=delivery_pipeline,
+        security_provider_plan=security_provider_plan,
+        host_contract=host_contract,
+        goal=goal,
+        team_mode=metadata["resolvedTeamMode"],
+        unified_mode=mode,
+        project_binding=project_binding,
+        dispatch_eligible=dispatch_eligible,
+        prompt_approval_bound=approval_bound,
+        methodology_plan=methodology_plan,
+    )
+    if mode == "shadow":
+        state = "shadow"
+        execution_source = "legacy-compatibility-view"
+    elif dispatch_eligible:
+        state = "ready"
+        execution_source = "team-composer"
+    else:
+        state = "preview-only"
+        execution_source = "team-composer-preview-only"
+    metadata.update(
+        {
+            "contextReadinessBound": context_bound,
+            "promptApprovalBound": approval_bound,
+            "promptBindingSource": prompt_binding.get("source"),
+            "candidateBindingAvailable": project_binding[
+                "candidateBindingAvailable"
+            ],
+        }
+    )
+    return {
+        "mode": mode,
+        "state": state,
+        "executionSource": execution_source,
+        "dispatchEligible": dispatch_eligible,
+        "blockers": [],
+        "metadata": metadata,
+        "methodologyPlan": methodology_plan,
+        "teamPlan": plan,
+        "teamPlanReceipt": receipt,
+        "deliveryPipeline": delivery_pipeline,
+        "securityProviderPlan": security_provider_plan,
+        "hostContract": host_contract,
+        "coordinationPacket": packet,
+        "receiptAssignments": orchestration_core.receipt_assignments(plan),
+    }
+
+
+def _attach_unified_team_plan(
+    legacy_team: dict[str, Any],
+    integration: dict[str, Any],
+) -> dict[str, Any]:
+    result = dict(legacy_team)
+    result["unifiedOSMode"] = integration["mode"]
+    result["executionSource"] = integration["executionSource"]
+    result["dispatchEligible"] = integration["dispatchEligible"]
+    result["unifiedOS"] = {
+        key: integration[key]
+        for key in ("mode", "state", "executionSource", "dispatchEligible", "blockers", "metadata")
+    }
+    result["methodologyPlan"] = integration["methodologyPlan"]
+    result["unifiedTeamPlan"] = integration["teamPlan"]
+    result["unifiedTeamPlanReceipt"] = integration["teamPlanReceipt"]
+    result["professionalDeliveryPipeline"] = integration[
+        "deliveryPipeline"
+    ]
+    result["securityProviderPlan"] = integration["securityProviderPlan"]
+    result["hostContract"] = integration["hostContract"]
+    result["dynamicCoordinationPacket"] = integration["coordinationPacket"]
+    result["dynamicReceiptAssignments"] = integration["receiptAssignments"]
+    result["dynamicTeamRoleIds"] = sorted(
+        {
+            str(item["roleId"])
+            for item in integration["receiptAssignments"]
+        }
+    )
+    result["legacyCompatibilityView"] = {
+        "sourceOfTruth": False,
+        "temporary": True,
+        "roleIds": [str(item["id"]) for item in legacy_team.get("agents") or []],
+        "capabilitySelectionDigest": (
+            (legacy_team.get("capabilityPlan") or {}).get("selectionDigest")
+        ),
+        "reason": legacy_team.get("reason"),
+        "rule": (
+            "Legacy agents and capability receipts remain available for additive migration, "
+            "but they are not the composition source when executionSource is team-composer."
+        ),
+    }
+    plan = integration["teamPlan"]
+    if isinstance(plan, dict):
+        result["activeSpecialistCount"] = len(plan["selectedSpecialists"])
+        result["activePhysicalAgentCount"] = len(plan["physicalAgents"])
+        result["activePhysicalAgents"] = plan["physicalAgents"]
+        if integration["executionSource"] == "team-composer":
+            result["reason"] = plan["selectionSummary"]
+    return result
+
+
+def _verify_unified_team_plan_receipt_token(
+    receipt: Any,
+    *,
+    goal: str,
+    team_mode: str,
+    require_dispatch_eligible: bool,
+) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt:
+        raise ToolError("A bounded unifiedTeamPlanReceipt is required.")
+    if len(receipt) > 250_000:
+        raise ToolError("unifiedTeamPlanReceipt exceeds the bounded receipt limit.")
+    payload = verify_signed_session_token(receipt, "unified-team-plan")
+    assignments = payload.get("assignments")
+    team_role_ids = payload.get("teamRoleIds")
+    try:
+        current_methodology_plan = methodology_core.select_methodologies(
+            goal,
+            str(payload.get("requestedTaskMode") or ""),
+            str(payload.get("operatingModeId") or ""),
+        )
+    except methodology_core.MethodologyError as exc:
+        raise ToolError(
+            "The Unified Team Plan receipt has an invalid methodology binding."
+        ) from exc
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == "jstack.team-plan-receipt.v1",
+        "goalDigest": payload.get("goalDigest") == context_goal_digest(goal),
+        "teamMode": payload.get("teamMode") == team_mode,
+        "teamPlanDigest": bool(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get("teamPlanDigest") or ""))
+        ),
+        "deliveryPipelineDigest": bool(
+            re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(payload.get("deliveryPipelineDigest") or ""),
+            )
+        ),
+        "authorityArchitectureId": payload.get("authorityArchitectureId")
+        == orchestration_core.AUTHORITY_ARCHITECTURE_ID,
+        "securityProviderPlanDigest": bool(
+            re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(payload.get("securityProviderPlanDigest") or ""),
+            )
+        ),
+        "hostId": bool(payload.get("hostId")),
+        "hostContractDigest": bool(
+            re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(payload.get("hostContractDigest") or ""),
+            )
+        ),
+        "policyDigest": payload.get("teamComposerPolicyDigest")
+        == orchestration_core.policy_digest(),
+        "methodologyCatalogVersion": payload.get("methodologyCatalogVersion")
+        == current_methodology_plan["catalogVersion"],
+        "methodologyCatalogDigest": payload.get("methodologyCatalogDigest")
+        == current_methodology_plan["catalogDigest"],
+        "methodologySelectionDigest": payload.get(
+            "methodologySelectionDigest"
+        )
+        == current_methodology_plan["selectionDigest"],
+        "selectedMethodologyIds": payload.get("selectedMethodologyIds")
+        == current_methodology_plan["selectedMethodologyIds"],
+        "assignments": isinstance(assignments, list) and bool(assignments),
+        "teamRoleIds": isinstance(team_role_ids, list)
+        and team_role_ids
+        == sorted(
+            {
+                str(item.get("roleId") or "")
+                for item in assignments or []
+                if isinstance(item, dict)
+            }
+        ),
+        "authority": payload.get("authorityEffect") == "none",
+    }
+    if require_dispatch_eligible:
+        checks["dispatchEligible"] = payload.get("dispatchEligible") is True
+        checks["promptApprovalBound"] = payload.get("promptApprovalBound") is True
+    if not all(checks.values()):
+        raise ToolError(
+            "The Unified Team Plan receipt is stale, non-dispatchable, or fails its authority bindings."
+        )
+    receipt_binding = resolve_project_binding(str(payload.get("projectPath") or ""))
+    current = _unified_project_binding(receipt_binding)
+    project_checks = {
+        "evidenceMode": payload.get("evidenceMode") == current["evidenceMode"],
+        "projectDigest": payload.get("projectDigest") == current["projectDigest"],
+        "repositoryFingerprint": payload.get("repositoryFingerprint")
+        == current["repositoryFingerprint"],
+        "gitHead": payload.get("gitHead") == current["gitHead"],
+        "projectPolicyDigest": payload.get("projectPolicyDigest")
+        == current["projectPolicyDigest"],
+    }
+    if not all(project_checks.values()):
+        raise ToolError(
+            "The project changed after Team Composition. Re-run Context Readiness and team planning."
+        )
+    return payload
+
+
+def _verify_unified_team_plan_container(
+    proposed: dict[str, Any],
+    *,
+    goal: str,
+    team_mode: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    plan = proposed.get("unifiedTeamPlan")
+    receipt = proposed.get("unifiedTeamPlanReceipt")
+    delivery_pipeline = proposed.get("professionalDeliveryPipeline")
+    security_provider_plan = proposed.get("securityProviderPlan")
+    host_contract = proposed.get("hostContract")
+    if not isinstance(plan, dict):
+        raise ToolError(
+            "Dynamic dispatch requires the exact unifiedTeamPlan returned by jstack_team_plan."
+        )
+    payload = _verify_unified_team_plan_receipt_token(
+        receipt,
+        goal=goal,
+        team_mode=team_mode,
+        require_dispatch_eligible=False,
+    )
+    methodology_plan = proposed.get("methodologyPlan")
+    try:
+        methodology_core.validate_plan(
+            methodology_plan,
+            goal=goal,
+            requested_task_mode=str(plan.get("requestedTaskMode") or ""),
+            operating_mode_id=str(plan.get("operatingModeId") or ""),
+        )
+    except methodology_core.MethodologyError as exc:
+        raise ToolError(
+            "The methodology plan is stale, altered, or does not match the exact Team Plan inputs."
+        ) from exc
+    try:
+        delivery_pipeline = orchestration_core.validate_delivery_pipeline(
+            delivery_pipeline,
+            team_plan=plan,
+        )
+    except orchestration_core.DeliveryContractError as exc:
+        raise ToolError(str(exc)) from exc
+    expected_security_plan = provider_core.build_security_plan(
+        risk_class=str(plan.get("riskClass") or ""),
+        dependency_change=bool(
+            set(plan.get("requiredEvidenceContractIds") or [])
+            & {"dependency-inventory", "supply-chain-review"}
+        ),
+        browser_provider_selected=any(
+            phase["id"] == "browser-qa" and phase["required"]
+            for phase in delivery_pipeline["phases"]
+        ),
+    )
+    try:
+        host_contract = hosts_core.validate_host_contract(host_contract)
+        expected_host_contract = hosts_core.host_contract(
+            str(host_contract.get("hostId") or "")
+        )
+    except hosts_core.HostCapabilityError as exc:
+        raise ToolError(str(exc)) from exc
+    checks = {
+        "teamPlanId": payload.get("teamPlanId") == plan.get("teamPlanId"),
+        "teamPlanDigest": payload.get("teamPlanDigest")
+        == orchestration_core.team_plan_digest(plan),
+        "semanticTeamPlanDigest": payload.get("semanticTeamPlanDigest")
+        == orchestration_core.semantic_team_plan_digest(plan),
+        "deliveryPipelineDigest": payload.get("deliveryPipelineDigest")
+        == delivery_pipeline.get("pipelineDigest"),
+        "authorityArchitectureId": payload.get("authorityArchitectureId")
+        == delivery_pipeline.get("authorityArchitectureId"),
+        "securityProviderPlan": security_provider_plan
+        == expected_security_plan,
+        "securityProviderPlanDigest": payload.get(
+            "securityProviderPlanDigest"
+        )
+        == expected_security_plan.get("planDigest"),
+        "hostContract": host_contract == expected_host_contract,
+        "hostId": payload.get("hostId") == host_contract.get("hostId"),
+        "hostContractDigest": payload.get("hostContractDigest")
+        == host_contract.get("contractDigest"),
+        "compositionInputDigest": payload.get("compositionInputDigest")
+        == (plan.get("bindings") or {}).get("compositionInputDigest"),
+        "operatingModeId": payload.get("operatingModeId")
+        == plan.get("operatingModeId"),
+        "requestedTaskMode": payload.get("requestedTaskMode")
+        == plan.get("requestedTaskMode"),
+        "promptCompilationDigest": payload.get("promptCompilationDigest")
+        == (plan.get("bindings") or {}).get("promptCompilationDigest"),
+        "contextReadinessDigest": payload.get("contextReadinessDigest")
+        == (plan.get("bindings") or {}).get("contextReadinessDigest"),
+        "repositoryFingerprint": payload.get("repositoryFingerprint")
+        == (plan.get("bindings") or {}).get("repositoryFingerprint"),
+        "methodologyCatalogDigest": payload.get("methodologyCatalogDigest")
+        == methodology_plan.get("catalogDigest"),
+        "methodologySelectionDigest": payload.get(
+            "methodologySelectionDigest"
+        )
+        == methodology_plan.get("selectionDigest"),
+        "selectedMethodologyIds": payload.get("selectedMethodologyIds")
+        == methodology_plan.get("selectedMethodologyIds"),
+        "assignments": payload.get("assignments")
+        == orchestration_core.receipt_assignments(plan),
+        "authority": plan.get("authorityEffect") == "none",
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "The Unified Team Plan receipt is stale, altered, or does not match its composition bindings."
+        )
+    return plan, payload
+
+
+def _dynamic_dispatch_check(
+    args: dict[str, Any],
+    *,
+    proposed: dict[str, Any],
+    goal: str,
+    team_mode: str,
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if team_mode == "auto":
+        blockers.append(
+            "Dynamic Team Composer dispatch requires an explicit resolved team_mode."
+        )
+        receipt_mode = str(
+            ((proposed.get("dynamicCoordinationPacket") or {}).get("mode") or "")
+        )
+    else:
+        receipt_mode = team_mode
+    try:
+        plan, payload = _verify_unified_team_plan_container(
+            proposed,
+            goal=goal,
+            team_mode=receipt_mode,
+        )
+    except ToolError as exc:
+        return {
+            "goal": goal,
+            "teamMode": team_mode,
+            "valid": False,
+            "blockers": [*blockers, str(exc)],
+            "warnings": warnings,
+            "executionSource": "team-composer",
+            "dispatchEligible": False,
+            "blockedActions": team_blocked_actions(),
+        }
+    if payload.get("dispatchEligible") is not True:
+        blockers.append(
+            "This Team Plan is shadow or preview-only. Complete and approve Prompt Compilation and Context Readiness before dispatch."
+        )
+    blockers.extend(
+        orchestration_core.validate_coordination_packet(
+            args.get("coordination_packet"),
+            plan=plan,
+            team_mode=receipt_mode,
+        )
+    )
+    if plan["riskClass"] == "production" and not bool(
+        args.get("explicit_release_requested")
+    ):
+        blockers.append(
+            "Production/release-classified team dispatch requires an explicit request to assess that work. This flag never authorizes deploy/release actions."
+        )
+    if args.get("max_specialists") is not None and len(
+        plan["selectedSpecialists"]
+    ) > int(args["max_specialists"]):
+        blockers.append(
+            "The selected logical specialist count exceeds the caller's explicit max_specialists limit."
+        )
+    writers = [
+        item
+        for item in plan["selectedSpecialists"]
+        if item.get("writeScopes")
+    ]
+    if len(writers) > 1:
+        blockers.append("A Team Plan may contain at most one primary source writer.")
+    methodology_ids = set(proposed["methodologyPlan"]["selectedMethodologyIds"])
+    root_cause_selected = "root-cause-investigation" in methodology_ids
+    requested_task_mode = str(plan["requestedTaskMode"])
+    mutation_requires_investigation = (
+        root_cause_selected
+        and requested_task_mode in investigation_core.MUTATING_TASK_MODES
+    )
+    supplied_phase = str(args.get("dispatch_phase") or "standard")
+    phase = supplied_phase
+    if supplied_phase not in {
+        "standard",
+        "investigation",
+        "remediation",
+        "browser-remediation",
+    }:
+        blockers.append(
+            "dispatch_phase must be standard, investigation, remediation, or browser-remediation."
+        )
+    investigation_receipt = args.get("investigation_receipt")
+    investigation_certification: Optional[dict[str, Any]] = None
+    browser_evidence_receipt = args.get("browser_evidence_receipt")
+    browser_finding_input = args.get("browser_finding")
+    browser_evidence: Optional[dict[str, Any]] = None
+    browser_finding: Optional[dict[str, Any]] = None
+    browser_handoff_receipt: Optional[str] = None
+    if mutation_requires_investigation and phase == "standard":
+        blockers.append(
+            "Evidence-led fix dispatch must begin with dispatch_phase=investigation; standard dispatch cannot bypass root-cause evidence."
+        )
+    if phase == "investigation":
+        if not root_cause_selected:
+            blockers.append(
+                "dispatch_phase=investigation requires the receipt-bound root-cause-investigation methodology."
+            )
+        if investigation_receipt is not None:
+            blockers.append(
+                "The investigation phase must not consume a remediation-unlocking receipt."
+            )
+    elif phase == "remediation":
+        if not mutation_requires_investigation:
+            blockers.append(
+                "dispatch_phase=remediation is allowed only for an implement or fix Team Plan with root-cause investigation selected."
+            )
+        elif investigation_receipt is None:
+            blockers.append(
+                "Remediation dispatch requires the exact passing root-cause specialist receipt from the unchanged candidate."
+            )
+        else:
+            try:
+                investigation_certification = _verify_root_cause_specialist_receipt(
+                    investigation_receipt,
+                    plan=plan,
+                    team_plan_payload=payload,
+                    goal=goal,
+                    team_mode=receipt_mode,
+                )
+            except ToolError as exc:
+                blockers.append(str(exc))
+    elif phase == "browser-remediation":
+        if requested_task_mode not in investigation_core.MUTATING_TASK_MODES:
+            blockers.append(
+                "Browser remediation requires an approved implement or fix Team Plan; QA evidence cannot expand a read-only task mode."
+            )
+        if len(writers) != 1:
+            blockers.append(
+                "Browser remediation requires exactly one original Team Plan writer with a bounded write scope."
+            )
+        browser_qa_assignments = [
+            item
+            for item in plan["selectedSpecialists"]
+            if item.get("specialistId") == "browser-qa-engineer"
+            and item.get("canonicalRoleId") == "qa"
+            and not item.get("writeScopes")
+        ]
+        if len(browser_qa_assignments) != 1:
+            blockers.append(
+                "Browser remediation requires one read-only browser-qa-engineer assignment in the signed Team Plan."
+            )
+        elif writers and (
+            browser_qa_assignments[0].get("physicalAgentId")
+            == writers[0].get("physicalAgentId")
+        ):
+            blockers.append(
+                "Browser QA and the source-writing Builder must remain physically independent."
+            )
+        if browser_evidence_receipt is None or browser_finding_input is None:
+            blockers.append(
+                "Browser remediation requires both the exact failing browser evidence receipt and its structured QA finding."
+            )
+        else:
+            project_path = Path(str(payload.get("projectPath") or ""))
+            try:
+                browser_evidence = _verify_browser_evidence_receipt(
+                    browser_evidence_receipt,
+                    project_path=project_path,
+                    require_current=True,
+                    require_failed_finding=True,
+                )
+                browser_finding = provider_core.normalize_finding(
+                    browser_finding_input,
+                    expected_evidence_sha256=browser_evidence["evidenceSha256"],
+                    expected_scenario_digest=browser_evidence["scenarioDigest"],
+                )
+            except (
+                ToolError,
+                provider_core.BrowserRemediationError,
+            ) as exc:
+                blockers.append(str(exc))
+        if mutation_requires_investigation:
+            if investigation_receipt is None:
+                blockers.append(
+                    "A fix-classified browser remediation also requires the exact passing root-cause investigation receipt."
+                )
+            else:
+                try:
+                    investigation_certification = _verify_root_cause_specialist_receipt(
+                        investigation_receipt,
+                        plan=plan,
+                        team_plan_payload=payload,
+                        goal=goal,
+                        team_mode=receipt_mode,
+                    )
+                except ToolError as exc:
+                    blockers.append(str(exc))
+        elif investigation_receipt is not None:
+            blockers.append(
+                "investigation_receipt is accepted for browser remediation only when the signed Team Plan requires root-cause investigation."
+            )
+    elif investigation_receipt is not None:
+        blockers.append(
+            "investigation_receipt is accepted only with dispatch_phase=remediation."
+        )
+    if phase != "browser-remediation" and (
+        browser_evidence_receipt is not None or browser_finding_input is not None
+    ):
+        blockers.append(
+            "browser_evidence_receipt and browser_finding are accepted only with dispatch_phase=browser-remediation."
+        )
+
+    if (
+        phase == "browser-remediation"
+        and not blockers
+        and browser_evidence is not None
+        and browser_finding is not None
+        and len(writers) == 1
+        and len(browser_qa_assignments) == 1
+    ):
+        expires_at = (
+            _dt.datetime.now(_dt.timezone.utc)
+            + _dt.timedelta(seconds=GOAL_READINESS_RECEIPT_MAX_AGE_SECONDS)
+        ).replace(microsecond=0).isoformat()
+        writer = writers[0]
+        browser_qa = browser_qa_assignments[0]
+        browser_handoff_receipt = issue_receipt(
+            {
+                "kind": "browser-remediation-handoff",
+                "schemaVersion": provider_core.BROWSER_REMEDIATION_HANDOFF_SCHEMA_VERSION,
+                "expiresAt": expires_at,
+                "projectPath": payload["projectPath"],
+                "originalGitHead": browser_evidence["gitHead"],
+                "originalProjectFingerprint": browser_evidence[
+                    "projectFingerprint"
+                ],
+                "originalPolicyDigest": browser_evidence["policyDigest"],
+                "originalBuildSha256": browser_evidence["buildSha256"],
+                "originalRuntimeSha256": browser_evidence["runtimeSha256"],
+                "scenarioDigest": browser_evidence["scenarioDigest"],
+                "priorEvidenceSha256": browser_evidence["evidenceSha256"],
+                "findingDigest": browser_finding["findingDigest"],
+                "teamPlanDigest": orchestration_core.team_plan_digest(plan),
+                "requestedTaskMode": requested_task_mode,
+                "writerSpecialistId": writer["specialistId"],
+                "writerPhysicalAgentId": writer["physicalAgentId"],
+                "writerScopes": list(writer["writeScopes"]),
+                "writerScopesDigest": provider_core.canonical_digest(
+                    writer["writeScopes"]
+                ),
+                "qaSpecialistId": browser_qa["specialistId"],
+                "qaPhysicalAgentId": browser_qa["physicalAgentId"],
+                "reQaRequired": True,
+                "priorEvidenceBecomesStaleOnCandidateChange": True,
+                "toolVersion": SERVER_VERSION,
+                "authorityEffect": "none",
+            }
+        )
+
+    execution_slice = _dynamic_dispatch_execution_slice(
+        plan,
+        phase=phase,
+        root_cause_selected=root_cause_selected,
+        blocked=bool(blockers),
+    )
+    return {
+        "goal": goal,
+        "goalDigest": context_goal_digest(goal),
+        "teamMode": receipt_mode,
+        "valid": not blockers,
+        "blockers": blockers,
+        "warnings": warnings,
+        "executionSource": "team-composer",
+        "dispatchEligible": payload.get("dispatchEligible") is True,
+        "teamPlanId": plan["teamPlanId"],
+        "teamPlanDigest": orchestration_core.team_plan_digest(plan),
+        "requestedTaskMode": plan["requestedTaskMode"],
+        "riskClass": plan["riskClass"],
+        "selectedSpecialists": plan["selectedSpecialists"],
+        "physicalAgents": plan["physicalAgents"],
+        "dispatchPhase": phase,
+        "investigationRequired": mutation_requires_investigation,
+        "investigationCertification": investigation_certification,
+        "remediationEligible": (
+            (
+                phase == "remediation"
+                and investigation_certification is not None
+            )
+            or (
+                phase == "browser-remediation"
+                and browser_handoff_receipt is not None
+            )
+        )
+        and not blockers,
+        "browserEvidence": (
+            {
+                key: browser_evidence.get(key)
+                for key in (
+                    "providerId",
+                    "providerKind",
+                    "gitHead",
+                    "projectFingerprint",
+                    "buildSha256",
+                    "runtimeSha256",
+                    "scenarioDigest",
+                    "evidenceSha256",
+                    "outcome",
+                    "complete",
+                    "truncated",
+                    "observedAt",
+                    "passed",
+                )
+            }
+            if browser_evidence is not None
+            else None
+        ),
+        "browserFinding": browser_finding,
+        "browserRemediationHandoffReceipt": browser_handoff_receipt,
+        "reQaRequired": browser_handoff_receipt is not None,
+        "executionSlice": execution_slice,
+        "independenceRequirements": plan["independenceRequirements"],
+        "requiredEvidenceContractIds": plan["requiredEvidenceContractIds"],
+        "coordinationPacket": args.get("coordination_packet"),
+        "authorityEffect": "none",
+        "blockedActions": team_blocked_actions(),
+    }
+
+
+def _dynamic_dispatch_execution_slice(
+    plan: dict[str, Any],
+    *,
+    phase: str,
+    root_cause_selected: bool,
+    blocked: bool,
+) -> dict[str, Any]:
+    assignments = list(plan["selectedSpecialists"])
+    if blocked:
+        selected_ids: set[str] = set()
+    elif phase == "investigation" and root_cause_selected:
+        selected_ids = {"root-cause-investigator"}
+    elif phase == "browser-remediation":
+        selected_ids = {
+            str(item["specialistId"])
+            for item in assignments
+            if item.get("writeScopes")
+        }
+    elif phase == "remediation" and root_cause_selected:
+        selected_ids = {
+            str(item["specialistId"])
+            for item in assignments
+            if item["specialistId"] != "root-cause-investigator"
+        }
+    else:
+        selected_ids = {str(item["specialistId"]) for item in assignments}
+    selected_assignments = [
+        json.loads(json.dumps(item))
+        for item in assignments
+        if item["specialistId"] in selected_ids
+    ]
+    if phase == "investigation":
+        for assignment in selected_assignments:
+            assignment["writeScopes"] = []
+    physical_agents: list[dict[str, Any]] = []
+    for physical in plan["physicalAgents"]:
+        logical_ids = [
+            item for item in physical["specialistIds"] if item in selected_ids
+        ]
+        if not logical_ids:
+            continue
+        projection = json.loads(json.dumps(physical))
+        projection["specialistIds"] = logical_ids
+        projection["canonicalRoleIds"] = sorted(
+            {
+                item["canonicalRoleId"]
+                for item in selected_assignments
+                if item["specialistId"] in logical_ids
+            }
+        )
+        physical_agents.append(projection)
+    return {
+        "schemaVersion": "jstack.dispatch-slice.v1",
+        "phase": phase,
+        "selectedSpecialists": selected_assignments,
+        "physicalAgents": physical_agents,
+        "sourceMutationAllowed": (
+            phase != "investigation"
+            and any(item.get("writeScopes") for item in selected_assignments)
+        ),
+        "instruction": (
+            "Dispatch is blocked; do not run an assignment or edit source."
+            if blocked
+            else "Run only the read-only root-cause investigation assignment; do not edit source."
+            if phase == "investigation"
+            else "Run only the original scoped Builder assignment; browser QA remains read-only and fresh re-QA is mandatory after the candidate changes."
+            if phase == "browser-remediation"
+            else "Run only the assignments in this phase under their original Team Plan scopes and authority."
+        ),
+        "authorityEffect": "none",
+    }
+
+
+def _verify_root_cause_specialist_receipt(
+    receipt: Any,
+    *,
+    plan: dict[str, Any],
+    team_plan_payload: dict[str, Any],
+    goal: str,
+    team_mode: str,
+) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > SPECIALIST_MAX_RECEIPT_CHARS:
+        raise ToolError(
+            "The root-cause investigation receipt is missing or exceeds the bounded receipt limit."
+        )
+    project_path = Path(str(team_plan_payload.get("projectPath") or ""))
+    state = evidence_subject(project_path)
+    verification = verify_receipt(
+        receipt,
+        "specialist-result",
+        state,
+        expected_subject=state,
+        require_passed=True,
+    )
+    if not verification["valid"]:
+        raise ToolError(
+            "The root-cause investigation receipt is stale, failed, or bound to another Git candidate."
+        )
+    receipt_payload = verification["payload"]
+    assignment = next(
+        (
+            item
+            for item in plan["selectedSpecialists"]
+            if item["specialistId"] == "root-cause-investigator"
+        ),
+        None,
+    )
+    if assignment is None:
+        raise ToolError(
+            "The signed Team Plan has no root-cause investigator assignment."
+        )
+    try:
+        certification = investigation_core.validate_certification(
+            receipt_payload.get("investigationCertification"),
+            requested_task_mode=str(plan["requestedTaskMode"]),
+        )
+    except investigation_core.InvestigationError as exc:
+        raise ToolError(
+            "The specialist receipt lacks a valid digest-only investigation certification."
+        ) from exc
+    result = receipt_payload.get("result")
+    telemetry = receipt_payload.get("telemetry")
+    checks = {
+        "schemaVersion": receipt_payload.get("schemaVersion")
+        == "jstack.specialist.receipt.v2",
+        "goalDigest": receipt_payload.get("goalDigest")
+        == hashlib.sha256(goal.encode("utf-8")).hexdigest(),
+        "teamMode": receipt_payload.get("teamMode") == team_mode,
+        "teamPlanDigest": receipt_payload.get("teamPlanDigest")
+        == team_plan_payload.get("teamPlanDigest"),
+        "teamRoleIds": receipt_payload.get("teamRoleIds")
+        == team_plan_payload.get("teamRoleIds"),
+        "specialistId": receipt_payload.get("specialistId")
+        == "root-cause-investigator",
+        "physicalAgentId": receipt_payload.get("physicalAgentId")
+        == assignment.get("physicalAgentId"),
+        "roleId": receipt_payload.get("roleId")
+        == assignment.get("canonicalRoleId")
+        == "investigator",
+        "capabilityIds": receipt_payload.get("capabilityIds")
+        == assignment.get("capabilityIds"),
+        "writeScope": receipt_payload.get("writeScope")
+        == assignment.get("writeScopes")
+        == [],
+        "result": isinstance(result, dict)
+        and result.get("status") == "success"
+        and result.get("changes") == [],
+        "resultDigest": receipt_payload.get("resultDigest")
+        == _specialist_digest(result),
+        "telemetryDigest": receipt_payload.get("telemetryDigest")
+        == _specialist_digest(telemetry),
+        "rootCauseEstablished": certification.get("rootCauseEstablished") is True,
+        "remediationEligible": certification.get("remediationEligible") is True,
+        "authority": certification.get("authorityEffect") == "none",
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "The root-cause specialist receipt does not match the exact Team Plan, read-only investigation assignment, or established-cause gate."
+        )
+    return certification
 
 
 def _prompt_receipt_binding_fields(
@@ -15434,6 +16620,15 @@ def verify_context_readiness_receipt(
             "requestedTaskMode": payload.get("requestedTaskMode"),
             "compilerVersion": payload.get("compilerVersion"),
             "templateVersion": payload.get("promptTemplateVersion"),
+            "approvalBound": payload.get("promptApprovalSource")
+            == "active-conversation"
+            and bool(
+                re.fullmatch(
+                    r"[0-9a-f]{64}",
+                    str(payload.get("approvedPromptSha256") or ""),
+                )
+            ),
+            "approvalSource": payload.get("promptApprovalSource"),
         },
         "checks": checks,
     }
@@ -15493,6 +16688,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     capability_ids = args.get("capability_ids") or []
     classifications = classify_work(goal)
     detected = tool_detect_project({"project_path": binding["requestedPath"]})
+    changed_ui_scope: list[str] = []
     if binding["evidenceMode"] == "git":
         ui_change_evidence = git_change_evidence(
             Path(binding["gitRoot"]),
@@ -15528,6 +16724,22 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         team_mode=team_mode,
         capability_ids=capability_ids,
     )
+    team_plan = _attach_unified_team_plan(
+        team_plan,
+        _compose_unified_team(
+            args,
+            goal=goal,
+            workflow_mode=workflow_mode,
+            requested_team_mode=team_mode,
+            quality_level=quality_level,
+            classifications=classifications,
+            changed_paths=changed_ui_scope,
+            ui_applicability=ui_applicability,
+            binding=binding,
+            context_readiness=context_readiness,
+            legacy_team=team_plan,
+        ),
+    )
     steps = [
         {
             "gate": "Classify",
@@ -15543,9 +16755,9 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "gate": "Planning",
-            "skill": "spec -> autoplan -> plan-eng-review -> plan-ceo-review -> plan-design-review -> plan-devex-review",
-            "purpose": "Convert unclear intent into acceptance criteria and review architecture/product/design/devex risk before coding.",
-            "doneWhen": "The execution plan is scoped, sequenced, and matched to the risk class.",
+            "skill": "spec -> proportional planning -> receipt-bound methodologyPlan",
+            "purpose": "Convert unclear intent into acceptance criteria, then apply only the JStack-native methodology capabilities selected for the exact goal and preserved task mode.",
+            "doneWhen": "The execution plan is scoped, sequenced, matched to risk, and any selected methodology output and evidence contract is complete.",
         },
         {
             "gate": "Safety",
@@ -15561,8 +16773,8 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "gate": "Quality",
-            "skill": "jstack_health -> jstack_review -> investigate -> jstack_qa",
-            "purpose": "Check repo health, review diffs, run focused verification, and investigate root causes for defects.",
+            "skill": "jstack_health -> jstack_review -> selected root-cause methodology -> jstack_qa",
+            "purpose": "Check repository health, review diffs, run focused verification, and use the JStack root-cause methodology only when deterministically selected.",
             "doneWhen": "Relevant lint/typecheck/test/build checks pass or failures are clearly reported.",
         },
         {
@@ -15691,6 +16903,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         "specialistCapabilityCatalog": _capability_call(
             lambda: capability_core.catalog_summary()
         ),
+        "methodologyCapabilityCatalog": methodology_core.catalog_summary(),
         "antiSlopChecklist": task_training["antiSlopChecklist"] if task_training else ANTI_SLOP_BASE,
         "recommendedSkills": selected,
         "availableWorkflowSkills": workflow_skill_names(),
@@ -15698,7 +16911,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         "releaseBlockers": release_blockers,
         "plan": steps,
         "policy": {
-            "intent": "Use gstack as an enterprise workflow router and quality gate.",
+            "intent": "Use JStack as the sole workflow and authority kernel; gstack remains only a pinned source for reviewed methodology and future bounded-provider research.",
             "noArbitraryShell": "Do not execute arbitrary shell commands through this MCP.",
             "actionSafety": "JStack adds no custom approval tokens or terminal ceremony. Perform repository, Git, provider, deployment, and production actions only within explicit user scope and the host/provider's normal permissions.",
             "productionBar": "Do not call work production-ready if required tests, security, QA, or docs for the risk class are missing.",
@@ -15760,6 +16973,29 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
         classifications,
         required=ui_applicability["state"] == "required",
     )
+    legacy_team = choose_agent_team(
+        goal,
+        classifications,
+        quality_level=quality_level,
+        team_mode=team_mode,
+        capability_ids=capability_ids,
+    )
+    dynamic_team = _attach_unified_team_plan(
+        legacy_team,
+        _compose_unified_team(
+            args,
+            goal=goal,
+            workflow_mode=workflow_mode,
+            requested_team_mode=team_mode,
+            quality_level=quality_level,
+            classifications=classifications,
+            changed_paths=(team_change_evidence["files"] if team_change_evidence else []),
+            ui_applicability=ui_applicability,
+            binding=binding,
+            context_readiness=context_readiness,
+            legacy_team=legacy_team,
+        ),
+    )
     return {
         "goal": goal,
         "qualityLevel": quality_level,
@@ -15772,14 +17008,9 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
         },
         "classifications": classifications,
         "productInterface": ui_applicability,
-        "team": choose_agent_team(
-            goal,
-            classifications,
-            quality_level=quality_level,
-            team_mode=team_mode,
-            capability_ids=capability_ids,
-        ),
+        "team": dynamic_team,
         "capabilityCatalog": _capability_call(lambda: capability_core.catalog_summary()),
+        "methodologyCapabilityCatalog": methodology_core.catalog_summary(),
         "availableRoster": AGENT_ROSTER,
         "policy": TEAM_DISPATCH_POLICY,
         "coordinationProtocol": TEAM_COORDINATION_PROTOCOL,
@@ -15822,6 +17053,37 @@ def tool_capability_catalog(args: dict[str, Any]) -> dict[str, Any]:
         filtered.append(capability)
     summary["capabilities"] = filtered
     summary["resultCount"] = len(filtered)
+    methodology_summary = methodology_core.catalog_summary(
+        include_details=include_details
+    )
+    normalized_methodology_query = re.sub(r"[-_]+", " ", query)
+    filtered_methods = []
+    for method in methodology_summary["methodologyCapabilities"]:
+        if role_ids and not set(str(item) for item in role_ids) & set(
+            method["canonicalRoleIds"]
+        ):
+            continue
+        if capability_ids:
+            continue
+        if query:
+            method_search_text = " ".join(
+                [
+                    str(method["id"]),
+                    str(method["name"]),
+                    str(method["summary"]),
+                    " ".join(str(item) for item in method["baseCapabilityIds"]),
+                ]
+            ).lower()
+            if (
+                query not in method_search_text
+                and normalized_methodology_query
+                not in re.sub(r"[-_]+", " ", method_search_text)
+            ):
+                continue
+        filtered_methods.append(method)
+    methodology_summary["methodologyCapabilities"] = filtered_methods
+    methodology_summary["resultCount"] = len(filtered_methods)
+    summary["methodologyCapabilityCatalog"] = methodology_summary
     goal = str(args.get("goal") or "").strip()
     if goal:
         selected_roles = [str(item) for item in role_ids] or ["lead"]
@@ -15961,6 +17223,13 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
     goal = str(args.get("goal") or "").strip()
     team_mode = normalize_team_mode(args.get("team_mode"))
     proposed = args.get("team") or args.get("agents") or {}
+    if isinstance(proposed, dict) and proposed.get("unifiedTeamPlan") is not None:
+        return _dynamic_dispatch_check(
+            args,
+            proposed=proposed,
+            goal=goal,
+            team_mode=team_mode,
+        )
     if isinstance(proposed, dict):
         raw_agents = proposed.get("agents") or []
     elif isinstance(proposed, list):
@@ -15981,6 +17250,14 @@ def tool_dispatch_check(args: dict[str, Any]) -> dict[str, Any]:
     classifications = classify_work(goal) if goal else []
     blockers: list[str] = []
     warnings: list[str] = []
+    if str(args.get("dispatch_phase") or "standard") != "standard":
+        blockers.append(
+            "Stage 9 phased dispatch requires a signed dynamic Unified Team Plan."
+        )
+    if args.get("investigation_receipt") is not None:
+        blockers.append(
+            "investigation_receipt is accepted only with a signed dynamic Unified Team Plan."
+        )
 
     ids = [agent["id"] for agent in agents]
     allowed_ids = {agent["id"] for agent in AGENT_ROSTER}
@@ -16371,6 +17648,8 @@ def _validate_specialist_result(
     capability_ids: list[str],
     write_scopes: list[str],
     catalog: dict[str, Any],
+    additional_required_evidence: Optional[Iterable[str]] = None,
+    require_exact_write_scope: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     validate_schema_value(result, SPECIALIST_RESULT_SCHEMA, "result")
     _specialist_structured_limit(result, "result")
@@ -16410,6 +17689,7 @@ def _validate_specialist_result(
             for capability_id in capability_ids
             for kind in indexed[capability_id]["requiredEvidence"]
         }
+        | {str(item) for item in (additional_required_evidence or [])}
     )
     missing_evidence = sorted(set(required_evidence) - set(evidence_kinds))
     if missing_evidence:
@@ -16464,7 +17744,7 @@ def _validate_specialist_result(
         change["path"] = path
         if role_id not in {"lead", "builder", "docs"}:
             raise ToolError(f"Read-only role '{role_id}' may not report file changes.")
-        if role_id != "lead" and not write_scopes:
+        if (require_exact_write_scope or role_id != "lead") and not write_scopes:
             raise ToolError(f"Editing role '{role_id}' requires a non-empty write_scope.")
         if write_scopes and not any(_path_owned_by_scope(path, scope) for scope in write_scopes):
             raise ToolError(
@@ -16546,6 +17826,203 @@ def _build_specialist_telemetry(
     return normalized
 
 
+def _tool_dynamic_specialist_result(
+    args: dict[str, Any],
+    *,
+    project_path: Path,
+    goal: str,
+    team_mode: str,
+) -> dict[str, Any]:
+    team_plan_receipt = args.get("team_plan_receipt")
+    payload = _verify_unified_team_plan_receipt_token(
+        team_plan_receipt,
+        goal=goal,
+        team_mode=team_mode,
+        require_dispatch_eligible=True,
+    )
+    if payload.get("evidenceMode") != "git":
+        raise ToolError(
+            "Dynamic specialist receipts require a Git-backed candidate; artifact-only evidence remains direct and explicitly uncertified."
+        )
+    if Path(str(payload.get("projectPath") or "")).resolve() != project_path.resolve():
+        raise ToolError("team_plan_receipt is bound to a different project.")
+    supplied_role_ids = _specialist_role_ids(args.get("team_role_ids"))
+    if supplied_role_ids != payload.get("teamRoleIds"):
+        raise ToolError(
+            "team_role_ids must exactly match dynamicTeamRoleIds from jstack_team_plan."
+        )
+    specialist_id = _specialist_identifier(
+        args.get("specialist_id"), "specialist_id"
+    )
+    physical_agent_id = _specialist_identifier(
+        args.get("physical_agent_id"), "physical_agent_id"
+    )
+    assignments = [
+        item
+        for item in payload["assignments"]
+        if isinstance(item, dict) and item.get("specialistId") == specialist_id
+    ]
+    if len(assignments) != 1:
+        raise ToolError(
+            f"specialist_id '{specialist_id}' is not an exact assignment in the Unified Team Plan."
+        )
+    assignment = assignments[0]
+    if physical_agent_id != assignment.get("physicalAgentId"):
+        raise ToolError(
+            "physical_agent_id must match the specialist's exact Team Plan allocation."
+        )
+    role_id = str(args.get("role_id") or "").strip()
+    if role_id != assignment.get("roleId"):
+        raise ToolError(
+            "role_id must match the specialist's canonical Team Plan authority role."
+        )
+    capability_ids = _specialist_capability_ids(role_id, args.get("capability_ids"))
+    if capability_ids != assignment.get("capabilityIds"):
+        raise ToolError(
+            "capability_ids must exactly match the selected specialist assignment."
+        )
+    write_scopes = _specialist_write_scopes(args.get("write_scope"))
+    if write_scopes != assignment.get("writeScope"):
+        raise ToolError(
+            "write_scope must exactly match the selected specialist assignment."
+        )
+    catalog = _capability_call(lambda: capability_core.load_catalog())
+    result, result_passed = _validate_specialist_result(
+        args.get("result"),
+        role_id=role_id,
+        capability_ids=capability_ids,
+        write_scopes=write_scopes,
+        catalog=catalog,
+        additional_required_evidence=assignment.get("evidenceContractIds") or [],
+        require_exact_write_scope=True,
+    )
+    root_cause_selected = "root-cause-investigation" in set(
+        payload.get("selectedMethodologyIds") or []
+    )
+    requires_investigation_contract = (
+        root_cause_selected and specialist_id == "root-cause-investigator"
+    )
+    investigation_contract = args.get("investigation_contract")
+    investigation_certification: Optional[dict[str, Any]] = None
+    if requires_investigation_contract:
+        if investigation_contract is None:
+            raise ToolError(
+                "The root-cause investigator must return the exact jstack.investigation.v1 contract."
+            )
+        _reject_specialist_sensitive_content(
+            investigation_contract, "investigation_contract"
+        )
+        try:
+            _, investigation_certification = investigation_core.validate_contract(
+                investigation_contract,
+                requested_task_mode=str(payload.get("requestedTaskMode") or ""),
+            )
+        except investigation_core.InvestigationError as exc:
+            raise ToolError(str(exc)) from exc
+        if result["changes"]:
+            raise ToolError(
+                "The root-cause investigator is read-only and may not report source changes."
+            )
+        if investigation_certification["rootCauseEstablished"] and not result_passed:
+            raise ToolError(
+                "An established root cause requires a complete passing specialist result."
+            )
+        if (
+            not investigation_certification["rootCauseEstablished"]
+            and result["status"] == "success"
+        ):
+            raise ToolError(
+                "An unresolved investigation must return partial, blocked, or error status rather than success."
+            )
+    elif investigation_contract is not None:
+        raise ToolError(
+            "investigation_contract is accepted only for the exact receipt-bound root-cause-investigator assignment."
+        )
+    subject_before = evidence_subject(project_path)
+    goal_digest = hashlib.sha256(goal.encode("utf-8")).hexdigest()
+    telemetry_context = {
+        "schemaVersion": "jstack.specialist.telemetry-input.v2",
+        "goalDigest": goal_digest,
+        "teamMode": team_mode,
+        "teamPlanDigest": payload["teamPlanDigest"],
+        "teamRoleIds": supplied_role_ids,
+        "specialistId": specialist_id,
+        "physicalAgentId": physical_agent_id,
+        "roleId": role_id,
+        "capabilityIds": capability_ids,
+        "writeScope": write_scopes,
+        "catalogDigest": capability_core.catalog_digest(catalog),
+        "gitHead": subject_before["gitHead"],
+        "projectFingerprint": subject_before["projectFingerprint"],
+    }
+    telemetry = _build_specialist_telemetry(
+        args.get("telemetry"), result=result, context=telemetry_context
+    )
+    telemetry_passed = telemetry["status"] == "success" and all(
+        item["status"] not in {"error", "blocked"}
+        for item in telemetry["toolCalls"]
+    )
+    passed = result_passed and telemetry_passed
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed while the dynamic specialist result was being validated. Re-run against one stable Git state."
+        )
+    result_digest = _specialist_digest(result)
+    telemetry_digest = _specialist_digest(telemetry)
+    receipt_payload = {
+        "kind": "specialist-result",
+        "schemaVersion": "jstack.specialist.receipt.v2",
+        "projectPath": subject_after["gitRoot"],
+        "gitHead": subject_after["gitHead"],
+        "projectFingerprint": subject_after["projectFingerprint"],
+        "baseRef": subject_after.get("baseRef"),
+        "baseCommit": subject_after.get("baseCommit"),
+        "policyDigest": subject_after["policyDigest"],
+        "toolVersion": SERVER_VERSION,
+        "goalDigest": goal_digest,
+        "teamMode": team_mode,
+        "teamPlanDigest": payload["teamPlanDigest"],
+        "teamRoleIds": supplied_role_ids,
+        "specialistId": specialist_id,
+        "physicalAgentId": physical_agent_id,
+        "roleId": role_id,
+        "capabilityIds": capability_ids,
+        "capabilityCatalogDigest": capability_core.catalog_digest(catalog),
+        "writeScope": write_scopes,
+        "result": result,
+        "resultDigest": result_digest,
+        "telemetry": telemetry,
+        "telemetryDigest": telemetry_digest,
+        "passed": passed,
+        "investigationCertification": investigation_certification,
+    }
+    receipt = issue_receipt(receipt_payload)
+    return {
+        "schemaVersion": "jstack.specialist.result-issuance.v2",
+        "passed": passed,
+        "teamPlanDigest": payload["teamPlanDigest"],
+        "specialistId": specialist_id,
+        "physicalAgentId": physical_agent_id,
+        "roleId": role_id,
+        "capabilityIds": capability_ids,
+        "capabilityCatalogDigest": capability_core.catalog_digest(catalog),
+        "goalDigest": goal_digest,
+        "resultDigest": result_digest,
+        "telemetry": telemetry,
+        "telemetryDigest": telemetry_digest,
+        "investigationCertification": investigation_certification,
+        "specialistResultReceipt": receipt,
+        "receiptDigest": _receipt_digest(receipt),
+        "receiptMeaning": (
+            "Session-local proof that one logical specialist result matches the exact signed Team Plan, canonical-role authority, physical-agent allocation, scope, evidence, telemetry, and current Git candidate. It grants no action or release authority."
+        ),
+    }
+
+
 def tool_specialist_result(args: dict[str, Any]) -> dict[str, Any]:
     _specialist_structured_limit(args, "arguments")
     project_path = require_project_path(args.get("project_path"))
@@ -16555,6 +18032,25 @@ def tool_specialist_result(args: dict[str, Any]) -> dict[str, Any]:
     team_mode = normalize_team_mode(args.get("team_mode"))
     if team_mode == "auto":
         raise ToolError("team_mode must be a resolved single-lead, smart-subagents, or full-team mode.")
+    dynamic_fields = {
+        name for name in ("team_plan_receipt", "specialist_id", "physical_agent_id")
+        if args.get(name) is not None
+    }
+    if dynamic_fields and "team_plan_receipt" not in dynamic_fields:
+        raise ToolError(
+            "specialist_id and physical_agent_id are accepted only with team_plan_receipt."
+        )
+    if args.get("team_plan_receipt") is not None:
+        return _tool_dynamic_specialist_result(
+            args,
+            project_path=project_path,
+            goal=goal,
+            team_mode=team_mode,
+        )
+    if args.get("investigation_contract") is not None:
+        raise ToolError(
+            "Stage 9 investigation contracts require a signed dynamic Team Plan receipt."
+        )
     explicit_capability_ids = [str(item) for item in (args.get("explicit_capability_ids") or [])]
     supplied_role_ids = _specialist_role_ids(args.get("team_role_ids"))
     selection_digest = _optional_capability_selection_digest(
@@ -16689,6 +18185,379 @@ def _specialist_diagnostic(
     return diagnostic
 
 
+def _tool_dynamic_specialist_handoff_check(
+    args: dict[str, Any],
+    *,
+    project_path: Path,
+    goal: str,
+    team_mode: str,
+) -> dict[str, Any]:
+    plan_payload = _verify_unified_team_plan_receipt_token(
+        args.get("team_plan_receipt"),
+        goal=goal,
+        team_mode=team_mode,
+        require_dispatch_eligible=True,
+    )
+    if plan_payload.get("evidenceMode") != "git":
+        raise ToolError("Dynamic specialist handoff receipts require a Git-backed candidate.")
+    if Path(str(plan_payload.get("projectPath") or "")).resolve() != project_path.resolve():
+        raise ToolError("team_plan_receipt is bound to a different project.")
+    assignments = plan_payload["assignments"]
+    expected_agents_raw = args.get("expected_agents")
+    if not isinstance(expected_agents_raw, list) or not expected_agents_raw:
+        raise ToolError(
+            "expected_agents must project every dynamicReceiptAssignment in exact order."
+        )
+    for index, expected in enumerate(expected_agents_raw):
+        validate_schema_value(
+            expected, SPECIALIST_EXPECTED_AGENT_SCHEMA, f"expected_agents[{index}]"
+        )
+    expected_projection = [
+        {
+            "roleId": assignment["roleId"],
+            "capabilityIds": assignment["capabilityIds"],
+        }
+        for assignment in assignments
+    ]
+    if expected_agents_raw != expected_projection:
+        raise ToolError(
+            "expected_agents must exactly match the ordered role/capability projection of dynamicReceiptAssignments."
+        )
+
+    resolutions_raw = args.get("resolutions") or []
+    if not isinstance(resolutions_raw, list):
+        raise ToolError("resolutions must be an array.")
+    resolutions: dict[str, dict[str, Any]] = {}
+    for index, resolution in enumerate(resolutions_raw):
+        validate_schema_value(
+            resolution, SPECIALIST_RESOLUTION_SCHEMA, f"resolutions[{index}]"
+        )
+        _reject_specialist_sensitive_content(resolution, f"resolutions[{index}]")
+        resolution_key = _specialist_identifier(
+            resolution["resolutionKey"], f"resolutions[{index}].resolutionKey"
+        )
+        if resolution_key in resolutions:
+            raise ToolError(f"Duplicate resolutionKey in resolutions: {resolution_key}")
+        resolutions[resolution_key] = json.loads(json.dumps(resolution))
+
+    receipts = args.get("receipts")
+    if not isinstance(receipts, list) or not all(
+        isinstance(item, str) for item in receipts
+    ):
+        raise ToolError("receipts must be an array returned by jstack_specialist_result.")
+    if len(receipts) > SPECIALIST_MAX_RECEIPTS or any(
+        len(item) > SPECIALIST_MAX_RECEIPT_CHARS for item in receipts
+    ):
+        raise ToolError("receipts exceeds the bounded specialist handoff limits.")
+    subject_before = evidence_subject(project_path)
+    goal_digest = hashlib.sha256(goal.encode("utf-8")).hexdigest()
+    catalog_digest = capability_core.catalog_digest(
+        _capability_call(lambda: capability_core.load_catalog())
+    )
+    expected_by_specialist = {
+        str(item["specialistId"]): item for item in assignments
+    }
+    diagnostics: list[dict[str, Any]] = []
+    verified_by_specialist: dict[str, dict[str, Any]] = {}
+    receipt_digests: list[str] = []
+    for receipt in receipts:
+        receipt_digest = _receipt_digest(receipt)
+        if receipt_digest in receipt_digests:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-DUPLICATE-RECEIPT",
+                    "The same dynamic specialist receipt was supplied more than once.",
+                )
+            )
+            continue
+        receipt_digests.append(receipt_digest)
+        try:
+            verification = verify_receipt(
+                receipt,
+                "specialist-result",
+                subject_before,
+                expected_subject=subject_before,
+                require_passed=False,
+            )
+        except ToolError:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RECEIPT-MALFORMED",
+                    f"Receipt {receipt_digest[:12]} is malformed or from another server session.",
+                )
+            )
+            continue
+        receipt_payload = verification["payload"]
+        specialist_id = str(receipt_payload.get("specialistId") or "")
+        expected = expected_by_specialist.get(specialist_id)
+        if not verification["valid"]:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RECEIPT-STALE",
+                    f"Dynamic specialist receipt {receipt_digest[:12]} is stale or bound to another candidate.",
+                    role_id=str(receipt_payload.get("roleId") or "") or None,
+                )
+            )
+            continue
+        receipt_checks = {
+            "schemaVersion": receipt_payload.get("schemaVersion")
+            == "jstack.specialist.receipt.v2",
+            "goalDigest": receipt_payload.get("goalDigest") == goal_digest,
+            "teamMode": receipt_payload.get("teamMode") == team_mode,
+            "teamPlanDigest": receipt_payload.get("teamPlanDigest")
+            == plan_payload["teamPlanDigest"],
+            "teamRoleIds": receipt_payload.get("teamRoleIds")
+            == plan_payload["teamRoleIds"],
+            "expectedSpecialist": expected is not None,
+            "physicalAgentId": receipt_payload.get("physicalAgentId")
+            == (expected or {}).get("physicalAgentId"),
+            "roleId": receipt_payload.get("roleId")
+            == (expected or {}).get("roleId"),
+            "capabilityIds": receipt_payload.get("capabilityIds")
+            == (expected or {}).get("capabilityIds"),
+            "writeScope": receipt_payload.get("writeScope")
+            == (expected or {}).get("writeScope"),
+            "catalogDigest": receipt_payload.get("capabilityCatalogDigest")
+            == catalog_digest,
+            "resultDigest": receipt_payload.get("resultDigest")
+            == _specialist_digest(receipt_payload.get("result")),
+            "telemetryDigest": receipt_payload.get("telemetryDigest")
+            == _specialist_digest(receipt_payload.get("telemetry")),
+        }
+        if not all(receipt_checks.values()):
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RECEIPT-MISMATCH",
+                    "A dynamic specialist receipt does not match the exact Team Plan assignment, capability catalog, or structured payload digests.",
+                    role_id=str(receipt_payload.get("roleId") or "") or None,
+                )
+            )
+            continue
+        if specialist_id in verified_by_specialist:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-DUPLICATE-ASSIGNMENT",
+                    f"Multiple receipts claim logical specialist '{specialist_id}'.",
+                    role_id=str(receipt_payload.get("roleId") or "") or None,
+                )
+            )
+            continue
+        verified_by_specialist[specialist_id] = {
+            "receiptDigest": receipt_digest,
+            "payload": receipt_payload,
+        }
+        if receipt_payload.get("passed") is not True:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-RESULT-NOT-PASSED",
+                    f"Logical specialist '{specialist_id}' returned an incomplete, blocked, or failed result.",
+                    role_id=str(receipt_payload.get("roleId") or "") or None,
+                )
+            )
+
+    for specialist_id, expected in expected_by_specialist.items():
+        if specialist_id not in verified_by_specialist:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-MISSING-ASSIGNMENT",
+                    f"No current valid receipt was supplied for logical specialist '{specialist_id}'.",
+                    role_id=str(expected["roleId"]),
+                )
+            )
+
+    resolution_views: dict[str, list[dict[str, str]]] = {}
+    resolution_evidence_references: dict[str, set[str]] = {}
+    changed_path_owners: list[tuple[str, str]] = []
+    telemetry_summary = {
+        "runCount": 0,
+        "toolCallCount": 0,
+        "durationMs": 0,
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "rawContentStored": False,
+    }
+    for specialist_id, verified in verified_by_specialist.items():
+        receipt_payload = verified["payload"]
+        result = receipt_payload["result"]
+        telemetry = receipt_payload["telemetry"]
+        evidence_by_kind = {
+            str(item["kind"]): set(str(reference) for reference in item["references"])
+            for item in result.get("evidence") or []
+        }
+        telemetry_summary["runCount"] += 1
+        telemetry_summary["toolCallCount"] += len(telemetry.get("toolCalls") or [])
+        telemetry_summary["durationMs"] += int(telemetry.get("durationMs") or 0)
+        telemetry_summary["inputTokens"] += int(telemetry.get("inputTokens") or 0)
+        telemetry_summary["outputTokens"] += int(telemetry.get("outputTokens") or 0)
+        telemetry_summary["rawContentStored"] = (
+            telemetry_summary["rawContentStored"]
+            or telemetry.get("rawContentStored") is not False
+        )
+        for finding in result.get("findings") or []:
+            resolution_key = str(finding["resolutionKey"])
+            resolution_views.setdefault(resolution_key, []).append(
+                {
+                    "specialistId": specialist_id,
+                    "roleId": str(receipt_payload["roleId"]),
+                    "disposition": str(finding["disposition"]),
+                    "findingId": str(finding["findingId"]),
+                }
+            )
+            references = resolution_evidence_references.setdefault(
+                resolution_key, set()
+            )
+            for evidence_kind in finding.get("evidenceKinds") or []:
+                references.update(evidence_by_kind.get(str(evidence_kind), set()))
+        for change in result.get("changes") or []:
+            path = str(change["path"])
+            for prior_path, prior_owner in changed_path_owners:
+                if prior_owner != specialist_id and scopes_overlap(path, prior_path):
+                    diagnostics.append(
+                        _specialist_diagnostic(
+                            "JSTACK-SPECIALIST-CHANGE-OWNERSHIP-CONFLICT",
+                            f"Changed path '{path}' claimed by '{specialist_id}' overlaps '{prior_path}' claimed by '{prior_owner}'.",
+                            role_id=str(receipt_payload["roleId"]),
+                        )
+                    )
+            changed_path_owners.append((path, specialist_id))
+
+    reconciliations: list[dict[str, Any]] = []
+    for resolution_key, views in sorted(resolution_views.items()):
+        dispositions = {
+            item["disposition"]
+            for item in views
+            if item["disposition"] != "not-applicable"
+        }
+        resolution = resolutions.get(resolution_key)
+        if len(dispositions) > 1 and resolution is None:
+            diagnostics.append(
+                _specialist_diagnostic(
+                    "JSTACK-SPECIALIST-UNRESOLVED-CONTRADICTION",
+                    f"Dynamic specialists disagree on '{resolution_key}': "
+                    + ", ".join(
+                        f"{item['specialistId']}={item['disposition']}"
+                        for item in views
+                    ),
+                    resolution_key=resolution_key,
+                )
+            )
+        if resolution is not None:
+            unknown_references = sorted(
+                set(str(item) for item in resolution["evidenceReferences"])
+                - resolution_evidence_references.get(resolution_key, set())
+            )
+            if unknown_references:
+                diagnostics.append(
+                    _specialist_diagnostic(
+                        "JSTACK-SPECIALIST-RESOLUTION-EVIDENCE-MISMATCH",
+                        f"Lead resolution for '{resolution_key}' cites evidence absent from signed findings: "
+                        + ", ".join(unknown_references),
+                        resolution_key=resolution_key,
+                    )
+                )
+            reconciliations.append(
+                {
+                    "resolutionKey": resolution_key,
+                    "specialistViews": views,
+                    "leadResolution": resolution,
+                }
+            )
+            if resolution["decision"] == "block":
+                diagnostics.append(
+                    _specialist_diagnostic(
+                        "JSTACK-SPECIALIST-LEAD-RESOLUTION-BLOCKS",
+                        f"Lead resolution for '{resolution_key}' remains blocking.",
+                        resolution_key=resolution_key,
+                    )
+                )
+    for resolution_key in sorted(set(resolutions) - set(resolution_views)):
+        diagnostics.append(
+            _specialist_diagnostic(
+                "JSTACK-SPECIALIST-UNREFERENCED-RESOLUTION",
+                f"Resolution '{resolution_key}' does not correspond to a specialist finding.",
+                severity="warning",
+                resolution_key=resolution_key,
+            )
+        )
+
+    subject_after = evidence_subject(project_path)
+    if any(
+        subject_after[field] != subject_before[field]
+        for field in ("gitHead", "projectFingerprint", "policyDigest", "toolVersion")
+    ):
+        raise ToolError(
+            "The project changed while dynamic specialist handoff receipts were checked."
+        )
+    valid = not [item for item in diagnostics if item["severity"] == "error"]
+    handoff_receipt = None
+    if valid:
+        handoff_receipt = issue_receipt(
+            {
+                "kind": "specialist-handoff",
+                "schemaVersion": "jstack.specialist.handoff-receipt.v2",
+                "projectPath": subject_after["gitRoot"],
+                "gitHead": subject_after["gitHead"],
+                "projectFingerprint": subject_after["projectFingerprint"],
+                "baseRef": subject_after.get("baseRef"),
+                "baseCommit": subject_after.get("baseCommit"),
+                "policyDigest": subject_after["policyDigest"],
+                "toolVersion": SERVER_VERSION,
+                "goalDigest": goal_digest,
+                "teamMode": team_mode,
+                "teamPlanDigest": plan_payload["teamPlanDigest"],
+                "teamRoleIds": plan_payload["teamRoleIds"],
+                "specialistIds": list(expected_by_specialist),
+                "specialistReceiptDigests": [
+                    verified_by_specialist[specialist_id]["receiptDigest"]
+                    for specialist_id in expected_by_specialist
+                ],
+                "reconciliationDigest": _specialist_digest(reconciliations),
+                "telemetrySummaryDigest": _specialist_digest(telemetry_summary),
+                "passed": True,
+            }
+        )
+    return {
+        "schemaVersion": "jstack.specialist.handoff.v2",
+        "valid": valid,
+        "complete": valid,
+        "goalDigest": goal_digest,
+        "teamMode": team_mode,
+        "teamPlanDigest": plan_payload["teamPlanDigest"],
+        "teamRoleIds": plan_payload["teamRoleIds"],
+        "verifiedSpecialists": [
+            {
+                "specialistId": specialist_id,
+                "physicalAgentId": expected_by_specialist[specialist_id][
+                    "physicalAgentId"
+                ],
+                "roleId": expected_by_specialist[specialist_id]["roleId"],
+                "capabilityIds": expected_by_specialist[specialist_id][
+                    "capabilityIds"
+                ],
+                "receiptDigest": verified_by_specialist[specialist_id][
+                    "receiptDigest"
+                ],
+                "resultStatus": verified_by_specialist[specialist_id]["payload"][
+                    "result"
+                ]["status"],
+            }
+            for specialist_id in expected_by_specialist
+            if specialist_id in verified_by_specialist
+        ],
+        "diagnostics": diagnostics,
+        "reconciliations": reconciliations,
+        "telemetrySummary": telemetry_summary,
+        "specialistHandoffReceipt": handoff_receipt,
+        "handoffReceiptDigest": (
+            _receipt_digest(handoff_receipt) if handoff_receipt else None
+        ),
+        "authorityEffect": "none",
+        "receiptMeaning": (
+            "When issued, this session-local receipt proves complete logical-specialist coverage for the exact signed Team Plan, current Git candidate, capability/scope bindings, and explicit contradiction reconciliation. It does not prove semantic truth or authorize an action."
+        ),
+    }
+
+
 def tool_specialist_handoff_check(args: dict[str, Any]) -> dict[str, Any]:
     _specialist_structured_limit(
         args,
@@ -16702,6 +18571,13 @@ def tool_specialist_handoff_check(args: dict[str, Any]) -> dict[str, Any]:
     team_mode = normalize_team_mode(args.get("team_mode"))
     if team_mode == "auto":
         raise ToolError("team_mode must be resolved before specialist handoff validation.")
+    if args.get("team_plan_receipt") is not None:
+        return _tool_dynamic_specialist_handoff_check(
+            args,
+            project_path=project_path,
+            goal=goal,
+            team_mode=team_mode,
+        )
     explicit_capability_ids = [str(item) for item in (args.get("explicit_capability_ids") or [])]
     selection_digest = _optional_capability_selection_digest(
         args.get("capability_selection_digest")
@@ -18820,6 +20696,412 @@ def tool_qa(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _browser_host_id() -> str:
+    raw = (platform.system() or "unknown").strip().lower()
+    normalized = re.sub(r"[^a-z0-9]+", "-", raw).strip("-") or "unknown"
+    return normalized if normalized[0].isalpha() else f"host-{normalized}"
+
+
+def _verify_browser_evidence_receipt(
+    receipt: Any,
+    *,
+    project_path: Path,
+    require_current: bool,
+    require_failed_finding: bool,
+) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("A bounded browser evidence receipt is required.")
+    payload = verify_signed_session_token(receipt, "browser-evidence")
+    digest_fields = (
+        "projectFingerprint",
+        "policyDigest",
+        "providerContractDigest",
+        "commandFingerprint",
+        "buildSha256",
+        "runtimeSha256",
+        "scenarioDigest",
+        "evidenceSha256",
+    )
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == provider_core.BROWSER_EVIDENCE_RECEIPT_SCHEMA_VERSION,
+        "projectPath": payload.get("projectPath") == str(project_path.resolve()),
+        "gitHead": bool(
+            re.fullmatch(r"[0-9a-f]{40}", str(payload.get("gitHead") or ""))
+        ),
+        "digests": all(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get(field) or ""))
+            for field in digest_fields
+        ),
+        "providerKind": payload.get("providerKind")
+        in {"project-script", "host-native", "gstack-browser"},
+        "providerIndependent": isinstance(payload.get("providerIndependent"), bool),
+        "outcome": payload.get("outcome") in {"pass", "fail", "blocked", "error"},
+        "complete": isinstance(payload.get("complete"), bool),
+        "truncated": isinstance(payload.get("truncated"), bool),
+        "passed": isinstance(payload.get("passed"), bool),
+        "mutationDetected": payload.get("mutationDetected") is False,
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "authority": payload.get("authorityEffect") == "none",
+    }
+    if require_failed_finding:
+        checks.update(
+            {
+                "failedFinding": payload.get("outcome") == "fail"
+                and payload.get("passed") is False,
+                "completeFinding": payload.get("complete") is True,
+                "untruncatedFinding": payload.get("truncated") is False,
+            }
+        )
+    if require_current:
+        current = evidence_subject(project_path)
+        checks.update(
+            {
+                "currentGitHead": payload.get("gitHead") == current["gitHead"],
+                "currentProjectFingerprint": payload.get("projectFingerprint")
+                == current["projectFingerprint"],
+                "currentPolicyDigest": payload.get("policyDigest")
+                == current["policyDigest"],
+            }
+        )
+    if not all(checks.values()):
+        raise ToolError(
+            "Browser evidence is stale, incomplete, passing, altered, or not bound to the required failing candidate."
+        )
+    return payload
+
+
+def _verify_browser_remediation_handoff(
+    receipt: Any,
+    *,
+    project_path: Path,
+    current_subject: dict[str, Any],
+    scenario_digest: str,
+    build_sha256: str,
+) -> dict[str, Any]:
+    if not isinstance(receipt, str) or not receipt or len(receipt) > UI_RECEIPT_MAX_CHARS:
+        raise ToolError("A bounded browser remediation handoff receipt is required.")
+    payload = verify_signed_session_token(receipt, "browser-remediation-handoff")
+    digest_fields = (
+        "originalProjectFingerprint",
+        "originalPolicyDigest",
+        "originalBuildSha256",
+        "originalRuntimeSha256",
+        "scenarioDigest",
+        "priorEvidenceSha256",
+        "findingDigest",
+        "teamPlanDigest",
+        "writerScopesDigest",
+    )
+    writer_scopes = payload.get("writerScopes")
+    checks = {
+        "schemaVersion": payload.get("schemaVersion")
+        == provider_core.BROWSER_REMEDIATION_HANDOFF_SCHEMA_VERSION,
+        "projectPath": payload.get("projectPath") == str(project_path.resolve()),
+        "originalGitHead": bool(
+            re.fullmatch(
+                r"[0-9a-f]{40}", str(payload.get("originalGitHead") or "")
+            )
+        ),
+        "digests": all(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get(field) or ""))
+            for field in digest_fields
+        ),
+        "taskMode": payload.get("requestedTaskMode") in {"implement", "fix"},
+        "writer": bool(str(payload.get("writerSpecialistId") or "").strip()),
+        "qa": bool(str(payload.get("qaSpecialistId") or "").strip()),
+        "writerPhysicalAgent": bool(
+            str(payload.get("writerPhysicalAgentId") or "").strip()
+        ),
+        "qaPhysicalAgent": bool(
+            str(payload.get("qaPhysicalAgentId") or "").strip()
+        ),
+        "separateAgents": payload.get("writerPhysicalAgentId")
+        != payload.get("qaPhysicalAgentId"),
+        "writerScopes": isinstance(writer_scopes, list)
+        and bool(writer_scopes)
+        and all(isinstance(item, str) and item for item in writer_scopes),
+        "writerScopesDigest": isinstance(writer_scopes, list)
+        and payload.get("writerScopesDigest")
+        == provider_core.canonical_digest(writer_scopes),
+        "policyUnchanged": payload.get("originalPolicyDigest")
+        == current_subject["policyDigest"],
+        "candidateChanged": payload.get("originalProjectFingerprint")
+        != current_subject["projectFingerprint"],
+        "scenarioUnchanged": payload.get("scenarioDigest") == scenario_digest,
+        "buildChanged": payload.get("originalBuildSha256") != build_sha256,
+        "reQaRequired": payload.get("reQaRequired") is True,
+        "staleRule": payload.get("priorEvidenceBecomesStaleOnCandidateChange")
+        is True,
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "authority": payload.get("authorityEffect") == "none",
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "Browser remediation handoff is stale, altered, not separated from QA, or does not bind a changed candidate and rebuilt scenario."
+        )
+    return payload
+
+
+def tool_browser_capture(args: dict[str, Any]) -> dict[str, Any]:
+    """Discover or run one bounded, candidate-bound browser evidence provider."""
+
+    project_path = require_project_path(args.get("project_path"))
+    subject_before = evidence_subject(project_path)
+    commands = provider_core.discover_project_browser_commands(package_scripts(project_path))
+    host_id = _browser_host_id()
+    contract = provider_core.provider_contract(
+        commands,
+        host_id=host_id,
+        host_supported=shutil.which("npm") is not None,
+    )
+    protocol = {
+        "schemaVersion": provider_core.BROWSER_PROVIDER_RESULT_SCHEMA_VERSION,
+        "outputEnvironmentVariable": "JSTACK_BROWSER_OUTPUT",
+        "candidateEnvironmentVariable": "JSTACK_BROWSER_CANDIDATE_JSON",
+        "scenarioEnvironmentVariable": "JSTACK_BROWSER_SCENARIO_JSON",
+        "maximumOutputBytes": provider_core.MAX_RESULT_BYTES,
+        "rawPageContentAllowed": False,
+        "externalNavigationAllowed": False,
+        "sourceWrite": False,
+        "gitWrite": False,
+        "release": False,
+        "deploy": False,
+        "production": False,
+        "authorityEffect": "none",
+    }
+    if not bool(args.get("run") or False):
+        return {
+            "projectPath": str(project_path),
+            "evidenceSubject": subject_before,
+            "providerContract": contract,
+            "executed": False,
+            "captureProtocol": protocol,
+            "policy": (
+                "Discovery is read-only. Execution is optional and requires an exact discovered project script, explicit trusted-execution approval, exact candidate/build/runtime/scenario bindings, and a closed digest-only output protocol. "
+                "The local runner scrubs its environment and bounds time and output, but it is not an OS or network sandbox and grants no source, Git, release, deployment, production, or external-action authority."
+            ),
+        }
+
+    if args.get("execution_approved") is not True:
+        raise ToolError(
+            "Browser capture executes repository-controlled code. Set execution_approved=true only within a separately authorized trusted development or QA workflow."
+        )
+    if contract["status"] != "available":
+        raise ToolError(
+            "No supported project-script browser provider is available on this host. Discovery must report unavailable or unsupported rather than selecting an implicit fallback."
+        )
+    trusted_revision = str(args.get("trusted_revision") or "").strip()
+    trusted_fingerprint = str(args.get("trusted_project_fingerprint") or "").strip()
+    trusted_policy_digest = str(args.get("trusted_policy_digest") or "").strip()
+    if (
+        trusted_revision != subject_before["gitHead"]
+        or trusted_fingerprint != subject_before["projectFingerprint"]
+        or trusted_policy_digest != subject_before["policyDigest"]
+    ):
+        raise ToolError(
+            "Trusted revision, fingerprint, or policy digest does not match the current project state. Rediscover and review the provider before execution."
+        )
+    command_key = str(args.get("command_key") or "").strip()
+    selected = next(
+        (command for command in contract["commands"] if command["key"] == command_key),
+        None,
+    )
+    if selected is None:
+        raise ToolError(
+            f"Unsupported command_key: {command_key}. Allowed: {[command['key'] for command in contract['commands']]}"
+        )
+    timeout = args.get("timeout_sec", 300)
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 1_800:
+        raise ToolError("timeout_sec must be an integer from 1 to 1800 seconds.")
+    build_sha256 = str(args.get("build_sha256") or "").strip().lower()
+    runtime_sha256 = str(args.get("runtime_sha256") or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", build_sha256):
+        raise ToolError("build_sha256 must be a lowercase SHA-256 digest.")
+    if not re.fullmatch(r"[0-9a-f]{64}", runtime_sha256):
+        raise ToolError("runtime_sha256 must be a lowercase SHA-256 digest.")
+    try:
+        scenario = provider_core.normalize_scenario(args.get("scenario"))
+    except provider_core.BrowserProviderError as exc:
+        raise ToolError(f"Browser scenario is invalid: {exc}") from exc
+    candidate = {
+        "gitHead": subject_before["gitHead"],
+        "projectFingerprint": subject_before["projectFingerprint"],
+        "buildSha256": build_sha256,
+        "runtimeSha256": runtime_sha256,
+    }
+    remediation_handoff_receipt = args.get("remediation_handoff_receipt")
+    remediation_handoff: Optional[dict[str, Any]] = None
+    if remediation_handoff_receipt is not None:
+        remediation_handoff = _verify_browser_remediation_handoff(
+            remediation_handoff_receipt,
+            project_path=project_path,
+            current_subject=subject_before,
+            scenario_digest=scenario["scenarioDigest"],
+            build_sha256=build_sha256,
+        )
+    expected_provider = {
+        "id": contract["providerId"],
+        "kind": contract["providerKind"],
+        "host": contract["hostId"],
+        "independent": False,
+    }
+    with tempfile.TemporaryDirectory(prefix="jstack-browser-capture-") as temp_dir:
+        output_path = Path(temp_dir) / "browser-result.json"
+        fixed_env = {
+            "JSTACK_BROWSER_OUTPUT": str(output_path),
+            "JSTACK_BROWSER_SCHEMA": provider_core.BROWSER_PROVIDER_RESULT_SCHEMA_VERSION,
+            "JSTACK_BROWSER_PROVIDER_ID": contract["providerId"],
+            "JSTACK_BROWSER_PROVIDER_KIND": contract["providerKind"],
+            "JSTACK_BROWSER_PROVIDER_HOST": contract["hostId"],
+            "JSTACK_BROWSER_COMMAND_FINGERPRINT": selected["commandFingerprint"],
+            "JSTACK_BROWSER_SCENARIO_JSON": json.dumps(
+                scenario, sort_keys=True, separators=(",", ":")
+            ),
+            "JSTACK_BROWSER_CANDIDATE_JSON": json.dumps(
+                candidate, sort_keys=True, separators=(",", ":")
+            ),
+        }
+        if remediation_handoff is not None:
+            fixed_env.update(
+                {
+                    "JSTACK_BROWSER_REMEDIATION_FINDING_DIGEST": remediation_handoff[
+                        "findingDigest"
+                    ],
+                    "JSTACK_BROWSER_SUPERSEDES_EVIDENCE_SHA256": remediation_handoff[
+                        "priorEvidenceSha256"
+                    ],
+                }
+            )
+        execution = run_approved_project_command(
+            selected["args"],
+            project_path,
+            timeout=timeout,
+            env_allowlist=[],
+            fixed_env=fixed_env,
+        )
+        subject_after = evidence_subject(project_path)
+        mutation_detected = any(
+            subject_after[field] != subject_before[field]
+            for field in ("gitHead", "projectFingerprint", "policyDigest")
+        )
+        if not output_path.exists():
+            raise ToolError(
+                "Browser provider did not write the required bounded result file "
+                f"(returncode={execution['returncode']}, stdoutSha256={execution.get('stdoutSha256')}, stderrSha256={execution.get('stderrSha256')}, mutationDetected={str(mutation_detected).lower()})."
+            )
+        try:
+            evidence = provider_core.load_result_file(
+                output_path,
+                expected_candidate=candidate,
+                expected_scenario=scenario,
+                expected_provider=expected_provider,
+            )
+        except provider_core.BrowserProviderError as exc:
+            raise ToolError(f"Browser provider output is invalid: {exc}") from exc
+
+    passed = bool(
+        execution["ok"]
+        and not mutation_detected
+        and evidence["outcome"] == "pass"
+        and evidence["complete"]
+        and not evidence["truncated"]
+    )
+    receipt = None
+    if not mutation_detected:
+        expires_at = (
+            _dt.datetime.now(_dt.timezone.utc)
+            + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+        ).replace(microsecond=0).isoformat()
+        receipt = issue_receipt(
+            {
+                "kind": "browser-evidence",
+                "schemaVersion": provider_core.BROWSER_EVIDENCE_RECEIPT_SCHEMA_VERSION,
+                "expiresAt": expires_at,
+                "projectPath": subject_before["gitRoot"],
+                "gitHead": candidate["gitHead"],
+                "projectFingerprint": candidate["projectFingerprint"],
+                "policyDigest": subject_before["policyDigest"],
+                "toolVersion": SERVER_VERSION,
+                "providerId": evidence["provider"]["id"],
+                "providerKind": evidence["provider"]["kind"],
+                "providerVersion": evidence["provider"]["version"],
+                "providerHost": evidence["provider"]["host"],
+                "providerIndependent": evidence["provider"]["independent"],
+                "providerContractDigest": contract["contractDigest"],
+                "commandKey": selected["key"],
+                "commandFingerprint": selected["commandFingerprint"],
+                "buildSha256": candidate["buildSha256"],
+                "runtimeSha256": candidate["runtimeSha256"],
+                "scenarioDigest": scenario["scenarioDigest"],
+                "evidenceSha256": evidence["evidenceSha256"],
+                "outcome": evidence["outcome"],
+                "complete": evidence["complete"],
+                "truncated": evidence["truncated"],
+                "observedAt": evidence["observedAt"],
+                "returncode": execution["returncode"],
+                "passed": passed,
+                "mutationDetected": False,
+                **(
+                    {
+                        "remediationHandoffDigest": hashlib.sha256(
+                            str(remediation_handoff_receipt).encode("utf-8")
+                        ).hexdigest(),
+                        "supersedesEvidenceSha256": remediation_handoff[
+                            "priorEvidenceSha256"
+                        ],
+                        "findingDigest": remediation_handoff["findingDigest"],
+                        "priorEvidenceStale": True,
+                        "reQa": True,
+                    }
+                    if remediation_handoff is not None
+                    else {}
+                ),
+                "authorityEffect": "none",
+            }
+        )
+    return {
+        "projectPath": str(project_path),
+        "executed": True,
+        "passed": passed,
+        "mutationDetected": mutation_detected,
+        "providerContract": contract,
+        "candidate": candidate,
+        "scenario": scenario,
+        "execution": {
+            "commandKey": selected["key"],
+            "commandFingerprint": selected["commandFingerprint"],
+            "returncode": execution["returncode"],
+            "stdoutSha256": execution.get("stdoutSha256"),
+            "stderrSha256": execution.get("stderrSha256"),
+            "capturedOutputBytes": execution.get("capturedOutputBytes"),
+        },
+        "evidence": evidence,
+        "evidenceReceipt": receipt,
+        "remediation": (
+            {
+                "reQa": True,
+                "findingDigest": remediation_handoff["findingDigest"],
+                "supersedesEvidenceSha256": remediation_handoff[
+                    "priorEvidenceSha256"
+                ],
+                "priorEvidenceState": "stale",
+                "findingResolved": passed,
+                "authorityEffect": "none",
+            }
+            if remediation_handoff is not None
+            else None
+        ),
+        "receiptMeaning": (
+            "The receipt binds one closed-protocol browser observation to the exact candidate, build, runtime, scenario, provider contract, discovered command, and local host. "
+            "It does not prove semantic completeness, provider independence, OS or network isolation, production behavior, or authorization to edit source, use Git, release, deploy, mutate production, or perform an external action."
+        ),
+        "outputPolicy": (
+            "Only bounded structured observations, counts, and digests are returned; raw page content and command stdout/stderr are not returned."
+        ),
+    }
+
+
 def _performance_environment() -> dict[str, Any]:
     environment = {
         "system": platform.system() or "unknown",
@@ -20547,6 +22829,7 @@ def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
             redesign_approved=args.get("redesign_approved", False),
             redesign_approval_reference=args.get("redesign_approval_reference"),
             reference_bundle=reference_binding,
+            design_decision=args.get("design_decision"),
         )
     except ui_core.UIError as exc:
         raise ToolError(str(exc)) from exc
@@ -20586,9 +22869,11 @@ def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
         "projectPath": str(project_path),
         "baseline": baseline,
         "catalog": contract["catalog"],
+        "contractSchemaVersion": contract["schemaVersion"],
         "detection": detection,
         "profileResolution": contract["profileResolution"],
         "referenceBundle": contract.get("referenceBundle"),
+        "designDecision": contract.get("designDecision"),
         "allowedPaths": contract["allowedPaths"],
         "platformExclusions": contract["platformExclusions"],
         "requirements": contract["requirements"],
@@ -20612,6 +22897,7 @@ def tool_ui_contract(args: dict[str, Any]) -> dict[str, Any]:
         "executionAuthorized": False,
         "limitations": [
             "This receipt freezes semantic UI requirements at a clean Git baseline; it does not execute or approve implementation work.",
+            "A Product/Design decision records a bounded selected direction and digested approval reference; it does not independently prove who approved it or authorize candidate or production mutation.",
             "Profile defaults are original JStack guidance influenced by general craft qualities, not copied vendor themes, layouts, branding, assets, or source code.",
             (
                 "The self-contained contract receipt remains verifiable across MCP restarts using a private per-user POSIX key; retain the opaque receipt unchanged."
@@ -22277,6 +24563,14 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     rollback_plan = str(args.get("rollback_plan") or "").strip()
     monitoring_plan = str(args.get("monitoring_plan") or "").strip()
     canary_plan = str(args.get("canary_plan") or "").strip()
+    release_strategy = str(
+        args.get("release_strategy")
+        or ("canary" if canary_plan else "direct")
+    ).strip().lower()
+    if release_strategy not in release_core.STRATEGIES:
+        raise ToolError(
+            "release_strategy must be direct, canary, or blue-green."
+        )
     approved_by = str(args.get("approved_by") or "").strip()
     approval_reference = str(args.get("approval_reference") or "").strip()
     security_reviewed_by = str(args.get("security_reviewed_by") or "").strip()
@@ -22426,6 +24720,7 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     )
     audit_receipt = str(args.get("audit_receipt") or "").strip()
     verified_audit: Optional[dict[str, Any]] = None
+    audit_passes_release = False
     if audit_receipt:
         verified_audit = verify_receipt(
             audit_receipt,
@@ -22546,7 +24841,7 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     if goal_is_sensitive(str(args.get("goal") or ""), enterprise_policy) and not security_reviewed_by:
         blockers.append("Sensitive release work requires a named human security reviewer or review reference.")
 
-    return {
+    result = {
         "projectPath": str(project_path),
         "targetEnvironment": target_environment,
         "ready": not blockers,
@@ -22607,6 +24902,32 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "terminalApprovalRequired": False,
         },
     }
+    try:
+        result["releaseChoreography"] = release_core.build_choreography(
+            candidate_fingerprint=subject["projectFingerprint"],
+            target_environment=target_environment,
+            strategy=release_strategy,
+            readiness_passed=result["ready"],
+            tests_passed=ship["ready"],
+            review_passed=ship["ready"],
+            security_passed=bool(
+                verified_security and verified_security.get("valid")
+            ),
+            browser_required=ui_required,
+            browser_passed=ui_passes_release,
+            launch_required=launch_required,
+            launch_passed=launch_passes_release,
+            audit_required=audit_required,
+            audit_passed=audit_passes_release,
+            explicit_release_requested=explicit_release_requested,
+            external_approval_reference_present=bool(approval_reference),
+            rollback_plan_present=bool(rollback_plan),
+            monitoring_plan_present=bool(monitoring_plan or canary_plan),
+            canary_plan_present=bool(canary_plan),
+        )
+    except release_core.ReleaseChoreographyError as exc:
+        raise ToolError(str(exc)) from exc
+    return result
 
 
 def parse_backtest_report(report_path: Path) -> dict[str, Any]:
@@ -26204,7 +28525,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_capability_catalog": {
-        "description": "Inspect the versioned JStack specialist capability registry or deterministically route bounded capabilities to existing core roles. Capabilities never grant tools, write access, or release authority.",
+        "description": "Inspect the versioned JStack specialist capability registry and the separate immutable-provenance methodology-capability catalog, or deterministically route bounded base capabilities to existing core roles. Neither catalog grants tools, write access, provider access, persistence, or release authority.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -26228,7 +28549,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_specialist_result": {
-        "description": "Validate one existing JStack role's capability-bound structured result and privacy-safe telemetry, enforce role/write/evidence contracts, bind it to the current Git state, and issue a session-local signed receipt.",
+        "description": "Validate one existing JStack role's capability-bound structured result and privacy-safe telemetry, enforce role/write/evidence contracts, bind it to the current Git state, and issue a session-local signed receipt. A receipt-bound root-cause investigator must also supply the Stage 9 investigation contract; only its digest-only certification is retained.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -26256,6 +28577,23 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "items": {"type": "string", "maxLength": 64},
                 },
                 "role_id": {"type": "string", "minLength": 2, "maxLength": 64},
+                "specialist_id": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100,
+                    "description": "Logical specialistId from dynamicReceiptAssignments. Supply only with team_plan_receipt and physical_agent_id.",
+                },
+                "physical_agent_id": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100,
+                    "description": "Exact physicalAgentId assigned to specialist_id by the signed Unified Team Plan.",
+                },
+                "team_plan_receipt": {
+                    "type": "string",
+                    "maxLength": 250_000,
+                    "description": "Exact dispatch-eligible unifiedTeamPlanReceipt returned by jstack_team_plan. When present, logical-specialist receipt v2 validation replaces the legacy fixed-role route.",
+                },
                 "capability_ids": {
                     "type": "array",
                     "minItems": 1,
@@ -26280,6 +28618,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "items": {"type": "string", "maxLength": 1000},
                 },
                 "result": SPECIALIST_RESULT_SCHEMA,
+                "investigation_contract": {
+                    "type": "object",
+                    "description": "Exact jstack.investigation.v1 contract for the receipt-bound root-cause-investigator. The packaged investigation-contract.v1.schema.json and deterministic server validator are authoritative.",
+                },
                 "telemetry": SPECIALIST_TELEMETRY_INPUT_SCHEMA,
             },
         },
@@ -26318,6 +28660,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                         "type": "string",
                         "maxLength": SPECIALIST_MAX_RECEIPT_CHARS,
                     },
+                },
+                "team_plan_receipt": {
+                    "type": "string",
+                    "maxLength": 250_000,
+                    "description": "Exact dispatch-eligible unifiedTeamPlanReceipt. When present, expected_agents is the ordered role/capability projection of dynamicReceiptAssignments and handoff validates every logical specialist.",
                 },
                 "explicit_capability_ids": {
                     "type": "array",
@@ -27003,6 +29350,18 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "goal": {"type": "string"},
                 "project_path": {"type": "string"},
                 "quality_level": {"type": "string", "enum": ["standard", "enterprise"], "default": "enterprise"},
+                "operating_profile": {
+                    "type": "string",
+                    "enum": ["solo", "professional", "enterprise"],
+                    "default": "professional",
+                    "description": "Governance floor, independent of execution topology and legacy quality_level. A weaker profile never lowers a mandatory risk floor.",
+                },
+                "host_id": {
+                    "type": "string",
+                    "enum": ["codex", "claude-code", "generic-mcp"],
+                    "default": "codex",
+                    "description": "Explicit host capability contract. Missing host-native features report UNAVAILABLE rather than being emulated.",
+                },
                 "team_mode": {"type": "string", "enum": ["single-lead", "smart-subagents", "full-team"], "default": "single-lead"},
                 "capability_ids": {
                     "type": "array",
@@ -27040,6 +29399,18 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "goal": {"type": "string"},
                 "project_path": {"type": "string"},
                 "quality_level": {"type": "string", "enum": ["standard", "enterprise"], "default": "enterprise"},
+                "operating_profile": {
+                    "type": "string",
+                    "enum": ["solo", "professional", "enterprise"],
+                    "default": "professional",
+                    "description": "Governance floor, independent of team_mode. A weaker profile never lowers a mandatory risk floor.",
+                },
+                "host_id": {
+                    "type": "string",
+                    "enum": ["codex", "claude-code", "generic-mcp"],
+                    "default": "codex",
+                    "description": "Explicit host capability contract. MCP connectivity alone does not imply command or continuation parity.",
+                },
                 "team_mode": {"type": "string", "enum": ["auto", "single-lead", "smart-subagents", "full-team"], "default": "auto"},
                 "capability_ids": {
                     "type": "array",
@@ -27067,7 +29438,7 @@ TOOLS: dict[str, dict[str, Any]] = {
         "readOnlyHint": True,
     },
     "gstack_dispatch_check": {
-        "description": "Validate a proposed multi-agent dispatch plan for lead accountability, coordination packet, max specialist count, write-scope overlap, and blocked actions.",
+        "description": "Validate a proposed multi-agent dispatch plan for lead accountability, coordination packet, max specialist count, write-scope overlap, blocked actions, Stage 9 investigation-before-remediation sequencing, and Stage 12 browser-QA-to-Builder handoff separation.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -27088,6 +29459,53 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "description": "The actual coordination packet. Its required fields, roles, and file ownership are validated.",
                 },
                 "explicit_release_requested": {"type": "boolean", "default": False, "description": "Confirms only that release-classified team planning was requested; it does not execute a release."},
+                "dispatch_phase": {
+                    "type": "string",
+                    "enum": ["standard", "investigation", "remediation", "browser-remediation"],
+                    "default": "standard",
+                    "description": "Stage 9/12 phase. Fix work validates investigation before remediation; a failing browser receipt uses browser-remediation to route only the original scoped Builder and require fresh re-QA.",
+                },
+                "investigation_receipt": {
+                    "type": "string",
+                    "maxLength": SPECIALIST_MAX_RECEIPT_CHARS,
+                    "description": "Exact passing root-cause specialist receipt required for remediation dispatch against the unchanged candidate.",
+                },
+                "browser_evidence_receipt": {
+                    "type": "string",
+                    "maxLength": UI_RECEIPT_MAX_CHARS,
+                    "description": "Exact current-candidate failing browser-evidence receipt required only with dispatch_phase=browser-remediation. It is evidence, not source-write authority.",
+                },
+                "browser_finding": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "schemaVersion", "id", "category", "severity", "title",
+                        "claim", "expectedBehavior", "observedBehavior",
+                        "reproductionStatus", "remediationRecommendation",
+                        "evidenceReferences", "evidenceSha256", "scenarioDigest",
+                        "sourceMutationAttempted",
+                    ],
+                    "properties": {
+                        "schemaVersion": {"const": provider_core.BROWSER_FINDING_SCHEMA_VERSION},
+                        "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+                        "category": {"type": "string", "enum": list(provider_core.FINDING_CATEGORIES)},
+                        "severity": {"type": "string", "enum": list(provider_core.FINDING_SEVERITIES)},
+                        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+                        "claim": {"type": "string", "minLength": 1, "maxLength": 1000},
+                        "expectedBehavior": {"type": "string", "minLength": 1, "maxLength": 1000},
+                        "observedBehavior": {"type": "string", "minLength": 1, "maxLength": 1000},
+                        "reproductionStatus": {"type": "string", "enum": list(provider_core.REPRODUCTION_STATES)},
+                        "remediationRecommendation": {"type": "string", "minLength": 1, "maxLength": 1000},
+                        "evidenceReferences": {
+                            "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
+                            "items": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+                        },
+                        "evidenceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                        "scenarioDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                        "sourceMutationAttempted": {"const": False},
+                    },
+                    "description": "Exact jstack.browser-finding.v1 QA finding bound to browser_evidence_receipt. QA may recommend remediation but cannot mutate source.",
+                },
             },
         },
         "handler": tool_dispatch_check,
@@ -27595,6 +30013,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "rollback_plan": {"type": "string"},
                 "monitoring_plan": {"type": "string"},
                 "canary_plan": {"type": "string"},
+                "release_strategy": {
+                    "type": "string",
+                    "enum": ["direct", "canary", "blue-green"],
+                    "description": "Readiness UX strategy only. It never authorizes or executes a release.",
+                },
                 "run_secret_scan": {"type": "boolean", "default": True},
                 "qa_receipts": {"type": "array", "items": {"type": "string"}, "default": []},
                 "security_receipt": {"type": "string"},
@@ -27802,6 +30225,79 @@ TOOLS.update(
             "handler": tool_prompt_compile,
             "readOnlyHint": True,
         },
+        "jstack_browser_capture": {
+            "description": "Discover or execute one optional, bounded browser-evidence provider for the exact current candidate. Discovery is read-only. Execution accepts only a deterministic browser-oriented package.json script after explicit trusted-execution approval and emits candidate/build/runtime/scenario/provider-bound digest-only evidence. It grants no source, Git, release, deployment, production, or external-action authority and is not an OS or network sandbox.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "run": {"type": "boolean", "default": False},
+                    "command_key": {
+                        "type": "string",
+                        "pattern": "^npm:[A-Za-z0-9][A-Za-z0-9:._-]{0,99}$",
+                    },
+                    "scenario": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["id", "route", "viewport", "mode"],
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+                            },
+                            "route": {"type": "string", "minLength": 1, "maxLength": 500},
+                            "viewport": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["width", "height", "dpr"],
+                                "properties": {
+                                    "width": {"type": "integer", "minimum": 240, "maximum": 7680},
+                                    "height": {"type": "integer", "minimum": 240, "maximum": 7680},
+                                    "dpr": {"type": "number", "minimum": 1, "maximum": 4},
+                                },
+                            },
+                            "mode": {"type": "string", "enum": ["ordinary", "reduced-motion"]},
+                        },
+                    },
+                    "build_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "runtime_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "execution_approved": {"type": "boolean", "default": False},
+                    "trusted_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                    "trusted_project_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "trusted_policy_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    "remediation_handoff_receipt": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": UI_RECEIPT_MAX_CHARS,
+                        "description": "Optional exact Stage 12 browser-remediation handoff. Re-QA requires a changed project fingerprint, rebuilt candidate, unchanged scenario, and original Builder/QA separation.",
+                    },
+                    "timeout_sec": {"type": "integer", "minimum": 1, "maximum": 1800, "default": 300},
+                },
+                "allOf": [
+                    {
+                        "if": {
+                            "required": ["run"],
+                            "properties": {"run": {"const": True}},
+                        },
+                        "then": {
+                            "required": [
+                                "command_key",
+                                "scenario",
+                                "build_sha256",
+                                "runtime_sha256",
+                                "execution_approved",
+                                "trusted_revision",
+                                "trusted_project_fingerprint",
+                                "trusted_policy_digest",
+                            ]
+                        },
+                    }
+                ],
+            },
+            "handler": tool_browser_capture,
+            "readOnlyHint": False,
+        },
         "jstack_ui_reference_contract": {
             "description": "Create a clean-baseline, Git-bound contract for a private Product Interface reference bundle assembled from user-provided screenshots, Figma exports, or explicitly approved URL captures. The tool performs no capture, crawling, model call, project edit, release, or deployment action; on POSIX it creates or reads one private per-user signing key beneath ~/.jstack.",
             "inputSchema": {
@@ -27886,7 +30382,7 @@ TOOLS.update(
             "readOnlyHint": True,
         },
         "jstack_ui_contract": {
-            "description": "Create a clean-baseline, Git-bound Product Interface System contract with original editorial-calm or creative-canvas profiles, preserve-and-extend precedence, per-surface platform mapping, and a complete objective evidence matrix. This tool performs no UI implementation or external action; on POSIX it creates or reads one private per-user contract-signing key beneath ~/.jstack.",
+            "description": "Create a clean-baseline, Git-bound Product Interface System contract with original editorial-calm or creative-canvas profiles, preserve-and-extend precedence, an optional human-selected Product/Design decision, per-surface platform mapping, and a complete objective evidence matrix. Product/Design exploration has no candidate or production mutation authority. This tool performs no UI implementation or external action; on POSIX it creates or reads one private per-user contract-signing key beneath ~/.jstack.",
             "inputSchema": {
                 "type": "object",
                 "additionalProperties": False,
@@ -27900,6 +30396,10 @@ TOOLS.update(
                         "minLength": 1,
                         "maxLength": UI_RECEIPT_MAX_CHARS,
                         "description": "Optional current receipt from jstack_ui_reference_finalize. Its digest-only binding informs this contract but never satisfies candidate finalization evidence.",
+                    },
+                    "design_decision": {
+                        "type": "object",
+                        "description": "Optional exact jstack.ui.design-decision-input.v1 object. The deterministic Product Interface validator is authoritative for input; the packaged ui-design-decision.v1 schema validates the normalized binding. Exploration requires two or three bounded alternatives and a human-selected direction; raw approval text is hashed and not retained. This field grants no implementation, provider, candidate-mutation, production, Git, release, deployment, or external-action authority.",
                     },
                     "profile_override": {"type": "string", "enum": list(ui_core.PROFILE_IDS)},
                     "surfaces": {
