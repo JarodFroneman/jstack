@@ -35,10 +35,15 @@ class GstackProvenanceTests(unittest.TestCase):
         sentinel = 1 << 29
         observed_flags = []
         real_open = os.open
+        platform_binary_flag = getattr(os, "O_BINARY", 0)
 
         def open_without_synthetic_flag(path: Path, flags: int) -> int:
             observed_flags.append(flags)
-            return real_open(path, flags & ~sentinel)
+            # Patching provenance.os also patches this process-wide os module.
+            # Preserve the platform's real binary flag when forwarding the
+            # synthetic observation bit to the underlying Windows descriptor.
+            forwarded_flags = (flags & ~sentinel) | platform_binary_flag
+            return real_open(path, forwarded_flags)
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
