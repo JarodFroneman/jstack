@@ -29690,7 +29690,7 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "base_ref": {"type": "string", "description": "Comparison base bound into the QA receipt."},
                 "run": {"type": "boolean", "default": False},
                 "command_key": {"type": "string", "description": "Required only when run=true. Use output allowedCommands keys."},
-                "timeout_sec": {"type": "integer", "minimum": 10, "maximum": 600, "default": 120},
+                "timeout_sec": {"type": "integer", "minimum": 10, "maximum": 1800, "default": 120},
                 "execution_approved": {"type": "boolean", "default": False, "description": "Required when run=true; acknowledges repository-controlled code execution."},
                 "trusted_revision": {"type": "string", "description": "Exact gitHead returned by discovery."},
                 "trusted_project_fingerprint": {"type": "string", "description": "Exact projectFingerprint returned by discovery."},

@@ -2945,6 +2945,13 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(server.ToolError, "stale"):
                 server.verify_signed_session_token(expired, "audit-session")
 
+    def test_qa_schema_allows_the_runtime_timeout_ceiling(self) -> None:
+        timeout_schema = server.TOOLS["jstack_qa"]["inputSchema"]["properties"]["timeout_sec"]
+        self.assertEqual(1800, timeout_schema["maximum"])
+        server.validate_schema_value(1800, timeout_schema, "timeout_sec")
+        with self.assertRaises(server.InputError):
+            server.validate_schema_value(1801, timeout_schema, "timeout_sec")
+
     def test_quick_prohibits_execution_and_standard_adapter_is_exactly_bound(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
