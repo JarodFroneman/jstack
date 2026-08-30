@@ -161,6 +161,26 @@ Existing product tokens, components, accessibility rules, layouts, and brand
 constraints are preserved and extended rather than redesigned without an
 explicit request.
 
+### Graphify-backed project intelligence
+
+Material work on an existing supported codebase routes through JStack's
+private Graphify-backed Project Intelligence protocol. The five delivery
+workflows and Audit bind an exact local AST snapshot, use bounded task and
+impact subgraphs to guide source inspection, refresh the graph after edits,
+and require exact candidate-bound finalization evidence where applicable.
+There is no additional slash command or standalone skill.
+
+Only source-anchored `EXTRACTED` relationships are strong graph evidence.
+Inferred, ambiguous, and unanchored relationships remain advisory and must be
+verified in source. The interactive Graphify-native `graph.html` stays under
+`~/.jstack/project-intelligence/`; it is shown for material work but never
+replaces source reads, tests, security, audit, review, or human judgment.
+Provision the pinned isolated local runtime explicitly with
+`python3 scripts/install.py --with-project-intelligence`. JStack does not use
+Graphify's hosted, semantic, hook, listener, instruction, or skill-install
+features. See the [Project Intelligence guide](docs/project-intelligence.md)
+and [ADR 0046](docs/adr/0046-graphify-project-intelligence.md).
+
 ### Adaptive context across JStack commands
 
 JStack v0.9.1 introduced repository and durable-context inspection before it
@@ -186,8 +206,10 @@ flowchart LR
     Q --> B[Readiness and policy]
     B --> C[Selected delivery mode]
     C --> K[Role-bound capability plan]
+    K --> PI[Bounded project graph and impact evidence]
     K --> UI[Product Interface contract when UI applies]
     UI --> D[Structured UI, QA, security, launch, review, and audit evidence]
+    PI --> D
     K --> D
     D --> E{Acceptance contract met?}
     E -- No --> F[Bounded revision or human gate]
@@ -209,7 +231,33 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In v0.11.0
+## What Is In v0.12.0
+
+`v0.12.0` adds Graphify-backed Project Intelligence to the stable Unified
+Engineering OS without adding another slash command, skill, control plane, or
+core dependency. Material cross-module, architecture, security, database,
+dependency, audit, team, loop, program, and release work now receives an
+exact-state graph contract, bounded task subgraph, pre-change impact analysis,
+post-edit refresh, and candidate-bound finalization gate.
+
+The five new canonical MCP operations expand the public surface to 65 tools
+while preserving six commands and 52 frozen aliases. Graph evidence is
+advisory unless an `EXTRACTED` relationship has a valid source anchor, and it
+never substitutes for direct source inspection, tests, scanners, review, or
+human judgment. Material work produces a private native `graph.html` view so
+the user can inspect the project graph without making the visualization a
+release authority.
+
+JStack core remains Python-standard-library only. The local AST provider is an
+explicit, transactionally managed install option pinned to `graphifyy==0.9.52`;
+ordinary installation remains offline and does not install Graphify. Hosted
+Graphify services, semantic APIs, listeners, HTTP MCP, hooks, repository
+instruction edits, and Graphify skills remain outside the boundary. Start with
+the [v0.12.0 migration guide](docs/migration-0.12.0.md), the
+[Project Intelligence guide](docs/project-intelligence.md), and
+[ADR 0046](docs/adr/0046-graphify-project-intelligence.md).
+
+### Prior v0.11.0 stable line
 
 `v0.11.0` packages the staged JStack × gstack Unified Engineering OS work
 through Stage 20 as a stable release. JStack remains the sole governance and
@@ -222,10 +270,9 @@ provenance extend the existing workflows and receipt plane.
 The release does not install or execute gstack as a second control plane. Its
 pinned MIT-licensed snapshot is research and optional bounded provider input;
 upstream prompts, permissions, state, installers, and release behavior remain
-outside JStack authority. The public compatibility floor remains six commands,
-60 canonical tools, 52 frozen aliases, and a Python-standard-library runtime
-core. Start with the [v0.11.0 migration guide](docs/migration-0.11.0.md) and
-the [Unified Engineering OS index](docs/integration/gstack/README.md).
+outside JStack authority. See the
+[v0.11.0 migration guide](docs/migration-0.11.0.md) and the
+[Unified Engineering OS index](docs/integration/gstack/README.md).
 
 ### Prior Beta.6 line
 
@@ -273,13 +320,13 @@ work keeps the existing finalization path. Beta.4's Prompt Compiler,
 Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
 and UI contract v1/v2 remain compatible.
 
-> **Stable release, bounded claims:** `0.11.0` is the stable compatibility and
+> **Stable release, bounded claims:** `0.12.0` is the stable compatibility and
 > distribution target for this architecture. Stage 19 remains `NOT_MEASURED`:
 > its 168-cell comparative study has not run. Beta.1's 18-image, 216-attempt,
 > 432-review Proof Study also remains deferred and byte-bound to the exact
 > annotated `v0.10.0-beta.1` tag. Publication, receipts, and the stable label do
-> not prove comparative uplift, attack immunity, or universal production
-> readiness.
+> not prove comparative uplift, graph completeness, semantic correctness,
+> attack immunity, or universal production readiness.
 
 | Capability | What it provides |
 | --- | --- |
@@ -311,17 +358,21 @@ and UI contract v1/v2 remain compatible.
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
 | Distribution | Six dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
-The MCP exposes 60 canonical `jstack_*` tools, including the canonical-only
+The MCP exposes 65 canonical `jstack_*` tools, including the canonical-only
 `jstack_prompt_compile` two-stage lifecycle, the
 `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` reference
 lifecycle, the `jstack_ui_contract` / `jstack_ui_finalize` candidate lifecycle,
-the `jstack_ui_motion_spec` / `jstack_ui_motion_finalize` motion lifecycle, the shared
+the `jstack_ui_motion_spec` / `jstack_ui_motion_finalize` motion lifecycle, the
+`jstack_graph_index` / `jstack_graph_query` / `jstack_graph_impact` /
+`jstack_graph_refresh` / `jstack_graph_finalize` Project Intelligence
+lifecycle, the shared
 `jstack_context_readiness` gate, 13 generic
 `jstack_program_*` tools and the three-step `jstack_launch_*` evidence
 protocol, plus `jstack_performance_capture`, `jstack_adversarial_capture`, and the delivery, audit, loop, continuity,
 specialist-review, and mastery families. The frozen 52 legacy `gstack_*`
 aliases remain available for compatibility; the Prompt Compiler and all six
-UI tools deliberately have no legacy aliases.
+UI tools and five Project Intelligence tools deliberately have no legacy
+aliases.
 
 All six workflows compile intent before inspection, display Stage B's complete
 rendered prompt, and wait for explicit approval. Only the approved Stage B
@@ -460,6 +511,7 @@ flowchart TB
 
     M --> P[Policy and project binding]
     M --> D[Delivery, capability routing, and team coordination]
+    M --> PI[Graphify-backed Project Intelligence]
     M --> UIC[Product Interface contracts and objective visual evidence]
     M --> E[QA, security, audit, and release evidence]
     M --> L[Bounded goal loops]
@@ -468,6 +520,8 @@ flowchart TB
 
     P --> G[(Git project state)]
     D --> G
+    PI --> G
+    PI --> X
     E --> G
     UIC --> G
     UIC --> X
@@ -490,6 +544,9 @@ artifacts before release.
 - **Delivery** owns plans, staffing, permissions, scopes, and implementation.
 - **Capabilities** add role-bound methods, required evidence, stop conditions,
   and audit/loop controls without expanding those permissions or scopes.
+- **Project Intelligence** selects a private, bounded, exact-state Graphify
+  subgraph for material code work and binds impact, refresh, and finalization
+  evidence without replacing source or runtime proof.
 - **Product Interface** detects UI scope, resolves design-system precedence,
   binds a human-selected Product/Design direction when applicable, and binds
   implementation/finalization evidence without authorizing changes.
@@ -510,6 +567,8 @@ release gate can require:
 - a distinct pre-release base and clean committed candidate;
 - complete committed, staged, unstaged, and untracked change evidence;
 - current QA, security, deterministic review, and audit receipts;
+- a current Graphify-backed Project Intelligence finalization receipt when the
+  material release delta requires it;
 - a current Product Interface finalization receipt when the actual release
   range changes an applicable user-facing interface;
 - current specialist result and handoff receipts when multi-agent capability
@@ -625,7 +684,7 @@ environment.
 
 | Path | Purpose |
 | --- | --- |
-| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, Product Interface catalog and evidence controls, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
+| [`mcp/jstack/`](mcp/jstack/) | Canonical JSON-RPC server, Project Intelligence and Product Interface protocols, capability registry, delivery controls, audit, loop, program, schemas, curricula, and templates |
 | [`skills/`](skills/) | Canonical single-lead, Product Interface, Evidence Builder, audit, and loop skills |
 | [`prompts/`](prompts/) | Canonical slash-command prompts |
 | [`plugins/`](plugins/) | Six dedicated command plugins |
@@ -664,6 +723,8 @@ all workflow actions are pinned to full immutable commits.
 | Start here | Deep dive |
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
+| [Graphify-backed Project Intelligence](docs/project-intelligence.md) | [ADR 0046](docs/adr/0046-graphify-project-intelligence.md) |
+| [v0.12.0 migration guide](docs/migration-0.12.0.md) | [Project Intelligence release](CHANGELOG.md#0120---2026-08-30---graphify-project-intelligence-stable-release) |
 | [v0.11.0 migration guide](docs/migration-0.11.0.md) | [Unified Engineering OS](docs/integration/gstack/README.md) · [0.11.0 changelog](CHANGELOG.md#0110---2026-08-26---unified-engineering-os-stable-release) |
 | [v0.10.0-beta.6.2 migration guide](docs/migration-0.10.0-beta.6.2.md) | [Bounded Product Interface detector behavior](CHANGELOG.md#0100-beta62---2026-08-24---product-interface-detector-hardening-prerelease) |
 | [v0.10.0-beta.6.1 migration guide](docs/migration-0.10.0-beta.6.1.md) | [Prompt Compiler professional and secure-development amendment](docs/adr/0025-prompt-compiler.md) · [Prompt Compiler guide](docs/prompt-compiler.md) |

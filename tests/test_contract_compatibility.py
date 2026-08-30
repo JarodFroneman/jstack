@@ -76,7 +76,11 @@ class CrossVersionContractTests(unittest.TestCase):
         schema = server.TOOLS[name]["inputSchema"]
         approved = ADDITIVE_EXISTING_TOOL_FIELDS[name]
         self.assertEqual(
-            {"ui_receipt", "release_strategy"},
+            {
+                "ui_receipt",
+                "release_strategy",
+                "graph_finalization_receipt",
+            },
             set(approved),
         )
         for field, contract in approved.items():

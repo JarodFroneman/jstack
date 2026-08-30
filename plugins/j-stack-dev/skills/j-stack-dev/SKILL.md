@@ -54,6 +54,17 @@ Default behavior:
    single-lead iteration. Let `jstack_loop_checkpoint` and
    `jstack_loop_finalize` own convergence and terminal status.
 
+For supported material code work, require JStack's exact Project Intelligence
+binding before broad source reading. Open the private Graphify-native graph for
+the user; use bounded `jstack_graph_query` and `jstack_graph_impact` results to
+select the task context; and verify every inferred, ambiguous, or unanchored
+relationship directly in source. Only source-anchored `EXTRACTED` edges are
+strong graph evidence. Refresh after edits and require
+`jstack_graph_finalize` with exact direct-source, test, independent-review, and
+unresolved-finding evidence before completion or release. Missing mandatory
+provider or receipt evidence fails closed. The graph grants no action authority
+and never replaces source, QA, security, audit, review, or human judgment.
+
 For Git-backed handoff, submit the Lead's exact `jstack.specialist.result.v1`
 and metadata-only `jstack.specialist.telemetry.v1` to
 `jstack_specialist_result`, then validate the one-role receipt set with

@@ -34,6 +34,11 @@ evidence, launch assurance, release readiness, and mastery progression.
   HOME are hardening, not an OS sandbox.
 - Context and mastery records are atomically written under `~/.jstack` with
   private file permissions.
+- Project Intelligence state is atomically written under
+  `~/.jstack/project-intelligence` with private file permissions. Its managed
+  Graphify provider uses only pinned local AST extraction and static HTML
+  export, receives no host API or proxy credentials, and installs no project
+  hooks, instructions, listeners, skills, or hosted-service integration.
 - Audit mastery Stage 0 uses only two synthetic inert scenarios. It executes no
   repository code, accesses no network or secrets, permits only declared
   `.jstack-training/` artifacts, and grants no remediation or production
@@ -162,7 +167,7 @@ execution.
 
 ## Tools
 
-The server exposes 60 canonical `jstack_*` tools for runtime status, project
+The server exposes 65 canonical `jstack_*` tools for runtime status, project
 detection, two-stage Prompt Compilation, adaptive context readiness, planning, capability routing,
 specialist result/handoff validation, team
 validation, policy/preflight, health/review, QA, performance and adversarial capture, security, launch assurance,
@@ -171,6 +176,15 @@ mastery, and Product Interface reference, candidate contracting/finalization,
 and Product Interface reference, candidate, and motion specification/finalization lifecycles. The frozen 52 legacy `gstack_*`
 aliases remain for compatibility; `jstack_prompt_compile` and the six UI tools are canonical-only
 and upstream gstack itself is optional.
+
+The five Project Intelligence tools are `jstack_graph_index`,
+`jstack_graph_query`, `jstack_graph_impact`, `jstack_graph_refresh`, and
+`jstack_graph_finalize`. They bind a pinned private Graphify AST graph to the
+exact Git tree, dirty fingerprint, policy, provider catalog, and original
+change base. Only source-anchored `EXTRACTED` edges are strong evidence;
+inferred, ambiguous, and unanchored edges remain advisory. These tools select
+context and validate evidence only. They do not replace source reads, tests,
+scanners, audit, review, or human judgment and authorize no action.
 
 Prompt Compiler `1.1.0` / execution template v2 renders the same professional
 prompt-engineering standard for all six workflows and adds a policy-traced
@@ -276,6 +290,17 @@ From a complete release checkout, use the top-level installer:
 ~~~text
 python scripts/install.py
 ~~~
+
+Provision the optional pinned local Graphify provider with Python 3.10 or
+newer only when Project Intelligence is required:
+
+~~~text
+python scripts/install.py --with-project-intelligence
+~~~
+
+The runtime is isolated under `~/.jstack/tools/graphify`; it is not a Codex
+skill and does not add a command. The ordinary installer remains offline with
+respect to Graphify.
 
 The transactional installer stages all prompts, skills, MCP files, curricula,
 and config before activation. Any late failure restores every affected target;

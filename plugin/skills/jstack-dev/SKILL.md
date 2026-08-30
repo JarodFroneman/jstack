@@ -138,6 +138,36 @@ Use the normal-Codex fallback only when `jstack_runtime_status` itself is
 unavailable or unreachable. Upstream gstack is optional; JStack is
 independently usable.
 
+## Project Intelligence
+
+For a Git-backed existing codebase, use the Project Intelligence decision
+returned by planning. Material, cross-module, architecture, security,
+database, dependency, team, audit, loop, program, and release work is
+mandatory and fails closed when the pinned managed Graphify runtime is absent.
+Only a disclosed trivial, non-code, greenfield, or unsupported result may skip
+the lifecycle.
+
+When required:
+
+1. Run or reuse `jstack_graph_index` before broad source reading, then open its
+   private `snapshot.visualizationPath` for the user.
+2. Use `jstack_graph_query` and `jstack_graph_impact` to select a bounded task
+   subgraph and likely change surface. Do not load the entire graph into model
+   context.
+3. Treat only source-anchored `EXTRACTED` edges as strong graph evidence.
+   Verify every inferred, ambiguous, or unanchored relationship directly in
+   current source before relying on it.
+4. After edits, call `jstack_graph_refresh`, inspect the graph delta, and open
+   the current private visualization when it helps explain the candidate.
+5. Before completion, call `jstack_graph_finalize` with exact Git-derived
+   changed paths, direct current source reads, test evidence, independent
+   review, claimed strong edge IDs, and unresolved findings. Pass its receipt
+   to release readiness when applicable.
+
+The graph selects context; it never replaces source reads, tests, linters,
+scanners, audit, review, or human judgment and grants no implementation, Git,
+release, deployment, or production authority.
+
 ## Delivery Gates
 
 ### Context

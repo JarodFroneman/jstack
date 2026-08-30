@@ -354,7 +354,7 @@ class MethodologyCapabilityTests(unittest.TestCase):
             "root-cause-investigation",
             root_cause["methodologyCapabilities"][0]["id"],
         )
-        self.assertEqual(60, len(server.tool_definitions()))
+        self.assertEqual(65, len(server.tool_definitions()))
         self.assertEqual(
             52, len([name for name in server.TOOLS if name.startswith("gstack_")])
         )

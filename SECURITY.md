@@ -25,6 +25,30 @@ Evidence receipts protect against accidental or MCP-caller alteration inside
 one server session. They do not protect against compromise of the same operating
 system account.
 
+## Project Intelligence Safety
+
+The optional Graphify provider is installed outside JStack's standard-library
+core into a private, versioned virtual environment only after explicit
+installer opt-in. JStack pins and verifies the top-level wheel hash and exact
+CLI version. Transitive binary dependencies are resolved at provisioning time
+and are not yet covered by a complete cross-platform hash lock.
+
+Runtime calls avoid a shell, close stdin, cap execution time and output, use a
+disposable private HOME, and forward no host API keys or proxy variables. Only
+local AST extraction and static HTML export are selected. JStack does not run
+Graphify's assistant installer or activate hosted services, semantic APIs,
+listeners, HTTP MCP, Git hooks, skills, or repository instruction edits.
+Environment hardening is not an OS network sandbox; use a container, VM, or
+hardened host for untrusted repositories or providers.
+
+Graph and HTML artifacts remain under current-user private `~/.jstack` storage
+and are digest checked. Only source-anchored `EXTRACTED` relationships are
+strong graph evidence. Inferred, ambiguous, and unanchored relationships are
+advisory and cannot replace source inspection, tests, scanners, audit,
+independent review, or human judgment. Every graph response has no authority
+effect and cannot authorize implementation, Git, release, deployment, or
+production actions.
+
 ## Audit Safety
 
 Default static audit collection is read-only, performs no network operation,

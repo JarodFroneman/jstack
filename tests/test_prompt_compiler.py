@@ -741,7 +741,7 @@ class PromptCompilerTests(unittest.TestCase):
         definitions = {item["name"] for item in server.tool_definitions()}
         self.assertIn("jstack_prompt_compile", definitions)
         self.assertNotIn("gstack_prompt_compile", server.TOOLS)
-        self.assertEqual(60, len(definitions))
+        self.assertEqual(65, len(definitions))
 
     def test_every_dedicated_workflow_requires_final_prompt_approval(self) -> None:
         skill_paths = (

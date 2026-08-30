@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/project-intelligence-query.v1.schema.json",
+  "title": "JStack Project Intelligence Query v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "query", "visualization", "queryReceipt", "authorityEffect"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.project-intelligence-query-result.v1"},
+    "query": {
+      "type": "object",
+      "required": ["schemaVersion", "questionDigest", "nodes", "edges", "strongEvidenceEdgeCount", "advisoryEdgeCount", "truncated", "graphDigest"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.project-intelligence-query.v1"},
+        "questionDigest": {"$ref": "#/$defs/sha256"},
+        "nodes": {"type": "array", "maxItems": 500, "items": {"type": "object"}},
+        "edges": {"type": "array", "maxItems": 1000, "items": {"type": "object"}},
+        "strongEvidenceEdgeCount": {"type": "integer", "minimum": 0},
+        "advisoryEdgeCount": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"},
+        "graphDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "visualization": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "bytes", "providerNative"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "bytes": {"type": "integer", "minimum": 1, "maximum": 150000000},
+            "providerNative": {"const": true}
+          }
+        }
+      ]
+    },
+    "queryReceipt": {"type": "string", "minLength": 1, "maxLength": 250000},
+    "authorityEffect": {"const": "none"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

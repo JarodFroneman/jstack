@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "jstack.project-intelligence-provider-catalog.v1",
+  "providerId": "graphify-local-ast",
+  "displayName": "Graphify Local AST",
+  "packageName": "graphifyy",
+  "version": "0.9.52",
+  "sourceRepository": "https://github.com/Graphify-Labs/graphify",
+  "sourceBranch": "v8",
+  "sourceCommit": "680e3ed8edd3dc1fa1961050912941880b778207",
+  "license": "Apache-2.0",
+  "distribution": {
+    "filename": "graphifyy-0.9.52-py3-none-any.whl",
+    "sha256": "5588ea9af433a8cf74ada89dfc0b981abf596a1327a1375fdaf661905562bf44",
+    "url": "https://files.pythonhosted.org/packages/eb/14/8a015f6b3e5e3dc06a762e9dc5b722097900832b322b922484dc2ae7a92a/graphifyy-0.9.52-py3-none-any.whl"
+  },
+  "runtime": {
+    "relativeRoot": ".jstack/tools/graphify/0.9.52",
+    "posixEntrypoint": "venv/bin/python",
+    "windowsEntrypoint": "venv/Scripts/python.exe",
+    "launcherArguments": ["-m", "graphify"],
+    "pythonRequirement": ">=3.10",
+    "installMode": "isolated-managed-venv"
+  },
+  "execution": {
+    "indexArguments": ["extract", "{project}", "--no-cluster", "--code-only", "--timing"],
+    "renderArguments": ["export", "html", "--graph", "{graph}", "--node-limit", "5000"],
+    "networkPolicy": "no-hosted-service-no-forwarded-credentials",
+    "isolationDisclosure": "scrubbed-local-process-without-os-network-sandbox",
+    "sourceWrite": false,
+    "gitWrite": false,
+    "repositoryInstructionWrite": false,
+    "hookInstall": false,
+    "listener": false
+  },
+  "confidencePolicy": {
+    "strongEvidence": "EXTRACTED with a valid repository source_file and source_location",
+    "advisory": ["INFERRED", "AMBIGUOUS", "unanchored EXTRACTED"]
+  }
+}

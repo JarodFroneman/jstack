@@ -15,6 +15,7 @@ except ImportError:  # Production remains standard-library only.
 from mcp.jstack import investigation
 from mcp.jstack import jstack_mcp_server as server
 from mcp.jstack import methodologies
+from tests.project_intelligence_support import isolate_legacy_test_case
 from tests.test_dynamic_operating_modes import (
     approved_prompt,
     dynamic_result,
@@ -263,6 +264,9 @@ class RootCauseContractTests(unittest.TestCase):
 
 
 class RootCauseDispatchTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_legacy_test_case(self, server)
+
     def _team(self, base: Path) -> tuple[Path, str, dict[str, Any]]:
         repo = make_repo(base)
         source = repo / "src" / "api" / "pagination.py"
@@ -596,7 +600,7 @@ class RootCauseDispatchTests(unittest.TestCase):
 
     def test_public_surface_remains_additive_without_a_new_command_or_tool(self) -> None:
         definitions = {item["name"]: item for item in server.tool_definitions()}
-        self.assertEqual(60, len(definitions))
+        self.assertEqual(65, len(definitions))
         self.assertEqual(
             52, len([name for name in server.TOOLS if name.startswith("gstack_")])
         )

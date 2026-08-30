@@ -1017,7 +1017,7 @@ def bind_program_readiness(
     }
     if not all(checks.values()):
         raise ProgramError("Program readiness receipt does not match the exact contract and project state.")
-    return {
+    result = {
         "schemaVersion": PROGRAM_READINESS_SCHEMA,
         "readinessDigest": attestation.get("readinessDigest"),
         "contractInputDigest": attestation.get("contractInputDigest"),
@@ -1026,6 +1026,19 @@ def bind_program_readiness(
         "receiptDigest": attestation.get("receiptDigest"),
         "assessedAt": attestation.get("issuedAt"),
     }
+    project_intelligence = attestation.get("projectIntelligence")
+    if project_intelligence is not None:
+        if not isinstance(project_intelligence, dict) or project_intelligence.get(
+            "schemaVersion"
+        ) not in {
+            "jstack.project-intelligence-binding.v1",
+            "jstack.project-intelligence-decision.v1",
+        }:
+            raise ProgramError(
+                "The program-readiness project-intelligence binding is malformed."
+            )
+        result["projectIntelligence"] = project_intelligence
+    return result
 
 
 def _safe_directory(path: Path) -> None:

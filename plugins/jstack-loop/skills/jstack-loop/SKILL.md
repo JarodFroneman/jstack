@@ -58,6 +58,26 @@ Choose from project evidence, not a preset phase count:
 - Do not split work merely to create activity. Every phase needs a distinct
   outcome, acceptance contract, scope, dependency reason, and optional output.
 
+## Project Intelligence Across Iterations
+
+Goal and program readiness automatically bind the exact Project Intelligence
+decision and Graphify index snapshot for supported material work. Open the
+private full `graph.html`, use bounded `jstack_graph_query` and
+`jstack_graph_impact` results to plan each current phase, and pass the current
+`graph_index_receipt` to readiness/start/revision calls when exposed.
+
+After each mutating iteration, call `jstack_graph_refresh` and pass its receipt
+to the checkpoint's `graph_refresh_receipt`. Final loop or program acceptance
+requires `jstack_graph_finalize` evidence through
+`graph_finalization_receipt`. Any Git, policy, provider-catalog, graph, HTML,
+change-base, or changed-path drift requires a fresh lifecycle or an approved
+contract revision; do not copy evidence between phases or repositories.
+
+Only source-anchored `EXTRACTED` graph edges are strong evidence. Verify all
+advisory relationships in source, and keep ordinary source, QA, security,
+audit, review, launch, and human gates intact. A graph receipt never advances a
+phase by itself or authorizes an action.
+
 Read [protocol.md](references/protocol.md) for bounded loops. Read
 [program-protocol.md](references/program-protocol.md) before operating a
 program. Read [human-gates.md](references/human-gates.md) for approvals and

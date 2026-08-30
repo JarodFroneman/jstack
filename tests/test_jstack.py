@@ -43,6 +43,24 @@ def git(repo: Path, *args: str) -> str:
     return run(["git", *args], repo).stdout.strip()
 
 
+def optional_project_intelligence_applicability(*_args, **kwargs) -> dict:
+    changed_paths = [str(path) for path in kwargs.get("changed_paths", [])]
+    return {
+        "schemaVersion": "jstack.project-intelligence-applicability.v1",
+        "mode": "auto",
+        "state": "optional",
+        "reason": "legacy-test-isolation",
+        "mandatoryReasons": [],
+        "workflowMode": str(kwargs.get("workflow_mode") or "j-stack-dev"),
+        "supportedSourceCount": int(kwargs.get("supported_sources") or 0),
+        "changedPathCount": len(changed_paths),
+        "changedCodePathCount": 0,
+        "visualizationRequired": False,
+        "failClosed": False,
+        "disclosureRequired": True,
+    }
+
+
 def write_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
@@ -1922,6 +1940,8 @@ class TransportTests(unittest.TestCase):
             self.assertIn("jstack_release_readiness", plan_result["blockedTools"])
 
             repo = make_repo(Path(temp))
+            git(repo, "rm", "tests/test_project.py", "jstack.enterprise.json")
+            git(repo, "commit", "-m", "make transport audit fixture documentation-only")
             audit_start_request = {
                 "jsonrpc": "2.0",
                 "id": 6,
@@ -2343,6 +2363,17 @@ class PolicyAndDispatchTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project_intelligence_patch = mock.patch.object(
+            server.project_intelligence_core,
+            "assess_applicability",
+            side_effect=optional_project_intelligence_applicability,
+        )
+        self.project_intelligence_patch.start()
+
+    def tearDown(self) -> None:
+        self.project_intelligence_patch.stop()
+
     def test_qa_requires_exact_explicit_trust_and_scrubs_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))
@@ -3083,6 +3114,17 @@ class EvidenceTests(unittest.TestCase):
 
 
 class MasteryAndInstallTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project_intelligence_patch = mock.patch.object(
+            server.project_intelligence_core,
+            "assess_applicability",
+            side_effect=optional_project_intelligence_applicability,
+        )
+        self.project_intelligence_patch.start()
+
+    def tearDown(self) -> None:
+        self.project_intelligence_patch.stop()
+
     def test_mastery_artifact_limits_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))

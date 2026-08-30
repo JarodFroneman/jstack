@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -33,6 +34,178 @@ class _StatView:
 
 
 class InstallerTests(unittest.TestCase):
+    def test_graphify_wheel_download_requires_exact_url_and_sha256(self) -> None:
+        payload = b"pinned graphify wheel bytes"
+        catalog = install_module._load_graphify_catalog(ROOT)
+        catalog = json.loads(json.dumps(catalog))
+        catalog["distribution"]["sha256"] = hashlib.sha256(payload).hexdigest()
+
+        def fake_download(command, *, environment, timeout):
+            self.assertEqual({}, environment)
+            self.assertEqual(120, timeout)
+            self.assertIn("--isolated", command)
+            self.assertIn("--no-deps", command)
+            self.assertIn("--only-binary=:all:", command)
+            self.assertEqual(catalog["distribution"]["url"], command[-1])
+            download_root = Path(command[command.index("--dest") + 1])
+            (download_root / catalog["distribution"]["filename"]).write_bytes(payload)
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(
+            install_module,
+            "_run_graphify_install_process",
+            side_effect=fake_download,
+        ):
+            destination = Path(temp) / "graphify.whl"
+            install_module._download_pinned_graphify_wheel(
+                catalog,
+                destination,
+                python_executable=Path("/managed/python"),
+                environment={},
+            )
+            self.assertEqual(payload, destination.read_bytes())
+
+        catalog["distribution"]["sha256"] = "0" * 64
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(
+            install_module,
+            "_run_graphify_install_process",
+            side_effect=fake_download,
+        ), self.assertRaisesRegex(RuntimeError, "SHA-256"):
+            install_module._download_pinned_graphify_wheel(
+                catalog,
+                Path(temp) / "graphify.whl",
+                python_executable=Path("/managed/python"),
+                environment={},
+            )
+
+    def test_graphify_stage_uses_a_relocatable_copied_interpreter(self) -> None:
+        catalog = install_module._load_graphify_catalog(ROOT)
+        commands: list[list[str]] = []
+
+        def fake_process(command, *, environment, timeout):
+            commands.append(command)
+            return subprocess.CompletedProcess(command, 0, b"", b"")
+
+        def fake_download(catalog_value, destination, **kwargs):
+            destination.write_bytes(b"verified wheel fixture")
+
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(
+            install_module,
+            "_run_graphify_install_process",
+            side_effect=fake_process,
+        ), mock.patch.object(
+            install_module,
+            "_download_pinned_graphify_wheel",
+            side_effect=fake_download,
+        ), mock.patch.object(
+            install_module,
+            "_verify_graphify_runtime",
+            return_value={"installId": "fixture"},
+        ):
+            target = Path(temp) / "tools" / "graphify" / "0.9.52"
+            target.parent.mkdir(parents=True)
+            stage, _ = install_module._stage_graphify_runtime(catalog, target)
+            self.addCleanup(shutil.rmtree, stage, True)
+
+        venv_command = next(command for command in commands if "venv" in command)
+        self.assertIn("--copies", venv_command)
+
+    def test_graphify_provision_reuses_valid_runtime_and_rejects_invalid_duplicate(self) -> None:
+        catalog = install_module._load_graphify_catalog(ROOT)
+        with tempfile.TemporaryDirectory() as temp:
+            jstack_home = Path(temp) / ".jstack"
+            target = install_module._graphify_runtime_target(
+                catalog,
+                jstack_home,
+            )
+            target.mkdir(parents=True)
+            with mock.patch.object(
+                install_module,
+                "_verify_graphify_runtime",
+                return_value={"installId": "existing"},
+            ), mock.patch.object(
+                install_module,
+                "_stage_graphify_runtime",
+                side_effect=AssertionError("valid duplicate must not reinstall"),
+            ):
+                outcome = install_module.provision_graphify_runtime(
+                    ROOT,
+                    jstack_home,
+                )
+            self.assertFalse(outcome["created"])
+            self.assertEqual("existing", outcome["installId"])
+
+            with mock.patch.object(
+                install_module,
+                "_verify_graphify_runtime",
+                side_effect=RuntimeError("marker drift"),
+            ), mock.patch.object(
+                install_module,
+                "_stage_graphify_runtime",
+            ) as stage, self.assertRaisesRegex(RuntimeError, "marker drift"):
+                install_module.provision_graphify_runtime(ROOT, jstack_home)
+            stage.assert_not_called()
+
+    def test_graphify_install_is_opt_in_and_late_failure_rolls_back_new_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home = root / "codex"
+            jstack_home = root / ".jstack"
+            with mock.patch.object(
+                install_module,
+                "provision_graphify_runtime",
+                side_effect=AssertionError("default install must remain offline"),
+            ):
+                outcome = install_module.install(
+                    ROOT,
+                    codex_home,
+                    jstack_home=jstack_home,
+                )
+            self.assertIsNone(outcome["graphifyRuntime"])
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home = root / "codex"
+            jstack_home = root / ".jstack"
+            runtime = jstack_home / "tools" / "graphify" / "0.9.52"
+
+            def provision(*args: object, **kwargs: object) -> dict[str, object]:
+                runtime.mkdir(parents=True)
+                (runtime / "created-by-test").write_bytes(b"new runtime\n")
+                return {
+                    "path": runtime,
+                    "created": True,
+                    "installId": "test-install",
+                    "version": "0.9.52",
+                    "catalogDigest": "1" * 64,
+                }
+
+            def rollback(*args: object, **kwargs: object) -> None:
+                shutil.rmtree(runtime)
+
+            with mock.patch.object(
+                install_module,
+                "provision_graphify_runtime",
+                side_effect=provision,
+            ), mock.patch.object(
+                install_module,
+                "rollback_graphify_runtime",
+                side_effect=rollback,
+            ) as rollback_call, mock.patch.object(
+                install_module,
+                "atomic_write_text_cas",
+                side_effect=OSError("synthetic post-provider failure"),
+            ), self.assertRaisesRegex(OSError, "synthetic post-provider failure"):
+                install_module.install(
+                    ROOT,
+                    codex_home,
+                    install_graphify=True,
+                    jstack_home=jstack_home,
+                )
+            rollback_call.assert_called_once()
+            self.assertFalse(runtime.exists())
+            self.assertFalse(any(codex_home.glob(".jstack-install-*")))
+
     def test_windows_acl_runner_uses_utf16le_encoded_command(self) -> None:
         script = "$ErrorActionPreference = 'Stop'\nWrite-Output 'Jos\u00e9'\n"
         with mock.patch.object(

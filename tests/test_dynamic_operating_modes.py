@@ -132,7 +132,47 @@ def dynamic_telemetry(index: int) -> dict[str, Any]:
     }
 
 
+def isolated_project_intelligence_plan(**kwargs: object) -> dict[str, Any]:
+    applicability = {
+        "schemaVersion": "jstack.project-intelligence-applicability.v1",
+        "mode": "auto",
+        "state": "optional",
+        "reason": "isolated-team-composer-unit-test",
+        "mandatoryReasons": [],
+        "workflowMode": str(kwargs.get("workflow_mode") or "j-stack-dev"),
+        "supportedSourceCount": 1,
+        "changedPathCount": 0,
+        "changedCodePathCount": 0,
+        "visualizationRequired": False,
+        "failClosed": False,
+        "disclosureRequired": True,
+    }
+    return {
+        "schemaVersion": "jstack.project-intelligence-plan.v1",
+        "state": "optional",
+        "reason": applicability["reason"],
+        "mandatory": False,
+        "applicability": applicability,
+        "provider": {"status": "test-isolated"},
+        "binding": None,
+        "indexReceipt": None,
+        "snapshot": None,
+        "instruction": "Covered by dedicated project-intelligence integration tests.",
+    }
+
+
 class DynamicOperatingModeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project_intelligence_patch = mock.patch.object(
+            server,
+            "_project_intelligence_plan_view",
+            side_effect=isolated_project_intelligence_plan,
+        )
+        self.project_intelligence_patch.start()
+
+    def tearDown(self) -> None:
+        self.project_intelligence_patch.stop()
+
     def test_stage_seven_commands_and_skills_preserve_the_specification_boundary(self) -> None:
         dynamic_paths = (
             ROOT / "prompts" / "j-stack-dev.md",
@@ -240,7 +280,7 @@ class DynamicOperatingModeTests(unittest.TestCase):
 
         definitions = {item["name"] for item in server.tool_definitions()}
         aliases = {name for name in server.TOOLS if name.startswith("gstack_")}
-        self.assertEqual(60, len(definitions))
+        self.assertEqual(65, len(definitions))
         self.assertEqual(52, len(aliases))
 
     def test_mode_flag_is_closed_and_preview_is_the_reversible_beta_default(self) -> None:

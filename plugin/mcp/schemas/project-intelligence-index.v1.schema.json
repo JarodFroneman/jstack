@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/project-intelligence-index.v1.schema.json",
+  "title": "JStack Project Intelligence Index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "applicability", "provider", "changeBaseCommit", "snapshot", "indexReceipt", "authorityEffect"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.project-intelligence-index.v1"},
+    "applicability": {"$ref": "#/$defs/applicability"},
+    "provider": {"$ref": "#/$defs/provider"},
+    "changeBaseCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "snapshot": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["manifestDigest", "graphDigest", "projectFingerprint", "nodeCount", "edgeCount", "strongEvidenceEdgeCount", "manifestPath", "graphPath", "visualizationPath"],
+          "properties": {
+            "manifestDigest": {"$ref": "#/$defs/sha256"},
+            "graphDigest": {"$ref": "#/$defs/sha256"},
+            "projectFingerprint": {"$ref": "#/$defs/sha256"},
+            "nodeCount": {"type": "integer", "minimum": 0, "maximum": 500000},
+            "edgeCount": {"type": "integer", "minimum": 0, "maximum": 2000000},
+            "strongEvidenceEdgeCount": {"type": "integer", "minimum": 0, "maximum": 2000000},
+            "manifestPath": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "graphPath": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "visualizationPath": {"type": ["string", "null"], "maxLength": 4096}
+          }
+        }
+      ]
+    },
+    "indexReceipt": {"type": ["string", "null"], "maxLength": 250000},
+    "authorityEffect": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "mode", "state", "reason", "mandatoryReasons", "workflowMode", "supportedSourceCount", "changedPathCount", "changedCodePathCount", "visualizationRequired", "failClosed", "disclosureRequired"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.project-intelligence-applicability.v1"},
+        "mode": {"enum": ["auto", "required", "off"]},
+        "state": {"enum": ["deferred", "optional", "required", "skipped", "unsupported"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 500},
+        "mandatoryReasons": {"type": "array", "maxItems": 50, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "workflowMode": {"type": "string", "minLength": 1, "maxLength": 100},
+        "supportedSourceCount": {"type": "integer", "minimum": 0},
+        "changedPathCount": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "changedCodePathCount": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "visualizationRequired": {"type": "boolean"},
+        "failClosed": {"type": "boolean"},
+        "disclosureRequired": {"type": "boolean"}
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "providerId", "expectedVersion", "catalogDigest", "managedPath", "status", "version", "reason", "executionProfile"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.project-intelligence-provider-status.v1"},
+        "providerId": {"const": "graphify-local-ast"},
+        "expectedVersion": {"type": "string"},
+        "catalogDigest": {"$ref": "#/$defs/sha256"},
+        "managedPath": {"type": "string"},
+        "status": {"enum": ["available", "unavailable", "error"]},
+        "version": {"type": ["string", "null"]},
+        "reason": {"type": "string"},
+        "executionProfile": {"type": "string", "minLength": 1, "maxLength": 500},
+        "diagnostic": {"type": "string", "maxLength": 4000}
+      }
+    }
+  }
+}
