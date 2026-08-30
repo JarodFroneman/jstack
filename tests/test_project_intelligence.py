@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+import venv
 from pathlib import Path
 from unittest import mock
 
@@ -27,16 +28,10 @@ server = load_server("jstack_project_intelligence_test_server")
 core = server.project_intelligence_core
 
 
-FAKE_GRAPHIFY = r'''#!/usr/bin/env python3
-import json
+FAKE_GRAPHIFY = r'''import json
 import os
 import pathlib
 import sys
-
-if sys.argv[1:3] != ["-m", "graphify"]:
-    print("managed module launcher was not used", file=sys.stderr)
-    raise SystemExit(8)
-del sys.argv[1:3]
 
 if sys.argv[1:] == ["--version"]:
     print("graphify " + os.environ.get("FAKE_GRAPHIFY_VERSION", "0.9.52"))
@@ -181,19 +176,30 @@ class ProjectIntelligenceTests(unittest.TestCase):
         (self.repo / "app.py").write_text("def run():\n    return 1\n", encoding="utf-8")
         subprocess.run(["git", "add", "app.py"], cwd=self.repo, check=True)
         subprocess.run(["git", "commit", "-qm", "initial"], cwd=self.repo, check=True)
-        self.executable = (
-            self.home
-            / ".jstack"
-            / "tools"
-            / "graphify"
-            / "0.9.52"
-            / "venv"
-            / "bin"
-            / "python"
+        runtime_root = (
+            self.home / ".jstack" / "tools" / "graphify" / "0.9.52"
         )
-        self.executable.parent.mkdir(parents=True, mode=0o700)
-        self.executable.write_text(FAKE_GRAPHIFY, encoding="utf-8")
-        self.executable.chmod(0o700)
+        venv.EnvBuilder(with_pip=False).create(runtime_root / "venv")
+        runtime_entrypoint = (
+            core.protocol.provider_catalog()["runtime"]["windowsEntrypoint"]
+            if os.name == "nt"
+            else core.protocol.provider_catalog()["runtime"]["posixEntrypoint"]
+        )
+        self.executable = runtime_root / runtime_entrypoint
+        purelib = subprocess.run(
+            [
+                str(self.executable),
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout.strip()
+        Path(purelib, "graphify.py").write_text(
+            FAKE_GRAPHIFY,
+            encoding="utf-8",
+        )
         self.home_patch = mock.patch.object(Path, "home", return_value=self.home)
         self.home_patch.start()
 
