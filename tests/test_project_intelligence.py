@@ -162,7 +162,90 @@ def approved_prompt(repo: Path, *, goal: str, workflow: str) -> dict:
     return server.tool_prompt_compile(approved)
 
 
+class ProjectIntelligenceWindowsAclTests(unittest.TestCase):
+    def test_windows_acl_validation_uses_encoded_bounded_path_input(self) -> None:
+        path = Path("C:/Users/Jay/.jstack/project-intelligence/repository")
+        completed = subprocess.CompletedProcess([], 0, b"", b"")
+
+        with mock.patch.object(core.protocol.os, "name", "nt"), mock.patch.object(
+            core.protocol.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            core.protocol._ensure_windows_private_acls([path])
+
+        command = run.call_args.args[0]
+        self.assertEqual("powershell.exe", command[0])
+        encoded_index = command.index("-EncodedCommand") + 1
+        script = core.protocol.base64.b64decode(command[encoded_index]).decode(
+            "utf-16-le"
+        )
+        self.assertIn("Get-Acl -LiteralPath", script)
+        self.assertIn("S-1-5-32-544", script)
+        self.assertEqual(
+            [str(path)],
+            json.loads(run.call_args.kwargs["input"].decode("ascii")),
+        )
+        self.assertEqual(30, run.call_args.kwargs["timeout"])
+
+    def test_windows_acl_validation_fails_closed(self) -> None:
+        path = Path("C:/Users/Jay/.jstack/project-intelligence/repository")
+        rejected = subprocess.CompletedProcess([], 23, b"", b"")
+
+        with mock.patch.object(core.protocol.os, "name", "nt"), mock.patch.object(
+            core.protocol.subprocess,
+            "run",
+            return_value=rejected,
+        ):
+            with self.assertRaisesRegex(
+                core.ProjectIntelligenceError,
+                "not verifiably user-private",
+            ):
+                core.protocol._ensure_windows_private_acls([path])
+
+        with mock.patch.object(core.protocol.os, "name", "nt"), mock.patch.object(
+            core.protocol.subprocess,
+            "run",
+            side_effect=OSError("unavailable"),
+        ):
+            with self.assertRaisesRegex(
+                core.ProjectIntelligenceError,
+                "could not be verified",
+            ):
+                core.protocol._ensure_windows_private_acls([path])
+
+
 class ProjectIntelligenceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.provider_temp = tempfile.TemporaryDirectory()
+        runtime_root = Path(cls.provider_temp.name) / "graphify-runtime"
+        venv.EnvBuilder(with_pip=False).create(runtime_root / "venv")
+        runtime_entrypoint = (
+            core.protocol.provider_catalog()["runtime"]["windowsEntrypoint"]
+            if os.name == "nt"
+            else core.protocol.provider_catalog()["runtime"]["posixEntrypoint"]
+        )
+        cls.provider_executable = runtime_root / runtime_entrypoint
+        purelib = subprocess.run(
+            [
+                str(cls.provider_executable),
+                "-c",
+                "import sysconfig; print(sysconfig.get_path('purelib'))",
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout.strip()
+        Path(purelib, "graphify.py").write_text(
+            FAKE_GRAPHIFY,
+            encoding="utf-8",
+        )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.provider_temp.cleanup()
+
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
@@ -176,35 +259,22 @@ class ProjectIntelligenceTests(unittest.TestCase):
         (self.repo / "app.py").write_text("def run():\n    return 1\n", encoding="utf-8")
         subprocess.run(["git", "add", "app.py"], cwd=self.repo, check=True)
         subprocess.run(["git", "commit", "-qm", "initial"], cwd=self.repo, check=True)
-        runtime_root = (
-            self.home / ".jstack" / "tools" / "graphify" / "0.9.52"
+        self.executable = self.provider_executable
+        self.managed_executable_patch = mock.patch.object(
+            core.protocol,
+            "managed_executable",
+            return_value=self.executable,
         )
-        venv.EnvBuilder(with_pip=False).create(runtime_root / "venv")
-        runtime_entrypoint = (
-            core.protocol.provider_catalog()["runtime"]["windowsEntrypoint"]
-            if os.name == "nt"
-            else core.protocol.provider_catalog()["runtime"]["posixEntrypoint"]
-        )
-        self.executable = runtime_root / runtime_entrypoint
-        purelib = subprocess.run(
-            [
-                str(self.executable),
-                "-c",
-                "import sysconfig; print(sysconfig.get_path('purelib'))",
-            ],
-            check=True,
-            text=True,
-            capture_output=True,
-        ).stdout.strip()
-        Path(purelib, "graphify.py").write_text(
-            FAKE_GRAPHIFY,
-            encoding="utf-8",
-        )
+        self.managed_executable_patch.start()
         self.home_patch = mock.patch.object(Path, "home", return_value=self.home)
         self.home_patch.start()
 
     def tearDown(self) -> None:
+        disabled = self.executable.with_suffix(".disabled")
+        if disabled.exists() and not self.executable.exists():
+            disabled.rename(self.executable)
         self.home_patch.stop()
+        self.managed_executable_patch.stop()
         self.temp.cleanup()
 
     def committed_graph_finalization(self) -> tuple[str, dict, dict]:

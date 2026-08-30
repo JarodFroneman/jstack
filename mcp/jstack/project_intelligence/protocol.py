@@ -8,6 +8,7 @@ hooks, listeners, hosted services, or repository instructions.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import hashlib
 import json
@@ -243,6 +244,89 @@ def _sha256_file(path: Path, *, maximum: int) -> tuple[int, str]:
     return total, digest.hexdigest()
 
 
+def _is_link_or_reparse(metadata: os.stat_result) -> bool:
+    marker = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return (
+        stat.S_ISLNK(metadata.st_mode)
+        or bool(marker and getattr(metadata, "st_file_attributes", 0) & marker)
+        or bool(getattr(metadata, "st_reparse_tag", 0))
+    )
+
+
+def _ensure_windows_private_acls(paths: Sequence[Path]) -> None:
+    if os.name != "nt" or not paths:
+        return
+    script = r'''
+$ErrorActionPreference = 'Stop'
+$securityModule = "$PSHOME\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1"
+Import-Module -Name $securityModule -Force -ErrorAction Stop
+$utilityModule = "$PSHOME\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1"
+Import-Module -Name $utilityModule -Force -ErrorAction Stop
+$current = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$allowed = @($current, 'S-1-5-18', 'S-1-5-32-544')
+$allowType = [System.Security.AccessControl.AccessControlType]::Allow
+$inheritOnly = [System.Security.AccessControl.PropagationFlags]::InheritOnly
+foreach ($path in @(ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd()))) {
+    $acl = Get-Acl -LiteralPath $path
+    $owner = $acl.GetOwner(
+        [System.Security.Principal.SecurityIdentifier]
+    ).Value
+    if ($allowed -notcontains $owner) {
+        exit 22
+    }
+    foreach ($rule in $acl.Access) {
+        if ($rule.AccessControlType -ne $allowType) {
+            continue
+        }
+        $sid = $rule.IdentityReference.Translate(
+            [System.Security.Principal.SecurityIdentifier]
+        ).Value
+        $creatorOwner = (
+            $sid -eq 'S-1-3-0' -and
+            ($rule.PropagationFlags -band $inheritOnly)
+        )
+        $ownerRights = $sid -eq 'S-1-3-4'
+        if (
+            ($allowed -notcontains $sid) -and
+            -not $creatorOwner -and
+            -not $ownerRights
+        ) {
+            exit 23
+        }
+    }
+}
+'''
+    payload = json.dumps([str(path) for path in paths])
+    try:
+        encoded_script = base64.b64encode(
+            script.encode("utf-16-le")
+        ).decode("ascii")
+        encoded_payload = payload.encode("ascii")
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-EncodedCommand",
+                encoded_script,
+            ],
+            input=encoded_payload,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        raise ProjectIntelligenceError(
+            "The Windows ACL for project-intelligence storage could not be verified."
+        ) from exc
+    if result.returncode != 0:
+        raise ProjectIntelligenceError(
+            "Project-intelligence storage is not verifiably user-private on Windows."
+        )
+
+
 def _ensure_private_directory(path: Path, *, home: Path) -> Path:
     home = home.expanduser().resolve()
     try:
@@ -250,6 +334,7 @@ def _ensure_private_directory(path: Path, *, home: Path) -> Path:
     except ValueError as exc:
         raise ProjectIntelligenceError("Project-intelligence state must remain below the user home.") from exc
     current = home
+    windows_paths: list[Path] = []
     for index, component in enumerate(relative.parts):
         current = current / component
         try:
@@ -259,12 +344,15 @@ def _ensure_private_directory(path: Path, *, home: Path) -> Path:
         except OSError as exc:
             raise ProjectIntelligenceError("Private project-intelligence storage could not be created.") from exc
         metadata = current.lstat()
-        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+        if _is_link_or_reparse(metadata) or not stat.S_ISDIR(metadata.st_mode):
             raise ProjectIntelligenceError("Private project-intelligence storage contains a linked or non-directory component.")
         if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
             raise ProjectIntelligenceError("Private project-intelligence storage is not current-user owned.")
-        if index >= 1 and stat.S_IMODE(metadata.st_mode) & 0o077:
-            raise ProjectIntelligenceError("Project-intelligence directories below ~/.jstack must use private mode 0700.")
+        if index >= 1:
+            if os.name == "posix" and stat.S_IMODE(metadata.st_mode) & 0o077:
+                raise ProjectIntelligenceError("Project-intelligence directories below ~/.jstack must use private mode 0700.")
+            windows_paths.append(current)
+    _ensure_windows_private_acls(windows_paths)
     return path
 
 
