@@ -262,15 +262,16 @@ $securityModule = "$PSHOME\Modules\Microsoft.PowerShell.Security\Microsoft.Power
 Import-Module -Name $securityModule -Force -ErrorAction Stop
 $utilityModule = "$PSHOME\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1"
 Import-Module -Name $utilityModule -Force -ErrorAction Stop
-$current = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$allowed = @($current, 'S-1-5-18', 'S-1-5-32-544')
-$allowType = [System.Security.AccessControl.AccessControlType]::Allow
-$inheritOnly = [System.Security.AccessControl.PropagationFlags]::InheritOnly
-foreach ($path in @(ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd()))) {
-    $acl = Get-Acl -LiteralPath $path
+function Assert-JStackPrivateAcl {
+    param([string]$Path)
+    $acl = Get-Acl -LiteralPath $Path
+    $current = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $allowed = @($current, 'S-1-5-18', 'S-1-5-32-544')
     $owner = $acl.GetOwner(
         [System.Security.Principal.SecurityIdentifier]
     ).Value
+    $allowType = [System.Security.AccessControl.AccessControlType]::Allow
+    $inheritOnly = [System.Security.AccessControl.PropagationFlags]::InheritOnly
     if ($allowed -notcontains $owner) {
         exit 22
     }
@@ -294,6 +295,10 @@ foreach ($path in @(ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd()))) 
             exit 23
         }
     }
+}
+$paths = ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())
+foreach ($path in @($paths)) {
+    Assert-JStackPrivateAcl -Path $path
 }
 '''
     payload = json.dumps([str(path) for path in paths])
@@ -321,9 +326,17 @@ foreach ($path in @(ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd()))) 
         raise ProjectIntelligenceError(
             "The Windows ACL for project-intelligence storage could not be verified."
         ) from exc
+    if result.returncode == 22:
+        raise ProjectIntelligenceError(
+            "Project-intelligence storage is not current-user owned on Windows."
+        )
+    if result.returncode == 23:
+        raise ProjectIntelligenceError(
+            "Project-intelligence storage grants access outside the current user, SYSTEM, and Administrators on Windows."
+        )
     if result.returncode != 0:
         raise ProjectIntelligenceError(
-            "Project-intelligence storage is not verifiably user-private on Windows."
+            "The Windows ACL for project-intelligence storage could not be verified."
         )
 
 

@@ -199,7 +199,7 @@ class ProjectIntelligenceWindowsAclTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 core.ProjectIntelligenceError,
-                "not verifiably user-private",
+                "grants access outside",
             ):
                 core.protocol._ensure_windows_private_acls([path])
 
