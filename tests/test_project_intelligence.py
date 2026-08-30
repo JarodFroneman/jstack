@@ -432,9 +432,21 @@ class ProjectIntelligenceTests(unittest.TestCase):
             {
                 "OPENAI_API_KEY": "must-not-leak",
                 "HTTPS_PROXY": "http://127.0.0.1:1",
+                "SYSTEMROOT": "C:/Windows",
+                "WINDIR": "C:/Windows",
             },
         ):
+            environment = core.protocol._provider_environment(
+                graph_out=self.root / "provider-output",
+                runtime_home=self.root / "provider-home",
+                executable=self.executable,
+            )
+            self.assertEqual("C:/Windows", environment["SYSTEMROOT"])
+            self.assertEqual("C:/Windows", environment["WINDIR"])
+            self.assertNotIn("OPENAI_API_KEY", environment)
+            self.assertNotIn("HTTPS_PROXY", environment)
             status = core.discover_provider(home=self.home)
+            self.assertEqual("available", status["status"], status)
             subject = server._project_intelligence_subject(self.repo)
             snapshot = core.build_snapshot(
                 self.repo,
@@ -442,7 +454,6 @@ class ProjectIntelligenceTests(unittest.TestCase):
                 home=self.home,
                 executable=self.executable,
             )
-        self.assertEqual("available", status["status"])
         self.assertTrue(Path(snapshot["graphPath"]).is_file())
         self.assertTrue(Path(snapshot["visualizationPath"]).is_file())
         Path(snapshot["graphPath"]).resolve().relative_to(

@@ -403,7 +403,7 @@ def _provider_environment(*, graph_out: Path, runtime_home: Path, executable: Pa
     for candidate in (Path("/usr/bin"), Path("/bin"), Path("/usr/local/bin"), Path("/opt/homebrew/bin")):
         if candidate.is_dir():
             path_entries.append(str(candidate))
-    return {
+    environment = {
         "CI": "1",
         "GRAPHIFY_NO_TIPS": "1",
         "GRAPHIFY_OUT": str(graph_out),
@@ -417,6 +417,10 @@ def _provider_environment(*, graph_out: Path, runtime_home: Path, executable: Pa
         "XDG_CACHE_HOME": str(runtime_home / ".cache"),
         "XDG_CONFIG_HOME": str(runtime_home / ".config"),
     }
+    for name in ("SYSTEMROOT", "WINDIR"):
+        if os.environ.get(name):
+            environment[name] = str(os.environ[name])
+    return environment
 
 
 def _terminate(process: subprocess.Popen[bytes]) -> None:
