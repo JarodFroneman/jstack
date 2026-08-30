@@ -15,6 +15,12 @@
   receipts, source-anchor confidence boundaries, workflow and release gates,
   transactional opt-in runtime provisioning, architecture documentation, and
   ADR 0046.
+- Normalized Graphify's provider-native unresolved import and reference targets
+  as bounded unanchored nodes while preserving fail-closed malformed-edge
+  limits.
+- Kept declarative JSON under exact direct-source, test, and review evidence
+  while excluding pure-data files that legitimately emit no AST node from the
+  narrower graph-source-coverage subset.
 
 ### Changed
 

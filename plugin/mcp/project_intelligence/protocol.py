@@ -39,6 +39,7 @@ MAX_EDGES = 2_000_000
 MAX_QUERY_NODES = 500
 MAX_QUERY_EDGES = 1_000
 MAX_QUERY_DEPTH = 5
+DEFAULT_HTML_NODE_LIMIT = 5_000
 PROVIDER_TIMEOUT_SECONDS = 600
 MAX_RETAINED_SNAPSHOTS = 8
 MAX_RETAINED_QUERIES = 32
@@ -120,6 +121,7 @@ CODE_EXTENSIONS = {
     ".v",
     ".zig",
 }
+GRAPH_COVERAGE_EXTENSIONS = CODE_EXTENSIONS - {".json"}
 
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -501,6 +503,56 @@ def _load_graph(path: Path, project_path: Path) -> tuple[dict[str, Any], dict[st
             }
         )
 
+    # Graphify intentionally leaves some import and reference targets outside
+    # its node array. Preserve those relationships as bounded, unanchored
+    # reference nodes instead of treating valid provider output as corruption.
+    unresolved_targets: set[str] = set()
+    for index, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            raise ProjectIntelligenceError(
+                f"Graphify edge {index} is not an object."
+            )
+        source_value = edge.get("source")
+        target_value = edge.get("target")
+        relation_value = edge.get("relation", edge.get("type"))
+        if not isinstance(source_value, str) or not isinstance(target_value, str):
+            raise ProjectIntelligenceError(
+                f"Graphify edge {index} has invalid endpoints or relation."
+            )
+        source = source_value.strip()
+        target = target_value.strip()
+        relation = str(relation_value or "").strip()
+        if (
+            not source
+            or len(source) > 2000
+            or source not in node_ids
+            or not target
+            or len(target) > 2000
+            or not relation
+            or len(relation) > 200
+        ):
+            raise ProjectIntelligenceError(
+                f"Graphify edge {index} has invalid endpoints or relation."
+            )
+        if target not in node_ids:
+            unresolved_targets.add(target)
+    if len(node_ids) + len(unresolved_targets) > MAX_NODES:
+        raise ProjectIntelligenceError(
+            "Graphify graph exceeds JStack's node safety limit after resolving edge targets."
+        )
+    for target in sorted(unresolved_targets):
+        node_ids.add(target)
+        node_anchors[target] = (None, None)
+        normalized_nodes.append(
+            {
+                "id": target,
+                "label": target,
+                "type": "unresolved-reference",
+                "sourceFile": None,
+                "sourceLocation": None,
+            }
+        )
+
     confidence_counts = {level: 0 for level in CONFIDENCE_LEVELS}
     confidence_counts["UNKNOWN"] = 0
     strong_edges = 0
@@ -607,6 +659,11 @@ def supported_source_count(project_path: Path, files: Iterable[str] | None = Non
 
 def is_supported_source_path(path: str) -> bool:
     return Path(str(path)).suffix.lower() in CODE_EXTENSIONS
+
+
+def requires_graph_source_coverage(path: str) -> bool:
+    """Return whether Graphify is expected to emit AST inventory for a path."""
+    return Path(str(path)).suffix.lower() in GRAPH_COVERAGE_EXTENSIONS
 
 
 def graph_inventory(project_path: Path, graph_path: Path) -> dict[str, Any]:
@@ -813,9 +870,20 @@ def build_snapshot(
         normalized, graph_summary = _load_graph(graph_path, project_path)
         html_artifact: dict[str, Any] | None = None
         if render:
+            html_node_limit = max(
+                DEFAULT_HTML_NODE_LIMIT,
+                int(graph_summary["nodeCount"]),
+            )
             _run_provider(
                 selected_executable,
-                ["export", "html", "--graph", str(graph_path), "--node-limit", "5000"],
+                [
+                    "export",
+                    "html",
+                    "--graph",
+                    str(graph_path),
+                    "--node-limit",
+                    str(html_node_limit),
+                ],
                 cwd=project_path,
                 graph_out=stage,
                 runtime_home=runtime_home,

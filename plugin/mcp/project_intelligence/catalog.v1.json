@@ -23,7 +23,7 @@
   },
   "execution": {
     "indexArguments": ["extract", "{project}", "--no-cluster", "--code-only", "--timing"],
-    "renderArguments": ["export", "html", "--graph", "{graph}", "--node-limit", "5000"],
+    "renderArguments": ["export", "html", "--graph", "{graph}", "--node-limit", "{nodeLimit}"],
     "networkPolicy": "no-hosted-service-no-forwarded-credentials",
     "isolationDisclosure": "scrubbed-local-process-without-os-network-sandbox",
     "sourceWrite": false,

@@ -88,11 +88,32 @@ if command == "extract":
             }
         ],
     }
+    if "MANY_UNRESOLVED_TARGETS" in text:
+        graph["edges"].extend(
+            {
+                "source": "app.py",
+                "target": f"external_{index}",
+                "relation": "imports",
+                "confidence": "EXTRACTED",
+                "source_file": str(source),
+                "source_location": "L1",
+            }
+            for index in range(5001)
+        )
     (out / "graph.json").write_text(json.dumps(graph), encoding="utf-8")
     print("local AST graph written")
     raise SystemExit(0)
 if command == "export" and sys.argv[2] == "html":
     graph_path = pathlib.Path(sys.argv[sys.argv.index("--graph") + 1])
+    node_limit = int(sys.argv[sys.argv.index("--node-limit") + 1])
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    node_ids = {str(node.get("id") or "") for node in graph.get("nodes", [])}
+    target_ids = {
+        str(edge.get("target") or "") for edge in graph.get("edges", [])
+    }
+    if len(node_ids | target_ids) > node_limit:
+        print("Single community - aggregated view not useful. Skipping graph.html.")
+        raise SystemExit(0)
     (graph_path.parent / "graph.html").write_text(
         "<!doctype html><title>Graphify</title><div id='graph'>native</div>",
         encoding="utf-8",
@@ -273,6 +294,17 @@ class ProjectIntelligenceTests(unittest.TestCase):
             catalog["runtime"]["windowsEntrypoint"],
         )
         self.assertEqual(["-m", "graphify"], catalog["runtime"]["launcherArguments"])
+        self.assertEqual(
+            [
+                "export",
+                "html",
+                "--graph",
+                "{graph}",
+                "--node-limit",
+                "{nodeLimit}",
+            ],
+            catalog["execution"]["renderArguments"],
+        )
 
     def test_applicability_is_mandatory_for_material_and_team_work(self) -> None:
         material = core.assess_applicability(
@@ -343,6 +375,67 @@ class ProjectIntelligenceTests(unittest.TestCase):
         self.assertFalse((self.repo / "graphify-out").exists())
         self.assertFalse((self.repo / "AGENTS.md").exists())
         self.assertFalse((self.repo / ".git" / "hooks" / "post-commit").exists())
+
+    def test_provider_unresolved_targets_become_bounded_reference_nodes(self) -> None:
+        graph_path = self.root / "provider-graph.json"
+        graph = {
+            "nodes": [
+                {
+                    "id": "app.py",
+                    "label": "app.py",
+                    "type": "file",
+                    "source_file": "app.py",
+                    "source_location": "L1",
+                }
+            ],
+            "edges": [
+                {
+                    "source": "app.py",
+                    "target": "pathlib",
+                    "relation": "imports",
+                    "confidence": "EXTRACTED",
+                    "source_file": "app.py",
+                    "source_location": "L1",
+                }
+            ],
+        }
+        graph_path.write_text(json.dumps(graph), encoding="utf-8")
+
+        normalized, summary = core.protocol._load_graph(graph_path, self.repo)
+
+        references = [
+            node
+            for node in normalized["nodes"]
+            if node["type"] == "unresolved-reference"
+        ]
+        self.assertEqual(["pathlib"], [node["id"] for node in references])
+        self.assertIsNone(references[0]["sourceFile"])
+        self.assertEqual(2, summary["nodeCount"])
+        self.assertTrue(normalized["edges"][0]["strongEvidence"])
+
+        with mock.patch.object(core.protocol, "MAX_NODES", 1):
+            with self.assertRaisesRegex(
+                core.ProjectIntelligenceError,
+                "node safety limit",
+            ):
+                core.protocol._load_graph(graph_path, self.repo)
+
+    def test_full_visualization_expands_to_the_normalized_graph_size(self) -> None:
+        (self.repo / "app.py").write_text(
+            "# MANY_UNRESOLVED_TARGETS\ndef run():\n    return 1\n",
+            encoding="utf-8",
+        )
+        subject = server._project_intelligence_subject(self.repo)
+
+        snapshot = core.build_snapshot(
+            self.repo,
+            subject,
+            home=self.home,
+            executable=self.executable,
+        )
+
+        self.assertEqual(5003, snapshot["manifest"]["graph"]["nodeCount"])
+        self.assertTrue(Path(snapshot["visualizationPath"]).is_file())
 
     def test_inferred_edges_are_advisory_even_when_source_anchored(self) -> None:
         (self.repo / "app.py").write_text(
@@ -609,6 +702,93 @@ class ProjectIntelligenceTests(unittest.TestCase):
         self.assertIn("testsPassing", result["findings"])
         self.assertIn("independentReviewPassing", result["findings"])
         self.assertIn("noUnresolvedFindings", result["findings"])
+
+    def test_declarative_json_requires_direct_but_not_ast_coverage(self) -> None:
+        config_path = self.repo / "config.json"
+        config_path.write_text('{"mode":"baseline"}\n', encoding="utf-8")
+        subprocess.run(["git", "add", "config.json"], cwd=self.repo, check=True)
+        subprocess.run(
+            ["git", "commit", "-qm", "add configuration"],
+            cwd=self.repo,
+            check=True,
+        )
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo,
+            check=True,
+            text=True,
+            capture_output=True,
+        ).stdout.strip()
+        config_path.write_text('{"mode":"release"}\n', encoding="utf-8")
+        subprocess.run(["git", "add", "config.json"], cwd=self.repo, check=True)
+        subprocess.run(
+            ["git", "commit", "-qm", "update configuration"],
+            cwd=self.repo,
+            check=True,
+        )
+        indexed = server.tool_graph_index(
+            {
+                "project_path": str(self.repo),
+                "goal": "Prepare a production release",
+                "workflow_mode": "j-stack-dev",
+                "base_ref": base,
+            }
+        )
+        impact = server.tool_graph_impact(
+            {
+                "project_path": str(self.repo),
+                "index_receipt": indexed["indexReceipt"],
+                "goal": "Assess configuration impact",
+                "changed_paths": ["config.json"],
+            }
+        )
+        refreshed = server.tool_graph_refresh(
+            {
+                "project_path": str(self.repo),
+                "index_receipt": indexed["indexReceipt"],
+                "impact_receipt": impact["impactReceipt"],
+            }
+        )
+        finalized = server.tool_graph_finalize(
+            {
+                "project_path": str(self.repo),
+                "index_receipt": indexed["indexReceipt"],
+                "impact_receipt": impact["impactReceipt"],
+                "refresh_receipt": refreshed["refreshReceipt"],
+                "evidence": {
+                    "changed_paths": ["config.json"],
+                    "source_reads": [
+                        {
+                            "path": "config.json",
+                            "sha256": hashlib.sha256(
+                                config_path.read_bytes()
+                            ).hexdigest(),
+                        }
+                    ],
+                    "tests": [
+                        {
+                            "name": "configuration validation",
+                            "status": "pass",
+                            "evidence_sha256": "1" * 64,
+                            "justification": "The declarative configuration is valid.",
+                        }
+                    ],
+                    "review": {
+                        "status": "pass",
+                        "reviewer": "independent-reviewer",
+                        "evidence_sha256": "2" * 64,
+                    },
+                    "graph_evidence_edge_ids": [],
+                    "unresolved_findings": [],
+                },
+            }
+        )
+
+        self.assertTrue(core.is_supported_source_path("config.json"))
+        self.assertFalse(core.requires_graph_source_coverage("config.json"))
+        self.assertTrue(finalized["checks"]["directSourceCoverage"])
+        self.assertTrue(finalized["checks"]["graphSourceCoverage"])
+        self.assertTrue(finalized["passed"], finalized["findings"])
 
     def test_audit_auto_queries_and_signed_team_plan_binds_graph_snapshot(self) -> None:
         audit = server.tool_audit(

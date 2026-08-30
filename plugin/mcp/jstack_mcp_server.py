@@ -27219,6 +27219,11 @@ def tool_graph_finalize(args: dict[str, Any]) -> dict[str, Any]:
         for path in actual_changed
         if project_intelligence_core.is_supported_source_path(path)
     }
+    graph_covered_changed = {
+        path
+        for path in actual_changed
+        if project_intelligence_core.requires_graph_source_coverage(path)
+    }
     claimed_edge_set = {str(edge) for edge in claimed_edges}
     checks = {
         "baselineBinding": impact_payload.get("manifestDigest")
@@ -27230,7 +27235,9 @@ def tool_graph_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "changedPathsExact": supplied_changed == actual_changed,
         "sourceReadsCurrent": source_reads_valid,
         "directSourceCoverage": code_changed.issubset(read_paths),
-        "graphSourceCoverage": code_changed.issubset(set(inventory["sourceFiles"])),
+        "graphSourceCoverage": graph_covered_changed.issubset(
+            set(inventory["sourceFiles"])
+        ),
         "testsPassing": tests_valid and (bool(tests) or not code_changed),
         "independentReviewPassing": review_valid,
         "strongGraphClaims": claimed_edge_set.issubset(set(inventory["strongEdgeIds"])),

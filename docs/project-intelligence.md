@@ -68,6 +68,19 @@ source before they support an implementation, audit finding, security claim,
 or final review. Even strong graph evidence does not prove runtime behavior or
 correctness. Finalization therefore requires direct source and test evidence.
 
+Graphify may emit source-anchored import or reference edges whose target is not
+present in its node array, including standard-library modules and schema
+symbols. JStack preserves these provider-native relationships as bounded,
+unanchored `unresolved-reference` nodes in its normalized view. It still rejects
+missing source endpoints, empty or oversized identifiers, malformed relations,
+and any expansion beyond the node safety limit.
+
+Declarative JSON remains a supported code-adjacent artifact and must have exact
+direct-source, test, and review evidence. Because Graphify can legitimately
+classify a pure-data JSON file without emitting an AST node, JSON is excluded
+only from the graph-source-coverage subset. This does not weaken its other
+finalization gates or make graph evidence authoritative.
+
 ## Private Storage And Visualization
 
 Generated state lives outside the repository at:
@@ -116,8 +129,13 @@ API keys or proxy variables. It invokes only:
 
 ```text
 graphify extract <repository> --no-cluster --code-only --timing
-graphify export html --graph <private-graph> --node-limit 5000
+graphify export html --graph <private-graph> --node-limit <bounded-node-count>
 ```
+
+The render limit is at least 5,000 and expands only to the already validated
+normalized node count. This prevents Graphify from silently skipping a native
+HTML artifact for a larger unclustered graph while retaining JStack's node and
+150 MB visualization safety limits.
 
 JStack does not invoke Graphify's assistant installer, hosted service,
 semantic API, listener, HTTP MCP mode, skill installer, instruction writer, or

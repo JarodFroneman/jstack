@@ -17,6 +17,7 @@ from .protocol import (
     load_current_snapshot,
     project_storage_root,
     provider_catalog,
+    requires_graph_source_coverage,
     render_focused_graph,
     supported_source_count,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "load_current_snapshot",
     "project_storage_root",
     "provider_catalog",
+    "requires_graph_source_coverage",
     "render_focused_graph",
     "supported_source_count",
 ]
