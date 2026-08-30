@@ -8,6 +8,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -78,6 +79,22 @@ class InstallerTests(unittest.TestCase):
                 environment={},
             )
 
+    def test_graphify_stage_rejects_python_older_than_310(self) -> None:
+        catalog = install_module._load_graphify_catalog(ROOT)
+        with tempfile.TemporaryDirectory() as temp, mock.patch.object(
+            install_module.sys,
+            "version_info",
+            (3, 9, 25),
+        ), self.assertRaisesRegex(RuntimeError, "Python 3.10 or newer"):
+            install_module._stage_graphify_runtime(
+                catalog,
+                Path(temp) / "tools" / "graphify" / "0.9.52",
+            )
+
+    @unittest.skipIf(
+        sys.version_info < (3, 10),
+        "managed Graphify runtime requires Python 3.10 or newer",
+    )
     def test_graphify_stage_uses_a_relocatable_copied_interpreter(self) -> None:
         catalog = install_module._load_graphify_catalog(ROOT)
         commands: list[list[str]] = []
