@@ -158,6 +158,43 @@ def revision_readiness_receipt(loop_id: str, contract: dict) -> str:
     return readiness["goalReadinessReceipt"]
 
 
+def isolated_project_intelligence(*args: object, **kwargs: object) -> dict:
+    applicability = {
+        "schemaVersion": "jstack.project-intelligence-applicability.v1",
+        "mode": "auto",
+        "state": "optional",
+        "reason": "isolated-loop-protocol-unit-test",
+        "mandatoryReasons": [],
+        "workflowMode": "jstack-loop",
+        "supportedSourceCount": 1,
+        "changedPathCount": 0,
+        "changedCodePathCount": 0,
+        "visualizationRequired": False,
+        "failClosed": False,
+        "disclosureRequired": True,
+    }
+    return {
+        "schemaVersion": "jstack.project-intelligence-preparation.v1",
+        "applicability": applicability,
+        "provider": {
+            "status": "test-isolated",
+            "reason": "covered-by-project-intelligence-integration-tests",
+        },
+        "binding": None,
+        "contract": {
+            "schemaVersion": "jstack.project-intelligence-decision.v1",
+            "state": "optional",
+            "reason": applicability["reason"],
+            "applicabilityDigest": server.project_intelligence_core.canonical_digest(
+                applicability
+            ),
+            "providerCatalogDigest": server.project_intelligence_core.catalog_digest(),
+        },
+        "indexReceipt": None,
+        "snapshot": None,
+    }
+
+
 def security_write_contract(repo: Path) -> dict:
     value = low_write_contract(repo)
     value["risk_tier"] = "medium"
@@ -173,6 +210,17 @@ def security_write_contract(repo: Path) -> dict:
 
 
 class LoopProtocolTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.project_intelligence_patch = mock.patch.object(
+            server,
+            "_prepare_project_intelligence",
+            side_effect=isolated_project_intelligence,
+        )
+        self.project_intelligence_patch.start()
+
+    def tearDown(self) -> None:
+        self.project_intelligence_patch.stop()
+
     def test_stale_lock_is_reclaimed_only_when_owner_is_not_alive(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             lock_path = Path(temp) / "state-lock"

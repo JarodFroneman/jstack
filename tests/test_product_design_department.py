@@ -316,7 +316,7 @@ class ProductDesignDepartmentTests(unittest.TestCase):
     def test_public_surface_reuses_one_tool_and_host_requires_human_selection(self) -> None:
         canonical = {name for name in server.TOOLS if name.startswith("jstack_")}
         aliases = {name for name in server.TOOLS if name.startswith("gstack_")}
-        self.assertEqual(60, len(canonical))
+        self.assertEqual(65, len(canonical))
         self.assertEqual(52, len(aliases))
         self.assertIn("design_decision", server.TOOLS["jstack_ui_contract"]["inputSchema"]["properties"])
         self.assertNotIn(

@@ -24,6 +24,11 @@ ADDITIVE_CANONICAL_TOOLS = frozenset(
         "jstack_ui_motion_finalize",
         "jstack_prompt_compile",
         "jstack_browser_capture",
+        "jstack_graph_index",
+        "jstack_graph_query",
+        "jstack_graph_impact",
+        "jstack_graph_refresh",
+        "jstack_graph_finalize",
     }
 )
 ADDITIVE_COMMAND_NAMES = frozenset({"jstack-evidence-builder.md"})
@@ -263,9 +268,56 @@ ADDITIVE_EXISTING_TOOL_FIELDS.setdefault("jstack_release_readiness", {}).update(
             "type": "string",
             "enum": ["direct", "canary", "blue-green"],
             "description": "Readiness UX strategy only. It never authorizes or executes a release.",
+        },
+        "graph_finalization_receipt": {
+            "type": "string",
+            "maxLength": 100000,
+            "description": "Current jstack_graph_finalize receipt; required automatically for a material release delta and bound to the exact candidate and changed-path set.",
+        },
+    }
+)
+ADDITIVE_EXISTING_TOOL_FIELDS.setdefault("jstack_audit", {}).update(
+    {
+        "graph_index_receipt": {
+            "type": "string",
+            "maxLength": 100000,
+            "description": "Optional current jstack_graph_index receipt. When omitted, mandatory read-only audit project intelligence is indexed automatically.",
         }
     }
 )
+for _name, _description in {
+    "jstack_loop_goal_readiness": "Optional current jstack_graph_index receipt; mandatory baselines are indexed automatically when omitted.",
+    "jstack_loop_start": "The same project-intelligence baseline receipt used during readiness, or omit it to reuse the exact immutable current snapshot automatically.",
+    "jstack_loop_revise": None,
+    "jstack_program_goal_readiness": "Optional current jstack_graph_index receipt. When omitted, mandatory project intelligence is indexed automatically during readiness/start.",
+    "jstack_program_start": "Optional current jstack_graph_index receipt. When omitted, mandatory project intelligence is indexed automatically during readiness/start.",
+    "jstack_program_revise": "Optional current jstack_graph_index receipt. When omitted, mandatory project intelligence is indexed automatically during readiness/start.",
+}.items():
+    _contract = {"type": "string", "maxLength": 100000}
+    if _description is not None:
+        _contract["description"] = _description
+    ADDITIVE_EXISTING_TOOL_FIELDS.setdefault(_name, {})[
+        "graph_index_receipt"
+    ] = _contract
+for _name in (
+    "jstack_loop_checkpoint",
+    "jstack_loop_finalize",
+    "jstack_program_finalize",
+):
+    ADDITIVE_EXISTING_TOOL_FIELDS.setdefault(_name, {}).update(
+        {
+            "graph_refresh_receipt": {
+                "type": "string",
+                "maxLength": 100000,
+                "description": "Current jstack_graph_refresh receipt for a changed-code checkpoint. It must descend from the immutable graph index bound at readiness.",
+            },
+            "graph_finalization_receipt": {
+                "type": "string",
+                "maxLength": 100000,
+                "description": "Current passing jstack_graph_finalize receipt for the exact completion candidate and immutable baseline graph binding.",
+            },
+        }
+    )
 ADDITIVE_EXISTING_TOOL_FIELDS["jstack_specialist_handoff_check"].update(
     {
         "team_plan_receipt": {
@@ -415,11 +467,16 @@ ADDITIVE_SCHEMA_FILES = frozenset(
         "host-contract.v1.schema.json",
         "release-choreography.v1.schema.json",
         "security-tooling-catalog.v1.schema.json",
+        "project-intelligence-index.v1.schema.json",
+        "project-intelligence-query.v1.schema.json",
+        "project-intelligence-impact.v1.schema.json",
+        "project-intelligence-refresh.v1.schema.json",
+        "project-intelligence-finalization.v1.schema.json",
     }
 )
 FROZEN_CANONICAL_TOOL_COUNT = 52
 FROZEN_ALIAS_COUNT = 52
-LIVE_CANONICAL_TOOL_COUNT = 60
+LIVE_CANONICAL_TOOL_COUNT = 65
 
 
 def _canonical_digest(value: Any) -> str:

@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.12.0 - 2026-08-30 - Graphify Project Intelligence stable release
+
+### Added
+
+- Added Graphify-backed Project Intelligence to Dev, Subagents, Full Team,
+  Audit, Loop, Program, and release readiness without adding a slash command or
+  standalone skill.
+- Added five canonical-only MCP operations for exact-state indexing, bounded
+  graph query, pre-change impact analysis, explicit post-edit refresh, and
+  fail-closed finalization, plus closed public schemas and an immutable pinned
+  provider catalog.
+- Added private Graphify-native HTML visualization, exact Git/policy/provider
+  receipts, source-anchor confidence boundaries, workflow and release gates,
+  transactional opt-in runtime provisioning, architecture documentation, and
+  ADR 0046.
+- Normalized Graphify's provider-native unresolved import and reference targets
+  as bounded unanchored nodes while preserving fail-closed malformed-edge
+  limits.
+- Kept declarative JSON under exact direct-source, test, and review evidence
+  while excluding pure-data files that legitimately emit no AST node from the
+  narrower graph-source-coverage subset.
+
+### Changed
+
+- Expanded the live canonical MCP surface from 60 to 65 tools while preserving
+  six commands, 52 frozen legacy aliases, and a Python-standard-library JStack
+  core.
+- Material, risk-sensitive, cross-module, team, audit, loop, program, and
+  release work now fails closed when required project-intelligence evidence is
+  missing or stale. Trivial, non-code, greenfield, and unsupported cases retain
+  explicit skip or deferral disclosures.
+
+### Security and evidence
+
+- Pinned `graphifyy==0.9.52`, source commit
+  `680e3ed8edd3dc1fa1961050912941880b778207`, and the top-level wheel SHA-256;
+  isolated the provider runtime and scrubbed host credentials.
+- Restricted strong graph evidence to source-anchored `EXTRACTED` edges.
+  Inferred, ambiguous, and unanchored edges remain advisory, and the graph
+  never replaces direct source, test, scanner, audit, review, or human evidence.
+- Kept hosted services, semantic APIs, listeners, HTTP MCP, Git hooks,
+  repository instruction changes, and Graphify skill installation outside the
+  JStack runtime boundary.
+
 ## 0.11.0 - 2026-08-26 - Unified Engineering OS stable release
 
 ### Added

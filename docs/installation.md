@@ -6,6 +6,7 @@ Choose one Codex command-distribution layout and do not combine those layouts.
 ## Requirements
 
 - Python 3.9 or newer
+- Python 3.10 or newer when installing the optional managed Graphify runtime
 - Git for commit-bound workflows
 - A local clone of this repository
 - Codex Desktop or Codex CLI for full command and continuation support, or
@@ -26,17 +27,17 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **v0.11.0 stable release boundary:** install `v0.11.0` only from its exact
+> **v0.12.0 stable release boundary:** install `v0.12.0` only from its exact
 > immutable annotated GitHub release tag, retain the complete
-> `v0.10.0-beta.6.2` installation as one rollback unit, and verify the installed
+> `v0.11.0` installation as one rollback unit, and verify the installed
 > bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
 > unvalidated. Stage 19 also remains `NOT_MEASURED`; its 168-cell comparative
-> study has not run. Installing v0.11.0 does not satisfy either deferred study
+> study has not run. Installing v0.12.0 does not satisfy either deferred study
 > or any project-specific independent review. Receipts validate bounded
 > contracts and declared evidence only; they do not certify prompt-quality
-> uplift, producer honesty, aesthetic quality, attack immunity, or universal
-> production readiness.
+> uplift, producer honesty, graph completeness, semantic correctness,
+> aesthetic quality, attack immunity, or universal production readiness.
 
 ## Host Support
 
@@ -52,7 +53,7 @@ presented as complete workflow parity.
 
 ## Prompt Compiler mode
 
-v0.11.0 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
+v0.12.0 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
 values are `shadow`, `preview`, and `disabled`; use `disabled` only as a bounded
 compatibility rollback while investigating an integration issue. Mode changes
 invalidate existing readiness and compilation receipts. The six packaged
@@ -161,6 +162,47 @@ containing a triple-quote delimiter token), plus a root inline
 Layout B and add the documented MCP block manually, or first make a separate
 backup and convert those values to ordinary single-line tables/values before
 rerunning Layout A.
+
+### Optional Graphify Project Intelligence runtime
+
+JStack's Project Intelligence protocol is built into the existing workflows,
+not installed as a skill or seventh command. Its external local-AST provider is
+deliberately opt-in so the ordinary installer does not download Graphify or its
+dependencies:
+
+```bash
+python3 scripts/install.py --with-project-intelligence
+```
+
+`--install-graphify` is an equivalent compatibility spelling. To validate a
+separate private JStack home, add `--jstack-home /absolute/private/path`.
+Project graphs and the runtime do not live under `CODEX_HOME`; their defaults
+are `~/.jstack/project-intelligence/` and
+`~/.jstack/tools/graphify/0.9.52/` respectively.
+
+The installer accepts only the pinned `graphifyy==0.9.52` catalog entry,
+downloads its exact Python Package Index wheel URL, verifies SHA-256 before
+installation, creates an isolated virtual environment, and verifies the exact
+CLI version. It reuses an existing runtime only when its private marker and
+executable match the catalog. A partial, altered, linked, broadly accessible,
+or duplicate runtime fails closed. If JStack activation later fails, a runtime
+created by that invocation is removed; a verified pre-existing runtime is
+preserved.
+
+The Graphify executable is local process code, not part of JStack's Python
+standard-library core. JStack runs only local AST extraction and native static
+HTML export with a scrubbed environment and no forwarded host API or proxy
+credentials. This is process hardening rather than an OS network sandbox. The
+top-level wheel is hash pinned; transitive binary dependencies are resolved at
+provisioning time and are not yet covered by a complete cross-platform hash
+lock. Use a container, VM, or hardened host for untrusted repositories or
+provider execution.
+
+The direct installer does not invoke Graphify's own install command and does
+not create assistant skills, repository instructions, Git hooks, listeners,
+hosted integrations, semantic API clients, or HTTP MCP services. See
+[Graphify-backed Project Intelligence](project-intelligence.md) for the
+runtime and evidence boundary.
 
 ## Codex Layout B: Dedicated Command Plugins
 
@@ -396,16 +438,18 @@ Expected dedicated layout:
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  release, `0.11.0`);
-- `tools/list` includes 60 canonical `jstack_*` tools, including the
+  release, `0.12.0`);
+- `tools/list` includes 65 canonical `jstack_*` tools, including the
   canonical-only `jstack_prompt_compile`, `jstack_context_readiness`,
   `jstack_performance_capture`, and
   `jstack_adversarial_capture`, plus the reference lifecycle
   `jstack_ui_reference_contract` / `jstack_ui_reference_finalize` and candidate
   lifecycle `jstack_ui_contract` / `jstack_ui_finalize`, and motion lifecycle
-  `jstack_ui_motion_spec` / `jstack_ui_motion_finalize`; the frozen
+  `jstack_ui_motion_spec` / `jstack_ui_motion_finalize`, plus
+  `jstack_graph_index`, `jstack_graph_query`, `jstack_graph_impact`,
+  `jstack_graph_refresh`, and `jstack_graph_finalize`; the frozen
   compatibility surface remains 52 legacy `gstack_*` aliases and has no UI
-  aliases.
+  or project-intelligence aliases.
 
 ## Upgrade
 
@@ -418,10 +462,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.11.0`, also confirm that GitHub marks the release as stable and that the
+For `v0.12.0`, also confirm that GitHub marks the release as stable and that the
 checked-out annotated tag resolves to the release commit before staging any
 global files. The rollback snapshot must contain the actual published
-`v0.10.0-beta.6.2` installation as one coherent MCP, plugin-source,
+`v0.11.0` installation as one coherent MCP, plugin-source,
 plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state

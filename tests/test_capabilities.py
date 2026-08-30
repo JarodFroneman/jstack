@@ -12,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.project_intelligence_support import isolate_legacy_test_case
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "mcp" / "jstack" / "jstack_mcp_server.py"
@@ -681,6 +683,9 @@ class SpecialistReceiptTests(unittest.TestCase):
 
 
 class CapabilityWorkflowTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_legacy_test_case(self, server)
+
     def test_audit_routes_capabilities_into_required_domains_and_receipt_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo = make_repo(Path(temp))

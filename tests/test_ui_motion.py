@@ -259,7 +259,7 @@ class MotionServerTests(unittest.TestCase):
         self.assertTrue(
             definitions["jstack_ui_motion_spec"]["annotations"]["readOnlyHint"]
         )
-        self.assertEqual(60, len(definitions))
+        self.assertEqual(65, len(definitions))
         self.assertEqual(
             52, len([name for name in server.TOOLS if name.startswith("gstack_")])
         )

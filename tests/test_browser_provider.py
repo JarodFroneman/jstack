@@ -17,6 +17,7 @@ except ImportError:  # Production remains standard-library only.
 from mcp.jstack import jstack_mcp_server as server
 from mcp.jstack.providers import browser
 from mcp.jstack.providers import remediation
+from tests.project_intelligence_support import isolate_legacy_test_case
 from tests.test_dynamic_operating_modes import approved_prompt, team_args
 from tests.test_jstack import git, make_repo, write_json
 
@@ -548,6 +549,9 @@ class BrowserCaptureToolTests(unittest.TestCase):
 
 
 class BrowserRemediationHandoffTests(BrowserCaptureToolTests):
+    def setUp(self) -> None:
+        isolate_legacy_test_case(self, server)
+
     def team(self, repo: Path) -> tuple[str, dict]:
         goal = "Implement a bounded correction for the dashboard browser interaction defect in app/page.tsx."
         approval = approved_prompt(

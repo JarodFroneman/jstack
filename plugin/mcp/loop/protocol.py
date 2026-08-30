@@ -1426,7 +1426,7 @@ def bind_goal_readiness(
         raise LoopError(
             "The goal-readiness receipt is stale or does not match this exact loop contract."
         )
-    return {
+    result = {
         "schemaVersion": GOAL_READINESS_SCHEMA,
         "readinessDigest": attestation.get("readinessDigest"),
         "contractInputDigest": attestation.get("contractInputDigest"),
@@ -1436,6 +1436,19 @@ def bind_goal_readiness(
         "receiptDigest": attestation.get("receiptDigest"),
         "assessedAt": attestation.get("issuedAt"),
     }
+    project_intelligence = attestation.get("projectIntelligence")
+    if project_intelligence is not None:
+        if not isinstance(project_intelligence, dict) or project_intelligence.get(
+            "schemaVersion"
+        ) not in {
+            "jstack.project-intelligence-binding.v1",
+            "jstack.project-intelligence-decision.v1",
+        }:
+            raise LoopError(
+                "The goal-readiness project-intelligence binding is malformed."
+            )
+        result["projectIntelligence"] = project_intelligence
+    return result
 
 
 def _criterion_composition_checks(
@@ -2234,6 +2247,7 @@ class LoopService:
             "goalContext": contract.get("goalContext"),
             "capabilityContract": contract.get("capabilityContract"),
             "goalReadiness": contract.get("goalReadiness"),
+            "projectIntelligence": snapshot.get("projectIntelligence"),
             "contractRevision": contract["revision"],
             "contractDigest": snapshot["contractDigest"],
             "baselineCommit": contract["project"]["baselineCommit"],
@@ -2533,6 +2547,7 @@ class LoopService:
                     "decision": decision,
                     "iteration": iteration,
                     "criteria": criteria,
+                    "projectIntelligence": evidence.get("projectIntelligence"),
                     "noProgressCount": no_progress,
                     "failureRepeatCount": repeats,
                     "lastFailureSignatureDigest": failure_digest,
@@ -2870,6 +2885,9 @@ class LoopService:
                         "criteria": criteria,
                         "completionEvidenceDigest": evidence_digest,
                         "currentFingerprint": subject["projectFingerprint"],
+                        "projectIntelligence": evidence.get(
+                            "projectIntelligence"
+                        ),
                     }
                 )
                 self._pause_active_clock(snapshot, event["occurredAt"])
@@ -2927,6 +2945,7 @@ class LoopService:
                     "currentFingerprint": subject["projectFingerprint"],
                     "completionEvidenceDigest": evidence_digest,
                     "completionSummary": summary,
+                    "projectIntelligence": evidence.get("projectIntelligence"),
                     "circuitBreaker": None,
                 }
             )
@@ -2976,6 +2995,16 @@ class LoopService:
                 "riskTier": contract["riskTier"],
                 "passed": True,
             }
+            project_intelligence = snapshot.get("projectIntelligence")
+            required_binding = (
+                contract.get("goalReadiness") or {}
+            ).get("projectIntelligence")
+            if isinstance(required_binding, dict):
+                if not isinstance(project_intelligence, dict):
+                    raise LoopError(
+                        "Loop completion is missing durable project-intelligence evidence."
+                    )
+                result["projectIntelligence"] = project_intelligence
             if contract.get("schemaVersion") == LOOP_CONTRACT_SCHEMA_V2:
                 ui_evidence = [
                     item["evidence"][0]

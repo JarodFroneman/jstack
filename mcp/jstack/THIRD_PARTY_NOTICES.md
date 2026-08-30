@@ -53,6 +53,34 @@ Upstream license notice:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## Graphify Local AST Provider
+
+JStack optionally provisions Graphify as a separately managed local provider
+for private AST graph extraction and native static HTML visualization:
+
+- Project: `Graphify-Labs/graphify`
+- Repository: https://github.com/Graphify-Labs/graphify
+- Source branch: `v8`
+- Pinned source commit: `680e3ed8edd3dc1fa1961050912941880b778207`
+- Distribution: `graphifyy==0.9.52`
+- Pinned distribution SHA-256:
+  `5588ea9af433a8cf74ada89dfc0b981abf596a1327a1375fdaf661905562bf44`
+- License: Apache License 2.0, with the upstream NOTICE and historical
+  MIT-licensed portions retained by the installed distribution
+
+Graphify is not vendored into JStack's standard-library core. The opt-in
+installer downloads the pinned top-level wheel from Python Package Index,
+verifies its hash, and installs it into a versioned isolated runtime under the
+user's private `~/.jstack` directory. Its transitive binary dependencies are
+resolved at installation time and are not currently covered by a complete
+cross-platform JStack hash lock.
+
+JStack invokes only local code extraction and static HTML export. It does not
+invoke the upstream assistant installer or activate hosted services, semantic
+providers, repository instructions, hooks, listeners, skills, or HTTP MCP.
+The installed distribution carries the authoritative Apache-2.0 license and
+NOTICE texts for Graphify and its included portions.
+
 ## Product UI Motion Research Reference
 
 JStack Product UI Motion Intelligence is an original, standard-library and

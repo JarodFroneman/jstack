@@ -11,6 +11,8 @@ import unittest
 from itertools import count
 from pathlib import Path
 
+from tests.project_intelligence_support import isolate_legacy_test_case
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "mcp" / "jstack" / "jstack_mcp_server.py"
@@ -510,6 +512,9 @@ class LaunchCatalogTests(unittest.TestCase):
 
 
 class LaunchProtocolTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_legacy_test_case(self, server)
+
     def test_assessment_requires_exact_target_risk_https_and_clean_commit(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             repo, base_ref = make_release_repo(Path(temp))

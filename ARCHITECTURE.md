@@ -112,7 +112,7 @@ it validates scoring protocol behavior and is not represented as a
 repository-level host benchmark.
 
 `scripts/check_product_boundaries.py` proves that the product has the
-six named commands, 60 canonical MCP tools, the frozen 52 compatibility aliases, 11
+six named commands, 65 canonical MCP tools, the frozen 52 compatibility aliases, 11
 roles, 18 capability packs, 47 launch controls, 22 launch surfaces, and a
 standard-library core. It also rejects vendor SDKs, network-capable core
 imports, packaged `evals/` content, model or scanner execution in the Proof
@@ -292,6 +292,37 @@ authorized implementation. The MCP validates the selection but cannot
 intercept arbitrary host-native edits or prove the human's identity. See
 [`PRODUCT_DESIGN_DEPARTMENT.md`](docs/integration/gstack/PRODUCT_DESIGN_DEPARTMENT.md)
 and [ADR 0042](docs/adr/0042-product-design-integration.md).
+
+## Graphify-Backed Project Intelligence
+
+Project Intelligence is a JStack-native context and evidence protocol around a
+pinned local Graphify AST provider. It adds five canonical MCP operations but
+no command, skill, role, permission, or second router. Dev, Subagents, Full
+Team, Audit, Loop, Program, and release readiness all consume the same
+applicability decision and immutable snapshot binding.
+
+The provider catalog pins package, source revision, distribution hash,
+execution arguments, runtime location, license, and confidence policy. The
+managed provider runs without a shell, with closed stdin, bounded output/time,
+a disposable HOME, and no forwarded API or proxy credentials. JStack invokes
+only local AST extraction and static HTML export. It installs no hooks,
+listeners, repository instructions, hosted client, semantic provider, or
+Graphify assistant integration.
+
+Snapshots live under a private repository-ID namespace in `~/.jstack`, never
+inside the project. Their manifest binds Git root, HEAD, tree, dirty
+fingerprint, policy digest, provider catalog, normalized graph, and native HTML
+hash. Index receipts also bind the original change-base commit. Query and
+impact tools return bounded traversals; refresh produces an explicit graph
+delta after edits; finalization derives exact changed paths from Git and
+requires direct source reads, tests, review, and no unresolved findings.
+
+The authority rule is deliberately narrow: only source-anchored `EXTRACTED`
+edges are strong graph evidence. Every inferred, ambiguous, or unanchored edge
+is advisory. No graph edge proves runtime behavior, and every response has
+`authorityEffect: none`. See
+[`docs/project-intelligence.md`](docs/project-intelligence.md) and
+[ADR 0046](docs/adr/0046-graphify-project-intelligence.md).
 
 The staged Unified Engineering OS documentation is consolidated in
 [`docs/integration/gstack/README.md`](docs/integration/gstack/README.md). That
@@ -722,6 +753,14 @@ all phase proof digests, current final evidence, project fingerprint, and
 program event head. Durable child proof is revalidated against its loop event
 chain and current declared output hashes.
 
+Project Intelligence receipts bind the provider catalog and version, immutable
+private manifest and graph, exact Git HEAD/tree/fingerprint/policy, and the
+original change-base commit. Query and impact receipts bind bounded traversal
+digests. Refresh binds the before/after graph delta. Finalization also binds the
+exact Git-derived changed-path digest and structured direct-source, test, and
+review evidence. Any candidate, catalog, graph, HTML, or evidence drift denies
+the claim.
+
 ## Security Boundary
 
 Git inspection neutralizes common external diff, prompt, fsmonitor, and global
@@ -732,6 +771,11 @@ The shared Python QA/performance runner is not an operating-system sandbox. It c
 scrubs inherited variables, isolates HOME, avoids a shell, caps output/time, and
 kills its process group. Untrusted project execution still requires a
 container, VM, or host sandbox.
+
+The managed Graphify process uses the same distinction: environment and
+process hardening are not an operating-system network sandbox. JStack forwards
+no host credentials and selects local-only commands, but untrusted providers
+or repositories still require a container, VM, or hardened host boundary.
 
 Specialist telemetry is bounded metadata, not a raw trace store. It may contain
 identifiers, timing, status, counts, tool names/statuses, evidence references,

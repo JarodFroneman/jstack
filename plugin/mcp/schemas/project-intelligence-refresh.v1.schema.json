@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/project-intelligence-refresh.v1.schema.json",
+  "title": "JStack Project Intelligence Refresh v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "before", "after", "delta", "refreshReceipt", "authorityEffect"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.project-intelligence-refresh.v1"},
+    "before": {"$ref": "#/$defs/snapshot"},
+    "after": {"$ref": "#/$defs/snapshot"},
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["graphChanged", "nodeCount", "edgeCount", "strongEvidenceEdgeCount"],
+      "properties": {
+        "graphChanged": {"type": "boolean"},
+        "nodeCount": {"type": "integer"},
+        "edgeCount": {"type": "integer"},
+        "strongEvidenceEdgeCount": {"type": "integer"}
+      }
+    },
+    "refreshReceipt": {"type": "string", "minLength": 1, "maxLength": 250000},
+    "authorityEffect": {"const": "none"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestDigest", "graphDigest", "projectFingerprint", "nodeCount", "edgeCount", "strongEvidenceEdgeCount", "visualizationPath"],
+      "properties": {
+        "manifestDigest": {"$ref": "#/$defs/sha256"},
+        "graphDigest": {"$ref": "#/$defs/sha256"},
+        "projectFingerprint": {"$ref": "#/$defs/sha256"},
+        "nodeCount": {"type": "integer", "minimum": 0},
+        "edgeCount": {"type": "integer", "minimum": 0},
+        "strongEvidenceEdgeCount": {"type": "integer", "minimum": 0},
+        "visualizationPath": {"type": ["string", "null"], "maxLength": 4096}
+      }
+    }
+  }
+}

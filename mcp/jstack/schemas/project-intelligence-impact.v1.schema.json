@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/project-intelligence-impact.v1.schema.json",
+  "title": "JStack Project Intelligence Impact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "impact", "visualization", "impactReceipt", "authorityEffect"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.project-intelligence-impact-result.v1"},
+    "impact": {
+      "type": "object",
+      "required": ["schemaVersion", "goalDigest", "changedPaths", "directNodeIds", "strongImpactedNodeIds", "advisoryImpactedNodeIds", "query", "impactDigest"],
+      "properties": {
+        "schemaVersion": {"const": "jstack.project-intelligence-impact.v1"},
+        "goalDigest": {"$ref": "#/$defs/sha256"},
+        "changedPaths": {"type": "array", "maxItems": 5000, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+        "directNodeIds": {"type": "array", "maxItems": 500, "uniqueItems": true, "items": {"type": "string"}},
+        "strongImpactedNodeIds": {"type": "array", "maxItems": 500, "uniqueItems": true, "items": {"type": "string"}},
+        "advisoryImpactedNodeIds": {"type": "array", "maxItems": 500, "uniqueItems": true, "items": {"type": "string"}},
+        "query": {"type": "object"},
+        "impactDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "visualization": {"type": ["object", "null"]},
+    "impactReceipt": {"type": "string", "minLength": 1, "maxLength": 250000},
+    "authorityEffect": {"const": "none"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

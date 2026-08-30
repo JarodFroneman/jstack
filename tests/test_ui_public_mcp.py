@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.project_intelligence_support import isolate_legacy_test_case
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "mcp" / "jstack" / "jstack_mcp_server.py"
@@ -265,6 +267,9 @@ def ready_program(args: dict) -> dict:
 
 
 class ProductInterfacePublicMcpTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_legacy_test_case(self, server)
+
     def test_backend_manifests_remain_non_ui_across_plan_loop_and_release(self) -> None:
         files = {
             "Api.csproj": (

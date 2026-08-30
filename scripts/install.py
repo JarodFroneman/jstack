@@ -8,6 +8,7 @@ import base64
 import ctypes
 import datetime as dt
 import errno
+import hashlib
 import json
 import os
 import re
@@ -51,6 +52,11 @@ PRODUCT_UI_OWNER_CONTENT = (
     '{"owner":"jstack","schemaVersion":"jstack.direct-skill-owner.v1",'
     '"skill":"product-ui-design"}\n'
 )
+GRAPHIFY_PROVIDER_ID = "graphify-local-ast"
+GRAPHIFY_MAX_WHEEL_BYTES = 50 * 1024 * 1024
+GRAPHIFY_MAX_PROCESS_OUTPUT_BYTES = 2 * 1024 * 1024
+GRAPHIFY_INSTALL_TIMEOUT_SECONDS = 900
+GRAPHIFY_MARKER = ".jstack-runtime.json"
 
 
 class ManagedAgentsError(RuntimeError):
@@ -2964,14 +2970,431 @@ tool_timeout_sec = 1900.0
 """.strip()
 
 
+def _canonical_digest(value: Any) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _load_graphify_catalog(repo_root: Path) -> dict[str, Any]:
+    path = repo_root / "mcp" / "jstack" / "project_intelligence" / "catalog.v1.json"
+    try:
+        raw = path.read_bytes()
+        if len(raw) > 64_000:
+            raise RuntimeError("Graphify provider catalog exceeds its safety limit.")
+        catalog = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("The pinned Graphify provider catalog is unavailable.") from exc
+    required = {
+        "schemaVersion",
+        "providerId",
+        "displayName",
+        "packageName",
+        "version",
+        "sourceRepository",
+        "sourceBranch",
+        "sourceCommit",
+        "license",
+        "distribution",
+        "runtime",
+        "execution",
+        "confidencePolicy",
+    }
+    if not isinstance(catalog, dict) or set(catalog) != required:
+        raise RuntimeError("The Graphify provider catalog has drifted.")
+    distribution = catalog.get("distribution")
+    runtime = catalog.get("runtime")
+    if (
+        catalog.get("providerId") != GRAPHIFY_PROVIDER_ID
+        or catalog.get("packageName") != "graphifyy"
+        or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", str(catalog.get("version") or ""))
+        or not re.fullmatch(r"[0-9a-f]{40}", str(catalog.get("sourceCommit") or ""))
+        or not isinstance(distribution, dict)
+        or set(distribution) != {"filename", "sha256", "url"}
+        or not re.fullmatch(r"[0-9a-f]{64}", str(distribution.get("sha256") or ""))
+        or not str(distribution.get("url") or "").startswith("https://files.pythonhosted.org/")
+        or not isinstance(runtime, dict)
+        or set(runtime)
+        != {
+            "relativeRoot",
+            "posixEntrypoint",
+            "windowsEntrypoint",
+            "launcherArguments",
+            "pythonRequirement",
+            "installMode",
+        }
+        or runtime.get("posixEntrypoint") != "venv/bin/python"
+        or runtime.get("windowsEntrypoint") != "venv/Scripts/python.exe"
+        or runtime.get("launcherArguments") != ["-m", "graphify"]
+        or runtime.get("installMode") != "isolated-managed-venv"
+    ):
+        raise RuntimeError("The Graphify provider pin is invalid or unsupported.")
+    return catalog
+
+
+def _graphify_runtime_target(catalog: dict[str, Any], jstack_home: Path) -> Path:
+    relative = Path(str(catalog["runtime"]["relativeRoot"]))
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or relative.parts[0] != ".jstack"
+        or ".." in relative.parts
+    ):
+        raise RuntimeError("The managed Graphify runtime path is unsafe.")
+    return _absolute_without_resolving(
+        jstack_home.joinpath(*relative.parts[1:])
+    )
+
+
+def _ensure_private_graphify_parent(jstack_home: Path, target: Path) -> None:
+    root = _absolute_without_resolving(jstack_home)
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise RuntimeError("The managed Graphify runtime must remain below JSTACK_HOME.") from exc
+    root.mkdir(mode=0o700, exist_ok=True)
+    root_metadata = os.lstat(root)
+    if _is_link_or_reparse(root_metadata) or not stat.S_ISDIR(root_metadata.st_mode):
+        raise RuntimeError("JSTACK_HOME must be a real directory.")
+    uid = _current_uid()
+    if uid is not None and root_metadata.st_uid != uid:
+        raise RuntimeError("JSTACK_HOME is not current-user owned.")
+    if os.name == "posix" and stat.S_IMODE(root_metadata.st_mode) & 0o077:
+        root.chmod(0o700)
+        if stat.S_IMODE(os.lstat(root).st_mode) != 0o700:
+            raise RuntimeError("JSTACK_HOME could not be made private.")
+    _ensure_windows_private_acl(root, label="JStack home")
+    current = root
+    for component in target.relative_to(root).parts[:-1]:
+        current = current / component
+        current.mkdir(mode=0o700, exist_ok=True)
+        metadata = os.lstat(current)
+        if _is_link_or_reparse(metadata) or not stat.S_ISDIR(metadata.st_mode):
+            raise RuntimeError("The managed Graphify path contains a linked or non-directory component.")
+        uid = _current_uid()
+        if uid is not None and metadata.st_uid != uid:
+            raise RuntimeError("The managed Graphify path is not current-user owned.")
+        if os.name == "posix" and stat.S_IMODE(metadata.st_mode) & 0o077:
+            current.chmod(0o700)
+            if stat.S_IMODE(os.lstat(current).st_mode) != 0o700:
+                raise RuntimeError("The managed Graphify path could not be made private.")
+        _ensure_windows_private_acl(current, label="managed Graphify directory")
+
+
+def _graphify_entrypoint(catalog: dict[str, Any], runtime_root: Path) -> Path:
+    relative = str(
+        catalog["runtime"][
+            "windowsEntrypoint" if os.name == "nt" else "posixEntrypoint"
+        ]
+    )
+    path = Path(relative)
+    if path.is_absolute() or ".." in path.parts:
+        raise RuntimeError("The managed Graphify entrypoint path is unsafe.")
+    return runtime_root / path
+
+
+def _run_graphify_install_process(
+    command: list[str],
+    *,
+    environment: dict[str, str],
+    timeout: int,
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        result = subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("The managed Graphify installer process could not run.") from exc
+    if len(result.stdout) + len(result.stderr) > GRAPHIFY_MAX_PROCESS_OUTPUT_BYTES:
+        raise RuntimeError("The managed Graphify installer exceeded its output safety limit.")
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).decode("utf-8", errors="replace")[-2000:]
+        raise RuntimeError(
+            "The managed Graphify installer failed: " + (detail.strip() or "no diagnostic output")
+        )
+    return result
+
+
+def _download_pinned_graphify_wheel(
+    catalog: dict[str, Any],
+    destination: Path,
+    *,
+    python_executable: Path,
+    environment: dict[str, str],
+) -> None:
+    distribution = catalog["distribution"]
+    download_root = destination.parent / "wheel-download"
+    download_root.mkdir(mode=0o700)
+    try:
+        _run_graphify_install_process(
+            [
+                str(python_executable),
+                "-m",
+                "pip",
+                "--isolated",
+                "--disable-pip-version-check",
+                "download",
+                "--no-input",
+                "--no-cache-dir",
+                "--no-deps",
+                "--only-binary=:all:",
+                "--dest",
+                str(download_root),
+                str(distribution["url"]),
+            ],
+            environment=environment,
+            timeout=120,
+        )
+        expected = download_root / str(distribution["filename"])
+        if sorted(path.name for path in download_root.iterdir()) != [expected.name]:
+            raise RuntimeError("The pinned Graphify download produced an unexpected file set.")
+        try:
+            raw, metadata = _read_regular_file(
+                expected,
+                label="pinned Graphify wheel",
+                max_bytes=GRAPHIFY_MAX_WHEEL_BYTES,
+            )
+        except ManagedAgentsError as exc:
+            raise RuntimeError("The pinned Graphify wheel could not be read safely.") from exc
+        if metadata.st_nlink != 1:
+            raise RuntimeError("The pinned Graphify wheel has an unsafe link count.")
+        if not raw or hashlib.sha256(raw).hexdigest() != distribution["sha256"]:
+            raise RuntimeError("The downloaded Graphify wheel failed SHA-256 verification.")
+        descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        try:
+            pending = memoryview(raw)
+            while pending:
+                written = os.write(descriptor, pending)
+                if written <= 0:
+                    raise RuntimeError("The pinned Graphify wheel could not be written safely.")
+                pending = pending[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    finally:
+        shutil.rmtree(download_root, ignore_errors=True)
+
+
+def _graphify_install_environment(stage: Path, python_dir: Path) -> dict[str, str]:
+    environment = {
+        "CI": "1",
+        "HOME": str(stage / "home"),
+        "NO_COLOR": "1",
+        "PATH": str(python_dir),
+        "PIP_CACHE_DIR": str(stage / "pip-cache"),
+        "PIP_CONFIG_FILE": os.devnull,
+        "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+        "PYTHONNOUSERSITE": "1",
+        "USERPROFILE": str(stage / "home"),
+    }
+    for name in ("SYSTEMROOT", "WINDIR"):
+        if os.environ.get(name):
+            environment[name] = str(os.environ[name])
+    return environment
+
+
+def _verify_graphify_runtime(
+    runtime_root: Path,
+    catalog: dict[str, Any],
+    *,
+    expected_install_id: Optional[str] = None,
+) -> dict[str, Any]:
+    marker_path = runtime_root / GRAPHIFY_MARKER
+    try:
+        marker_raw = marker_path.read_bytes()
+        if len(marker_raw) > 16_000:
+            raise RuntimeError("Managed Graphify marker exceeds its safety limit.")
+        marker = json.loads(marker_raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("The managed Graphify runtime marker is unavailable.") from exc
+    expected = {
+        "schemaVersion": "jstack.graphify-runtime.v1",
+        "providerId": GRAPHIFY_PROVIDER_ID,
+        "version": catalog["version"],
+        "sourceCommit": catalog["sourceCommit"],
+        "distributionSha256": catalog["distribution"]["sha256"],
+        "catalogDigest": _canonical_digest(catalog),
+    }
+    if not isinstance(marker, dict) or any(marker.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("The managed Graphify runtime marker has drifted.")
+    if expected_install_id is not None and marker.get("installId") != expected_install_id:
+        raise RuntimeError("The managed Graphify runtime install identity changed.")
+    entrypoint = _graphify_entrypoint(catalog, runtime_root)
+    metadata = os.lstat(entrypoint)
+    if _is_link_or_reparse(metadata) or not stat.S_ISREG(metadata.st_mode):
+        raise RuntimeError("The managed Graphify entrypoint is not a regular file.")
+    uid = _current_uid()
+    if uid is not None and metadata.st_uid != uid:
+        raise RuntimeError("The managed Graphify entrypoint is not current-user owned.")
+    environment = _graphify_install_environment(runtime_root, entrypoint.parent)
+    result = _run_graphify_install_process(
+        [
+            str(entrypoint),
+            *catalog["runtime"]["launcherArguments"],
+            "--version",
+        ],
+        environment=environment,
+        timeout=30,
+    )
+    version_output = result.stdout.decode("utf-8", errors="replace").strip()
+    if version_output != f"graphify {catalog['version']}":
+        raise RuntimeError("The managed Graphify executable version is not the pinned version.")
+    return marker
+
+
+def _stage_graphify_runtime(
+    catalog: dict[str, Any],
+    target: Path,
+) -> tuple[Path, str]:
+    if sys.version_info < (3, 10):
+        raise RuntimeError("Graphify project intelligence requires Python 3.10 or newer.")
+    stage = target.parent / f".{target.name}.jstack-stage-{uuid.uuid4().hex}"
+    stage.mkdir(mode=0o700)
+    install_id = uuid.uuid4().hex
+    try:
+        venv_root = stage / "venv"
+        bootstrap_environment = _graphify_install_environment(stage, Path(sys.executable).parent)
+        _run_graphify_install_process(
+            [sys.executable, "-m", "venv", "--copies", str(venv_root)],
+            environment=bootstrap_environment,
+            timeout=120,
+        )
+        venv_python = venv_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        install_environment = _graphify_install_environment(stage, venv_python.parent)
+        wheel = stage / str(catalog["distribution"]["filename"])
+        _download_pinned_graphify_wheel(
+            catalog,
+            wheel,
+            python_executable=venv_python,
+            environment=install_environment,
+        )
+        _run_graphify_install_process(
+            [
+                str(venv_python),
+                "-m",
+                "pip",
+                "install",
+                "--isolated",
+                "--no-input",
+                "--disable-pip-version-check",
+                "--only-binary=:all:",
+                str(wheel),
+            ],
+            environment=install_environment,
+            timeout=GRAPHIFY_INSTALL_TIMEOUT_SECONDS,
+        )
+        wheel.unlink()
+        marker = {
+            "schemaVersion": "jstack.graphify-runtime.v1",
+            "providerId": GRAPHIFY_PROVIDER_ID,
+            "version": catalog["version"],
+            "sourceCommit": catalog["sourceCommit"],
+            "distributionSha256": catalog["distribution"]["sha256"],
+            "catalogDigest": _canonical_digest(catalog),
+            "installId": install_id,
+        }
+        atomic_write_text(
+            stage / GRAPHIFY_MARKER,
+            json.dumps(marker, sort_keys=True, separators=(",", ":")) + "\n",
+            mode=0o600,
+        )
+        _verify_graphify_runtime(stage, catalog, expected_install_id=install_id)
+        return stage, install_id
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+
+
+def provision_graphify_runtime(
+    repo_root: Path,
+    jstack_home: Path,
+) -> dict[str, Any]:
+    catalog = _load_graphify_catalog(repo_root)
+    target = _graphify_runtime_target(catalog, jstack_home)
+    _ensure_private_graphify_parent(jstack_home, target)
+    if target.exists() or _path_is_link_or_reparse(target):
+        marker = _verify_graphify_runtime(target, catalog)
+        return {
+            "path": target,
+            "created": False,
+            "installId": marker["installId"],
+            "version": catalog["version"],
+            "catalogDigest": _canonical_digest(catalog),
+        }
+    stage, install_id = _stage_graphify_runtime(catalog, target)
+    try:
+        _rename_tree_noreplace(stage, target)
+        _verify_graphify_runtime(target, catalog, expected_install_id=install_id)
+    except BaseException:
+        if stage.exists() and not _path_is_link_or_reparse(stage):
+            shutil.rmtree(stage, ignore_errors=True)
+        raise
+    return {
+        "path": target,
+        "created": True,
+        "installId": install_id,
+        "version": catalog["version"],
+        "catalogDigest": _canonical_digest(catalog),
+    }
+
+
+def rollback_graphify_runtime(
+    repo_root: Path,
+    outcome: Optional[dict[str, Any]],
+) -> None:
+    if not outcome or not outcome.get("created"):
+        return
+    target = Path(outcome["path"])
+    catalog = _load_graphify_catalog(repo_root)
+    quarantine = target.parent / f".{target.name}.jstack-rollback-{uuid.uuid4().hex}"
+    _rename_tree_noreplace(target, quarantine)
+    try:
+        _verify_graphify_runtime(
+            quarantine,
+            catalog,
+            expected_install_id=str(outcome["installId"]),
+        )
+    except BaseException:
+        try:
+            _rename_tree_noreplace(quarantine, target)
+        except BaseException as restore_exc:
+            raise RuntimeError(
+                "Graphify rollback verification failed and its runtime was retained in quarantine."
+            ) from restore_exc
+        raise RuntimeError(
+            "Graphify rollback refused to remove a changed runtime."
+        )
+    shutil.rmtree(quarantine)
+
+
 def install(
     repo_root: Path,
     codex_home: Path,
     *,
     manage_agents: bool = False,
+    install_graphify: bool = False,
+    jstack_home: Optional[Path] = None,
 ) -> dict[str, Any]:
     repo_root = repo_root.expanduser().resolve()
     codex_home_input = _absolute_without_resolving(codex_home)
+    jstack_home_input = _absolute_without_resolving(
+        jstack_home if jstack_home is not None else Path.home() / ".jstack"
+    )
     if not repo_root.exists():
         raise RuntimeError(f"Repo root not found: {repo_root}")
     _validate_existing_ancestry(codex_home_input, label="Codex home")
@@ -3202,6 +3625,7 @@ def install(
     }
     archived_prompt = None
     archived_skill = None
+    graphify_runtime = None
     try:
         for target in install_targets:
             transaction.snapshot(
@@ -3223,6 +3647,11 @@ def install(
         archived_skill = transaction.archive(
             skills_root / "gstack-dev", codex_home / "skills-disabled"
         )
+        if install_graphify:
+            graphify_runtime = provision_graphify_runtime(
+                repo_root,
+                jstack_home_input,
+            )
         for prompt in PROMPTS:
             target = prompts_dir / prompt
             retained_prompt = transaction.retain_path(f"prompt-{prompt}")
@@ -3386,7 +3815,16 @@ def install(
                 retained_preimage=retained_agents,
             )
     except BaseException:
+        graphify_rollback_error = None
+        try:
+            rollback_graphify_runtime(repo_root, graphify_runtime)
+        except Exception as exc:
+            graphify_rollback_error = exc
         transaction.rollback()
+        if graphify_rollback_error is not None:
+            raise RuntimeError(
+                "JStack rolled back, but the newly provisioned Graphify runtime was retained for manual recovery."
+            ) from graphify_rollback_error
         raise
     transaction.commit()
 
@@ -3403,6 +3841,7 @@ def install(
         "archivedPrompt": archived_prompt,
         "archivedSkill": archived_skill,
         "agentsPath": codex_home_input / "AGENTS.md" if agents_preimage is not None else None,
+        "graphifyRuntime": graphify_runtime,
     }
 
 
@@ -3415,11 +3854,32 @@ def main() -> int:
         action="store_true",
         help="Install the bounded JStack Product UI block in global AGENTS.md",
     )
+    parser.add_argument(
+        "--with-project-intelligence",
+        "--install-graphify",
+        dest="install_graphify",
+        action="store_true",
+        help=(
+            "Explicitly download, SHA-256 verify, and provision the pinned Graphify "
+            "runtime in an isolated JStack-managed virtual environment"
+        ),
+    )
+    parser.add_argument(
+        "--jstack-home",
+        default=str(Path.home() / ".jstack"),
+        help="Private JStack state root used for the optional managed Graphify runtime",
+    )
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root)
     codex_home = Path(args.codex_home)
-    outcome = install(repo_root, codex_home, manage_agents=args.manage_agents)
+    outcome = install(
+        repo_root,
+        codex_home,
+        manage_agents=args.manage_agents,
+        install_graphify=args.install_graphify,
+        jstack_home=Path(args.jstack_home),
+    )
     prompts_dir = outcome["promptsDir"]
     skill_dir = outcome["skillDir"]
     audit_skill_dir = outcome["auditSkillDir"]
@@ -3432,6 +3892,7 @@ def main() -> int:
     archived_prompt = outcome["archivedPrompt"]
     archived_skill = outcome["archivedSkill"]
     agents_path = outcome["agentsPath"]
+    graphify_runtime = outcome["graphifyRuntime"]
 
     print("Installed JStack prompts:")
     for prompt in PROMPTS:
@@ -3450,6 +3911,12 @@ def main() -> int:
         print(f"Archived old gstack-dev skill: {archived_skill}")
     if agents_path:
         print(f"Updated managed JStack Product UI block in {agents_path}")
+    if graphify_runtime:
+        action = "Provisioned" if graphify_runtime["created"] else "Verified existing"
+        print(
+            f"{action} Graphify {graphify_runtime['version']} runtime at "
+            f"{graphify_runtime['path']}"
+        )
     print("Restart Codex or open a new thread for command and MCP changes to load.")
     return 0
 

@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.project_intelligence_support import isolate_legacy_test_case
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER_PATH = ROOT / "mcp" / "jstack" / "jstack_mcp_server.py"
@@ -198,6 +200,9 @@ def start_child_loop(
 
 
 class ProgramMcpTests(unittest.TestCase):
+    def setUp(self) -> None:
+        isolate_legacy_test_case(self, server)
+
     def test_policy_gap_questions_include_reason_and_recommended_default(self) -> None:
         gaps = server._program_policy_gaps(
             {"final_acceptance_criteria": []},

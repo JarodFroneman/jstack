@@ -110,6 +110,23 @@ coverage, evidence collection, team waves, and report structure. Use
 challenging findings. Read [audit-mastery.md](references/audit-mastery.md) only
 when learning or assessment is requested.
 
+## Project Intelligence
+
+`jstack_audit` automatically applies mandatory Project Intelligence to a
+supported existing codebase, builds or verifies the exact private Graphify AST
+snapshot, and performs a bounded query for the audit focus before inventory.
+Open the returned full `snapshot.visualizationPath` for material audits; a
+focused visualization may be absent when the query has no matching nodes.
+
+Use graph source anchors to prioritize inspection, not to manufacture
+findings. Only source-anchored `EXTRACTED` edges are strong graph evidence.
+Every inferred, ambiguous, or unanchored edge is advisory and requires direct
+source verification plus the audit profile's ordinary reachability,
+reproduction, test, scanner, and challenge evidence. The graph does not widen
+scope, permit execution, authorize remediation, or replace Audit independence.
+Missing or stale mandatory provider evidence stops the audit rather than
+silently falling back.
+
 ## Stage 0 Through Stage 8 Mastery Boundary
 
 When the current audit mastery stage is 0, run only the inert drill returned by

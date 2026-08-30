@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jstack.dev/schemas/project-intelligence-finalization.v1.schema.json",
+  "title": "JStack Project Intelligence Finalization v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "passed", "checks", "findings", "evidenceDigest", "finalizationReceipt", "authorityEffect"],
+  "properties": {
+    "schemaVersion": {"const": "jstack.project-intelligence-finalization.v1"},
+    "passed": {"type": "boolean"},
+    "checks": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "findings": {"type": "array", "maxItems": 100, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+    "evidenceDigest": {"$ref": "#/$defs/sha256"},
+    "finalizationReceipt": {"type": ["string", "null"], "maxLength": 250000},
+    "authorityEffect": {"const": "none"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

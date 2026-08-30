@@ -152,9 +152,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
+          python -m unittest -v tests.test_project_intelligence
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
           $modules = @(
             Get-ChildItem -Path tests -Filter 'test_*.py' -File |
-              Where-Object { $_.Name -notlike 'test_proof_plane_*' } |
+              Where-Object {
+                $_.Name -notlike 'test_proof_plane_*' -and
+                $_.Name -ne 'test_project_intelligence.py'
+              } |
               Sort-Object -Property Name |
               ForEach-Object { "tests.$($_.BaseName)" }
           )

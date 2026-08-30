@@ -46,6 +46,7 @@ import loop as loop_core
 import methodologies as methodology_core
 import orchestration as orchestration_core
 import prompt_compiler as prompt_compiler_core
+import project_intelligence as project_intelligence_core
 import providers as provider_core
 import program as program_core
 import release as release_core
@@ -53,7 +54,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.11.0"
+SERVER_VERSION = "0.12.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -573,6 +574,11 @@ _RECEIPT_SECRET = secrets.token_bytes(32)
 _MCP_INITIALIZED = False
 
 GIT_REQUIRED_TOOLS = [
+    "jstack_graph_index",
+    "jstack_graph_query",
+    "jstack_graph_impact",
+    "jstack_graph_refresh",
+    "jstack_graph_finalize",
     "jstack_mastery_record",
     "jstack_policy_check",
     "jstack_preflight",
@@ -15024,6 +15030,7 @@ def _issue_unified_team_plan_receipt(
     dispatch_eligible: bool,
     prompt_approval_bound: bool,
     methodology_plan: dict[str, Any],
+    project_intelligence: dict[str, Any],
 ) -> str:
     expires = (
         _dt.datetime.now(_dt.timezone.utc)
@@ -15070,6 +15077,10 @@ def _issue_unified_team_plan_receipt(
             "selectedMethodologyIds": methodology_plan[
                 "selectedMethodologyIds"
             ],
+            "projectIntelligence": project_intelligence,
+            "projectIntelligenceDigest": project_intelligence_core.canonical_digest(
+                project_intelligence
+            ),
             "promptCompilationDigest": plan["bindings"][
                 "promptCompilationDigest"
             ],
@@ -15128,8 +15139,30 @@ def _compose_unified_team(
     binding: dict[str, Any],
     context_readiness: Optional[dict[str, Any]],
     legacy_team: dict[str, Any],
+    project_intelligence: dict[str, Any],
 ) -> dict[str, Any]:
     mode = _unified_os_mode()
+    project_intelligence_contract = (
+        project_intelligence.get("binding")
+        if isinstance(project_intelligence.get("binding"), dict)
+        else {
+            "schemaVersion": "jstack.project-intelligence-decision.v1",
+            "state": project_intelligence.get("state"),
+            "reason": project_intelligence.get("reason"),
+            "applicabilityDigest": project_intelligence_core.canonical_digest(
+                project_intelligence.get("applicability") or {}
+            ),
+            "providerCatalogDigest": project_intelligence_core.catalog_digest(),
+        }
+    )
+    if project_intelligence.get("state") == "blocked":
+        return _unified_blocked_result(
+            mode=mode,
+            code="JSTACK-TEAM-PROJECT-INTELLIGENCE-REQUIRED",
+            message=(
+                "Team composition requires the pinned managed Graphify runtime and an exact immutable project-intelligence baseline."
+            ),
+        )
     if mode == "disabled":
         return {
             "mode": mode,
@@ -15324,6 +15357,7 @@ def _compose_unified_team(
         dispatch_eligible=dispatch_eligible,
         prompt_approval_bound=approval_bound,
         methodology_plan=methodology_plan,
+        project_intelligence=project_intelligence_contract,
     )
     if mode == "shadow":
         state = "shadow"
@@ -15359,6 +15393,7 @@ def _compose_unified_team(
         "hostContract": host_contract,
         "coordinationPacket": packet,
         "receiptAssignments": orchestration_core.receipt_assignments(plan),
+        "projectIntelligence": project_intelligence_contract,
     }
 
 
@@ -15384,6 +15419,7 @@ def _attach_unified_team_plan(
     result["hostContract"] = integration["hostContract"]
     result["dynamicCoordinationPacket"] = integration["coordinationPacket"]
     result["dynamicReceiptAssignments"] = integration["receiptAssignments"]
+    result["projectIntelligence"] = integration.get("projectIntelligence")
     result["dynamicTeamRoleIds"] = sorted(
         {
             str(item["roleId"])
@@ -15411,6 +15447,80 @@ def _attach_unified_team_plan(
         if integration["executionSource"] == "team-composer":
             result["reason"] = plan["selectionSummary"]
     return result
+
+
+def _assert_team_project_intelligence_contract(
+    value: Any,
+    *,
+    project_path: Path,
+) -> None:
+    if not isinstance(value, dict):
+        raise ToolError(
+            "The Unified Team Plan is missing its project-intelligence contract."
+        )
+    checks = {
+        "state": value.get("state")
+        in {
+            "required",
+            "optional",
+            "skipped",
+            "deferred",
+            "unsupported",
+            "unavailable",
+        },
+        "applicabilityDigest": bool(
+            re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(value.get("applicabilityDigest") or ""),
+            )
+        ),
+        "providerCatalogDigest": value.get("providerCatalogDigest")
+        == project_intelligence_core.catalog_digest(),
+    }
+    if value.get("state") == "required":
+        try:
+            snapshot = project_intelligence_core.load_snapshot(
+                project_path,
+                str(value.get("manifestRelativePath") or ""),
+                expected_manifest_digest=str(value.get("manifestDigest") or ""),
+            )
+            current = _project_intelligence_subject(project_path)
+        except project_intelligence_core.ProjectIntelligenceError as exc:
+            raise ToolError(
+                "The Unified Team Plan project-intelligence snapshot is unavailable or invalid."
+            ) from exc
+        graph_binding = snapshot["manifest"]["binding"]
+        checks.update(
+            {
+                "providerId": value.get("providerId") == "graphify-local-ast",
+                "changeBaseCommit": bool(
+                    re.fullmatch(
+                        r"[0-9a-f]{40}",
+                        str(value.get("changeBaseCommit") or ""),
+                    )
+                ),
+                "manifestGraph": snapshot["manifest"]["graph"].get("sha256")
+                == value.get("graphDigest"),
+                "baselineGitHead": value.get("baselineGitHead")
+                == current["gitHead"]
+                == graph_binding.get("gitHead"),
+                "baselineGitTree": value.get("baselineGitTree")
+                == current["gitTree"]
+                == graph_binding.get("gitTree"),
+                "baselineProjectFingerprint": value.get(
+                    "baselineProjectFingerprint"
+                )
+                == current["projectFingerprint"]
+                == graph_binding.get("projectFingerprint"),
+                "baselinePolicyDigest": value.get("baselinePolicyDigest")
+                == current["policyDigest"]
+                == graph_binding.get("policyDigest"),
+            }
+        )
+    if not all(checks.values()):
+        raise ToolError(
+            "The Unified Team Plan project-intelligence contract is stale or invalid."
+        )
 
 
 def _verify_unified_team_plan_receipt_token(
@@ -15478,6 +15588,10 @@ def _verify_unified_team_plan_receipt_token(
         == current_methodology_plan["selectionDigest"],
         "selectedMethodologyIds": payload.get("selectedMethodologyIds")
         == current_methodology_plan["selectedMethodologyIds"],
+        "projectIntelligenceDigest": payload.get("projectIntelligenceDigest")
+        == project_intelligence_core.canonical_digest(
+            payload.get("projectIntelligence")
+        ),
         "assignments": isinstance(assignments, list) and bool(assignments),
         "teamRoleIds": isinstance(team_role_ids, list)
         and team_role_ids
@@ -15512,6 +15626,10 @@ def _verify_unified_team_plan_receipt_token(
         raise ToolError(
             "The project changed after Team Composition. Re-run Context Readiness and team planning."
         )
+    _assert_team_project_intelligence_contract(
+        payload.get("projectIntelligence"),
+        project_path=Path(receipt_binding["projectPath"]),
+    )
     return payload
 
 
@@ -15613,6 +15731,8 @@ def _verify_unified_team_plan_container(
         == methodology_plan.get("selectionDigest"),
         "selectedMethodologyIds": payload.get("selectedMethodologyIds")
         == methodology_plan.get("selectedMethodologyIds"),
+        "projectIntelligence": payload.get("projectIntelligence")
+        == proposed.get("projectIntelligence"),
         "assignments": payload.get("assignments")
         == orchestration_core.receipt_assignments(plan),
         "authority": plan.get("authorityEffect") == "none",
@@ -16656,6 +16776,198 @@ def audit_context_workflow_parameters(args: dict[str, Any]) -> dict[str, Any]:
         raise ToolError(str(exc)) from exc
 
 
+def _project_intelligence_plan_view(
+    *,
+    binding: dict[str, Any],
+    goal: str,
+    workflow_mode: str,
+    changed_paths: list[str],
+) -> dict[str, Any]:
+    if binding["evidenceMode"] != "git":
+        return {
+            "schemaVersion": "jstack.project-intelligence-plan.v1",
+            "state": "unavailable",
+            "reason": "git-required",
+            "mandatory": workflow_mode
+            in project_intelligence_core.protocol.MANDATORY_WORKFLOWS,
+            "provider": None,
+            "instruction": (
+                "Project intelligence requires an exact Git repository. Continue only with the disclosed artifact-only evidence boundary."
+            ),
+        }
+    project_path = Path(binding["gitRoot"])
+    prepared = _prepare_project_intelligence(
+        project_path,
+        goal=goal,
+        workflow_mode=workflow_mode,
+        changed_paths=changed_paths,
+        auto_index=True,
+        raise_on_unavailable=False,
+    )
+    applicability = prepared["applicability"]
+    provider = prepared["provider"]
+    blocked = applicability["failClosed"] and prepared.get("binding") is None
+    return {
+        "schemaVersion": "jstack.project-intelligence-plan.v1",
+        "state": "blocked" if blocked else applicability["state"],
+        "reason": (
+            "mandatory-provider-unavailable" if blocked else applicability["reason"]
+        ),
+        "mandatory": applicability["state"] == "required",
+        "applicability": applicability,
+        "provider": provider,
+        "binding": prepared.get("binding"),
+        "indexReceipt": prepared.get("indexReceipt"),
+        "snapshot": prepared.get("snapshot"),
+        "instruction": (
+            "Run jstack_graph_index before broad source reading, use jstack_graph_query and jstack_graph_impact to select a bounded task subgraph, verify advisory relationships directly in source, refresh after edits, and require jstack_graph_finalize before completion."
+            if applicability["state"] == "required"
+            else "Disclose the applicability result. Index only when the task grows beyond the documented skip boundary."
+        ),
+    }
+
+
+def _project_intelligence_binding(
+    *,
+    applicability: dict[str, Any],
+    receipt: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": "jstack.project-intelligence-binding.v1",
+        "state": applicability["state"],
+        "reason": applicability["reason"],
+        "applicabilityDigest": project_intelligence_core.canonical_digest(
+            applicability
+        ),
+        "providerId": payload["providerId"],
+        "providerVersion": payload["providerVersion"],
+        "providerCatalogDigest": payload["providerCatalogDigest"],
+        "manifestRelativePath": payload["manifestRelativePath"],
+        "manifestDigest": payload["manifestDigest"],
+        "graphDigest": payload["graphDigest"],
+        "changeBaseCommit": payload["changeBaseCommit"],
+        "baselineGitHead": payload["gitHead"],
+        "baselineGitTree": payload["gitTree"],
+        "baselineProjectFingerprint": payload["projectFingerprint"],
+        "baselinePolicyDigest": payload["policyDigest"],
+        "indexReceiptDigest": _receipt_digest(receipt),
+    }
+
+
+def _prepare_project_intelligence(
+    project_path: Path,
+    *,
+    goal: str,
+    workflow_mode: str,
+    changed_paths: list[str],
+    index_receipt: Any = None,
+    auto_index: bool,
+    raise_on_unavailable: bool = True,
+) -> dict[str, Any]:
+    try:
+        applicability = project_intelligence_core.assess_applicability(
+            goal=goal,
+            workflow_mode=workflow_mode,
+            changed_paths=changed_paths,
+            supported_sources=project_intelligence_core.supported_source_count(
+                project_path
+            ),
+            mode="auto",
+        )
+        provider = project_intelligence_core.discover_provider()
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    result: dict[str, Any] = {
+        "schemaVersion": "jstack.project-intelligence-preparation.v1",
+        "applicability": applicability,
+        "provider": provider,
+        "binding": None,
+        "contract": {
+            "schemaVersion": "jstack.project-intelligence-decision.v1",
+            "state": applicability["state"],
+            "reason": applicability["reason"],
+            "applicabilityDigest": project_intelligence_core.canonical_digest(
+                applicability
+            ),
+            "providerCatalogDigest": project_intelligence_core.catalog_digest(),
+        },
+        "indexReceipt": None,
+        "snapshot": None,
+    }
+    if applicability["state"] != "required":
+        return result
+    if provider["status"] != "available":
+        if applicability["failClosed"] and raise_on_unavailable:
+            raise ToolError(
+                "Project intelligence is mandatory for this work, but the pinned managed Graphify runtime is unavailable: "
+                + str(provider["reason"])
+                + ". Provision it through the approved JStack installer before continuing."
+            )
+        return result
+    receipt = str(index_receipt or "").strip()
+    snapshot_summary = None
+    if receipt:
+        payload, snapshot = _verify_project_intelligence_receipt(
+            receipt,
+            expected_kind="graph-index",
+            project_path=project_path,
+            require_current=True,
+        )
+        snapshot_summary = _project_intelligence_snapshot_summary(snapshot)
+    elif auto_index:
+        indexed = tool_graph_index(
+            {
+                "project_path": str(project_path),
+                "goal": goal,
+                "workflow_mode": workflow_mode,
+                "scope_paths": changed_paths,
+                "mode": "auto",
+                "visualize": True,
+            }
+        )
+        receipt = str(indexed.get("indexReceipt") or "")
+        if not receipt:
+            raise ToolError(
+                "Mandatory project intelligence did not produce an index receipt."
+            )
+        payload, snapshot = _verify_project_intelligence_receipt(
+            receipt,
+            expected_kind="graph-index",
+            project_path=project_path,
+            require_current=True,
+        )
+        snapshot_summary = indexed.get("snapshot")
+    else:
+        raise ToolError(
+            "Mandatory project intelligence requires a current graph_index_receipt."
+        )
+    expected_applicability_digest = project_intelligence_core.canonical_digest(
+        applicability
+    )
+    if payload.get("applicabilityDigest") != expected_applicability_digest:
+        raise ToolError(
+            "The graph index receipt does not match the current project-intelligence applicability decision."
+        )
+    result.update(
+        {
+            "binding": _project_intelligence_binding(
+                applicability=applicability,
+                receipt=receipt,
+                payload=payload,
+            ),
+            "contract": _project_intelligence_binding(
+                applicability=applicability,
+                receipt=receipt,
+                payload=payload,
+            ),
+            "indexReceipt": receipt,
+            "snapshot": snapshot_summary,
+        }
+    )
+    return result
+
+
 def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
     goal = str(args.get("goal") or "").strip()
     if not goal:
@@ -16710,6 +17022,12 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
             "reason": "git-required",
             "detection": None,
         }
+    project_intelligence = _project_intelligence_plan_view(
+        binding=binding,
+        goal=goal,
+        workflow_mode=workflow_mode,
+        changed_paths=changed_ui_scope,
+    )
     classifications = classifications_with_product_interface(
         classifications,
         required=ui_applicability["state"] == "required",
@@ -16738,6 +17056,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
             binding=binding,
             context_readiness=context_readiness,
             legacy_team=team_plan,
+            project_intelligence=project_intelligence,
         ),
     )
     steps = [
@@ -16859,6 +17178,20 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
                 break
+    if project_intelligence.get("mandatory"):
+        steps.insert(
+            2,
+            {
+                "gate": "Project intelligence",
+                "skill": "jstack_graph_index -> jstack_graph_query -> jstack_graph_impact",
+                "purpose": (
+                    "Build a private exact-state Graphify AST graph, select only the bounded task subgraph, and use source-anchored EXTRACTED relationships as strong evidence."
+                ),
+                "doneWhen": (
+                    "The baseline graph and impact receipt match the exact repository state; inferred, ambiguous, and unanchored relationships are marked advisory and verified directly in source."
+                ),
+            },
+        )
     release_blockers: list[str] = []
     required_gates: list[str] = []
     for classification in classifications:
@@ -16872,6 +17205,13 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         release_blockers.insert(0, ARTIFACT_ONLY_RELEASE_BLOCKER)
         if "artifact-evidence" not in required_gates:
             required_gates.append("artifact-evidence")
+    if project_intelligence.get("mandatory"):
+        if "project-intelligence" not in required_gates:
+            required_gates.append("project-intelligence")
+        if project_intelligence["state"] == "blocked":
+            release_blockers.append(
+                "Mandatory project intelligence is blocked until the pinned managed Graphify runtime is provisioned."
+            )
     task_training = (
         build_task_training(goal, classifications, required_gates, learning_mode)
         if learning_mode != "off"
@@ -16891,6 +17231,7 @@ def tool_plan(args: dict[str, Any]) -> dict[str, Any]:
         },
         "classifications": classifications,
         "productInterface": ui_applicability,
+        "projectIntelligence": project_intelligence,
         "project": detected,
         "projectBinding": binding,
         "gitRequiredTools": GIT_REQUIRED_TOOLS,
@@ -16969,6 +17310,12 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
             "detection": None,
         }
     )
+    project_intelligence = _project_intelligence_plan_view(
+        binding=binding,
+        goal=goal,
+        workflow_mode=workflow_mode,
+        changed_paths=(team_change_evidence["files"] if team_change_evidence else []),
+    )
     classifications = classifications_with_product_interface(
         classifications,
         required=ui_applicability["state"] == "required",
@@ -16994,6 +17341,7 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
             binding=binding,
             context_readiness=context_readiness,
             legacy_team=legacy_team,
+            project_intelligence=project_intelligence,
         ),
     )
     return {
@@ -17008,6 +17356,7 @@ def tool_team_plan(args: dict[str, Any]) -> dict[str, Any]:
         },
         "classifications": classifications,
         "productInterface": ui_applicability,
+        "projectIntelligence": project_intelligence,
         "team": dynamic_team,
         "capabilityCatalog": _capability_call(lambda: capability_core.catalog_summary()),
         "methodologyCapabilityCatalog": methodology_core.catalog_summary(),
@@ -19788,6 +20137,7 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
         profile_definition = audit_core.get_profile(profile)
     except audit_core.AuditError as exc:
         raise ToolError(str(exc)) from exc
+
     base_ref = str(args.get("base_ref") or "").strip() or None
     if binding["evidenceMode"] == "git":
         if base_ref is not None:
@@ -19823,6 +20173,27 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
         args.get("scope"),
         base_ref,
     )
+    project_intelligence = _prepare_project_intelligence(
+        project_path,
+        goal=audit_capability_goal,
+        workflow_mode="jstack-audit",
+        changed_paths=[str(item) for item in effective_scope],
+        index_receipt=args.get("graph_index_receipt"),
+        auto_index=True,
+    )
+    graph_query = None
+    if project_intelligence.get("indexReceipt"):
+        graph_query = tool_graph_query(
+            {
+                "project_path": str(project_path),
+                "index_receipt": project_intelligence["indexReceipt"],
+                "question": audit_capability_goal,
+                "max_nodes": 160,
+                "max_edges": 320,
+                "depth": 2,
+                "visualize": True,
+            }
+        )
     limits = profile_definition["limits"]
     try:
         inventory = audit_core.inventory_repository(
@@ -19943,6 +20314,15 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
         "contextBriefDigest": context_readiness.get("briefDigest")
         if context_readiness
         else None,
+        "projectIntelligence": project_intelligence["contract"],
+        "projectIntelligenceQueryDigest": (
+            project_intelligence_core.canonical_digest(graph_query["query"])
+            if graph_query
+            else None
+        ),
+        "projectIntelligenceQueryReceiptDigest": (
+            _receipt_digest(graph_query["queryReceipt"]) if graph_query else None
+        ),
     }
     audit_session_token = issue_receipt(token_payload)
     return {
@@ -19970,6 +20350,11 @@ def tool_audit(args: dict[str, Any]) -> dict[str, Any]:
             "capabilityRequiredDomains": audit_capability_plan["auditDomains"],
         },
         "specialistCapabilityPlan": audit_capability_plan,
+        "projectIntelligence": {
+            "preparation": project_intelligence,
+            "boundedQuery": graph_query,
+            "authorityEffect": "none",
+        },
         "deterministicEvidence": deterministic_evidence,
         "adapterPlans": adapter_plans,
         "adapterResults": adapter_results,
@@ -20060,6 +20445,36 @@ def audit_assert_session_subject(
         "capabilityCatalogDigest": token_payload.get("capabilityCatalogDigest")
         == capability_catalog["catalogDigest"],
     }
+    project_intelligence = token_payload.get("projectIntelligence")
+    if isinstance(project_intelligence, dict):
+        checks["projectIntelligenceCatalog"] = (
+            project_intelligence.get("providerCatalogDigest")
+            == project_intelligence_core.catalog_digest()
+        )
+        if project_intelligence.get("state") == "required":
+            try:
+                graph_snapshot = project_intelligence_core.load_snapshot(
+                    Path(binding["projectPath"]),
+                    str(project_intelligence.get("manifestRelativePath") or ""),
+                    expected_manifest_digest=str(
+                        project_intelligence.get("manifestDigest") or ""
+                    ),
+                )
+            except project_intelligence_core.ProjectIntelligenceError:
+                checks["projectIntelligenceSnapshot"] = False
+            else:
+                graph_binding = graph_snapshot["manifest"]["binding"]
+                checks["projectIntelligenceSnapshot"] = (
+                    graph_binding.get("gitHead") == subject.get("gitHead")
+                    and graph_binding.get("projectFingerprint")
+                    == subject.get("projectFingerprint")
+                    and graph_binding.get("policyDigest")
+                    == subject.get("policyDigest")
+                    and graph_snapshot["manifest"]["graph"].get("sha256")
+                    == project_intelligence.get("graphDigest")
+                )
+    else:
+        checks["projectIntelligenceContract"] = False
     if token_payload.get("profile") == "release" and binding["evidenceMode"] == "git":
         current_range_digest = audit_release_range_digest(
             Path(binding["projectPath"]),
@@ -24773,6 +25188,81 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
     release_changed_files = (
         release_change_evidence["files"] if release_change_evidence else []
     )
+    try:
+        graph_applicability = project_intelligence_core.assess_applicability(
+            goal=str(args.get("goal") or "release readiness assessment"),
+            workflow_mode="j-stack-dev",
+            changed_paths=release_changed_files,
+            supported_sources=project_intelligence_core.supported_source_count(
+                project_path
+            ),
+            mode="auto",
+        )
+        graph_provider = project_intelligence_core.discover_provider()
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    graph_required = graph_applicability["state"] == "required"
+    graph_receipt = str(args.get("graph_finalization_receipt") or "").strip()
+    verified_graph: Optional[dict[str, Any]] = None
+    graph_passes_release = False
+    graph_verification_error: Optional[str] = None
+    if graph_required and graph_provider["status"] != "available":
+        blockers.append(
+            "The release delta requires project intelligence, but the pinned managed Graphify runtime is unavailable: "
+            + str(graph_provider["reason"])
+            + "."
+        )
+    if graph_receipt:
+        if len(graph_receipt) > LOOP_MAX_RECEIPT_CHARS:
+            raise ToolError("graph_finalization_receipt exceeds the bounded receipt size.")
+        try:
+            graph_payload, graph_snapshot = _verify_project_intelligence_receipt(
+                graph_receipt,
+                expected_kind="graph-finalization",
+                project_path=project_path,
+                require_current=True,
+            )
+        except ToolError as exc:
+            graph_verification_error = str(exc)
+        else:
+            expected_paths_digest = project_intelligence_core.canonical_digest(
+                release_changed_files
+            )
+            graph_passes_release = (
+                graph_payload.get("passed") is True
+                and graph_payload.get("actualChangedPathsDigest")
+                == expected_paths_digest
+                and graph_payload.get("changeBaseCommit")
+                == subject.get("baseCommit")
+                and bool(
+                    re.fullmatch(
+                        r"[0-9a-f]{64}",
+                        str(graph_payload.get("baselineManifestDigest") or ""),
+                    )
+                )
+                and graph_snapshot["manifest"]["graph"].get("sha256")
+                == graph_payload.get("graphDigest")
+            )
+            verified_graph = {
+                "valid": graph_passes_release,
+                "payload": graph_payload,
+                "snapshot": _project_intelligence_snapshot_summary(
+                    graph_snapshot
+                ),
+            }
+        if graph_required and not graph_passes_release:
+            blockers.append(
+                "The release delta requires a current passing project-intelligence finalization receipt bound to the exact candidate and changed-path set."
+            )
+        elif not graph_passes_release:
+            warnings.append(
+                "An optional project-intelligence finalization receipt was supplied but is stale, invalid, or does not cover the exact release delta."
+            )
+    elif graph_required:
+        blockers.append(
+            "The release delta requires a receipt from jstack_graph_finalize."
+        )
+
     ui_applicability = _ui_applicability(
         project_path,
         goal=str(args.get("goal") or ""),
@@ -24884,11 +25374,25 @@ def tool_release_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "passesRelease": ui_passes_release,
             "doesNotReplaceQaSecurityAuditOrLaunch": True,
         },
+        "projectIntelligenceEvidence": {
+            "applicability": graph_applicability,
+            "provider": graph_provider,
+            "required": graph_required,
+            "verification": verified_graph,
+            "verificationError": graph_verification_error,
+            "passesRelease": graph_passes_release,
+            "strongEvidenceBoundary": (
+                "Only source-anchored EXTRACTED graph edges are strong evidence; "
+                "all inferred, ambiguous, and unanchored relationships remain advisory."
+            ),
+            "doesNotReplaceSourceTestsSecurityAuditOrReview": True,
+        },
         "preflight": preflight,
         "shipCheck": ship,
         "releaseStandard": [
             "No unresolved blockers.",
             "Tests and security checks are evidenced or explicitly blocked.",
+            "Material release deltas have a current Graphify-backed project-intelligence finalization receipt for the exact candidate and changed-path set.",
             "Changed user-facing UI surfaces have a current candidate-bound Product Interface finalization receipt.",
             "Applicable launch controls are resolved by current typed evidence, explicit not-applicable proof, or a bounded non-blocker waiver.",
             "Rollback and monitoring are documented before production.",
@@ -25130,6 +25634,9 @@ def _reject_loop_secret_inputs(args: dict[str, Any]) -> None:
         "goal_readiness_receipt",
         "program_readiness_receipt",
         "loop_completion_receipt",
+        "graph_index_receipt",
+        "graph_refresh_receipt",
+        "graph_finalization_receipt",
     }
 
     def visit(value: Any, field: str) -> None:
@@ -25562,6 +26069,8 @@ def _loop_iteration_evidence(
     project_path: Path,
     loop_status: dict[str, Any],
     args: dict[str, Any],
+    *,
+    final: bool = False,
 ) -> dict[str, Any]:
     baseline = str(loop_status["baselineCommit"])
     subject = evidence_subject(project_path, baseline)
@@ -25620,6 +26129,13 @@ def _loop_iteration_evidence(
         project_path, loop_status["acceptanceCriteria"]
     )
     evidence["artifacts"] = artifacts
+    evidence["projectIntelligence"] = _project_intelligence_iteration_evidence(
+        project_path,
+        loop_status,
+        changed_files=changed_files,
+        args=args,
+        final=final,
+    )
     evidence["invalid"] = [*invalid, *artifact_invalid]
     subject_after = evidence_subject(project_path, baseline)
     if any(
@@ -25636,6 +26152,85 @@ def _loop_iteration_evidence(
         "protectedFiles": protected_files,
         "productInterface": product_interface,
         "evidence": evidence,
+    }
+
+
+def _project_intelligence_iteration_evidence(
+    project_path: Path,
+    status: dict[str, Any],
+    *,
+    changed_files: list[str],
+    args: dict[str, Any],
+    final: bool,
+) -> dict[str, Any]:
+    readiness = status.get("goalReadiness") or status.get("programReadiness") or {}
+    contract = readiness.get("projectIntelligence")
+    if not isinstance(contract, dict):
+        raise ToolError(
+            "This loop or program predates the project-intelligence contract. Revise it through current readiness before continuing."
+        )
+    if contract.get("providerCatalogDigest") != project_intelligence_core.catalog_digest():
+        raise ToolError(
+            "The project-intelligence provider catalog changed after readiness. Revise the contract before continuing."
+        )
+    state = str(contract.get("state") or "")
+    if state != "required":
+        return {
+            "schemaVersion": "jstack.project-intelligence-evidence.v1",
+            "state": state,
+            "reason": contract.get("reason"),
+            "applicabilityDigest": contract.get("applicabilityDigest"),
+            "required": False,
+            "passed": True,
+        }
+    if contract.get("schemaVersion") != "jstack.project-intelligence-binding.v1":
+        raise ToolError("The required project-intelligence binding is malformed.")
+    receipt_field = "graph_finalization_receipt" if final else "graph_refresh_receipt"
+    receipt_kind = "graph-finalization" if final else "graph-refresh"
+    receipt = str(args.get(receipt_field) or "").strip()
+    if not receipt:
+        if not final and not changed_files:
+            return {
+                "schemaVersion": "jstack.project-intelligence-evidence.v1",
+                "state": "required",
+                "stage": "baseline",
+                "manifestDigest": contract["manifestDigest"],
+                "graphDigest": contract["graphDigest"],
+                "receiptDigest": contract["indexReceiptDigest"],
+                "required": True,
+                "passed": True,
+            }
+        raise ToolError(
+            f"{receipt_field} is required for this project-intelligence-bound {'completion' if final else 'checkpoint'}."
+        )
+    payload, _ = _verify_project_intelligence_receipt(
+        receipt,
+        expected_kind=receipt_kind,
+        project_path=project_path,
+        require_current=True,
+    )
+    checks = {
+        "baselineManifest": payload.get("baselineManifestDigest")
+        == contract.get("manifestDigest"),
+        "providerCatalog": payload.get("providerCatalogDigest")
+        == contract.get("providerCatalogDigest"),
+        "passed": payload.get("passed") is True,
+    }
+    if not all(checks.values()):
+        raise ToolError(
+            "The project-intelligence evidence receipt does not belong to this exact baseline contract."
+        )
+    return {
+        "schemaVersion": "jstack.project-intelligence-evidence.v1",
+        "state": "required",
+        "stage": "finalization" if final else "refresh",
+        "baselineManifestDigest": contract["manifestDigest"],
+        "manifestDigest": payload["manifestDigest"],
+        "graphDigest": payload["graphDigest"],
+        "receiptDigest": _receipt_digest(receipt),
+        "impactDigest": payload.get("impactDigest"),
+        "required": True,
+        "passed": True,
     }
 
 
@@ -25804,6 +26399,7 @@ def _loop_args_with_ui_contract(
     elif isinstance((prior_status or {}).get("uiContract"), dict):
         enriched["ui_contract_binding"] = dict(prior_status["uiContract"])
     enriched.pop("ui_contract_receipt", None)
+    enriched.pop("graph_index_receipt", None)
     enriched.pop("prompt_compilation_receipt", None)
     enriched.pop("prompt_contract", None)
     return enriched
@@ -26025,6 +26621,662 @@ def _ui_readiness_gaps(
     return gaps
 
 
+def _project_intelligence_tree(project_path: Path) -> str:
+    result = run_complete(
+        ["git", "rev-parse", "HEAD^{tree}"],
+        project_path,
+        timeout=8,
+    )
+    tree = _git_text(result).strip() if result["ok"] else ""
+    if not re.fullmatch(r"[0-9a-f]{40}", tree):
+        raise ToolError("Could not derive the exact Git tree for project intelligence.")
+    return tree
+
+
+def _project_intelligence_subject(project_path: Path) -> dict[str, Any]:
+    subject = evidence_subject(project_path)
+    return {**subject, "gitTree": _project_intelligence_tree(project_path)}
+
+
+def _project_intelligence_expiry() -> str:
+    return (
+        _dt.datetime.now(_dt.timezone.utc)
+        + _dt.timedelta(seconds=RECEIPT_MAX_AGE_SECONDS)
+    ).replace(microsecond=0).isoformat()
+
+
+def _project_intelligence_snapshot_summary(
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    manifest = snapshot["manifest"]
+    graph = manifest["graph"]
+    return {
+        "manifestDigest": manifest["manifestDigest"],
+        "graphDigest": graph["sha256"],
+        "projectFingerprint": manifest["binding"]["projectFingerprint"],
+        "nodeCount": graph["nodeCount"],
+        "edgeCount": graph["edgeCount"],
+        "strongEvidenceEdgeCount": graph["strongEvidenceEdgeCount"],
+        "manifestPath": snapshot["manifestPath"],
+        "graphPath": snapshot["graphPath"],
+        "visualizationPath": snapshot["visualizationPath"],
+    }
+
+
+def _project_intelligence_receipt_fields(
+    subject: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    manifest = snapshot["manifest"]
+    return {
+        "expiresAt": _project_intelligence_expiry(),
+        "projectPath": subject["gitRoot"],
+        "gitHead": subject["gitHead"],
+        "gitTree": subject["gitTree"],
+        "projectFingerprint": subject["projectFingerprint"],
+        "policyDigest": subject["policyDigest"],
+        "toolVersion": SERVER_VERSION,
+        "providerId": manifest["provider"]["id"],
+        "providerVersion": manifest["provider"]["version"],
+        "providerCatalogDigest": manifest["provider"]["catalogDigest"],
+        "manifestRelativePath": snapshot["manifestRelativePath"],
+        "manifestDigest": manifest["manifestDigest"],
+        "graphDigest": manifest["graph"]["sha256"],
+    }
+
+
+def _verify_project_intelligence_receipt(
+    receipt: Any,
+    *,
+    expected_kind: str,
+    project_path: Path,
+    require_current: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not isinstance(receipt, str) or not receipt:
+        raise ToolError(f"A {expected_kind} receipt is required.")
+    payload = verify_signed_session_token(receipt, expected_kind)
+    checks = {
+        "projectPath": payload.get("projectPath") == str(project_path.resolve()),
+        "toolVersion": payload.get("toolVersion") == SERVER_VERSION,
+        "providerId": payload.get("providerId") == "graphify-local-ast",
+        "providerCatalogDigest": payload.get("providerCatalogDigest")
+        == project_intelligence_core.catalog_digest(),
+        "manifestDigest": bool(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get("manifestDigest") or ""))
+        ),
+        "graphDigest": bool(
+            re.fullmatch(r"[0-9a-f]{64}", str(payload.get("graphDigest") or ""))
+        ),
+    }
+    if expected_kind in {"graph-index", "graph-finalization"}:
+        checks["changeBaseCommit"] = bool(
+            re.fullmatch(
+                r"[0-9a-f]{40}",
+                str(payload.get("changeBaseCommit") or ""),
+            )
+        )
+    try:
+        snapshot = project_intelligence_core.load_snapshot(
+            project_path,
+            str(payload.get("manifestRelativePath") or ""),
+            expected_manifest_digest=str(payload.get("manifestDigest") or ""),
+        )
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    manifest = snapshot["manifest"]
+    binding = manifest["binding"]
+    checks.update(
+        {
+            "snapshotGitHead": binding.get("gitHead") == payload.get("gitHead"),
+            "snapshotGitTree": binding.get("gitTree") == payload.get("gitTree"),
+            "snapshotFingerprint": binding.get("projectFingerprint")
+            == payload.get("projectFingerprint"),
+            "snapshotPolicy": binding.get("policyDigest")
+            == payload.get("policyDigest"),
+            "snapshotGraph": manifest["graph"].get("sha256")
+            == payload.get("graphDigest"),
+        }
+    )
+    if require_current:
+        current = _project_intelligence_subject(project_path)
+        checks.update(
+            {
+                "currentGitHead": payload.get("gitHead") == current["gitHead"],
+                "currentGitTree": payload.get("gitTree") == current["gitTree"],
+                "currentFingerprint": payload.get("projectFingerprint")
+                == current["projectFingerprint"],
+                "currentPolicy": payload.get("policyDigest")
+                == current["policyDigest"],
+            }
+        )
+    if not all(checks.values()):
+        stale = " current repository state" if require_current else " bound snapshot"
+        raise ToolError(
+            f"The {expected_kind} receipt is stale, tampered, or does not match its{stale}."
+        )
+    return payload, snapshot
+
+
+def _project_intelligence_changed_paths(project_path: Path) -> list[str]:
+    return sorted(git_change_evidence(project_path)["files"])
+
+
+def tool_graph_index(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    goal = str(args.get("goal") or "").strip()
+    if not goal:
+        raise ToolError("goal is required for project-intelligence routing.")
+    workflow_mode = str(args.get("workflow_mode") or "j-stack-dev").strip()
+    if workflow_mode not in {
+        "j-stack-dev",
+        "jstack-audit",
+        "jstack-full-team",
+        "jstack-loop",
+        "jstack-subagents",
+    }:
+        raise ToolError("workflow_mode is not supported by project intelligence.")
+    requested_base_ref = str(args.get("base_ref") or "").strip()
+    if requested_base_ref:
+        resolved_base = resolve_base_ref(project_path, requested_base_ref)
+        change_base_commit = str(resolved_base.get("baseCommit") or "").strip()
+        if not re.fullmatch(r"[0-9a-f]{40}", change_base_commit):
+            raise ToolError("base_ref did not resolve to an exact Git commit.")
+    else:
+        change_base_commit = _project_intelligence_subject(project_path)["gitHead"]
+    scope_paths = args.get("scope_paths")
+    if scope_paths is not None:
+        if (
+            not isinstance(scope_paths, list)
+            or len(scope_paths) > 5000
+            or not all(isinstance(path, str) for path in scope_paths)
+        ):
+            raise ToolError("scope_paths must be a bounded array of repository paths.")
+        try:
+            changed_paths = sorted(
+                {
+                    audit_core.normalize_repo_path(path, "scope_paths")
+                    for path in scope_paths
+                }
+            )
+        except audit_core.AuditError as exc:
+            raise ToolError(str(exc)) from exc
+    else:
+        changed_paths = sorted(
+            git_change_evidence(project_path, change_base_commit)["files"]
+        )
+    supported = project_intelligence_core.protocol.supported_source_count(
+        project_path
+    )
+    try:
+        applicability = project_intelligence_core.assess_applicability(
+            goal=goal,
+            workflow_mode=workflow_mode,
+            changed_paths=changed_paths,
+            supported_sources=supported,
+            mode=str(args.get("mode") or "auto"),
+        )
+        provider = project_intelligence_core.discover_provider()
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    if applicability["state"] in {"deferred", "skipped", "unsupported"}:
+        return {
+            "schemaVersion": "jstack.project-intelligence-index.v1",
+            "applicability": applicability,
+            "provider": provider,
+            "changeBaseCommit": change_base_commit,
+            "snapshot": None,
+            "indexReceipt": None,
+            "authorityEffect": "none",
+        }
+    if provider["status"] != "available":
+        if applicability["failClosed"]:
+            raise ToolError(
+                "Project intelligence is mandatory for this work, but the pinned managed Graphify runtime is unavailable: "
+                + str(provider["reason"])
+                + ". Provision it through the approved JStack installer before continuing."
+            )
+        return {
+            "schemaVersion": "jstack.project-intelligence-index.v1",
+            "applicability": applicability,
+            "provider": provider,
+            "changeBaseCommit": change_base_commit,
+            "snapshot": None,
+            "indexReceipt": None,
+            "authorityEffect": "none",
+        }
+    subject = _project_intelligence_subject(project_path)
+    try:
+        snapshot = project_intelligence_core.build_snapshot(
+            project_path,
+            subject,
+            render=bool(
+                args.get("visualize", applicability["visualizationRequired"])
+            ),
+        )
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    receipt = issue_receipt(
+        {
+            "kind": "graph-index",
+            "passed": True,
+            "changeBaseCommit": change_base_commit,
+            "applicabilityDigest": project_intelligence_core.protocol.canonical_digest(
+                applicability
+            ),
+            **_project_intelligence_receipt_fields(subject, snapshot),
+        }
+    )
+    return {
+        "schemaVersion": "jstack.project-intelligence-index.v1",
+        "applicability": applicability,
+        "provider": provider,
+        "changeBaseCommit": change_base_commit,
+        "snapshot": _project_intelligence_snapshot_summary(snapshot),
+        "indexReceipt": receipt,
+        "authorityEffect": "none",
+    }
+
+
+def tool_graph_query(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    _, snapshot = _verify_project_intelligence_receipt(
+        args.get("index_receipt"),
+        expected_kind="graph-index",
+        project_path=project_path,
+        require_current=True,
+    )
+    question = str(args.get("question") or "").strip()
+    try:
+        query = project_intelligence_core.focused_query(
+            project_path,
+            Path(snapshot["graphPath"]),
+            question,
+            max_nodes=int(args.get("max_nodes", 120)),
+            max_edges=int(args.get("max_edges", 240)),
+            depth=int(args.get("depth", 2)),
+        )
+        visualization = (
+            project_intelligence_core.render_focused_graph(
+                project_path,
+                snapshot,
+                query,
+            )
+            if bool(args.get("visualize", True)) and query["nodes"]
+            else None
+        )
+    except (ValueError, project_intelligence_core.ProjectIntelligenceError) as exc:
+        raise ToolError(str(exc)) from exc
+    subject = _project_intelligence_subject(project_path)
+    receipt = issue_receipt(
+        {
+            "kind": "graph-query",
+            "passed": True,
+            "queryDigest": project_intelligence_core.protocol.canonical_digest(query),
+            "visualizationSha256": (
+                visualization["sha256"] if visualization else None
+            ),
+            **_project_intelligence_receipt_fields(subject, snapshot),
+        }
+    )
+    return {
+        "schemaVersion": "jstack.project-intelligence-query-result.v1",
+        "query": query,
+        "visualization": visualization,
+        "queryReceipt": receipt,
+        "authorityEffect": "none",
+    }
+
+
+def tool_graph_impact(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    _, snapshot = _verify_project_intelligence_receipt(
+        args.get("index_receipt"),
+        expected_kind="graph-index",
+        project_path=project_path,
+        require_current=True,
+    )
+    goal = str(args.get("goal") or "").strip()
+    if not goal:
+        raise ToolError("goal is required for graph impact analysis.")
+    changed_paths = args.get("changed_paths")
+    if changed_paths is None:
+        changed_paths = _project_intelligence_changed_paths(project_path)
+    elif (
+        not isinstance(changed_paths, list)
+        or len(changed_paths) > 5000
+        or not all(isinstance(path, str) for path in changed_paths)
+    ):
+        raise ToolError("changed_paths must be a bounded array of repository paths.")
+    else:
+        try:
+            changed_paths = sorted(
+                {
+                    audit_core.normalize_repo_path(path, "changed_paths")
+                    for path in changed_paths
+                }
+            )
+        except audit_core.AuditError as exc:
+            raise ToolError(str(exc)) from exc
+    try:
+        impact = project_intelligence_core.impact_analysis(
+            project_path,
+            Path(snapshot["graphPath"]),
+            goal=goal,
+            changed_paths=[str(path) for path in changed_paths],
+            max_nodes=int(args.get("max_nodes", 160)),
+            max_edges=int(args.get("max_edges", 320)),
+            depth=int(args.get("depth", 2)),
+        )
+        visualization = (
+            project_intelligence_core.render_focused_graph(
+                project_path,
+                snapshot,
+                impact["query"],
+            )
+            if bool(args.get("visualize", True)) and impact["query"]["nodes"]
+            else None
+        )
+    except (ValueError, project_intelligence_core.ProjectIntelligenceError) as exc:
+        raise ToolError(str(exc)) from exc
+    subject = _project_intelligence_subject(project_path)
+    receipt = issue_receipt(
+        {
+            "kind": "graph-impact",
+            "passed": True,
+            "impactDigest": impact["impactDigest"],
+            "changedPathsDigest": impact["changedPathsDigest"],
+            "visualizationSha256": (
+                visualization["sha256"] if visualization else None
+            ),
+            **_project_intelligence_receipt_fields(subject, snapshot),
+        }
+    )
+    return {
+        "schemaVersion": "jstack.project-intelligence-impact-result.v1",
+        "impact": impact,
+        "visualization": visualization,
+        "impactReceipt": receipt,
+        "authorityEffect": "none",
+    }
+
+
+def tool_graph_refresh(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    index_payload, before_snapshot = _verify_project_intelligence_receipt(
+        args.get("index_receipt"),
+        expected_kind="graph-index",
+        project_path=project_path,
+        require_current=False,
+    )
+    impact_payload = None
+    if args.get("impact_receipt"):
+        impact_payload, _ = _verify_project_intelligence_receipt(
+            args.get("impact_receipt"),
+            expected_kind="graph-impact",
+            project_path=project_path,
+            require_current=False,
+        )
+        if impact_payload.get("manifestDigest") != index_payload.get("manifestDigest"):
+            raise ToolError("The graph impact receipt does not belong to the supplied baseline index.")
+    subject = _project_intelligence_subject(project_path)
+    try:
+        after_snapshot = project_intelligence_core.build_snapshot(
+            project_path,
+            subject,
+            render=bool(args.get("visualize", True)),
+        )
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    before = _project_intelligence_snapshot_summary(before_snapshot)
+    after = _project_intelligence_snapshot_summary(after_snapshot)
+    delta = {
+        "graphChanged": before["graphDigest"] != after["graphDigest"],
+        "nodeCount": after["nodeCount"] - before["nodeCount"],
+        "edgeCount": after["edgeCount"] - before["edgeCount"],
+        "strongEvidenceEdgeCount": (
+            after["strongEvidenceEdgeCount"] - before["strongEvidenceEdgeCount"]
+        ),
+    }
+    receipt = issue_receipt(
+        {
+            "kind": "graph-refresh",
+            "passed": True,
+            "baselineManifestDigest": before["manifestDigest"],
+            "baselineProjectFingerprint": before["projectFingerprint"],
+            "impactDigest": impact_payload.get("impactDigest") if impact_payload else None,
+            "deltaDigest": project_intelligence_core.protocol.canonical_digest(delta),
+            **_project_intelligence_receipt_fields(subject, after_snapshot),
+        }
+    )
+    return {
+        "schemaVersion": "jstack.project-intelligence-refresh.v1",
+        "before": {
+            key: before[key]
+            for key in (
+                "manifestDigest",
+                "graphDigest",
+                "projectFingerprint",
+                "nodeCount",
+                "edgeCount",
+                "strongEvidenceEdgeCount",
+                "visualizationPath",
+            )
+        },
+        "after": {
+            key: after[key]
+            for key in (
+                "manifestDigest",
+                "graphDigest",
+                "projectFingerprint",
+                "nodeCount",
+                "edgeCount",
+                "strongEvidenceEdgeCount",
+                "visualizationPath",
+            )
+        },
+        "delta": delta,
+        "refreshReceipt": receipt,
+        "authorityEffect": "none",
+    }
+
+
+def _project_intelligence_evidence(args: dict[str, Any]) -> dict[str, Any]:
+    evidence = args.get("evidence")
+    if not isinstance(evidence, dict):
+        raise ToolError("A structured project-intelligence evidence manifest is required.")
+    required = {
+        "changed_paths",
+        "source_reads",
+        "tests",
+        "review",
+        "graph_evidence_edge_ids",
+        "unresolved_findings",
+    }
+    if set(evidence) != required:
+        raise ToolError("The project-intelligence evidence manifest has an unsupported field set.")
+    return evidence
+
+
+def tool_graph_finalize(args: dict[str, Any]) -> dict[str, Any]:
+    project_path = require_project_path(args.get("project_path"))
+    index_payload, _ = _verify_project_intelligence_receipt(
+        args.get("index_receipt"),
+        expected_kind="graph-index",
+        project_path=project_path,
+        require_current=False,
+    )
+    impact_payload, _ = _verify_project_intelligence_receipt(
+        args.get("impact_receipt"),
+        expected_kind="graph-impact",
+        project_path=project_path,
+        require_current=False,
+    )
+    refresh_payload, snapshot = _verify_project_intelligence_receipt(
+        args.get("refresh_receipt"),
+        expected_kind="graph-refresh",
+        project_path=project_path,
+        require_current=True,
+    )
+    evidence = _project_intelligence_evidence(args)
+    change_base_commit = str(index_payload.get("changeBaseCommit") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", change_base_commit):
+        raise ToolError(
+            "The graph index receipt is missing its exact change-base commit. Re-index the project."
+        )
+    actual_changed = sorted(
+        git_change_evidence(project_path, change_base_commit)["files"]
+    )
+    if (
+        not isinstance(evidence["changed_paths"], list)
+        or len(evidence["changed_paths"]) > 5000
+        or not all(isinstance(path, str) for path in evidence["changed_paths"])
+    ):
+        raise ToolError("changed_paths must be a bounded array of repository paths.")
+    try:
+        supplied_changed = sorted(
+            {
+                audit_core.normalize_repo_path(path, "changed_paths")
+                for path in evidence["changed_paths"]
+            }
+        )
+    except audit_core.AuditError as exc:
+        raise ToolError(str(exc)) from exc
+    source_reads = evidence["source_reads"]
+    tests = evidence["tests"]
+    review = evidence["review"]
+    claimed_edges = evidence["graph_evidence_edge_ids"]
+    unresolved = evidence["unresolved_findings"]
+    if not isinstance(source_reads, list) or len(source_reads) > 5000:
+        raise ToolError("source_reads must be a bounded array.")
+    if not isinstance(tests, list) or len(tests) > 200:
+        raise ToolError("tests must be a bounded array.")
+    if not isinstance(review, dict):
+        raise ToolError("review must be an object.")
+    if not isinstance(claimed_edges, list) or len(claimed_edges) > 500:
+        raise ToolError("graph_evidence_edge_ids must be a bounded array.")
+    if not all(isinstance(edge, str) for edge in claimed_edges):
+        raise ToolError("graph_evidence_edge_ids must contain only edge IDs.")
+    if (
+        not isinstance(unresolved, list)
+        or len(unresolved) > 100
+        or not all(isinstance(item, str) for item in unresolved)
+    ):
+        raise ToolError("unresolved_findings must be a bounded array.")
+
+    read_paths: set[str] = set()
+    source_reads_valid = True
+    for item in source_reads:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            source_reads_valid = False
+            continue
+        relative = str(item.get("path") or "").replace("\\", "/")
+        digest = str(item.get("sha256") or "")
+        try:
+            _, current_digest = audit_core.digest_repository_file(
+                project_path,
+                relative,
+                max_bytes=25_000_000,
+                max_seconds=15,
+            )
+        except audit_core.AuditError:
+            source_reads_valid = False
+            continue
+        if digest != current_digest:
+            source_reads_valid = False
+            continue
+        read_paths.add(relative)
+    tests_valid = True
+    for item in tests:
+        if not isinstance(item, dict) or set(item) != {
+            "name",
+            "status",
+            "evidence_sha256",
+            "justification",
+        }:
+            tests_valid = False
+            continue
+        if item.get("status") not in {"pass", "not-applicable"}:
+            tests_valid = False
+        if not re.fullmatch(r"[0-9a-f]{64}", str(item.get("evidence_sha256") or "")):
+            tests_valid = False
+        if not str(item.get("name") or "").strip() or not str(item.get("justification") or "").strip():
+            tests_valid = False
+    review_valid = (
+        set(review) == {"status", "reviewer", "evidence_sha256"}
+        and review.get("status") == "pass"
+        and bool(str(review.get("reviewer") or "").strip())
+        and bool(re.fullmatch(r"[0-9a-f]{64}", str(review.get("evidence_sha256") or "")))
+    )
+    try:
+        inventory = project_intelligence_core.graph_inventory(
+            project_path,
+            Path(snapshot["graphPath"]),
+        )
+    except project_intelligence_core.ProjectIntelligenceError as exc:
+        raise ToolError(str(exc)) from exc
+    code_changed = {
+        path
+        for path in actual_changed
+        if project_intelligence_core.is_supported_source_path(path)
+    }
+    graph_covered_changed = {
+        path
+        for path in actual_changed
+        if project_intelligence_core.requires_graph_source_coverage(path)
+    }
+    claimed_edge_set = {str(edge) for edge in claimed_edges}
+    checks = {
+        "baselineBinding": impact_payload.get("manifestDigest")
+        == index_payload.get("manifestDigest"),
+        "refreshBinding": refresh_payload.get("baselineManifestDigest")
+        == index_payload.get("manifestDigest"),
+        "exactCurrentState": refresh_payload.get("projectFingerprint")
+        == _project_intelligence_subject(project_path)["projectFingerprint"],
+        "changedPathsExact": supplied_changed == actual_changed,
+        "sourceReadsCurrent": source_reads_valid,
+        "directSourceCoverage": code_changed.issubset(read_paths),
+        "graphSourceCoverage": graph_covered_changed.issubset(
+            set(inventory["sourceFiles"])
+        ),
+        "testsPassing": tests_valid and (bool(tests) or not code_changed),
+        "independentReviewPassing": review_valid,
+        "strongGraphClaims": claimed_edge_set.issubset(set(inventory["strongEdgeIds"])),
+        "noUnresolvedFindings": not unresolved,
+        "currentGraphDigest": inventory["graphDigest"] == refresh_payload.get("graphDigest"),
+    }
+    findings = [name for name, passed in checks.items() if not passed]
+    passed = all(checks.values())
+    evidence_digest = project_intelligence_core.protocol.canonical_digest(evidence)
+    receipt = None
+    if passed:
+        subject = _project_intelligence_subject(project_path)
+        receipt = issue_receipt(
+            {
+                "kind": "graph-finalization",
+                "passed": True,
+                "evidenceDigest": evidence_digest,
+                "impactDigest": impact_payload.get("impactDigest"),
+                "baselineManifestDigest": index_payload.get("manifestDigest"),
+                "actualChangedPathsDigest": project_intelligence_core.canonical_digest(
+                    actual_changed
+                ),
+                "changeBaseCommit": change_base_commit,
+                "refreshDeltaDigest": refresh_payload.get("deltaDigest"),
+                "checksDigest": project_intelligence_core.protocol.canonical_digest(checks),
+                **_project_intelligence_receipt_fields(subject, snapshot),
+            }
+        )
+    return {
+        "schemaVersion": "jstack.project-intelligence-finalization.v1",
+        "passed": passed,
+        "checks": checks,
+        "findings": findings,
+        "evidenceDigest": evidence_digest,
+        "finalizationReceipt": receipt,
+        "authorityEffect": "none",
+    }
+
+
 def _ui_readiness_questions(gaps: list[str], *, program: bool) -> list[dict[str, Any]]:
     questions: list[dict[str, Any]] = []
     for gap in gaps:
@@ -26223,6 +27475,18 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
         if prompt_goal
         else None
     )
+    project_intelligence = (
+        _prepare_project_intelligence(
+            project_path,
+            goal=prompt_goal,
+            workflow_mode="jstack-loop",
+            changed_paths=_project_intelligence_changed_paths(project_path),
+            index_receipt=args.get("graph_index_receipt"),
+            auto_index=True,
+        )
+        if prompt_goal
+        else None
+    )
     enriched_args = _loop_args_with_ui_contract(
         args, project_path, subject, prior_status
     )
@@ -26253,6 +27517,7 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             ["product-interface-new-loop"], program=False
         )
         blocked["promptCompilation"] = prompt_binding
+        blocked["projectIntelligence"] = project_intelligence
         return blocked
     if ui_bound != has_ui_verifier:
         blocked = _ui_readiness_block(
@@ -26260,6 +27525,7 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             program=False,
         )
         blocked["promptCompilation"] = prompt_binding
+        blocked["projectIntelligence"] = project_intelligence
         return blocked
     try:
         assessment = _loop_call(
@@ -26278,6 +27544,7 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
         if ui_gaps:
             blocked = _ui_readiness_block(ui_gaps, program=False)
             blocked["promptCompilation"] = prompt_binding
+            blocked["projectIntelligence"] = project_intelligence
             return blocked
         raise
     assessment.pop("_contract", None)
@@ -26286,10 +27553,12 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             assessment, ui_gaps, program=False
         )
         blocked["promptCompilation"] = prompt_binding
+        blocked["projectIntelligence"] = project_intelligence
         return blocked
     if assessment.get("ready") is not True:
         assessment["receiptIssued"] = False
         assessment["promptCompilation"] = prompt_binding
+        assessment["projectIntelligence"] = project_intelligence
         return assessment
     if _prompt_mode() != "disabled" and prompt_binding is None:
         raise ToolError(
@@ -26332,6 +27601,11 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
                 else None
             ),
             "passed": True,
+            "projectIntelligence": (
+                project_intelligence["contract"]
+                if project_intelligence is not None
+                else None
+            ),
             **_prompt_receipt_binding_fields(prompt_binding),
         }
     )
@@ -26339,6 +27613,7 @@ def tool_loop_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     assessment["receiptExpiresAt"] = expires_at
     assessment["receiptIssued"] = True
     assessment["promptCompilation"] = prompt_binding
+    assessment["projectIntelligence"] = project_intelligence
     assessment["receiptMeaning"] = (
         "Session-local proof that the exact goal context and contract were readiness-checked "
         "against the current project state; it executes no implementation or external action "
@@ -26367,9 +27642,23 @@ def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
         has_ui_verifier=_has_public_ui_verifier(ui_criteria),
         operation="loop start",
     )
+    project_intelligence = _prepare_project_intelligence(
+        project_path,
+        goal=str(enriched_args.get("goal") or ""),
+        workflow_mode="jstack-loop",
+        changed_paths=_project_intelligence_changed_paths(project_path),
+        index_receipt=args.get("graph_index_receipt"),
+        auto_index=True,
+    )
     readiness_attestation = _verified_goal_readiness_attestation(
         args.get("goal_readiness_receipt"), subject
     )
+    if readiness_attestation.get("projectIntelligence") != project_intelligence[
+        "contract"
+    ]:
+        raise ToolError(
+            "The goal-readiness receipt and current project-intelligence binding do not match."
+        )
     service = _loop_service(project_path)
     result = _loop_call(
         lambda: service.start(
@@ -26382,6 +27671,7 @@ def tool_loop_start(args: dict[str, Any]) -> dict[str, Any]:
         )
     )
     result["worktreeAttestation"] = worktree
+    result["projectIntelligence"] = project_intelligence
     result["nativeGoalContract"] = {
         "createGoalRequired": True,
         "objective": result["goal"],
@@ -26423,6 +27713,14 @@ def tool_loop_status(args: dict[str, Any]) -> dict[str, Any]:
         else result["uiContract"].get("catalogSha256")
         == ui_core.canonical_digest(ui_core.load_catalog())
     )
+    project_intelligence_contract = (result.get("goalReadiness") or {}).get(
+        "projectIntelligence"
+    )
+    result["projectIntelligenceCatalogMatchesContract"] = (
+        isinstance(project_intelligence_contract, dict)
+        and project_intelligence_contract.get("providerCatalogDigest")
+        == project_intelligence_core.catalog_digest()
+    )
     return result
 
 
@@ -26432,7 +27730,7 @@ def tool_loop_checkpoint(args: dict[str, Any]) -> dict[str, Any]:
     service = _loop_service(project_path)
     loop_id = str(args.get("loop_id") or "")
     status = _loop_call(lambda: service.status(loop_id))
-    context = _loop_iteration_evidence(project_path, status, args)
+    context = _loop_iteration_evidence(project_path, status, args, final=False)
     return _loop_call(
         lambda: service.checkpoint(
             loop_id,
@@ -26483,11 +27781,26 @@ def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
         operation="loop revision",
     )
     readiness_attestation = None
+    project_intelligence = None
     if args.get("goal_readiness_receipt") is not None:
+        project_intelligence = _prepare_project_intelligence(
+            project_path,
+            goal=str(enriched_args.get("goal") or prior_status.get("goal") or ""),
+            workflow_mode="jstack-loop",
+            changed_paths=_project_intelligence_changed_paths(project_path),
+            index_receipt=args.get("graph_index_receipt"),
+            auto_index=True,
+        )
         readiness_attestation = _verified_goal_readiness_attestation(
             args.get("goal_readiness_receipt"), subject
         )
-    return _loop_call(
+        if readiness_attestation.get("projectIntelligence") != project_intelligence[
+            "contract"
+        ]:
+            raise ToolError(
+                "The revised goal-readiness receipt and project-intelligence binding do not match."
+            )
+    result = _loop_call(
         lambda: service.revise(
             loop_id,
             enriched_args,
@@ -26498,6 +27811,9 @@ def tool_loop_revise(args: dict[str, Any]) -> dict[str, Any]:
             readiness_attestation=readiness_attestation,
         )
     )
+    if project_intelligence is not None:
+        result["projectIntelligencePreparation"] = project_intelligence
+    return result
 
 
 def tool_loop_stop(args: dict[str, Any]) -> dict[str, Any]:
@@ -26518,7 +27834,7 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
     service = _loop_service(project_path)
     loop_id = str(args.get("loop_id") or "")
     status = _loop_call(lambda: service.status(loop_id))
-    context = _loop_iteration_evidence(project_path, status, args)
+    context = _loop_iteration_evidence(project_path, status, args, final=True)
     result = _loop_call(
         lambda: service.finalize(
             loop_id,
@@ -26574,6 +27890,9 @@ def tool_loop_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "uiContractSha256": (result.get("uiContract") or {}).get(
                 "contractSha256"
             ),
+            "graphFinalizationReceiptDigest": (
+                context["evidence"].get("projectIntelligence") or {}
+            ).get("receiptDigest"),
             "autonomyLevel": result["autonomyLevel"],
             "riskTier": result["riskTier"],
             "passed": True,
@@ -26607,6 +27926,7 @@ def _program_args_with_ui_contract(
     elif isinstance((prior_status or {}).get("uiContract"), dict):
         enriched["ui_contract_binding"] = dict(prior_status["uiContract"])
     enriched.pop("ui_contract_receipt", None)
+    enriched.pop("graph_index_receipt", None)
     enriched.pop("prompt_compilation_receipt", None)
     enriched.pop("prompt_contract", None)
     return enriched
@@ -26976,6 +28296,18 @@ def _program_status_integrity(
         "baselineAncestry": _program_baseline_ancestry(
             project_path, status["baselineCommit"]
         ),
+        "projectIntelligenceCatalog": (
+            isinstance(
+                (status.get("programReadiness") or {}).get(
+                    "projectIntelligence"
+                ),
+                dict,
+            )
+            and (status.get("programReadiness") or {})[
+                "projectIntelligence"
+            ].get("providerCatalogDigest")
+            == project_intelligence_core.catalog_digest()
+        ),
     }
     passed = all(context_checks.values()) and child_integrity["valid"]
     status["integrity"] = {
@@ -27026,6 +28358,18 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
         if prompt_goal
         else None
     )
+    project_intelligence = (
+        _prepare_project_intelligence(
+            project_path,
+            goal=prompt_goal,
+            workflow_mode="jstack-loop",
+            changed_paths=_project_intelligence_changed_paths(project_path),
+            index_receipt=args.get("graph_index_receipt"),
+            auto_index=True,
+        )
+        if prompt_goal
+        else None
+    )
     enriched_args = _program_args_with_ui_contract(
         args, project_path, subject, prior_status
     )
@@ -27072,9 +28416,11 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
                 incomplete_assessment, ui_gaps, program=True
             )
             blocked["promptCompilation"] = prompt_binding
+            blocked["projectIntelligence"] = project_intelligence
             return blocked
         blocked = _ui_readiness_block(ui_gaps, program=True)
         blocked["promptCompilation"] = prompt_binding
+        blocked["projectIntelligence"] = project_intelligence
         return blocked
     policy_gaps = _program_policy_gaps(enriched_args, policy)
     if policy_gaps:
@@ -27096,6 +28442,7 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "receiptIssued": False,
         }
         blocked["promptCompilation"] = prompt_binding
+        blocked["projectIntelligence"] = project_intelligence
         return blocked
     assessment = _program_call(
         lambda: program_core.assess_program_readiness(
@@ -27114,6 +28461,7 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
     if assessment.get("ready") is not True:
         assessment["receiptIssued"] = False
         assessment["promptCompilation"] = prompt_binding
+        assessment["projectIntelligence"] = project_intelligence
         return assessment
     if _prompt_mode() != "disabled" and prompt_binding is None:
         raise ToolError(
@@ -27155,6 +28503,11 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
                 else None
             ),
             "passed": True,
+            "projectIntelligence": (
+                project_intelligence["contract"]
+                if project_intelligence is not None
+                else None
+            ),
             **_prompt_receipt_binding_fields(prompt_binding),
         }
     )
@@ -27164,6 +28517,7 @@ def tool_program_goal_readiness(args: dict[str, Any]) -> dict[str, Any]:
             "receiptExpiresAt": expires_at,
             "receiptIssued": True,
             "promptCompilation": prompt_binding,
+            "projectIntelligence": project_intelligence,
             "receiptMeaning": (
                 "Session-local proof that the exact program DAG and acceptance boundary were readiness-checked; "
                 "it does not approve implementation, release, deployment, or a human gate."
@@ -27197,9 +28551,21 @@ def tool_program_start(args: dict[str, Any]) -> dict[str, Any]:
             "Program contract does not satisfy policy: "
             + ", ".join(item["id"] for item in policy_gaps)
         )
+    project_intelligence = _prepare_project_intelligence(
+        project_path,
+        goal=str(enriched_args.get("goal") or ""),
+        workflow_mode="jstack-loop",
+        changed_paths=_project_intelligence_changed_paths(project_path),
+        index_receipt=args.get("graph_index_receipt"),
+        auto_index=True,
+    )
     attestation = _verified_program_readiness_attestation(
         args.get("program_readiness_receipt"), subject
     )
+    if attestation.get("projectIntelligence") != project_intelligence["contract"]:
+        raise ToolError(
+            "The program-readiness receipt and current project-intelligence binding do not match."
+        )
     service = _program_service(project_path)
     result = _program_call(
         lambda: service.start(
@@ -27214,6 +28580,7 @@ def tool_program_start(args: dict[str, Any]) -> dict[str, Any]:
         )
     )
     result = _program_status_integrity(project_path, result)
+    result["projectIntelligencePreparation"] = project_intelligence
     result["nativeGoalContract"] = {
         "createGoalRequired": True,
         "objective": result["goal"],
@@ -27546,9 +28913,21 @@ def tool_program_revise(args: dict[str, Any]) -> dict[str, Any]:
             "Revised program contract does not satisfy policy: "
             + ", ".join(item["id"] for item in policy_gaps)
         )
+    project_intelligence = _prepare_project_intelligence(
+        project_path,
+        goal=str(enriched_args.get("goal") or prior_status.get("goal") or ""),
+        workflow_mode="jstack-loop",
+        changed_paths=_project_intelligence_changed_paths(project_path),
+        index_receipt=args.get("graph_index_receipt"),
+        auto_index=True,
+    )
     attestation = _verified_program_readiness_attestation(
         args.get("program_readiness_receipt"), subject
     )
+    if attestation.get("projectIntelligence") != project_intelligence["contract"]:
+        raise ToolError(
+            "The revised program-readiness receipt and project-intelligence binding do not match."
+        )
     result = _program_call(
         lambda: service.revise(
             program_id,
@@ -27565,7 +28944,9 @@ def tool_program_revise(args: dict[str, Any]) -> dict[str, Any]:
             operation_id=operation_id,
         )
     )
-    return _program_status_integrity(project_path, result)
+    result = _program_status_integrity(project_path, result)
+    result["projectIntelligencePreparation"] = project_intelligence
+    return result
 
 
 def tool_program_cancel(args: dict[str, Any]) -> dict[str, Any]:
@@ -27611,10 +28992,13 @@ def tool_program_finalize(args: dict[str, Any]) -> dict[str, Any]:
         "baselineCommit": status["baselineCommit"],
         "goal": status.get("goal"),
         "acceptanceCriteria": status["finalAcceptanceCriteria"],
+        "programReadiness": status.get("programReadiness"),
     }
     if isinstance(status.get("uiContract"), dict):
         pseudo_loop["uiContract"] = status["uiContract"]
-    context = _loop_iteration_evidence(project_path, pseudo_loop, args)
+    context = _loop_iteration_evidence(
+        project_path, pseudo_loop, args, final=True
+    )
     criteria = loop_core.LoopService._evaluate_criteria(
         pseudo_loop,
         {"completionApprovals": {}},
@@ -27674,6 +29058,9 @@ def tool_program_finalize(args: dict[str, Any]) -> dict[str, Any]:
             "completionEvidenceDigest": proof.get("evidenceDigest"),
             "latestEventHash": result["latestEventHash"],
             "phaseProofDigests": proof.get("phaseProofDigests"),
+            "graphFinalizationReceiptDigest": (
+                context["evidence"].get("projectIntelligence") or {}
+            ).get("receiptDigest"),
             "passed": True,
         }
     if ui_bound:
@@ -27846,6 +29233,16 @@ LOOP_EVIDENCE_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "maxLength": UI_RECEIPT_MAX_CHARS,
         "description": "A current candidate-bound receipt from jstack_ui_finalize. It satisfies only a dedicated ui criterion and never substitutes for QA, audit, security, launch, or human evidence.",
+    },
+    "graph_refresh_receipt": {
+        "type": "string",
+        "maxLength": LOOP_MAX_RECEIPT_CHARS,
+        "description": "Current jstack_graph_refresh receipt for a changed-code checkpoint. It must descend from the immutable graph index bound at readiness.",
+    },
+    "graph_finalization_receipt": {
+        "type": "string",
+        "maxLength": LOOP_MAX_RECEIPT_CHARS,
+        "description": "Current passing jstack_graph_finalize receipt for the exact completion candidate and immutable baseline graph binding.",
     },
     "audit_receipts": {
         "type": "array",
@@ -28309,6 +29706,11 @@ PROGRAM_CONTRACT_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "maxLength": UI_RECEIPT_MAX_CHARS,
         "description": "Opaque receipt returned by jstack_ui_contract for this exact program baseline and policy state.",
+    },
+    "graph_index_receipt": {
+        "type": "string",
+        "maxLength": LOOP_MAX_RECEIPT_CHARS,
+        "description": "Optional current jstack_graph_index receipt. When omitted, mandatory project intelligence is indexed automatically during readiness/start.",
     },
     "revision_approval_reference": {"type": "string", "maxLength": 500},
 }
@@ -29022,6 +30424,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "maxLength": UI_RECEIPT_MAX_CHARS,
                     "description": "Optional clean-baseline receipt from jstack_ui_contract. Supplying it creates an explicit loop contract v2 and requires a ui acceptance criterion.",
                 },
+                "graph_index_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                    "description": "Optional current jstack_graph_index receipt; mandatory baselines are indexed automatically when omitted.",
+                },
                 "mode_approval_reference": {"type": "string"},
                 "autonomy_approval_reference": {"type": "string"},
                 "risk_approval_reference": {"type": "string"},
@@ -29084,6 +30491,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "maxLength": UI_RECEIPT_MAX_CHARS,
                     "description": "The same Product Interface baseline receipt bound into goal readiness for a UI loop.",
+                },
+                "graph_index_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                    "description": "The same project-intelligence baseline receipt used during readiness, or omit it to reuse the exact immutable current snapshot automatically.",
                 },
                 "mode_approval_reference": {"type": "string"},
                 "autonomy_approval_reference": {"type": "string"},
@@ -29161,6 +30573,10 @@ TOOLS: dict[str, dict[str, Any]] = {
                 "token_budget": {"type": "integer", "minimum": 1},
                 "goal_context": LOOP_GOAL_CONTEXT_SCHEMA,
                 "goal_readiness_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                },
+                "graph_index_receipt": {
                     "type": "string",
                     "maxLength": LOOP_MAX_RECEIPT_CHARS,
                 },
@@ -29641,6 +31057,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "maximum": 300,
                     "default": 120,
                 },
+                "graph_index_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                    "description": "Optional current jstack_graph_index receipt. When omitted, mandatory read-only audit project intelligence is indexed automatically.",
+                },
             },
         },
         "handler": tool_audit,
@@ -30031,6 +31452,11 @@ TOOLS: dict[str, dict[str, Any]] = {
                     "maxLength": UI_RECEIPT_MAX_CHARS,
                     "description": "Current jstack_ui_finalize receipt; required automatically when repository evidence shows UI changes in the release delta.",
                 },
+                "graph_finalization_receipt": {
+                    "type": "string",
+                    "maxLength": LOOP_MAX_RECEIPT_CHARS,
+                    "description": "Current jstack_graph_finalize receipt; required automatically for a material release delta and bound to the exact candidate and changed-path set.",
+                },
             },
         },
         "handler": tool_release_readiness,
@@ -30065,10 +31491,207 @@ for _name, _meta in list(TOOLS.items()):
             TOOLS[_alias] = _alias_meta
 
 
-# Product Interface tools are intentionally canonical-only. The frozen 52
+# Post-v0.10 canonical tools are intentionally JStack-only. The frozen 52
 # gstack_* aliases remain byte-compatible while the live JStack surface grows.
 TOOLS.update(
     {
+        "jstack_graph_index": {
+            "description": "Classify project-intelligence applicability and, when applicable, run the pinned managed Graphify runtime in local AST-only mode. The graph and provider-native HTML stay under private ~/.jstack storage and the receipt binds the exact Git tree, dirty fingerprint, JStack policy, provider catalog, and graph digest. No hosted service, model API, skill installer, hook, listener, repository instruction, source write, or Git write is used.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["project_path", "goal", "workflow_mode"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "goal": {"type": "string", "minLength": 1, "maxLength": 20000},
+                    "base_ref": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "description": "Optional exact comparison base for committed task or release deltas. Omit to bind the starting HEAD for normal in-progress work.",
+                    },
+                    "workflow_mode": {
+                        "type": "string",
+                        "enum": [
+                            "j-stack-dev",
+                            "jstack-audit",
+                            "jstack-full-team",
+                            "jstack-loop",
+                            "jstack-subagents",
+                        ],
+                    },
+                    "scope_paths": {
+                        "type": "array",
+                        "maxItems": 5000,
+                        "uniqueItems": True,
+                        "items": {"type": "string", "minLength": 1, "maxLength": 2000},
+                        "description": "Optional anticipated task scope. Omit to use the exact current Git delta.",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["auto", "required", "off"],
+                        "default": "auto",
+                    },
+                    "visualize": {
+                        "type": "boolean",
+                        "description": "Generate Graphify's native private graph.html. Defaults on for mandatory material work.",
+                    },
+                },
+            },
+            "handler": tool_graph_index,
+            "readOnlyHint": False,
+        },
+        "jstack_graph_query": {
+            "description": "Query a current receipt-bound private Graphify graph through a deterministic bounded subgraph traversal. It returns source anchors and keeps inferred, ambiguous, and unanchored relationships advisory. Optional visualization uses Graphify's native static HTML exporter in private JStack storage.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["project_path", "index_receipt", "question"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "index_receipt": {"type": "string", "maxLength": 250000},
+                    "question": {"type": "string", "minLength": 1, "maxLength": 20000},
+                    "max_nodes": {"type": "integer", "minimum": 1, "maximum": 500, "default": 120},
+                    "max_edges": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 240},
+                    "depth": {"type": "integer", "minimum": 0, "maximum": 5, "default": 2},
+                    "visualize": {"type": "boolean", "default": True},
+                },
+            },
+            "handler": tool_graph_query,
+            "readOnlyHint": False,
+        },
+        "jstack_graph_impact": {
+            "description": "Produce a bounded pre-change Graphify impact view for an exact goal and path scope. Only source-anchored EXTRACTED edges are labeled strong evidence; every inferred, ambiguous, or unanchored relationship remains advisory and must be verified in source.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["project_path", "index_receipt", "goal"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "index_receipt": {"type": "string", "maxLength": 250000},
+                    "goal": {"type": "string", "minLength": 1, "maxLength": 20000},
+                    "changed_paths": {
+                        "type": "array",
+                        "maxItems": 5000,
+                        "uniqueItems": True,
+                        "items": {"type": "string", "minLength": 1, "maxLength": 2000},
+                    },
+                    "max_nodes": {"type": "integer", "minimum": 1, "maximum": 500, "default": 160},
+                    "max_edges": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 320},
+                    "depth": {"type": "integer", "minimum": 0, "maximum": 5, "default": 2},
+                    "visualize": {"type": "boolean", "default": True},
+                },
+            },
+            "handler": tool_graph_impact,
+            "readOnlyHint": False,
+        },
+        "jstack_graph_refresh": {
+            "description": "Explicitly refresh the private Graphify AST graph after source edits, produce a before/after delta, regenerate provider-native HTML, and issue an exact candidate-bound receipt. JStack does not install or depend on Git hooks for refresh.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["project_path", "index_receipt"],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "index_receipt": {"type": "string", "maxLength": 250000},
+                    "impact_receipt": {"type": "string", "maxLength": 250000},
+                    "visualize": {"type": "boolean", "default": True},
+                },
+            },
+            "handler": tool_graph_refresh,
+            "readOnlyHint": False,
+        },
+        "jstack_graph_finalize": {
+            "description": "Fail-closed project-intelligence finalization for the exact current repository state. It verifies the baseline impact, refreshed graph, Git/policy/provider bindings, exact changed paths, direct current source reads, graph source coverage, test evidence, independent review, unresolved findings, and that every claimed strong graph edge is source-anchored EXTRACTED evidence.",
+            "inputSchema": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "project_path",
+                    "index_receipt",
+                    "impact_receipt",
+                    "refresh_receipt",
+                    "evidence",
+                ],
+                "properties": {
+                    "project_path": {"type": "string"},
+                    "index_receipt": {"type": "string", "maxLength": 250000},
+                    "impact_receipt": {"type": "string", "maxLength": 250000},
+                    "refresh_receipt": {"type": "string", "maxLength": 250000},
+                    "evidence": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "changed_paths",
+                            "source_reads",
+                            "tests",
+                            "review",
+                            "graph_evidence_edge_ids",
+                            "unresolved_findings",
+                        ],
+                        "properties": {
+                            "changed_paths": {
+                                "type": "array",
+                                "maxItems": 5000,
+                                "uniqueItems": True,
+                                "items": {"type": "string", "minLength": 1, "maxLength": 2000},
+                            },
+                            "source_reads": {
+                                "type": "array",
+                                "maxItems": 5000,
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["path", "sha256"],
+                                    "properties": {
+                                        "path": {"type": "string", "minLength": 1, "maxLength": 2000},
+                                        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                                    },
+                                },
+                            },
+                            "tests": {
+                                "type": "array",
+                                "maxItems": 200,
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "required": ["name", "status", "evidence_sha256", "justification"],
+                                    "properties": {
+                                        "name": {"type": "string", "minLength": 1, "maxLength": 500},
+                                        "status": {"type": "string", "enum": ["pass", "fail", "blocked", "not-applicable"]},
+                                        "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                                        "justification": {"type": "string", "minLength": 1, "maxLength": 2000},
+                                    },
+                                },
+                            },
+                            "review": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["status", "reviewer", "evidence_sha256"],
+                                "properties": {
+                                    "status": {"type": "string", "enum": ["pass", "fail", "blocked"]},
+                                    "reviewer": {"type": "string", "minLength": 1, "maxLength": 200},
+                                    "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                                },
+                            },
+                            "graph_evidence_edge_ids": {
+                                "type": "array",
+                                "maxItems": 500,
+                                "uniqueItems": True,
+                                "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                            },
+                            "unresolved_findings": {
+                                "type": "array",
+                                "maxItems": 100,
+                                "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+                            },
+                        },
+                    },
+                },
+            },
+            "handler": tool_graph_finalize,
+            "readOnlyHint": True,
+        },
         "jstack_prompt_compile": {
             "description": "Compile a raw request through JStack's deterministic two-stage Prompt Compiler. Stage intent runs before repository inspection and returns only normalized intent plus a digest-bound receipt. Stage grounded binds source-labelled repository context, task mode, authority, requirements, acceptance evidence, and a rendered Codex prompt to current project and policy state. A context-ready first call returns the complete prompt plus a preview receipt but no planning receipt; after the user explicitly approves that exact displayed prompt, repeat Stage grounded with prompt_approval and the preview receipt to unlock planning. The tool performs no model call, project edit, side-effecting command, Git mutation, external action, release, deployment, or production mutation.",
             "inputSchema": {

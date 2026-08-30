@@ -23,6 +23,19 @@ side-effecting tools, call
 raw_request=exact_user_request)`. Preserve the exact Stage A contract and
 receipt; they grant no execution authority or additional staffing authority.
 
+Project Intelligence is mandatory for supported Full Team code work. The Lead
+requires the signed Team Plan's exact `projectIntelligence` binding before
+dispatch, opens the private Graphify-native graph for the user, and uses
+bounded query/impact subgraphs to route source-backed discovery, implementation,
+and assurance scopes. Physical agents receive only their relevant nodes,
+relationships, and direct source anchors. Only source-anchored `EXTRACTED`
+edges are strong evidence; inferred, ambiguous, and unanchored relationships
+must be checked in source. After the one writer integrates the candidate, the
+Lead refreshes the graph and requires exact source, test, independent-review,
+and unresolved-finding finalization before synthesis or release. Missing or
+stale mandatory graph evidence blocks the team rather than reducing coverage
+or falling back silently.
+
 Operating rules:
 
 1. The Lead Engineer owns final scope, synthesis, implementation decisions, verification, and handoff.

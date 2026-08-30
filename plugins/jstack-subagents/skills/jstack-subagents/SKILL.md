@@ -27,6 +27,18 @@ side-effecting tools, call
 raw_request=exact_user_request)`. Preserve the exact Stage A contract and
 receipt; they grant no execution authority or additional staffing authority.
 
+Project Intelligence is mandatory for supported specialist-team code work.
+Before broad reading or dispatch, require the Team Plan's exact
+`projectIntelligence` binding, open its private Graphify-native graph for the
+user, and use bounded graph query/impact results to divide source-backed
+assignments. Give agents only the relevant bounded subgraph and source anchors,
+not the complete graph. Only source-anchored `EXTRACTED` edges are strong;
+every inferred, ambiguous, or unanchored relationship must be verified in
+source. After the single writer finishes, the Lead refreshes the graph and
+finalizes exact source/test/review evidence before handoff or release. Missing
+mandatory provider or receipt evidence stops dispatch; it never triggers a
+silent single-agent fallback.
+
 Before dispatch, require the exact signed `unifiedTeamPlan` and returned
 `jstack.team-coordination.v2` packet. They bind the physical agents, logical
 specialists, canonical roles, scopes, independence, evidence, and stop rules.

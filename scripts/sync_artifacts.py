@@ -72,6 +72,11 @@ for source in sorted((ROOT / "mcp" / "jstack" / "prompt_compiler").rglob("*")):
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "prompt_compiler")
         FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "prompt_compiler" / relative]
 
+for source in sorted((ROOT / "mcp" / "jstack" / "project_intelligence").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "mcp" / "jstack" / "project_intelligence")
+        FILE_MAP[source] = [ROOT / "plugin" / "mcp" / "project_intelligence" / relative]
+
 for source in sorted((ROOT / "mcp" / "jstack" / "providers").rglob("*")):
     if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
         relative = source.relative_to(ROOT / "mcp" / "jstack" / "providers")
@@ -196,6 +201,10 @@ TREE_MIRRORS = (
     (
         ROOT / "mcp" / "jstack" / "prompt_compiler",
         ROOT / "plugin" / "mcp" / "prompt_compiler",
+    ),
+    (
+        ROOT / "mcp" / "jstack" / "project_intelligence",
+        ROOT / "plugin" / "mcp" / "project_intelligence",
     ),
     (
         ROOT / "mcp" / "jstack" / "providers",
