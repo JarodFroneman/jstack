@@ -545,7 +545,9 @@ class ProjectIntelligenceTests(unittest.TestCase):
         )
         self.assertEqual("required", indexed["applicability"]["state"])
         self.assertIsNotNone(indexed["indexReceipt"])
-        self.assertIn(".jstack/project-intelligence", indexed["snapshot"]["graphPath"])
+        Path(indexed["snapshot"]["graphPath"]).resolve().relative_to(
+            (self.home / ".jstack" / "project-intelligence").resolve()
+        )
         impact = server.tool_graph_impact(
             {
                 "project_path": str(self.repo),
