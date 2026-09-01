@@ -15,13 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = {
     "j-stack-dev.md",
     "jstack-audit.md",
+    "jstack-cso.md",
     "jstack-evidence-builder.md",
     "jstack-full-team.md",
     "jstack-loop.md",
     "jstack-subagents.md",
 }
 PLUGIN_NAMES = {
-    "j-stack-dev", "jstack-audit", "jstack-evidence-builder",
+    "j-stack-dev", "jstack-audit", "jstack-cso", "jstack-evidence-builder",
     "jstack-full-team", "jstack-loop", "jstack-subagents",
 }
 ROLES = {
@@ -191,10 +192,10 @@ def check_boundaries() -> list[str]:
     errors: list[str] = []
     prompt_names = {path.name for path in (ROOT / "prompts").glob("*.md")}
     if prompt_names != COMMANDS:
-        errors.append("JStack must expose exactly the six named command prompts")
+        errors.append("JStack must expose exactly the seven named command prompts")
     plugin_names = {path.name for path in (ROOT / "plugins").iterdir() if path.is_dir()}
     if plugin_names != PLUGIN_NAMES:
-        errors.append("JStack must retain exactly the six dedicated command plugins")
+        errors.append("JStack must retain exactly the seven dedicated command plugins")
 
     server = _load_module("jstack_boundary_server", ROOT / "mcp" / "jstack" / "jstack_mcp_server.py")
     canonical = {name for name in server.TOOLS if name.startswith("jstack_")}
@@ -291,7 +292,7 @@ def main() -> int:
         sys.stderr.write("\n".join(errors) + "\n")
         return 1
     print(
-        "JStack product boundaries are intact: six commands, 65 canonical tools, "
+        "JStack product boundaries are intact: seven commands, 65 canonical tools, "
         "52 frozen aliases, stdlib core, no packaged Proof Plane authority."
     )
     return 0

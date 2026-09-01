@@ -134,6 +134,8 @@ class ActionSafetyTests(unittest.TestCase):
             for path in workflow_root.rglob("*"):
                 if not path.is_file():
                     continue
+                if "__pycache__" in path.parts:
+                    continue
                 content = path.read_text(encoding="utf-8")
                 for phrase in retired_phrases:
                     with self.subTest(path=path, phrase=phrase):

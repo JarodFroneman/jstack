@@ -1,6 +1,6 @@
 {
   "name": "jstack-evidence-builder",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Top-level JStack command for prompt-compiled private screenshot and URL reference bundles before UI implementation.",
   "author": {
     "name": "Jarod Froneman",

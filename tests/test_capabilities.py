@@ -224,7 +224,7 @@ class CapabilityRegistryTests(unittest.TestCase):
                 ["accessibility-assurance"],
             )
 
-    def test_distribution_keeps_six_commands_and_publishes_tools_schemas_and_notice(self) -> None:
+    def test_distribution_keeps_seven_commands_and_publishes_tools_schemas_and_notice(self) -> None:
         tool_names = {item["name"] for item in server.tool_definitions()}
         self.assertTrue(
             {
@@ -233,7 +233,9 @@ class CapabilityRegistryTests(unittest.TestCase):
                 "jstack_specialist_handoff_check",
             }.issubset(tool_names)
         )
-        self.assertEqual(6, len(list((ROOT / "prompts").glob("*.md"))))
+        self.assertEqual(7, len(list((ROOT / "prompts").glob("*.md"))))
+        self.assertTrue((ROOT / "prompts" / "jstack-cso.md").is_file())
+        self.assertTrue((ROOT / "skills" / "jstack-cso" / "SKILL.md").is_file())
         umbrella_mcp = json.loads(
             (ROOT / "plugin" / ".mcp.json").read_text(encoding="utf-8")
         )

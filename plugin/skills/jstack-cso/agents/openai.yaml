@@ -1,0 +1,4 @@
+interface:
+  display_name: "JStack CSO"
+  short_description: "Enterprise application and AI security audits"
+  default_prompt: "Use $jstack-cso to run a read-only enterprise CSO audit of this repository."

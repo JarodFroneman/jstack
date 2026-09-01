@@ -27,13 +27,13 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **v0.12.0 stable release boundary:** install `v0.12.0` only from its exact
+> **v0.13.0 stable release boundary:** install `v0.13.0` only from its exact
 > immutable annotated GitHub release tag, retain the complete
-> `v0.11.0` installation as one rollback unit, and verify the installed
+> `v0.12.0` installation as one rollback unit, and verify the installed
 > bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
 > unvalidated. Stage 19 also remains `NOT_MEASURED`; its 168-cell comparative
-> study has not run. Installing v0.12.0 does not satisfy either deferred study
+> study has not run. Installing v0.13.0 does not satisfy either deferred study
 > or any project-specific independent review. Receipts validate bounded
 > contracts and declared evidence only; they do not certify prompt-quality
 > uplift, producer honesty, graph completeness, semantic correctness,
@@ -53,10 +53,10 @@ presented as complete workflow parity.
 
 ## Prompt Compiler mode
 
-v0.12.0 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
+v0.13.0 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
 values are `shadow`, `preview`, and `disabled`; use `disabled` only as a bounded
 compatibility rollback while investigating an integration issue. Mode changes
-invalidate existing readiness and compilation receipts. The six packaged
+invalidate existing readiness and compilation receipts. The seven packaged
 commands perform Stage A before repository inspection and Stage B after
 read-only grounding. A context-ready Stage B preview must be shown in full and
 explicitly approved before the MCP issues planning receipts. Receipt and prompt
@@ -148,8 +148,9 @@ To restore manually, first stop Codex and every process that may still hold a
 JStack file open, then archive the current target. Move the numbered recovery
 entry back to the matching target only while that target is absent:
 `prompt-<name>` maps to `prompts/<name>`; `jstack-dev-skill`,
-`jstack-audit-skill`, `jstack-loop-skill`, `product-ui-design`, and
-`jstack-mcp` map to their same-named installed skill or MCP directories;
+`jstack-audit-skill`, `jstack-cso-skill`, `jstack-loop-skill`,
+`jstack-evidence-builder-skill`, `product-ui-design`, and `jstack-mcp` map to
+their same-named installed skill or MCP directories;
 `config.toml`, `config-backup`, and `AGENTS.md` map to the corresponding
 `CODEX_HOME` files. Preserve the recovery set if any mapping or live state is
 uncertain.
@@ -166,7 +167,7 @@ rerunning Layout A.
 ### Optional Graphify Project Intelligence runtime
 
 JStack's Project Intelligence protocol is built into the existing workflows,
-not installed as a skill or seventh command. Its external local-AST provider is
+not installed as a skill or standalone command. Its external local-AST provider is
 deliberately opt-in so the ordinary installer does not download Graphify or its
 dependencies:
 
@@ -206,12 +207,13 @@ runtime and evidence boundary.
 
 ## Codex Layout B: Dedicated Command Plugins
 
-This layout provides six clean command surfaces:
+This layout provides seven clean command surfaces:
 
 - `j-stack-dev`
 - `jstack-subagents`
 - `jstack-full-team`
 - `jstack-audit`
+- `jstack-cso`
 - `jstack-loop`
 - `jstack-evidence-builder`
 
@@ -223,7 +225,7 @@ Evidence Builder preprocessing command.
 
 ### 1. Register A Local Marketplace
 
-Register the six directories under `plugins/` in a local Codex marketplace.
+Register the seven directories under `plugins/` in a local Codex marketplace.
 Each marketplace source must resolve to the corresponding plugin directory in
 this clone. Then install:
 
@@ -232,6 +234,7 @@ codex plugin add j-stack-dev@personal
 codex plugin add jstack-subagents@personal
 codex plugin add jstack-full-team@personal
 codex plugin add jstack-audit@personal
+codex plugin add jstack-cso@personal
 codex plugin add jstack-loop@personal
 codex plugin add jstack-evidence-builder@personal
 ```
@@ -301,10 +304,10 @@ accept risk, commit, publish, release, deploy, or access production.
 ### 3. Keep The Umbrella Plugin Uninstalled
 
 The `plugin/` directory is an alternative all-in-one distribution. Installing
-it alongside the six dedicated plugins creates duplicate command surfaces.
+it alongside the seven dedicated plugins creates duplicate command surfaces.
 Use either:
 
-- the six dedicated plugins plus one shared MCP server; or
+- the seven dedicated plugins plus one shared MCP server; or
 - the umbrella plugin by itself.
 
 Do not add a direct `CODEX_HOME/skills/product-ui-design` copy while either the
@@ -408,7 +411,7 @@ Then open Claude Code, run `/mcp`, and confirm that the `jstack_*` tools are
 available. Start with `jstack_runtime_status` and `jstack_detect_project`.
 
 This preview exposes the control-plane tools, but it does not install JStack's
-six Codex command plugins. The current loop skill also composes continuation
+seven Codex command plugins. The current loop skill also composes continuation
 with Codex Goal mode; Claude operators must supervise continuation manually
 until a Claude-native adapter and its release tests ship. Do not interpret MCP
 connectivity as unattended execution or full host parity.
@@ -432,13 +435,13 @@ codex plugin list --marketplace personal
 
 Expected dedicated layout:
 
-- all six dedicated plugins are installed and enabled;
-- all six report the same release and cachebuster version;
+- all seven dedicated plugins are installed and enabled;
+- all seven report the same release and cachebuster version;
 - `jstack@personal` is not installed;
 - exactly one active `product-ui-design` skill is present through
   `j-stack-dev`, with no duplicate direct or umbrella copy;
 - the MCP initialize response reports the checked-out release (for this
-  release, `0.12.0`);
+  release, `0.13.0`);
 - `tools/list` includes 65 canonical `jstack_*` tools, including the
   canonical-only `jstack_prompt_compile`, `jstack_context_readiness`,
   `jstack_performance_capture`, and
@@ -462,10 +465,10 @@ Expected dedicated layout:
 6. Restart Codex and verify the installed version, tool inventory, hashes, and
    JSON-RPC smoke test.
 
-For `v0.12.0`, also confirm that GitHub marks the release as stable and that the
+For `v0.13.0`, also confirm that GitHub marks the release as stable and that the
 checked-out annotated tag resolves to the release commit before staging any
 global files. The rollback snapshot must contain the actual published
-`v0.11.0` installation as one coherent MCP, plugin-source,
+`v0.12.0` installation as one coherent MCP, plugin-source,
 plugin-cache, marketplace, and configuration unit.
 
 Do not delete `~/.jstack/loops/`, `~/.jstack/programs/`, or mastery state
@@ -492,7 +495,7 @@ environment settings from the MCP launcher after confirming the upgrade.
 ### Commands Appear Twice
 
 Confirm that the umbrella plugin and legacy direct prompt or skill artifacts
-are not active alongside the six dedicated plugins. Keep one distribution
+are not active alongside the seven dedicated plugins. Keep one distribution
 layout only, then restart Codex.
 
 ### MCP Tools Are Missing

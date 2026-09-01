@@ -26,6 +26,7 @@ WORKFLOW_MODES = (
     "jstack-subagents",
     "jstack-full-team",
     "jstack-audit",
+    "jstack-cso",
     "jstack-loop",
     "jstack-evidence-builder",
 )
@@ -424,7 +425,7 @@ def compile_intent(
     normalized = _clean(raw_request, MAX_NORMALIZED_GOAL_CHARS)
     task_mode, detected_modes = _task_mode(raw_request)
     authority = _authority(raw_request, task_mode)
-    if workflow_mode in {"jstack-audit", "jstack-evidence-builder"}:
+    if workflow_mode in {"jstack-audit", "jstack-cso", "jstack-evidence-builder"}:
         authority["repositoryWrite"] = False
         authority["authorizedActions"] = [
             action for action in authority["authorizedActions"] if action != "edit-files"

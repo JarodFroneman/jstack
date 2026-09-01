@@ -24,6 +24,7 @@ FILE_MAP = {
     ROOT / "prompts" / "jstack-subagents.md": [ROOT / "plugin" / "commands" / "jstack-subagents.md"],
     ROOT / "prompts" / "jstack-full-team.md": [ROOT / "plugin" / "commands" / "jstack-full-team.md"],
     ROOT / "prompts" / "jstack-audit.md": [ROOT / "plugin" / "commands" / "jstack-audit.md"],
+    ROOT / "prompts" / "jstack-cso.md": [ROOT / "plugin" / "commands" / "jstack-cso.md"],
     ROOT / "prompts" / "jstack-evidence-builder.md": [ROOT / "plugin" / "commands" / "jstack-evidence-builder.md"],
     ROOT / "prompts" / "jstack-loop.md": [ROOT / "plugin" / "commands" / "jstack-loop.md"],
     ROOT / "skills" / "jstack-dev" / "SKILL.md": [ROOT / "plugin" / "skills" / "jstack-dev" / "SKILL.md"],
@@ -143,6 +144,14 @@ for source in sorted((ROOT / "skills" / "jstack-audit").rglob("*")):
             ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit" / relative,
         ]
 
+for source in sorted((ROOT / "skills" / "jstack-cso").rglob("*")):
+    if source.is_file() and "__pycache__" not in source.parts and source.suffix != ".pyc":
+        relative = source.relative_to(ROOT / "skills" / "jstack-cso")
+        FILE_MAP[source] = [
+            ROOT / "plugin" / "skills" / "jstack-cso" / relative,
+            ROOT / "plugins" / "jstack-cso" / "skills" / "jstack-cso" / relative,
+        ]
+
 for source in sorted((ROOT / "skills" / "jstack-loop").rglob("*")):
     if source.is_file():
         relative = source.relative_to(ROOT / "skills" / "jstack-loop")
@@ -234,6 +243,11 @@ TREE_MIRRORS = (
     (
         ROOT / "skills" / "jstack-audit",
         ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit",
+    ),
+    (ROOT / "skills" / "jstack-cso", ROOT / "plugin" / "skills" / "jstack-cso"),
+    (
+        ROOT / "skills" / "jstack-cso",
+        ROOT / "plugins" / "jstack-cso" / "skills" / "jstack-cso",
     ),
     (ROOT / "skills" / "jstack-loop", ROOT / "plugin" / "skills" / "jstack-loop"),
     (

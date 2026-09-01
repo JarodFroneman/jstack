@@ -31,6 +31,7 @@ PROMPTS = (
     "jstack-subagents.md",
     "jstack-full-team.md",
     "jstack-audit.md",
+    "jstack-cso.md",
     "jstack-loop.md",
     "jstack-evidence-builder.md",
 )
@@ -3408,6 +3409,7 @@ def install(
     skills_root = codex_home / "skills"
     skill_dir = skills_root / "jstack-dev"
     audit_skill_dir = skills_root / "jstack-audit"
+    cso_skill_dir = skills_root / "jstack-cso"
     loop_skill_dir = skills_root / "jstack-loop"
     evidence_builder_skill_dir = skills_root / "jstack-evidence-builder"
     product_ui_skill_dir = skills_root / PRODUCT_UI_SKILL
@@ -3425,6 +3427,7 @@ def install(
         skills_root,
         skill_dir,
         audit_skill_dir,
+        cso_skill_dir,
         loop_skill_dir,
         evidence_builder_skill_dir,
         product_ui_skill_dir,
@@ -3517,6 +3520,11 @@ def install(
         label="jstack-audit skill",
         validate_windows_acl=True,
     )
+    cso_skill_preimage = _inspect_install_tree(
+        cso_skill_dir,
+        label="jstack-cso skill",
+        validate_windows_acl=True,
+    )
     loop_skill_preimage = _inspect_install_tree(
         loop_skill_dir,
         label="jstack-loop skill",
@@ -3560,6 +3568,10 @@ def install(
             "jstack-audit-skill",
             repo_root / "skills" / "jstack-audit",
         )
+        staged_cso_skill = transaction.stage_tree(
+            "jstack-cso-skill",
+            repo_root / "skills" / "jstack-cso",
+        )
         staged_loop_skill = transaction.stage_tree(
             "jstack-loop-skill",
             repo_root / "skills" / "jstack-loop",
@@ -3594,6 +3606,7 @@ def install(
         *(prompts_dir / prompt for prompt in PROMPTS),
         skill_dir,
         audit_skill_dir,
+        cso_skill_dir,
         loop_skill_dir,
         evidence_builder_skill_dir,
         product_ui_skill_dir,
@@ -3618,6 +3631,7 @@ def install(
     tree_preimages = {
         skill_dir: skill_preimage,
         audit_skill_dir: audit_skill_preimage,
+        cso_skill_dir: cso_skill_preimage,
         loop_skill_dir: loop_skill_preimage,
         evidence_builder_skill_dir: evidence_builder_skill_preimage,
         product_ui_skill_dir: product_ui_preimage,
@@ -3693,6 +3707,13 @@ def install(
                 audit_skill_preimage,
                 "jstack-audit skill",
                 "jstack-audit-skill",
+            ),
+            (
+                staged_cso_skill,
+                cso_skill_dir,
+                cso_skill_preimage,
+                "jstack-cso skill",
+                "jstack-cso-skill",
             ),
             (
                 staged_loop_skill,
@@ -3832,6 +3853,7 @@ def install(
         "promptsDir": prompts_dir,
         "skillDir": skill_dir,
         "auditSkillDir": audit_skill_dir,
+        "csoSkillDir": cso_skill_dir,
         "loopSkillDir": loop_skill_dir,
         "evidenceBuilderSkillDir": evidence_builder_skill_dir,
         "productUiSkillDir": product_ui_skill_dir,
@@ -3883,6 +3905,7 @@ def main() -> int:
     prompts_dir = outcome["promptsDir"]
     skill_dir = outcome["skillDir"]
     audit_skill_dir = outcome["auditSkillDir"]
+    cso_skill_dir = outcome["csoSkillDir"]
     loop_skill_dir = outcome["loopSkillDir"]
     evidence_builder_skill_dir = outcome["evidenceBuilderSkillDir"]
     product_ui_skill_dir = outcome["productUiSkillDir"]
@@ -3899,6 +3922,7 @@ def main() -> int:
         print(f"  - {prompts_dir / prompt}")
     print(f"Installed jstack-dev skill to {skill_dir}")
     print(f"Installed jstack-audit skill to {audit_skill_dir}")
+    print(f"Installed jstack-cso skill to {cso_skill_dir}")
     print(f"Installed jstack-loop skill to {loop_skill_dir}")
     print(f"Installed jstack-evidence-builder skill to {evidence_builder_skill_dir}")
     print(f"Installed product-ui-design skill to {product_ui_skill_dir}")

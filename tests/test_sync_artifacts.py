@@ -100,6 +100,29 @@ class ProductInterfaceSyncTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(set(sync_artifacts.TREE_MIRRORS)))
 
+    def test_jstack_cso_has_exact_canonical_packaged_mirrors(self) -> None:
+        source_root = ROOT / "skills" / "jstack-cso"
+        destinations = (
+            ROOT / "plugin" / "skills" / "jstack-cso",
+            ROOT / "plugins" / "jstack-cso" / "skills" / "jstack-cso",
+        )
+        sources = {
+            path
+            for path in source_root.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        }
+        self.assertTrue(sources)
+        for source in sources:
+            relative = source.relative_to(source_root)
+            self.assertEqual(
+                [destination / relative for destination in destinations],
+                sync_artifacts.FILE_MAP[source],
+            )
+            for destination in destinations:
+                self.assertEqual(source.read_bytes(), (destination / relative).read_bytes())
+        for destination in destinations:
+            self.assertIn((source_root, destination), sync_artifacts.TREE_MIRRORS)
+
     def test_browser_provider_tree_is_a_closed_plugin_mirror(self) -> None:
         provider_root = ROOT / "mcp" / "jstack" / "providers"
         provider_sources = {

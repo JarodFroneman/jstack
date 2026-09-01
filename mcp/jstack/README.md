@@ -187,7 +187,7 @@ context and validate evidence only. They do not replace source reads, tests,
 scanners, audit, review, or human judgment and authorize no action.
 
 Prompt Compiler `1.1.0` / execution template v2 renders the same professional
-prompt-engineering standard for all six workflows and adds a policy-traced
+prompt-engineering standard for all seven workflows and adds a policy-traced
 secure-development baseline only to authorized implementation/fix work or
 explicit plan-only creation of new software or a development workspace. The
 baseline uses existing JStack security capabilities proportionately, cannot

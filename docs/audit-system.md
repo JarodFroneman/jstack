@@ -6,6 +6,15 @@
 security, reliability, architecture, performance, supply-chain, testability,
 operations, data-integrity, and API compatibility review.
 
+`jstack-cso` is the enterprise application and AI security specialization of
+that same audit system. It preserves the same read-only authority and final
+Audit receipt boundary while adding browser-delivery inventory, redacted secret
+collection, API-minimization and authorization tracing, proprietary-logic and
+reverse-engineering assessment, AI prompt-injection review, scanner
+self-protection, abuse detection, and incident-readiness evidence. It reuses
+the existing `chief-security-officer` specialist and does not introduce a
+second security kernel.
+
 It separates two responsibilities:
 
 - the command agent performs semantic review, generates candidates, and tries
@@ -25,6 +34,15 @@ $jstack-audit [scope] [options]                  # umbrella or legacy skill
 $jstack-audit:jstack-audit [scope] [options]     # dedicated plugin
 /prompts:jstack-audit [scope] [options]
 ~~~
+
+The matching CSO forms are `$jstack-cso` in the umbrella plugin and
+`$jstack-cso:jstack-cso` in the dedicated plugin. Its modes include the default
+daily full scan, comprehensive, infrastructure, code, application security,
+skills, diff, supply-chain, OWASP, and bounded focused scope. Reports are
+written only when explicitly requested beneath `.jstack/security-reports/`,
+using owner-private permissions and redacted values. The bundled writer
+validates before creation, refuses overwrite, and fails closed for saved-report
+writes on non-POSIX hosts in this release; analysis can still run read-only.
 
 `/jstack-audit` is the intended palette label, but palette rendering is
 client-dependent and requires an installed-client restart test before it is

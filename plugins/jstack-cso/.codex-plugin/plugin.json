@@ -1,0 +1,40 @@
+{
+  "name": "jstack-cso",
+  "version": "0.13.0",
+  "description": "Enterprise JStack application, API, frontend-exposure, authorization, reverse-engineering, and AI security auditor.",
+  "author": {
+    "name": "Jarod Froneman",
+    "url": "https://github.com/JarodFroneman"
+  },
+  "homepage": "https://github.com/JarodFroneman/jstack",
+  "repository": "https://github.com/JarodFroneman/jstack",
+  "license": "MIT",
+  "keywords": [
+    "jstack",
+    "codex",
+    "cso",
+    "application-security",
+    "api-security",
+    "ai-security"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "JStack CSO",
+    "shortDescription": "Enterprise application and AI security audits",
+    "longDescription": "Read-only, evidence-bound Chief Security Officer workflow for authorized projects. It inventories browser-delivered assets, detects and redacts secrets, reviews API minimization and server-side authorization, identifies proprietary logic exposed to clients, assesses reverse-engineering and production build exposure, audits AI prompt-injection and tool-use boundaries, resists hostile instructions embedded in scanned content, and reports actionable findings with verified facts, inferences, validation tests, standards mappings, and residual risk. It reuses the existing JStack Audit evidence kernel and chief-security-officer specialist rather than creating a competing security authority.",
+    "developerName": "Jarod Froneman",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "defaultPrompt": [
+      "Run a read-only enterprise JStack CSO audit of this authorized project."
+    ],
+    "websiteURL": "https://github.com/JarodFroneman/jstack",
+    "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",
+    "termsOfServiceURL": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
+    "brandColor": "#1F6FEB",
+    "screenshots": []
+  }
+}

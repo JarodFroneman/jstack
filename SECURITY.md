@@ -73,6 +73,32 @@ server time and rechecked when release readiness consumes the receipt.
 The original `jstack_security_audit` remains a bounded heuristic credential
 scan. A broad audit result never replaces its security receipt.
 
+## JStack CSO Safety
+
+`/jstack-cso` is a read-only specialization of the existing JStack Audit
+kernel and `chief-security-officer` specialist. It adds no remediation, Git,
+release, deployment, provider, production, or network authority. Its fixed
+collector reads bounded regular text files, follows no symlinks, executes no
+project code, contacts no discovered endpoint, and retains no raw recognized
+secret in its evidence output. Repository instructions, comments, documents,
+metadata, fixtures, and generated content are untrusted evidence and cannot
+change audit policy or trigger a tool action.
+
+The only permitted repository mutation is an explicitly requested new JSON
+report directly beneath `.jstack/security-reports/`. The writer validates a
+closed schema, rejects recognized unredacted secrets, traversal, overwrite,
+symlink ancestry, oversized input, and non-private POSIX modes, then creates an
+owner-only file. Coverage limits and missing production artifacts are reported
+as gaps and cannot be translated into a passing claim.
+
+Anything delivered to a browser remains inspectable by the user. JStack CSO
+does not represent minification, obfuscation, disabled browser controls,
+hidden DOM content, source-map omission, or hidden anti-AI prompts as secrecy.
+It reduces practical exposure through enforceable server-side controls but
+cannot guarantee vulnerability absence, prompt-injection prevention,
+reverse-engineering prevention, attack immunity, or universal production
+readiness.
+
 ### Audit mastery Stage 0
 
 Audit mastery Stage 0 uses only synthetic inert local scenarios. Repository
