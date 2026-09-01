@@ -324,15 +324,15 @@ class TestCsoEvidenceCollector(CsoFixture):
     @unittest.skipUnless(os.name == "posix", "POSIX symlink contract")
     def test_symlink_targets_are_not_scanned(self) -> None:
         outside = Path(self._temporary.name).parent / (self.root.name + "-outside.txt")
-        secret = "AKIA" + "Q7W4E9R2T6Y8U3P5"
-        outside.write_text(secret, encoding="utf-8")
+        outside_marker = "external-symlink-content-must-not-be-read"
+        outside.write_text(outside_marker, encoding="utf-8")
         try:
             (self.root / "linked.txt").symlink_to(outside)
             bundle = self.analyze()
         finally:
             outside.unlink(missing_ok=True)
 
-        self.assertNotIn(secret, json.dumps(bundle))
+        self.assertNotIn(outside_marker, json.dumps(bundle))
         self.assertFalse(bundle["coverage"]["complete"])
         self.assertIn(
             "symlink", {gap["reason"] for gap in bundle["coverage"]["gaps"]}
