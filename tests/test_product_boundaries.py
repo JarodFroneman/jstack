@@ -32,7 +32,7 @@ class ProductBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(set(fixture["legacyAliases"]), aliases)
         self.assertFalse(any(name.startswith("gstack_ui_") for name in aliases))
-        self.assertEqual(6, len(COMMANDS))
+        self.assertEqual(7, len(COMMANDS))
         self.assertEqual(11, len(ROLES))
         self.assertEqual(18, len(CAPABILITIES))
 

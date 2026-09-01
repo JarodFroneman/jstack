@@ -54,7 +54,7 @@ import ui as ui_core
 
 
 SERVER_NAME = "jstack-mcp"
-SERVER_VERSION = "0.12.0"
+SERVER_VERSION = "0.13.0"
 PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
 MAX_OUTPUT_CHARS = 12_000
@@ -4167,8 +4167,9 @@ def skill_files() -> list[Path]:
     if jstack_root:
         bundled = jstack_root / "skills" / "jstack-dev" / "SKILL.md"
         audit_skill = jstack_root / "skills" / "jstack-audit" / "SKILL.md"
+        cso_skill = jstack_root / "skills" / "jstack-cso" / "SKILL.md"
         direct = jstack_root / "SKILL.md"
-        for candidate in (bundled, audit_skill, direct):
+        for candidate in (bundled, audit_skill, cso_skill, direct):
             if candidate.exists() and candidate not in files:
                 files.append(candidate)
     root = find_gstack_root()
@@ -14506,7 +14507,11 @@ PROMPT_COMPILER_WORKFLOW_MODES = prompt_compiler_core.WORKFLOW_MODES
 
 
 def _prompt_context_workflow(workflow_mode: str) -> str:
-    return "j-stack-dev" if workflow_mode == "jstack-evidence-builder" else workflow_mode
+    if workflow_mode == "jstack-evidence-builder":
+        return "j-stack-dev"
+    if workflow_mode == "jstack-cso":
+        return "jstack-audit"
+    return workflow_mode
 
 
 def _prompt_mode() -> str:
@@ -16478,7 +16483,7 @@ def tool_prompt_compile(args: dict[str, Any]) -> dict[str, Any]:
     workflow_mode = str(args.get("workflow_mode") or "").strip()
     if workflow_mode not in PROMPT_COMPILER_WORKFLOW_MODES:
         raise ToolError(
-            "workflow_mode must identify one of the six public JStack workflows."
+            "workflow_mode must identify one of the seven public JStack workflows."
         )
     if stage == "intent":
         try:

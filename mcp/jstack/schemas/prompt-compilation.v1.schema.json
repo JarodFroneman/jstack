@@ -142,7 +142,7 @@
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "workflowMode": {
-      "enum": ["j-stack-dev", "jstack-subagents", "jstack-full-team", "jstack-audit", "jstack-loop", "jstack-evidence-builder"]
+      "enum": ["j-stack-dev", "jstack-subagents", "jstack-full-team", "jstack-audit", "jstack-cso", "jstack-loop", "jstack-evidence-builder"]
     },
     "taskMode": {
       "enum": ["explain", "research", "plan-only", "read-only-audit", "diagnose-only", "implement", "test", "review", "fix", "commit", "push", "open-pull-request", "deploy", "modify-production", "external-action"]

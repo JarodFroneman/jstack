@@ -219,9 +219,11 @@ class DynamicOperatingModeTests(unittest.TestCase):
         preserved_paths = (
             ROOT / "prompts" / "jstack-loop.md",
             ROOT / "prompts" / "jstack-audit.md",
+            ROOT / "prompts" / "jstack-cso.md",
             ROOT / "prompts" / "jstack-evidence-builder.md",
             ROOT / "skills" / "jstack-loop" / "SKILL.md",
             ROOT / "skills" / "jstack-audit" / "SKILL.md",
+            ROOT / "skills" / "jstack-cso" / "SKILL.md",
             ROOT / "skills" / "jstack-evidence-builder" / "SKILL.md",
         )
         for path in preserved_paths:

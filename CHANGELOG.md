@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.13.0 - 2026-09-01 - JStack CSO enterprise security auditor
+
+### Added
+
+- Added `/jstack-cso` as JStack's seventh public workflow and dedicated plugin.
+  It specializes the existing JStack Audit evidence/finalization kernel and
+  `chief-security-officer` specialist instead of creating a second security
+  authority or runtime dependency.
+- Added daily, comprehensive, infrastructure, code, application-security,
+  skills, supply-chain, OWASP, focused, and diff audit modes covering browser
+  exposure, secrets, API minimization, object/property/function/tenant/role
+  authorization, proprietary logic, reverse-engineering exposure, AI security,
+  browser controls, abuse detection, monitoring, and incident readiness.
+- Added a deterministic standard-library evidence collector, closed evidence
+  and report schemas, redacted finding contracts, adversarial fixtures, and a
+  confined owner-private report writer beneath `.jstack/security-reports/`.
+
+### Changed
+
+- Expanded the supported distribution from six to seven commands while
+  preserving 65 canonical MCP tools, all 52 frozen compatibility aliases, and
+  the Python-standard-library JStack core.
+- Added `jstack-cso` to the Prompt Compiler with a non-lowerable read-only
+  authority floor and internal routing through the existing Audit context
+  workflow. Added canonical, umbrella, dedicated-plugin, and transactional
+  direct-installer packaging with rollback and duplicate-prevention coverage.
+- Retained exact MIT attribution and immutable source provenance for the
+  upgraded GStack CSO method adapted into the JStack-owned implementation. The
+  installed JStack CSO has no runtime dependency on GStack.
+
+### Security and evidence
+
+- Established the explicit rule that anything delivered to a browser is
+  inspectable. Minification, obfuscation, disabled browser controls, hidden DOM
+  content, and hidden anti-AI prompts are never represented as confidentiality
+  boundaries.
+- Added scanner self-protection: repository instructions remain untrusted
+  evidence, cannot change policy or trigger commands/network requests, and are
+  reported as `reported-not-obeyed` when suspicious.
+- Bounded collection by file count, per-file bytes, total bytes, evidence
+  volume, regular-file identity, symlink refusal, and fail-closed coverage
+  gaps. Reports reject traversal, overwrite, unknown fields, oversized input,
+  broad permissions, and recognized unredacted secrets.
+- Security conclusions remain evidence-bound and expressly do not guarantee
+  vulnerability absence, prompt-injection prevention, reverse-engineering
+  prevention, attack immunity, or universal production readiness.
+
 ## 0.12.0 - 2026-08-30 - Graphify Project Intelligence stable release
 
 ### Added

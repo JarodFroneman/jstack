@@ -29,6 +29,21 @@ state, memory, telemetry, browser, Git, release, or deployment runtime. Later
 adapted or wrapped behavior must add its own traceable provenance record before
 its stage gate can pass.
 
+### JStack CSO Adaptation
+
+The `jstack-cso` workflow adapts the enterprise security-audit behavior of
+gstack CSO from the pinned baseline above plus the locally reviewed upgraded
+CSO revision `b80c52e416c950934df6092e5d3a9f16e025cb03`. JStack owns the resulting
+Prompt Compiler integration, command and skill contracts, Python
+standard-library evidence collector and validators, report schemas, plugin
+packaging, installer transaction, tests, and JStack Audit receipt flow. It has
+no runtime dependency on an installed gstack checkout. Adapted concepts include
+the read-only audit phases, browser-delivery secrecy boundary, API and
+authorization review, proprietary-logic assessment, AI prompt-injection review,
+scanner self-protection, redacted finding format, deterministic fixtures, and
+defensible guarantee policy. The Garry Tan MIT notice below applies to this
+adaptation.
+
 Upstream license notice:
 
 > MIT License

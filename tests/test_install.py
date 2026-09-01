@@ -315,8 +315,12 @@ class InstallerTests(unittest.TestCase):
                 (codex_home / "skills" / "jstack-evidence-builder" / "SKILL.md").is_file()
             )
             self.assertTrue(
+                (codex_home / "skills" / "jstack-cso" / "SKILL.md").is_file()
+            )
+            self.assertTrue(
                 (codex_home / "prompts" / "jstack-evidence-builder.md").is_file()
             )
+            self.assertTrue((codex_home / "prompts" / "jstack-cso.md").is_file())
             if os.name == "posix":
                 self.assertEqual(
                     0o600,

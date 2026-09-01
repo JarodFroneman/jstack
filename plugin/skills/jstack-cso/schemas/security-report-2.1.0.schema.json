@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/cso/security-report-2.1.0.schema.json",
+  "title": "JStack CSO Security Posture Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "date",
+    "mode",
+    "scope",
+    "diff_mode",
+    "phases_run",
+    "modules_run",
+    "guarantee_policy",
+    "coverage",
+    "attack_surface",
+    "findings",
+    "filter_stats",
+    "totals",
+    "trend"
+  ],
+  "properties": {
+    "version": { "const": "2.1.0" },
+    "date": { "type": "string", "format": "date-time" },
+    "mode": { "enum": ["daily", "comprehensive"] },
+    "scope": {
+      "enum": ["full", "infra", "code", "appsec", "skills", "supply-chain", "owasp", "focused"]
+    },
+    "diff_mode": { "type": "boolean" },
+    "phases_run": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 14 },
+      "uniqueItems": true
+    },
+    "modules_run": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "client-exposure",
+          "secret-scanning",
+          "api-minimization",
+          "authorization",
+          "business-logic",
+          "reverse-engineering",
+          "ai-security",
+          "browser-security",
+          "abuse-detection",
+          "scanner-self-protection"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "guarantee_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "browser_delivered_content_is_inspectable",
+        "reverse_engineering_prevention_guaranteed",
+        "prompt_injection_prevention_guaranteed",
+        "residual_risk_acknowledged"
+      ],
+      "properties": {
+        "browser_delivered_content_is_inspectable": { "const": true },
+        "reverse_engineering_prevention_guaranteed": { "const": false },
+        "prompt_injection_prevention_guaranteed": { "const": false },
+        "residual_risk_acknowledged": { "const": true }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "gaps"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "gaps": { "type": "array" }
+      }
+    },
+    "attack_surface": { "type": "object" },
+    "client_exposure": { "type": "object" },
+    "api_minimization": { "type": "object" },
+    "authorization_review": { "type": "object" },
+    "proprietary_logic": { "type": "object" },
+    "ai_security": { "type": "object" },
+    "scanner_self_protection": { "type": "object" },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "supply_chain_summary": { "type": "object" },
+    "filter_stats": { "type": "object" },
+    "totals": { "type": "object" },
+    "trend": { "type": "object" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line", "sha256", "description"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\.$)(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+        },
+        "line": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "finding_id",
+        "title",
+        "severity",
+        "confidence",
+        "status",
+        "affected_component",
+        "evidence",
+        "attack_precondition",
+        "potential_impact",
+        "verified_fact",
+        "inference",
+        "recommended_remediation",
+        "validation_test",
+        "residual_risk",
+        "relevant_standard"
+      ],
+      "properties": {
+        "id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+        "finding_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 10 },
+        "status": { "enum": ["VERIFIED", "UNVERIFIED", "TENTATIVE"] },
+        "affected_component": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "attack_precondition": { "type": "string", "minLength": 1 },
+        "potential_impact": { "type": "string", "minLength": 1 },
+        "verified_fact": { "type": "string", "minLength": 1 },
+        "inference": { "type": ["string", "null"] },
+        "recommended_remediation": { "type": "string", "minLength": 1 },
+        "validation_test": { "type": "string", "minLength": 1 },
+        "residual_risk": { "type": "string", "minLength": 1 },
+        "relevant_standard": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "phase": { "type": "integer", "minimum": 0, "maximum": 14 },
+        "phase_name": { "type": "string" },
+        "category": { "type": "string" },
+        "fingerprint": { "type": "string" },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "commit": { "type": "string" },
+        "description": { "type": "string" },
+        "exploit_scenario": { "type": "string" },
+        "impact": { "type": "string" },
+        "recommendation": { "type": "string" },
+        "playbook": { "type": "string" },
+        "verification": { "type": "string" }
+      }
+    }
+  }
+}

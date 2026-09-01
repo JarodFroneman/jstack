@@ -146,6 +146,7 @@ class PromptCompilerTests(unittest.TestCase):
             ("Deploy the already approved release to staging.", "j-stack-dev"),
             ("Update production to rotate the active feature flag.", "j-stack-dev"),
             ("Audit the authentication boundary without changing files.", "jstack-audit"),
+            ("Run the enterprise application security audit.", "jstack-cso"),
             ("Build a private screenshot evidence bundle.", "jstack-evidence-builder"),
         )
         for raw, workflow in non_applicable:
@@ -212,7 +213,7 @@ class PromptCompilerTests(unittest.TestCase):
         self.assertNotIn("deploy", intent["authority"]["authorizedActions"])
 
     def test_read_only_workflow_floors_cannot_be_weakened_by_request_text(self) -> None:
-        for workflow in ("jstack-audit", "jstack-evidence-builder"):
+        for workflow in ("jstack-audit", "jstack-cso", "jstack-evidence-builder"):
             with self.subTest(workflow=workflow):
                 intent = prompt_compiler.compile_intent(
                     raw_request="Build and edit the target project.",
@@ -749,6 +750,7 @@ class PromptCompilerTests(unittest.TestCase):
             "plugins/jstack-subagents/skills/jstack-subagents/SKILL.md",
             "plugins/jstack-full-team/skills/jstack-full-team/SKILL.md",
             "plugins/jstack-audit/skills/jstack-audit/SKILL.md",
+            "plugins/jstack-cso/skills/jstack-cso/SKILL.md",
             "plugins/jstack-loop/skills/jstack-loop/SKILL.md",
             "plugins/jstack-evidence-builder/skills/jstack-evidence-builder/SKILL.md",
         )

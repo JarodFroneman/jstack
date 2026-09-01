@@ -31,9 +31,12 @@ ADDITIVE_CANONICAL_TOOLS = frozenset(
         "jstack_graph_finalize",
     }
 )
-ADDITIVE_COMMAND_NAMES = frozenset({"jstack-evidence-builder.md"})
+ADDITIVE_COMMAND_NAMES = frozenset({"jstack-cso.md", "jstack-evidence-builder.md"})
 ADDITIVE_PLUGIN_LAYOUTS = frozenset(
-    {"plugins/jstack-evidence-builder/.codex-plugin/plugin.json"}
+    {
+        "plugins/jstack-cso/.codex-plugin/plugin.json",
+        "plugins/jstack-evidence-builder/.codex-plugin/plugin.json",
+    }
 )
 ADDITIVE_EXISTING_TOOL_FIELDS = {
     **{

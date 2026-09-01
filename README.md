@@ -76,12 +76,20 @@ authoritative; JStack never silently escalates staffing.
 | `/jstack-full-team` | Eleven professional roles dispatched in controlled waves | High-risk, broad, or release-critical changes requiring full functional coverage |
 | `/jstack-loop` | A bounded durable goal loop composed with one selected delivery mode | Work that needs verified iteration across turns, human approvals, external waits, or multiple phases |
 | `/jstack-audit` | Independent read-only inspection | Evidence-bound correctness, security, architecture, maintainability, performance, and release review |
+| `/jstack-cso` | Enterprise Chief Security Officer audit | Authorized application, API, frontend-exposure, authorization, proprietary-logic, reverse-engineering, AI-security, and scanner self-protection review |
 | `/jstack-evidence-builder` | One Lead builds a private source-reference bundle without editing the project | Approved screenshots, Figma exports, or exact URLs that should inform later UI implementation |
 
 `/jstack-loop <goal>` uses single-lead delivery by default. State `use JStack
 Subagents` or `use JStack Full Team` in the same request when that staffing is
 explicitly intended. Audit remains an independent inspection boundary and does
 not edit project code.
+
+`/jstack-cso` is the security-specialized audit surface. It reuses JStack
+Audit's deterministic evidence and finalization kernel plus the existing
+`chief-security-officer` specialist, while adding a redacted standard-library
+collector and enterprise application/AI security methodology. It does not
+create a second security authority or claim that browser-delivered information
+can be kept secret.
 
 ### Specialist capabilities inside the five delivery commands
 
@@ -164,8 +172,9 @@ explicit request.
 ### Graphify-backed project intelligence
 
 Material work on an existing supported codebase routes through JStack's
-private Graphify-backed Project Intelligence protocol. The five delivery
-workflows and Audit bind an exact local AST snapshot, use bounded task and
+private Graphify-backed Project Intelligence protocol. The five base
+delivery/audit workflows and the CSO audit specialization bind an exact local
+AST snapshot, use bounded task and
 impact subgraphs to guide source inspection, refresh the graph after edits,
 and require exact candidate-bound finalization evidence where applicable.
 There is no additional slash command or standalone skill.
@@ -231,7 +240,30 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In v0.12.0
+## What Is In v0.13.0
+
+`v0.13.0` adds JStack CSO as the seventh public workflow: a read-only,
+enterprise application and AI security auditor for authorized projects. It
+reuses JStack Audit's exact-state evidence and finalization kernel plus the
+existing `chief-security-officer` specialist, so the release adds no parallel
+security authority and no new MCP tool.
+
+The JStack-owned standard-library collector inventories browser-delivered
+artifacts, redacts recognized secrets, maps frontend-consumed API properties,
+reviews server-side authorization signals, identifies proprietary calculations
+that may belong behind a server boundary, assesses direct and indirect prompt
+injection, and treats instructions embedded in scanned content as untrusted
+evidence. Collection is bounded, follows no symlinks, executes no project code,
+makes no discovered-endpoint requests, and reports every coverage gap.
+
+`/jstack-cso` ships through the dedicated and umbrella plugin layouts and the
+transactional direct installer. The public surface is now seven commands while
+remaining at 65 canonical tools and 52 frozen aliases. Start with the
+[v0.13.0 migration guide](docs/migration-0.13.0.md), the
+[Audit and CSO guide](docs/audit-system.md), and the
+[security policy](SECURITY.md).
+
+### Prior v0.12.0 stable line
 
 `v0.12.0` adds Graphify-backed Project Intelligence to the stable Unified
 Engineering OS without adding another slash command, skill, control plane, or
@@ -241,7 +273,7 @@ exact-state graph contract, bounded task subgraph, pre-change impact analysis,
 post-edit refresh, and candidate-bound finalization gate.
 
 The five new canonical MCP operations expand the public surface to 65 tools
-while preserving six commands and 52 frozen aliases. Graph evidence is
+while preserving seven commands and 52 frozen aliases. Graph evidence is
 advisory unless an `EXTRACTED` relationship has a valid source anchor, and it
 never substitutes for direct source inspection, tests, scanners, review, or
 human judgment. Material work produces a private native `graph.html` view so
@@ -320,7 +352,7 @@ work keeps the existing finalization path. Beta.4's Prompt Compiler,
 Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
 and UI contract v1/v2 remain compatible.
 
-> **Stable release, bounded claims:** `0.12.0` is the stable compatibility and
+> **Stable release, bounded claims:** `0.13.0` is the stable compatibility and
 > distribution target for this architecture. Stage 19 remains `NOT_MEASURED`:
 > its 168-cell comparative study has not run. Beta.1's 18-image, 216-attempt,
 > 432-review Proof Study also remains deferred and byte-bound to the exact
@@ -348,7 +380,7 @@ and UI contract v1/v2 remain compatible.
 | Evidence plane | Session-signed QA and security receipts, complete coverage checks, Git-state binding, and residual-risk reporting |
 | Reference Evidence Builder | Private screenshot/Figma/approved-URL bundles, rights and provider disclosures, optional isolated HTML prototypes, and digest-only binding into a later UI contract without candidate-evidence authority |
 | Launch assurance | 22 explicit surfaces, four non-lowerable risk tiers, a versioned 47-control catalog, static hint reconciliation, composite structured evidence, independent high-risk scanning, and fail-closed production receipts |
-| Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the five delivery commands; Evidence Builder remains a separate single-Lead preprocessing workflow |
+| Specialist capabilities | Pinned, versioned routing for 18 engineering, launch, testing, security, reliability, and handoff capability packs inside the five base delivery/audit commands; JStack CSO specializes the existing Audit/Security authority and Evidence Builder remains a separate single-Lead preprocessing workflow |
 | Methodology capabilities | Seven deterministic, immutable-provenance product, plan-review, investigation, and retrospective methods routed through existing specialists, Team Composer evidence, and signed non-authorizing receipts |
 | Specialist handoff | Machine-validated result and telemetry schemas, per-role signed receipts, contradiction checks, and one current team-handoff receipt |
 | Audit system | Read-only quick, standard, deep, and release profiles with deterministic finalization and SARIF output |
@@ -356,7 +388,7 @@ and UI contract v1/v2 remain compatible.
 | Program orchestration | Phase-count-agnostic dependency graphs, child-goal proofs, human and external gates, pause-aware budgets, invalidation, recovery, and final integrated evidence |
 | Team coordination | Single-lead, specialist-team, and full-team modes with validated roles, permissions, scopes, and controlled waves |
 | Mastery system | Separate ten-stage engineering, audit, and loop-engineering curricula with artifacts, assistance caps, repeated attempts, and blind capstones |
-| Distribution | Six dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
+| Distribution | Seven dedicated command plugins, one optional umbrella plugin, a standalone MCP server, one transactional release-checkout installer, and cross-platform CI |
 
 The MCP exposes 65 canonical `jstack_*` tools, including the canonical-only
 `jstack_prompt_compile` two-stage lifecycle, the
@@ -374,7 +406,7 @@ aliases remain available for compatibility; the Prompt Compiler and all six
 UI tools and five Project Intelligence tools deliberately have no legacy
 aliases.
 
-All six workflows compile intent before inspection, display Stage B's complete
+All seven workflows compile intent before inspection, display Stage B's complete
 rendered prompt, and wait for explicit approval. Only the approved Stage B
 response's nested `readinessReceipt` and exact `normalizedBrief` are used as
 `context_readiness_receipt` and `context_brief`. Planning verifies the pair so
@@ -498,7 +530,7 @@ Restart Codex or open a new task, then confirm that the JStack commands and
 `jstack_*` MCP tools are available. Run the installed MCP smoke test when
 validating a managed environment.
 
-For the clean six-plugin command layout, custom `CODEX_HOME` locations,
+For the clean seven-plugin command layout, custom `CODEX_HOME` locations,
 Claude Code MCP preview, upgrades, rollback, and duplicate-command prevention, read the
 [installation guide](docs/installation.md).
 
@@ -724,6 +756,7 @@ all workflow actions are pinned to full immutable commits.
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
 | [Graphify-backed Project Intelligence](docs/project-intelligence.md) | [ADR 0046](docs/adr/0046-graphify-project-intelligence.md) |
+| [v0.13.0 migration guide](docs/migration-0.13.0.md) | [JStack CSO release](CHANGELOG.md#0130---2026-09-01---jstack-cso-enterprise-security-auditor) |
 | [v0.12.0 migration guide](docs/migration-0.12.0.md) | [Project Intelligence release](CHANGELOG.md#0120---2026-08-30---graphify-project-intelligence-stable-release) |
 | [v0.11.0 migration guide](docs/migration-0.11.0.md) | [Unified Engineering OS](docs/integration/gstack/README.md) · [0.11.0 changelog](CHANGELOG.md#0110---2026-08-26---unified-engineering-os-stable-release) |
 | [v0.10.0-beta.6.2 migration guide](docs/migration-0.10.0-beta.6.2.md) | [Bounded Product Interface detector behavior](CHANGELOG.md#0100-beta62---2026-08-24---product-interface-detector-hardening-prerelease) |

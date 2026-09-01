@@ -3187,16 +3187,23 @@ class MasteryAndInstallTests(unittest.TestCase):
             (codex_home / "prompts").mkdir(parents=True)
             (codex_home / "skills" / "jstack-dev").mkdir(parents=True)
             (codex_home / "skills" / "jstack-audit").mkdir(parents=True)
+            (codex_home / "skills" / "jstack-cso").mkdir(parents=True)
             (codex_home / "skills" / "jstack-loop").mkdir(parents=True)
             (codex_home / "mcp" / "jstack").mkdir(parents=True)
             (codex_home / "prompts" / "jstack-audit.md").write_text(
                 "old prompt\n", encoding="utf-8"
+            )
+            (codex_home / "prompts" / "jstack-cso.md").write_text(
+                "old cso prompt\n", encoding="utf-8"
             )
             (codex_home / "skills" / "jstack-dev" / "SKILL.md").write_text(
                 "old dev skill\n", encoding="utf-8"
             )
             (codex_home / "skills" / "jstack-audit" / "SKILL.md").write_text(
                 "old audit skill\n", encoding="utf-8"
+            )
+            (codex_home / "skills" / "jstack-cso" / "SKILL.md").write_text(
+                "old cso skill\n", encoding="utf-8"
             )
             (codex_home / "skills" / "jstack-loop" / "SKILL.md").write_text(
                 "old loop skill\n", encoding="utf-8"
@@ -3209,8 +3216,10 @@ class MasteryAndInstallTests(unittest.TestCase):
             )
             before = {
                 "prompt": (codex_home / "prompts" / "jstack-audit.md").read_bytes(),
+                "cso_prompt": (codex_home / "prompts" / "jstack-cso.md").read_bytes(),
                 "dev": (codex_home / "skills" / "jstack-dev" / "SKILL.md").read_bytes(),
                 "audit": (codex_home / "skills" / "jstack-audit" / "SKILL.md").read_bytes(),
+                "cso": (codex_home / "skills" / "jstack-cso" / "SKILL.md").read_bytes(),
                 "loop": (codex_home / "skills" / "jstack-loop" / "SKILL.md").read_bytes(),
                 "mcp": (codex_home / "mcp" / "jstack" / "old.txt").read_bytes(),
                 "config": (codex_home / "config.toml").read_bytes(),
@@ -3248,12 +3257,20 @@ class MasteryAndInstallTests(unittest.TestCase):
                 (codex_home / "prompts" / "jstack-audit.md").read_bytes(),
             )
             self.assertEqual(
+                before["cso_prompt"],
+                (codex_home / "prompts" / "jstack-cso.md").read_bytes(),
+            )
+            self.assertEqual(
                 before["dev"],
                 (codex_home / "skills" / "jstack-dev" / "SKILL.md").read_bytes(),
             )
             self.assertEqual(
                 before["audit"],
                 (codex_home / "skills" / "jstack-audit" / "SKILL.md").read_bytes(),
+            )
+            self.assertEqual(
+                before["cso"],
+                (codex_home / "skills" / "jstack-cso" / "SKILL.md").read_bytes(),
             )
             self.assertEqual(
                 before["loop"],
@@ -5450,6 +5467,8 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertEqual(0, sync.returncode, sync.stderr)
         self.assertTrue((ROOT / "plugin" / "commands" / "jstack-audit.md").exists())
         self.assertTrue((ROOT / "plugin" / "skills" / "jstack-audit" / "SKILL.md").exists())
+        self.assertTrue((ROOT / "plugin" / "commands" / "jstack-cso.md").exists())
+        self.assertTrue((ROOT / "plugin" / "skills" / "jstack-cso" / "SKILL.md").exists())
         self.assertTrue((ROOT / "plugin" / "commands" / "jstack-loop.md").exists())
         self.assertTrue((ROOT / "plugin" / "skills" / "jstack-loop" / "SKILL.md").exists())
         self.assertTrue((ROOT / "plugin" / "commands" / "jstack-evidence-builder.md").exists())
@@ -5463,6 +5482,16 @@ class MasteryAndInstallTests(unittest.TestCase):
         self.assertEqual(EXPECTED_VERSION, audit_manifest["version"])
         self.assertTrue(
             (ROOT / "plugins" / "jstack-audit" / "skills" / "jstack-audit" / "SKILL.md").exists()
+        )
+        cso_manifest = json.loads(
+            (ROOT / "plugins" / "jstack-cso" / ".codex-plugin" / "plugin.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("jstack-cso", cso_manifest["name"])
+        self.assertEqual(EXPECTED_VERSION, cso_manifest["version"])
+        self.assertTrue(
+            (ROOT / "plugins" / "jstack-cso" / "skills" / "jstack-cso" / "SKILL.md").exists()
         )
         loop_manifest = json.loads(
             (ROOT / "plugins" / "jstack-loop" / ".codex-plugin" / "plugin.json").read_text(
@@ -5527,6 +5556,8 @@ class MasteryAndInstallTests(unittest.TestCase):
             )
             self.assertTrue((codex_home / "prompts" / "jstack-audit.md").exists())
             self.assertTrue((codex_home / "skills" / "jstack-audit" / "SKILL.md").exists())
+            self.assertTrue((codex_home / "prompts" / "jstack-cso.md").exists())
+            self.assertTrue((codex_home / "skills" / "jstack-cso" / "SKILL.md").exists())
             self.assertTrue((codex_home / "prompts" / "jstack-loop.md").exists())
             self.assertTrue((codex_home / "skills" / "jstack-loop" / "SKILL.md").exists())
             self.assertTrue((codex_home / "prompts" / "jstack-evidence-builder.md").exists())

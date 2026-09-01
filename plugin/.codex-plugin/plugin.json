@@ -1,6 +1,6 @@
 {
   "name": "jstack",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Universal JStack delivery with schema-first Prompt Compilation, Product Interface motion intelligence and reference evidence, launch assurance, specialist capabilities, bounded loops, programs, audits, mastery, and MCP workflows for Codex.",
   "author": {
     "name": "Jarod Froneman",
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "JStack",
     "shortDescription": "Enterprise delivery, goal programs, and audits for Codex",
-    "longDescription": "JStack adds six Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, read-only repository audits, and a private Evidence Builder for user-approved screenshots, Figma exports, and URL captures. User-facing implementation work automatically receives the original Product Interface design skill, frequency-aware motion specifications, reduced-motion behavior, and Git-bound objective candidate evidence; reference bundles remain a separate pre-implementation input. An Adaptive Context Gate inspects first, asks at most three material questions with recommended defaults, and binds sourced facts and disclosed assumptions into planning without terminal ceremony. Versioned capability routing upgrades the same roles without granting extra permissions. Its MCP also provides risk-tiered Launch Assurance, durable loop and program state, review, QA, security, audit finalization, and release readiness.",
+    "longDescription": "JStack adds seven Codex workflows: single-lead development, right-sized specialist subagents, full 11-role team mode, evidence-verified bounded loops or multi-phase programs, general read-only repository audits, enterprise application and AI security audits through JStack CSO, and a private Evidence Builder for user-approved screenshots, Figma exports, and URL captures. User-facing implementation work automatically receives the original Product Interface design skill, frequency-aware motion specifications, reduced-motion behavior, and Git-bound objective candidate evidence; reference bundles remain a separate pre-implementation input. An Adaptive Context Gate inspects first, asks at most three material questions with recommended defaults, and binds sourced facts and disclosed assumptions into planning without terminal ceremony. Versioned capability routing upgrades the same roles without granting extra permissions. Its MCP also provides risk-tiered Launch Assurance, durable loop and program state, review, QA, security, audit finalization, and release readiness.",
     "developerName": "Jarod Froneman",
     "category": "Developer Tools",
     "capabilities": [
@@ -36,7 +36,7 @@
     "defaultPrompt": [
       "Use /j-stack-dev to run the single-lead workflow.",
       "Use /jstack-subagents for a specialist team or /jstack-full-team for all 11 roles.",
-      "Use /jstack-loop for verified goal completion, /jstack-audit for read-only inspection, or /jstack-evidence-builder for private visual references."
+      "Use /jstack-loop for verified goal completion, /jstack-audit for general read-only inspection, /jstack-cso for enterprise application and AI security, or /jstack-evidence-builder for private visual references."
     ],
     "websiteURL": "https://github.com/JarodFroneman/jstack",
     "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",

@@ -388,6 +388,7 @@ class MethodologyCapabilityTests(unittest.TestCase):
         preserved = (
             ROOT / "prompts" / "jstack-loop.md",
             ROOT / "prompts" / "jstack-audit.md",
+            ROOT / "prompts" / "jstack-cso.md",
             ROOT / "prompts" / "jstack-evidence-builder.md",
         )
         for path in preserved:

@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JarodFroneman/jstack/schemas/cso/evidence-bundle-1.0.0.schema.json",
+  "title": "JStack CSO Enterprise Evidence Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "repository",
+    "policy",
+    "limits",
+    "stack",
+    "coverage",
+    "clientExposure",
+    "apiProperties",
+    "suspiciousInstructions",
+    "evidence",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "fingerprint", "fileCount", "byteCount"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "fingerprint": { "$ref": "#/$defs/sha256" },
+        "fileCount": { "type": "integer", "minimum": 0 },
+        "byteCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "browserDeliveredContentIsInspectable",
+        "readOnlyProjectInspection",
+        "networkRequestsPermitted",
+        "projectCommandsPermitted",
+        "rawSecretsRetained"
+      ],
+      "properties": {
+        "browserDeliveredContentIsInspectable": { "const": true },
+        "readOnlyProjectInspection": { "const": true },
+        "networkRequestsPermitted": { "const": false },
+        "projectCommandsPermitted": { "const": false },
+        "rawSecretsRetained": { "const": false }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxFiles", "maxFileBytes", "maxTotalBytes"],
+      "properties": {
+        "maxFiles": { "type": "integer", "minimum": 1, "maximum": 25000 },
+        "maxFileBytes": { "type": "integer", "minimum": 1, "maximum": 10485760 },
+        "maxTotalBytes": { "type": "integer", "minimum": 1, "maximum": 262144000 }
+      }
+    },
+    "stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["languages", "frameworks", "adapters"],
+      "properties": {
+        "languages": { "$ref": "#/$defs/stringArray" },
+        "frameworks": { "$ref": "#/$defs/stringArray" },
+        "adapters": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filesScanned",
+        "bytesScanned",
+        "filesSkipped",
+        "complete",
+        "buildArtifactsPresent",
+        "gaps"
+      ],
+      "properties": {
+        "filesScanned": { "type": "integer", "minimum": 0 },
+        "bytesScanned": { "type": "integer", "minimum": 0 },
+        "filesSkipped": { "type": "integer", "minimum": 0 },
+        "complete": { "type": "boolean" },
+        "buildArtifactsPresent": { "type": "boolean" },
+        "gaps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/coverageGap" }
+        }
+      }
+    },
+    "clientExposure": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/clientExposure" }
+    },
+    "apiProperties": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/apiProperty" }
+    },
+    "suspiciousInstructions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/suspiciousInstruction" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidenceItem" }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byModule", "byDisposition", "bySeverityHint"],
+      "properties": {
+        "byModule": { "$ref": "#/$defs/countMap" },
+        "byDisposition": { "$ref": "#/$defs/countMap" },
+        "bySeverityHint": { "$ref": "#/$defs/countMap" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+    },
+    "evidencePath": {
+      "allOf": [
+        { "$ref": "#/$defs/repositoryPath" },
+        { "not": { "const": "." } }
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "coverageGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reason", "detail"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "reason": {
+          "enum": [
+            "file-limit",
+            "file-too-large",
+            "total-byte-limit",
+            "evidence-limit",
+            "binary",
+            "symlink",
+            "read-error",
+            "unsupported-format",
+            "artifact-not-present"
+          ]
+        },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "classification": {
+      "enum": [
+        "required-public-data",
+        "authorized-user-data",
+        "sensitive-data",
+        "secret",
+        "proprietary-logic",
+        "debug-information",
+        "unnecessary-metadata",
+        "unknown"
+      ]
+    },
+    "clientExposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "artifactType", "classification", "sha256", "evidenceIds"],
+      "properties": {
+        "path": { "$ref": "#/$defs/evidencePath" },
+        "artifactType": { "type": "string", "minLength": 1 },
+        "classification": { "$ref": "#/$defs/classification" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "evidenceIds": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "apiProperty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint",
+        "sourcePath",
+        "responseProperties",
+        "observedClientProperties",
+        "unusedCandidateProperties",
+        "authorizationSignals",
+        "dtoAllowlistDetected",
+        "rawUpstreamResponseCandidate",
+        "confidence"
+      ],
+      "properties": {
+        "endpoint": { "type": "string", "minLength": 1 },
+        "sourcePath": { "$ref": "#/$defs/evidencePath" },
+        "responseProperties": { "$ref": "#/$defs/stringArray" },
+        "observedClientProperties": { "$ref": "#/$defs/stringArray" },
+        "unusedCandidateProperties": { "$ref": "#/$defs/stringArray" },
+        "authorizationSignals": { "$ref": "#/$defs/stringArray" },
+        "dtoAllowlistDetected": { "type": "boolean" },
+        "rawUpstreamResponseCandidate": { "type": "boolean" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "suspiciousInstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "line", "pattern", "sha256", "preview", "actionTaken"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/evidencePath" },
+        "line": { "type": "integer", "minimum": 1 },
+        "pattern": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "preview": { "type": "string" },
+        "actionTaken": { "const": "reported-not-obeyed" }
+      }
+    },
+    "evidenceLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/evidencePath" },
+        "line": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "preview": { "type": "string" }
+      }
+    },
+    "evidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "module",
+        "kind",
+        "title",
+        "classification",
+        "disposition",
+        "severityHint",
+        "confidence",
+        "location",
+        "verifiedFact",
+        "inference",
+        "standards",
+        "metadata"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "module": {
+          "enum": [
+            "client-exposure",
+            "secret-scanning",
+            "api-minimization",
+            "authorization",
+            "business-logic",
+            "reverse-engineering",
+            "ai-security",
+            "browser-security",
+            "abuse-detection",
+            "scanner-self-protection"
+          ]
+        },
+        "kind": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "classification": { "$ref": "#/$defs/classification" },
+        "disposition": {
+          "enum": [
+            "verified-exposure",
+            "candidate-finding",
+            "control-present",
+            "coverage-gap",
+            "informational"
+          ]
+        },
+        "severityHint": { "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 10 },
+        "location": { "$ref": "#/$defs/evidenceLocation" },
+        "verifiedFact": { "type": "string", "minLength": 1 },
+        "inference": { "type": ["string", "null"] },
+        "standards": { "$ref": "#/$defs/stringArray" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+        }
+      }
+    },
+    "countMap": {
+      "type": "object",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    }
+  }
+}
