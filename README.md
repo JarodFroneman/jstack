@@ -240,7 +240,26 @@ JStack separates four concerns that ordinary prompts tend to collapse:
    repository, Git, provider, deployment, or production actions only within
    explicit user scope and normal host/provider permissions.
 
-## What Is In v0.13.0
+## What Is In v0.13.1
+
+`v0.13.1` adds optional Liquid Glass guidance to the existing Product UI
+skill. It distinguishes native Apple materials from Apple-inspired web
+effects, preserves existing design systems, and requires appropriate
+accessibility, fallback, and runtime checks.
+
+Product UI can also provide design guidance during a GStack-led workflow.
+For example, ask: "Use GStack implementation with JStack Product UI design
+guidance. Preserve this product's design system and use the Liquid Glass
+reference where appropriate." GStack keeps implementation, QA, review,
+evidence, and deployment ownership. This does not invoke JStack contracts
+or add another command. Deployment still follows the selected workflow's
+approval process.
+
+See the [v0.13.1 migration guide](docs/migration-0.13.1.md) and the
+[Liquid Glass reference](skills/product-ui-design/references/liquid-glass.md).
+No rendering library or community skill is installed by this release.
+
+### Prior v0.13.0 stable line
 
 `v0.13.0` adds JStack CSO as the seventh public workflow: a read-only,
 enterprise application and AI security auditor for authorized projects. It
@@ -352,7 +371,7 @@ work keeps the existing finalization path. Beta.4's Prompt Compiler,
 Beta.4.1's mandatory complete-prompt approval boundary, the Evidence Builder,
 and UI contract v1/v2 remain compatible.
 
-> **Stable release, bounded claims:** `0.13.0` is the stable compatibility and
+> **Stable release, bounded claims:** `0.13.1` is the stable compatibility and
 > distribution target for this architecture. Stage 19 remains `NOT_MEASURED`:
 > its 168-cell comparative study has not run. Beta.1's 18-image, 216-attempt,
 > 432-review Proof Study also remains deferred and byte-bound to the exact
@@ -756,6 +775,7 @@ all workflow actions are pinned to full immutable commits.
 | --- | --- |
 | [Installation and host compatibility](docs/installation.md) | [Architecture](ARCHITECTURE.md) |
 | [Graphify-backed Project Intelligence](docs/project-intelligence.md) | [ADR 0046](docs/adr/0046-graphify-project-intelligence.md) |
+| [v0.13.1 migration guide](docs/migration-0.13.1.md) | [Liquid Glass guidance](skills/product-ui-design/references/liquid-glass.md) |
 | [v0.13.0 migration guide](docs/migration-0.13.0.md) | [JStack CSO release](CHANGELOG.md#0130---2026-09-01---jstack-cso-enterprise-security-auditor) |
 | [v0.12.0 migration guide](docs/migration-0.12.0.md) | [Project Intelligence release](CHANGELOG.md#0120---2026-08-30---graphify-project-intelligence-stable-release) |
 | [v0.11.0 migration guide](docs/migration-0.11.0.md) | [Unified Engineering OS](docs/integration/gstack/README.md) · [0.11.0 changelog](CHANGELOG.md#0110---2026-08-26---unified-engineering-os-stable-release) |

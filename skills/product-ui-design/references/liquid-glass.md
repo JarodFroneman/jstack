@@ -1,0 +1,19 @@
+# Liquid Glass direction
+
+Use this reference only when the user requests Liquid Glass or the existing product already uses a related material. This is an optional surface treatment within the selected Product UI profile, not a third profile and not a global default. Preserve existing tokens, hierarchy, and platform conventions; use translucent material mainly for navigation, controls, and transient overlays where it aids orientation. Keep primary content and dense data readable.
+
+## Choose the platform path
+
+1. Identify the actual targets, framework, minimum supported OS/browser versions, existing components, and whether the user wants native Apple behavior or an Apple-inspired web treatment. A React Native or Flutter application needs separate verification on each claimed host; a webview remains web content inside a native shell.
+2. For SwiftUI, UIKit, or AppKit on a supported Apple OS, prefer system controls and materials. Use Apple's [Human Interface Guidelines for materials](https://developer.apple.com/design/human-interface-guidelines/materials) for design intent and current [SwiftUI Liquid Glass documentation](https://developer.apple.com/documentation/SwiftUI/Applying-Liquid-Glass-to-custom-views) or corresponding framework documentation for available APIs. Verify exact API names and availability against the project's SDK and deployment target. If unavailable, preserve a coherent standard-material fallback instead of imitating an unsupported effect.
+3. For web, Electron, Tauri, or webviews, describe the result as Apple-inspired glass, not native Apple Liquid Glass. Start with semantic controls, restrained transparency, and a solid/frosted fallback. Only evaluate a specialized rendering dependency when real refraction is a user requirement, the project's framework fits, and dependency adoption is authorized. The [simple-liquid-glass project](https://github.com/lucaperullo/simple-liquid-glass) is an optional example to assess, not a JStack dependency; its refraction support and fallback behavior must be verified on the browsers in scope. Do not promise identical rendering in Safari, Firefox, and Chromium.
+4. The community [liquid-glass-skills repository](https://github.com/YordiLorenzo/liquid-glass-skills) may be consulted as an optional implementation reference for native Apple work. It is not bundled, installed, or authoritative. Check its current version, license, SDK claims, and examples before use. Never copy its skill text or Apple's HIG mirror into JStack.
+
+## Apply with restraint
+
+- Specify which navigation, control, or overlay surfaces receive the material and which remain opaque. Prefer the product's established component system; do not turn every panel, card, table, or background into glass.
+- Check content contrast across bright, dark, and detailed backgrounds, including selection, hover, focus, disabled, error, and loading states. Provide a stable opaque or frosted fallback when transparency or visual effects are reduced, rendering support is absent, or readability suffers.
+- Preserve keyboard and screen-reader behavior, text scaling, touch targets, safe areas, input responsiveness, and reduced-motion behavior. Keep blur/refraction and animation within measured performance budgets, especially during scrolling and resizing.
+- Verify native work on an appropriate device or simulator at the minimum supported OS and in light/dark appearance. Verify web work in each supported browser at desktop and mobile sizes. Record which effect actually rendered, which fallback was exercised, and unresolved differences; a static mockup or one browser screenshot is insufficient.
+
+For an explicitly GStack-led implementation or deployment, this reference contributes design decisions and checks only. The GStack workflow owns its implementation, review, evidence, approvals, and release. Do not activate JStack contracts or receipts merely because this reference was used.

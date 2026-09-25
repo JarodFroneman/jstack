@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.1 - 2026-09-25 - Product UI Liquid Glass guidance
+
+### Added
+
+- Added optional Liquid Glass guidance inside the existing Product UI skill.
+  Native Apple and web paths cover platform support, readable fallback
+  materials, accessibility, reduced motion, and runtime verification.
+- Linked authoritative Apple design/API guidance and optional community
+  implementation references without adding rendering libraries or skills.
+
+### Changed
+
+- Product UI can supply design guidance to an explicitly GStack-led task.
+  GStack retains implementation, review, QA, evidence, and deployment ownership;
+  using Product UI does not activate JStack contracts or release gates.
+- Preserved JStack-led UI protocol requirements, existing design-system
+  precedence, all seven commands, and the 65 canonical/52 alias MCP surface.
+
 ## 0.13.0 - 2026-09-01 - JStack CSO enterprise security auditor
 
 ### Added

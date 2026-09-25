@@ -27,13 +27,13 @@ python3 mcp/jstack/smoke_test.py
 
 Use `python` instead of `python3` where required on Windows.
 
-> **v0.13.0 stable release boundary:** install `v0.13.0` only from its exact
+> **v0.13.1 stable release boundary:** install `v0.13.1` only from its exact
 > immutable annotated GitHub release tag, retain the complete
-> `v0.12.0` installation as one rollback unit, and verify the installed
+> `v0.13.0` installation as one rollback unit, and verify the installed
 > bytes and tool surface. The
 > Beta.1 Proof Plane remains byte-frozen to `v0.10.0-beta.1`, uninstalled, and
 > unvalidated. Stage 19 also remains `NOT_MEASURED`; its 168-cell comparative
-> study has not run. Installing v0.13.0 does not satisfy either deferred study
+> study has not run. Installing v0.13.1 does not satisfy either deferred study
 > or any project-specific independent review. Receipts validate bounded
 > contracts and declared evidence only; they do not certify prompt-quality
 > uplift, producer honesty, graph completeness, semantic correctness,
@@ -53,7 +53,7 @@ presented as complete workflow parity.
 
 ## Prompt Compiler mode
 
-v0.13.0 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
+v0.13.1 defaults `JSTACK_PROMPT_COMPILER_MODE` to `enforced`. The other accepted
 values are `shadow`, `preview`, and `disabled`; use `disabled` only as a bounded
 compatibility rollback while investigating an integration issue. Mode changes
 invalidate existing readiness and compilation receipts. The seven packaged
@@ -222,6 +222,13 @@ The dedicated plugins under `plugins/` are skill-only. They require one shared
 the single active `product-ui-design` skill used across UI-scoped JStack work.
 That automatic implementation skill is separate from the explicitly invoked
 Evidence Builder preprocessing command.
+
+Product UI can also be selected as design guidance for an explicitly
+GStack-led task. The GStack implementation/deployment workflows retain their
+own QA, evidence, and approvals; the design skill does not activate JStack
+protocol steps in that mode. Optional Liquid Glass guidance is loaded only
+when requested or when extending an existing glass-based design. See the
+[v0.13.1 migration guide](migration-0.13.1.md).
 
 ### 1. Register A Local Marketplace
 
