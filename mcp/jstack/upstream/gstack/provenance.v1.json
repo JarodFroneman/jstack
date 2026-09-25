@@ -4067,7 +4067,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -4177,7 +4177,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original deterministic JStack implementation and operating-mode bridge; no upstream prompt, router, authority model, agent state, installer, or execution runtime is copied."
       },
-      "recordDigest": "c23e062b78b97dcfa2ddfd61ebbc4fc81ae23ce4373768108a79bf5c3497f82e"
+      "recordDigest": "d9e6061999ccddbe43bb3fb531d88abb6edea2558413030672a9f5f2d6390781"
     },
     {
       "id": "gstack-low-risk-methodology-adaptation",
@@ -4203,8 +4203,8 @@
         },
         {
           "path": "README.md",
-          "sha256": "625bb349d0388a6615bb2e72492fcf6f1e51afd653edce843d9b0c34ce4824ee",
-          "sizeBytes": 56047
+          "sha256": "9b3857e35514ae385935dfde4e3cca1bed3944d0bb1f54b99a6f11b5b799072b",
+          "sizeBytes": 57149
         },
         {
           "path": "docs/integration/gstack/LOW_RISK_METHODOLOGIES.md",
@@ -4223,7 +4223,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -4318,7 +4318,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack data, validator, routing, receipt binding, and host instructions; no upstream prompt wording, persona, command, provider, state, installer, updater, or authority model is copied or activated."
       },
-      "recordDigest": "7b245f3a8ebb1578e15283d0324dcb7ed32b0336695d1e07f9785fc7bb872db4"
+      "recordDigest": "7fb3eac4eeca43cde51c283151c4f2904aaefa98bb8aae1f9f26489745940270"
     },
     {
       "id": "gstack-root-cause-investigation-adaptation",
@@ -4338,8 +4338,8 @@
         },
         {
           "path": "README.md",
-          "sha256": "625bb349d0388a6615bb2e72492fcf6f1e51afd653edce843d9b0c34ce4824ee",
-          "sizeBytes": 56047
+          "sha256": "9b3857e35514ae385935dfde4e3cca1bed3944d0bb1f54b99a6f11b5b799072b",
+          "sizeBytes": 57149
         },
         {
           "path": "docs/adr/0045-root-cause-investigation-gate.md",
@@ -4383,7 +4383,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -4468,7 +4468,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack contract, deterministic validator, phased dispatch, receipt certification, tests, and host instructions; no upstream prompt, router, state, provider, installer, updater, or action authority is copied or activated."
       },
-      "recordDigest": "59856276ba9d0276578d1feb51917a1cbe808f96c8f29b9174236b9b20638117"
+      "recordDigest": "19fe11b1bc9a75e3ecdf0c90e5b501e82a2c4603bb063983d3c0e327aa9c80a0"
     },
     {
       "id": "gstack-product-design-department-adaptation",
@@ -4492,8 +4492,8 @@
         },
         {
           "path": "README.md",
-          "sha256": "625bb349d0388a6615bb2e72492fcf6f1e51afd653edce843d9b0c34ce4824ee",
-          "sizeBytes": 56047
+          "sha256": "9b3857e35514ae385935dfde4e3cca1bed3944d0bb1f54b99a6f11b5b799072b",
+          "sizeBytes": 57149
         },
         {
           "path": "docs/adr/0042-product-design-integration.md",
@@ -4517,7 +4517,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -4577,8 +4577,8 @@
         },
         {
           "path": "skills/product-ui-design/SKILL.md",
-          "sha256": "e492b571a77f4b14c8c6ff1cb7a47be48b635ecfc2a457bb3b19ac1467993388",
-          "sizeBytes": 9554
+          "sha256": "f90f5e2fc35d84453bb84a61e354feb601b05dae425f8509e7a308ccfe27ab52",
+          "sizeBytes": 10346
         },
         {
           "path": "skills/product-ui-design/references/product-design-intelligence.md",
@@ -4612,7 +4612,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack policy, deterministic contract successor, human-selection gate, source traceability, tests, and host guidance; no upstream prompt, persona, router, provider, state, browser runtime, installer, updater, dependency, auto-commit, or mutation authority is copied or activated."
       },
-      "recordDigest": "3149e1387bcf757f9d8786d10910f903d9bdd9f8e64ffb0d25bf507ca4666d05"
+      "recordDigest": "bdaeb7ee3249322c93eeb252a1044cdb185991cf5a9d7c2ef7de38188ea7dbf7"
     },
     {
       "id": "gstack-provider-candidates",
@@ -4991,8 +4991,8 @@
         },
         {
           "path": "README.md",
-          "sha256": "625bb349d0388a6615bb2e72492fcf6f1e51afd653edce843d9b0c34ce4824ee",
-          "sizeBytes": 56047
+          "sha256": "9b3857e35514ae385935dfde4e3cca1bed3944d0bb1f54b99a6f11b5b799072b",
+          "sizeBytes": 57149
         },
         {
           "path": "docs/integration/gstack/BROWSER_PROVIDER.md",
@@ -5011,7 +5011,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -5081,7 +5081,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original standard-library JStack protocol and adapter. No upstream TypeScript, browser binary, prompt, state, cookie, telemetry, installer, dependency, provider runtime, source mutation, Git, release, deployment, or production authority is copied, vendored, or activated."
       },
-      "recordDigest": "fe591b6ab557c04d75682f3a59634dd498096ac0a2c2e091aa825b8bbf3a386f"
+      "recordDigest": "bd1c8eb0c84a14f8bea79cb46c16777a3b86e2a862bd3239ed19bdf4b36739a7"
     },
     {
       "id": "gstack-browser-qa-remediation-adaptation",
@@ -5108,7 +5108,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -5168,7 +5168,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack finding, handoff, stale-evidence, and re-QA contracts. Upstream automatic fixes, commits, pushes, browser runtime, prompts, state, installer, dependencies, and action authority are not copied or activated."
       },
-      "recordDigest": "db52ea8c67bc79ffbb7b30c4339a8503976472e1f1e0b71858d54d136c37e439"
+      "recordDigest": "577b10e31aa958d0d72911d114e34f8be6d83c1a5e530fd711afee3535c66cd1"
     },
     {
       "id": "gstack-professional-delivery-adaptation",
@@ -5191,7 +5191,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -5231,7 +5231,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack projection and validator; no upstream prompt, scheduler, control plane, runtime, automatic fix, Git action, release action, or deployment authority is copied or activated."
       },
-      "recordDigest": "bf11069e1dabf999a1042f2ca9c0cd7f3c7a5a5e9cd2e27a294e6a69d301deaf"
+      "recordDigest": "43391311db576bbbbe4f48810b7435d4a9c996757471dce7096744a966e75929"
     },
     {
       "id": "gstack-release-canary-ux-adaptation",
@@ -5254,7 +5254,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -5294,7 +5294,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack readiness UX. Upstream prompts, deploy setup, provider execution, state, auto-commit, auto-push, release, deployment, and production authority are not copied or activated."
       },
-      "recordDigest": "d216f88030b4a67074bf045b9f99ef3082143f19bbbe596c9ceb7ce52a036f0a"
+      "recordDigest": "1407443a7147a8ef90c0a7b3bccfd73f6e21d10b37b52a3d23f38850bb4a5138"
     },
     {
       "id": "gstack-security-hardening-research",
@@ -5324,7 +5324,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -5364,7 +5364,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Research informed an original provider-neutral catalog. No upstream scanner, workflow, sidecar, dependency, prompt, runtime, network action, remediation authority, or security guarantee is copied or activated."
       },
-      "recordDigest": "318ccf01c5508d0216db737a69c6d4b7b4847ce2654db276704b9b18cb03b764"
+      "recordDigest": "f27400649bc1c70962091d512a2d3fa2cf9086d3d1b3b5f882c5436f130402b0"
     },
     {
       "id": "gstack-cross-host-methodology-boundary",
@@ -5403,7 +5403,7 @@
         },
         {
           "path": "mcp/jstack/jstack_mcp_server.py",
-          "sha256": "acc2f45613eebe1e83a6a5ef6b6d75d832b73b22925eb8ab462c6ffde7490166",
+          "sha256": "ae089fb251b2d051c52b921972795b84853645527e869d92403ee9fd52c30dbb",
           "sizeBytes": 1386740
         },
         {
@@ -5438,7 +5438,7 @@
         "sourceCommit": "ad8400543cd9ce8d07641362db48d44a95417e33",
         "note": "Original JStack catalog and contract. No upstream generated host output, hook, prompt, state, installer, permission model, provider runtime, or fake host equivalence is copied or activated."
       },
-      "recordDigest": "0a87d342c898795021d26af311020884105d2295850881f9865be3817b4f267e"
+      "recordDigest": "b527b07edd572a8abab1b910826327700acd237024deed796ed5a2cfa41e0bd9"
     },
     {
       "id": "gstack-empirical-study-design",
@@ -6070,5 +6070,5 @@
     "planDigest": "6f4f581f3d2ebe9ede92b9bea270202411e4c47d430da1d4ea74db5d68564d47",
     "generatedBy": "scripts/build_gstack_provenance.py"
   },
-  "manifestDigest": "6a634abc6d1b3d6b27ef1071193fa682f479da0c1c379ca6b85ca274111caf0a"
+  "manifestDigest": "7e275fb692526f7cb4e24d9ce8bdfecf7febd04bf67086ecc86c373771216e4e"
 }

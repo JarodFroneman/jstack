@@ -1,6 +1,6 @@
 {
   "name": "jstack-cso",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Enterprise JStack application, API, frontend-exposure, authorization, reverse-engineering, and AI security auditor.",
   "author": {
     "name": "Jarod Froneman",
